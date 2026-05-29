@@ -1,0 +1,3 @@
+#pragma once
+#define STB_VORBIS_MAX_CHANNELS 2
+#define STB_VORBIS_NO_PUSHDATA_API

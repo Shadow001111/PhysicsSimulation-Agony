@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{c96162c3-46fc-4c94-bda6-fbdaea93d27d}</ProjectGuid>
+    <RootNamespace>PhysicsSimulation_Agony</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>ClangCL</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>ClangCL</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <AssemblerListingLocation>$(IntDir)%(RelativeDir)\</AssemblerListingLocation>
+      <ObjectFileName>$(IntDir)%(RelativeDir)\</ObjectFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Libraries\lib;</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;TRACY_ENABLE%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;</AdditionalIncludeDirectories>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <AssemblerListingLocation>$(IntDir)%(RelativeDir)\</AssemblerListingLocation>
+      <ObjectFileName>$(IntDir)%(RelativeDir)\</ObjectFileName>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Libraries\lib;</AdditionalLibraryDirectories>
+      <IgnoreSpecificDefaultLibraries>MSVCRTD;LIBCMT;</IgnoreSpecificDefaultLibraries>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
+    <ClCompile Include="AudioEngine\AudioConfig.cpp" />
+    <ClCompile Include="AudioEngine\AudioLoader.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\decoder_libs\minimp3.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\decoder_libs\stb_vorbis.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\IAudioDecoder.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\MappedFile.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\Mp3Decoder.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\OggDecoder.cpp" />
+    <ClCompile Include="AudioEngine\Decoders\WavDecoder.cpp" />
+    <ClCompile Include="AudioEngine\miniaudio\miniaudio.cpp" />
+    <ClCompile Include="AudioEngine\PcmRingBuffer.cpp" />
+    <ClCompile Include="AudioEngine\Player.cpp" />
+    <ClCompile Include="AudioEngine\ResourceManager.cpp" />
+    <ClCompile Include="AudioEngine\SoundData.cpp" />
+    <ClCompile Include="Core\Decoding\UTFDecoder.cpp" />
+    <ClCompile Include="Core\FileLogger.cpp" />
+    <ClCompile Include="Core\FileStream.cpp" />
+    <ClCompile Include="Core\Hashes\ivec2Hasher.cpp" />
+    <ClCompile Include="Core\Hashes\ivec3Hasher.cpp" />
+    <ClCompile Include="Core\Multithreading\ProcessingFence.cpp" />
+    <ClCompile Include="Core\Multithreading\ThreadPool.cpp" />
+    <ClCompile Include="Core\Random.cpp" />
+    <ClCompile Include="Core\StringIndexer.cpp" />
+    <ClCompile Include="Core\TimeMeasurer.cpp" />
+    <ClCompile Include="Core\TracyPtofiler.cpp" />
+    <ClCompile Include="Core\UpdateTimer.cpp" />
+    <ClCompile Include="glad.c" />
+    <ClCompile Include="Graphics\Camera.cpp" />
+    <ClCompile Include="Graphics\DrawCommands.cpp" />
+    <ClCompile Include="Graphics\TextRenderer.cpp" />
+    <ClCompile Include="Graphics\TextureLoader.cpp" />
+    <ClCompile Include="Input\InputManager.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="OpenGLWrappers\FrameBuffer.cpp" />
+    <ClCompile Include="OpenGLWrappers\ImmutableBuffer.cpp" />
+    <ClCompile Include="OpenGLWrappers\Shader.cpp" />
+    <ClCompile Include="OpenGLWrappers\Texture.cpp" />
+    <ClCompile Include="OpenGLWrappers\VertexArray.cpp" />
+    <ClCompile Include="WindowManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AudioEngine\AudioConfig.h" />
+    <ClInclude Include="AudioEngine\AudioLoader.h" />
+    <ClInclude Include="AudioEngine\Decoders\decoder_libs\minimp3.h" />
+    <ClInclude Include="AudioEngine\Decoders\decoder_libs\minimp3_impl\minimp3.h" />
+    <ClInclude Include="AudioEngine\Decoders\decoder_libs\minimp3_impl\minimp3_ex.h" />
+    <ClInclude Include="AudioEngine\Decoders\decoder_libs\stb_vorbis.h" />
+    <ClInclude Include="AudioEngine\Decoders\decoder_libs\stb_vorbis_impl\settings.h" />
+    <ClInclude Include="AudioEngine\Decoders\decoder_libs\stb_vorbis_impl\stb_vorbis.h" />
+    <ClInclude Include="AudioEngine\Decoders\IAudioDecoder.h" />
+    <ClInclude Include="AudioEngine\Decoders\MappedFile.h" />
+    <ClInclude Include="AudioEngine\Decoders\Mp3Decoder.h" />
+    <ClInclude Include="AudioEngine\Decoders\OggDecoder.h" />
+    <ClInclude Include="AudioEngine\Decoders\WavDecoder.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\api_static.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\attributes.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\dll.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\platform_detection.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\silence_warnings.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\types.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\header_impl\version.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\miniaudio_header.h" />
+    <ClInclude Include="AudioEngine\miniaudio\impl\miniaudio_implementation.h" />
+    <ClInclude Include="AudioEngine\miniaudio\miniaudio.h" />
+    <ClInclude Include="AudioEngine\PcmRingBuffer.h" />
+    <ClInclude Include="AudioEngine\Player.h" />
+    <ClInclude Include="AudioEngine\ResourceManager.h" />
+    <ClInclude Include="AudioEngine\SoundData.h" />
+    <ClInclude Include="AudioEngine\SoundSample.h" />
+    <ClInclude Include="Core\Assert.h" />
+    <ClInclude Include="Core\AtomicBitset.h" />
+    <ClInclude Include="Core\AtomicFlags.h" />
+    <ClInclude Include="Core\Bitset.h" />
+    <ClInclude Include="Core\BlockAllocator.h" />
+    <ClInclude Include="Core\Container\Dequeue.h" />
+    <ClInclude Include="Core\Container\DynamicArray.h" />
+    <ClInclude Include="Core\Container\Queue.h" />
+    <ClInclude Include="Core\Debug.h" />
+    <ClInclude Include="Core\Decoding\UTFDecoder.h" />
+    <ClInclude Include="Core\FileLogger.h" />
+    <ClInclude Include="Core\FileStream.h" />
+    <ClInclude Include="Core\Flags.h" />
+    <ClInclude Include="Core\Hashes\ivec2Hasher.h" />
+    <ClInclude Include="Core\Hashes\ivec3Hasher.h" />
+    <ClInclude Include="Core\IdPool.h" />
+    <ClInclude Include="Core\MemoryAllocation\AlignedStorage.h" />
+    <ClInclude Include="Core\MemoryAllocation\FixedArenaAllocator.h" />
+    <ClInclude Include="Core\MemoryAllocation\FixedArenaObjectPool.h" />
+    <ClInclude Include="Core\Multithreading\move_only_function.h" />
+    <ClInclude Include="Core\Multithreading\ProcessingFence.h" />
+    <ClInclude Include="Core\Multithreading\ThreadPool.h" />
+    <ClInclude Include="Core\Random.h" />
+    <ClInclude Include="Core\Resource.h" />
+    <ClInclude Include="Core\Shapes\Box.h" />
+    <ClInclude Include="Core\Shapes\Frustum.h" />
+    <ClInclude Include="Core\Shapes\Plane.h" />
+    <ClInclude Include="Core\Shapes\Shapes.h" />
+    <ClInclude Include="Core\Simd.h" />
+    <ClInclude Include="Core\StringIndexer.h" />
+    <ClInclude Include="Core\SymmetricBitMatrix.h" />
+    <ClInclude Include="Core\TimeMeasurer.h" />
+    <ClInclude Include="Core\TracyProfiler.h" />
+    <ClInclude Include="Core\Transform.h" />
+    <ClInclude Include="Core\UpdateTimer.h" />
+    <ClInclude Include="Graphics\Camera.h" />
+    <ClInclude Include="Graphics\DrawCommands.h" />
+    <ClInclude Include="Graphics\quad_vertices.h" />
+    <ClInclude Include="Graphics\TextRenderer.h" />
+    <ClInclude Include="Graphics\TextureLoader.h" />
+    <ClInclude Include="Input\InputManager.h" />
+    <ClInclude Include="OpenGLWrappers\FrameBuffer.h" />
+    <ClInclude Include="OpenGLWrappers\ImmutableBuffer.h" />
+    <ClInclude Include="OpenGLWrappers\Shader.h" />
+    <ClInclude Include="OpenGLWrappers\Texture.h" />
+    <ClInclude Include="OpenGLWrappers\VertexArray.h" />
+    <ClInclude Include="WindowManager.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
