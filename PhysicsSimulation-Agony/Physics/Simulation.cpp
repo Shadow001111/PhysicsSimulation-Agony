@@ -68,9 +68,29 @@ namespace PS_AGONY
 
     void Simulation::physicsStep(Real deltaTime)
     {
+        TRACY_SCOPE_N("Physics step");
+
         const size_t bodyCount = bodies.getCount();
 
-        // Gravity.
+        // Self-explanatory.
+        applyExternalForces(bodyCount, deltaTime);
+        integrate(bodyCount, deltaTime);
+
+        // Build AABBs.
+        {
+            TRACY_SCOPE_N("Build AABBs");
+            buildCircleAABBs();
+        }
+
+        // Collision detection.
+
+        // Collision resolution.
+    }
+
+    void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
+    {
+        TRACY_SCOPE_N("Apply external forces");
+
         const Vec2 gravityDelta = simulationSettings.gravity * deltaTime;
         for (size_t i = 0; i < bodyCount; i++)
         {
@@ -80,8 +100,12 @@ namespace PS_AGONY
         {
             bodies.velocityY[i] += gravityDelta.y;
         }
+    }
 
-        // Integration.
+    void Simulation::integrate(size_t bodyCount, Real deltaTime)
+    {
+        TRACY_SCOPE_N("Intergrate");
+
         for (size_t i = 0; i < bodyCount; i++)
         {
             bodies.positionX[i] += bodies.velocityX[i] * deltaTime;
@@ -90,32 +114,26 @@ namespace PS_AGONY
         {
             bodies.positionY[i] += bodies.velocityY[i] * deltaTime;
         }
+    }
 
-        // Boundaries.
-        const Real boundary = 10.0f;
-        for (size_t i = 0; i < bodyCount; i++)
+    void Simulation::buildCircleAABBs()
+    {
+        TRACY_SCOPE_N("Build circle AABBs");
+
+        const size_t circleCount = circles.getCount();
+
+        for (size_t i = 0; i < circleCount; i++)
         {
-            const Real x = bodies.positionX[i];
-            const Real absX = std::abs(x);
+            const Real radius = circles.radius[i];
+            const BodyIndex bodyIndex = circles.bodyIndices[i];
 
-            if (absX > boundary)
-            {
-                const Real sign = bodies.positionX[i] > 0.0 ? 1.0 : -1.0;
-                bodies.positionX[i] = boundary * sign;
-                bodies.velocityX[i] = -bodies.velocityX[i];
-            }
-        }
-        for (size_t i = 0; i < bodyCount; i++)
-        {
-            const Real y = bodies.positionY[i];
-            const Real absY = std::abs(y);
+            const Real x = bodies.positionX[bodyIndex];
+            const Real y = bodies.positionY[bodyIndex];
 
-            if (absY > boundary)
-            {
-                const Real sign = bodies.positionY[i] > 0.0 ? 1.0 : -1.0;
-                bodies.positionY[i] = boundary * sign;
-                bodies.velocityY[i] = -bodies.velocityY[i];
-            }
+            bodies.aabb.minX[bodyIndex] = x - radius;
+            bodies.aabb.minY[bodyIndex] = y - radius;
+            bodies.aabb.maxX[bodyIndex] = x + radius;
+            bodies.aabb.maxY[bodyIndex] = y + radius;
         }
     }
 }

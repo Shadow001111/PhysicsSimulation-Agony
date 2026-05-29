@@ -19,6 +19,14 @@ namespace PS_AGONY
 		Real dynamicFriction = 0.0;
 	};
 
+	struct AABBSoA
+	{
+		std::vector<Real> minX;
+		std::vector<Real> minY;
+		std::vector<Real> maxX;
+		std::vector<Real> maxY;
+	};
+
 	struct BodiesSoA
 	{
 		std::vector<Real> positionX;
@@ -42,7 +50,7 @@ namespace PS_AGONY
 
 		std::vector<MaterialIndex> materialIndex;
 
-		//std::vector<AABB> aabb;
+		AABBSoA aabb;
 
 		std::vector<BodyType> bodyType;
 
@@ -99,5 +107,11 @@ namespace PS_AGONY
 		const auto& getCircles() const noexcept { return circles; }
 	private:
 		void physicsStep(Real deltaTime);
+
+		void applyExternalForces(size_t bodyCount, Real deltaTime);
+
+		void integrate(size_t bodyCount, Real deltaTime);
+
+		void buildCircleAABBs();
 	};
 }
