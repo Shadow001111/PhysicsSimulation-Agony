@@ -3,7 +3,6 @@
 
 class ImmutableBuffer
 {
-    GLenum target = 0;
     GLuint id = 0;
     GLbitfield flags = 0;
     size_t capacity = 0;
@@ -18,17 +17,14 @@ public:
     ImmutableBuffer(ImmutableBuffer&& other) noexcept;
     ImmutableBuffer& operator=(ImmutableBuffer&& other) noexcept;
 
-    void create(GLenum target);
+    void create();
     void destroy();
 
     void allocateStorage(size_t size, GLbitfield flags, const void* data = nullptr);
 
-    void bind() const;
     void bind(GLenum target) const;
-    void unbind() const;
     static void unbind(GLenum target);
 
-    void bindBase(GLuint index) const;
     void bindBase(GLenum target, GLuint index) const;
 
     void swap(ImmutableBuffer& other) noexcept;

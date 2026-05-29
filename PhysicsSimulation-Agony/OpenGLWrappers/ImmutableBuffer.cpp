@@ -10,7 +10,6 @@ ImmutableBuffer::~ImmutableBuffer()
 }
 
 ImmutableBuffer::ImmutableBuffer(ImmutableBuffer&& other) noexcept :
-    target(std::exchange(other.target, 0)),
     id(std::exchange(other.id, 0)),
     flags(std::exchange(other.flags, 0)),
     capacity(std::exchange(other.capacity, 0)),
@@ -24,7 +23,6 @@ ImmutableBuffer& ImmutableBuffer::operator=(ImmutableBuffer&& other) noexcept
     {
         if (id) glDeleteBuffers(1, &id);
 
-        target = std::exchange(other.target, 0);
         id = std::exchange(other.id, 0);
         flags = std::exchange(other.flags, 0);
         capacity = std::exchange(other.capacity, 0);
@@ -33,9 +31,8 @@ ImmutableBuffer& ImmutableBuffer::operator=(ImmutableBuffer&& other) noexcept
     return *this;
 }
 
-void ImmutableBuffer::create(GLenum target)
+void ImmutableBuffer::create()
 {
-    this->target = target;
     this->flags = 0;
     this->capacity = 0;
     this->persistentMappedPtr = nullptr;
@@ -49,7 +46,6 @@ void ImmutableBuffer::create(GLenum target)
 
 void ImmutableBuffer::destroy()
 {
-    this->target = 0;
     this->flags = 0;
     this->capacity = 0;
     this->persistentMappedPtr = nullptr;
@@ -85,29 +81,14 @@ void ImmutableBuffer::allocateStorage(size_t size, GLbitfield flags, const void*
     glNamedBufferStorage(id, capacity, data, flags);
 }
 
-void ImmutableBuffer::bind() const
-{
-    glBindBuffer(target, id);
-}
-
 void ImmutableBuffer::bind(GLenum target) const
 {
     glBindBuffer(target, id);
 }
 
-void ImmutableBuffer::unbind() const
-{
-    glBindBuffer(target, 0);
-}
-
 void ImmutableBuffer::unbind(GLenum target)
 {
     glBindBuffer(target, 0);
-}
-
-void ImmutableBuffer::bindBase(GLuint index) const
-{
-    glBindBufferBase(target, index, id);
 }
 
 void ImmutableBuffer::bindBase(GLenum target, GLuint index) const
@@ -117,7 +98,6 @@ void ImmutableBuffer::bindBase(GLenum target, GLuint index) const
 
 void ImmutableBuffer::swap(ImmutableBuffer& other) noexcept
 {
-    std::swap(target, other.target);
     std::swap(flags, other.flags);
     std::swap(id, other.id);
     std::swap(capacity, other.capacity);

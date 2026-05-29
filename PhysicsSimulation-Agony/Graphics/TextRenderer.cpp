@@ -156,7 +156,7 @@ TextRenderer::TextRenderer() :
     textVAO.create();
 
     // Create VBO
-    textVBO.create(GL_ARRAY_BUFFER);
+    textVBO.create();
     textVBO.allocateStorage(sizeof(vertices), 0, vertices);
 
     // Bind VBO to VAO
@@ -195,7 +195,7 @@ void TextRenderer::pushGlyph(const GlyphInstance& glyph)
 void TextRenderer::createInstanceVBO(size_t glyphCount)
 {
     // Create instance VBO
-    textInstanceVBO.create(GL_ARRAY_BUFFER);
+    textInstanceVBO.create();
     textInstanceVBO.allocateStorage(sizeof(GlyphInstance) * glyphCount, GL_DYNAMIC_STORAGE_BIT);
 
     // Bind instance VBO to VAO

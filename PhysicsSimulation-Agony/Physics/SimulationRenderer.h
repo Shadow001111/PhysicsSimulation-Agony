@@ -1,4 +1,6 @@
 #pragma once
+#include "Camera2D.h"
+
 #include "OpenGLWrappers/Shader.h"
 #include "OpenGLWrappers/ImmutableBuffer.h"
 #include "OpenGLWrappers/VertexArray.h"
@@ -9,9 +11,13 @@ namespace PS_AGONY
 
 	class SimulationRenderer
 	{
+		// Resources.
 		VertexArray vaoCircle;
 		ImmutableBuffer vboCircle;
 		Shader shaderCircle;
+
+		// Camera.
+		Camera2D camera;
 	public:
 		SimulationRenderer() = default;
 		~SimulationRenderer() = default;
@@ -22,6 +28,8 @@ namespace PS_AGONY
 
 		void init();
 		void render(const Simulation& simulation);
+
+		Camera2D& getCamera() noexcept { return camera; }
 	private:
 		void initShaders();
 		void initBuffers();

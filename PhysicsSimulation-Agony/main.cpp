@@ -20,10 +20,10 @@ static int gameFunc()
         .title = "Physics simulation - AGONY",
         .nativeFullscreen = false,
         .bolderlessFullscreen = false,
-        .resizable = false,
+        .resizable = true,
         .vsync = true,
         .openglDebug = true,
-        .strictAspectRatio = true
+        .strictAspectRatio = false
         });
 
     InputManager windowInputManager;
@@ -73,7 +73,7 @@ static int gameFunc()
     }
 
     // Input settings.
-    glfwSetInputMode(wnd.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    //glfwSetInputMode(wnd.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // Simulation
     PS_AGONY::Simulation simulation;
@@ -115,6 +115,7 @@ static int gameFunc()
             framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
 
             // Render simulation.
+            simulationRenderer.getCamera().setViewRangeH(20.0, wnd.getAspectRatio());
             simulationRenderer.render(simulation);
 
             // Swap buffers.
