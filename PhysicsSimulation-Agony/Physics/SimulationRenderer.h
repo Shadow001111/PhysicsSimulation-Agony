@@ -9,12 +9,24 @@ namespace PS_AGONY
 {
 	class Simulation;
 
+	struct CircleRenderData
+	{
+		float x, y, radius;
+	};
+
+	struct CircleRenderResources
+	{
+		VertexArray vao;
+		ImmutableBuffer vbo;
+		ImmutableBuffer instanceVbo;
+		Shader shader;
+		std::vector<CircleRenderData> renderData;
+	};
+
 	class SimulationRenderer
 	{
 		// Resources.
-		VertexArray vaoCircle;
-		ImmutableBuffer vboCircle;
-		Shader shaderCircle;
+		CircleRenderResources circleResources;
 
 		// Camera.
 		Camera2D camera;
@@ -33,6 +45,10 @@ namespace PS_AGONY
 	private:
 		void initShaders();
 		void initBuffers();
+
+		void renderCircles(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+
+		void ensureCircleInstanceVboCapacity(size_t count);
 	};
 }
 

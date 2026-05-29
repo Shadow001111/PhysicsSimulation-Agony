@@ -4,7 +4,7 @@ in vec2 uv;
 
 out vec4 fragColor;
 
-uniform vec3 color;
+const vec3 color = vec3(1.0);
 
 void main()
 {

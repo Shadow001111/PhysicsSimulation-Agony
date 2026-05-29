@@ -115,7 +115,7 @@ static int gameFunc()
             framebuffer.setDrawBuffers({ "color" });
 
             // Clean screen.
-            const float black[4] = { 0.0f,0.0f ,0.0f ,0.0f };
+            const float black[4] = { 0.0f, 0.0f ,0.0f ,0.0f };
             framebuffer.clearDrawBuffer("color", black);
 
             // Render simulation.
