@@ -67,7 +67,15 @@ static int gameFunc()
     PS_AGONY::Simulation simulation;
 
     {
-        const int bodyCount = 50'000;
+        PS_AGONY::Material material0 = {
+            .elasticity = 1.0,
+            .staticFriction = 0.0,
+            .dynamicFriction = 0.0
+        };
+
+        PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
+
+        const int bodyCount = 100;
         for (int i = 0; i < bodyCount; i++)
         {
             float x = Random::real<float>(-5.0f, 5.0f);
@@ -75,8 +83,9 @@ static int gameFunc()
             float vx = Random::real<float>(-2.0f, 2.0f);
             float vy = Random::real<float>(-2.0f, 2.0f);
             float r = Random::real<float>(0.2f, 0.5f);
+            float mass = Random::real<float>(0.2f, 0.5f);
 
-            simulation.createCircle({ x, y }, { vx, vy }, r);
+            simulation.createCircle({ x, y }, { vx, vy }, r, 0.0, 0.0, mass, material0Index);
         }
     }
 

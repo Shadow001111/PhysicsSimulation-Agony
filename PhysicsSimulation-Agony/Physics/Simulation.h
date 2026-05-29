@@ -12,13 +12,40 @@ namespace PS_AGONY
 		Polygon
 	};
 
+	struct Material
+	{
+		Real elasticity = 1.0;
+		Real staticFriction = 0.0;
+		Real dynamicFriction = 0.0;
+	};
+
 	struct BodiesSoA
 	{
 		std::vector<Real> positionX;
 		std::vector<Real> positionY;
+
 		std::vector<Real> velocityX;
 		std::vector<Real> velocityY;
+
+		std::vector<Real> rotation;
+
+		std::vector<Real> angularVelocity;
+
+		std::vector<Real> mass;
+		std::vector<Real> invMass;
+
+		std::vector<Real> inertia;
+		std::vector<Real> invInertia;
+
+		// std::vector<Real> localCenterOfMassX;
+		// std::vector<Real> localCenterOfMassY;
+
+		std::vector<MaterialIndex> materialIndex;
+
+		//std::vector<AABB> aabb;
+
 		std::vector<BodyType> bodyType;
+
 		std::vector<BodyIndex> shapeIndex;
 
 		size_t getCount() const noexcept { return positionX.size(); }
@@ -46,6 +73,9 @@ namespace PS_AGONY
 		BodiesSoA bodies;
 		CirclesSoA circles;
 
+		// Materials.
+		std::vector<Material> materials;
+
 		// Settings.
 		SimulationSettings simulationSettings;
 
@@ -61,7 +91,9 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real radius);
+		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real radius, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex);
+
+		MaterialIndex createMaterial(const Material& material);
 
 		const auto& getBodies() const noexcept { return bodies; }
 		const auto& getCircles() const noexcept { return circles; }
