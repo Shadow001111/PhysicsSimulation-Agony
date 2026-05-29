@@ -1,24 +1,33 @@
 #pragma once
-#include "Types.h"
+#include "GlmTypes.h"
 
 #include <vector>
 
 namespace PS_AGONY
 {
-	using BodyType = uint8_t;
+	enum class BodyType : uint8_t
+	{
+		Circle,
+		Box,
+		Polygon
+	};
 
 	struct BodiesSoA
 	{
 		std::vector<Real> positionX;
 		std::vector<Real> positionY;
-
+		std::vector<Real> velocityX;
+		std::vector<Real> velocityY;
 		std::vector<BodyType> bodyType;
+
 		std::vector<BodyIndex> shapeIndex;
 	};
 
 	struct CirclesSoA
 	{
 		std::vector<Real> radius;
+
+		std::vector<BodyIndex> bodyIndices;
 	};
 
 	struct SimulationSettings
@@ -28,11 +37,11 @@ namespace PS_AGONY
 
 	class Simulation
 	{
-		// Bodies SoA
+		// Bodies SoA.
 		BodiesSoA bodies;
 		CirclesSoA circles;
 
-		// Settings
+		// Settings.
 		SimulationSettings simulationSettings;
 	public:
 		Simulation() = default;
@@ -43,6 +52,11 @@ namespace PS_AGONY
 		Simulation& operator=(Simulation&&) = delete;
 
 		void update(Real deltaTime);
+
+		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real radius);
+
+		const auto& getBodies() const noexcept { return bodies; }
+		const auto& getCircles() const noexcept { return circles; }
 	private:
 	};
 }

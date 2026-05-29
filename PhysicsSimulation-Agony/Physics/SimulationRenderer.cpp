@@ -23,19 +23,33 @@ namespace PS_AGONY
         // Camera.
         const Mat4 viewMatrix = camera.getViewMatrix();
         const Mat4 projectionMatrix = camera.getProjectionMatrix();
+        const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+        // Bodies reference.
+        const auto& bodies = simulation.getBodies();
 
         // Circles.
         shaderCircle.use();
-
-        shaderCircle.setVec2("position", 0.0f, 0.0f);
-        shaderCircle.setFloat("radius", 1.0f);
-        shaderCircle.setVec3("color", 1.0f, 1.0f, 1.0f);
-        shaderCircle.setMat4("viewMatrix", viewMatrix);
-        shaderCircle.setMat4("projectionMatrix", projectionMatrix);
+        shaderCircle.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
         vaoCircle.bind();
 
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        const auto& circles = simulation.getCircles();
+        const size_t circleCount = circles.radius.size();
+        for (size_t i = 0; i < circleCount; i++)
+        {
+            const Real radius = circles.radius[i];
+            const BodyIndex bodyIndex = circles.bodyIndices[i];
+
+            const Real positionX = bodies.positionX[bodyIndex];
+            const Real positionY = bodies.positionY[bodyIndex];
+
+            shaderCircle.setVec2("position", positionX, positionY);
+            shaderCircle.setFloat("radius", radius);
+            shaderCircle.setVec3("color", 1.0f, 1.0f, 1.0f);
+
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+        }
     }
 
     void SimulationRenderer::initShaders()

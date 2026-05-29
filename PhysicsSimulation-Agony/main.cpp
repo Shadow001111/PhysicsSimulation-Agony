@@ -78,6 +78,9 @@ static int gameFunc()
     // Simulation
     PS_AGONY::Simulation simulation;
 
+    simulation.createCircle({ 0.0, 0.0 }, { 1.0, 0.0 }, 0.5f);
+    simulation.createCircle({ 0.0, -1.0 }, { 1.0, 0.0 }, 0.5f);
+
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
 
