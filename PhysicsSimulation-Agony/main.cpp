@@ -2,7 +2,7 @@
 
 #include "Core/FileLogger.h"
 #include "Core/TracyProfiler.h"
-#include "Core/UpdateTimer.h"
+#include "Core/Random.h"
 
 #include "AudioEngine/Player.h"
 
@@ -28,18 +28,6 @@ static int gameFunc()
 
     InputManager windowInputManager;
     wnd.linkInputManager(&windowInputManager);
-
-    // Init audio engine.
-    {
-        TRACY_SCOPE_N("Init audio engine");
-        AudioEngine::Player::getGlobalInstance().init();
-    }
-
-    // Init texture global data.
-    {
-        TRACY_SCOPE_N("Init texture global data");
-        Texture::initGlobalData();
-    }
 
     // Create framebuffer.
     FrameBuffer framebuffer;
@@ -78,8 +66,19 @@ static int gameFunc()
     // Simulation
     PS_AGONY::Simulation simulation;
 
-    simulation.createCircle({ 0.0, 0.0 }, { 1.0, 0.0 }, 0.5f);
-    simulation.createCircle({ 0.0, -1.0 }, { 1.0, 0.0 }, 0.5f);
+    {
+        const int bodyCount = 50'000;
+        for (int i = 0; i < bodyCount; i++)
+        {
+            float x = Random::real<float>(-5.0f, 5.0f);
+            float y = Random::real<float>(-5.0f, 5.0f);
+            float vx = Random::real<float>(-2.0f, 2.0f);
+            float vy = Random::real<float>(-2.0f, 2.0f);
+            float r = Random::real<float>(0.2f, 0.5f);
+
+            simulation.createCircle({ x, y }, { vx, vy }, r);
+        }
+    }
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
@@ -100,6 +99,8 @@ static int gameFunc()
         const double deltaTime = time - lastTime;
         lastTime = time;
 
+        std::cout << 1.0f / deltaTime << "\n";
+
         // Simulation.
         simulation.update(deltaTime);
 
@@ -113,13 +114,17 @@ static int gameFunc()
         {
             framebuffer.setDrawBuffers({ "color" });
 
-            // Blitting FBO to default FBO.
-            framebuffer.setReadBuffer("color");
-            framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
+            // Clean screen.
+            const float black[4] = { 0.0f,0.0f ,0.0f ,0.0f };
+            framebuffer.clearDrawBuffer("color", black);
 
             // Render simulation.
             simulationRenderer.getCamera().setViewRangeH(20.0, wnd.getAspectRatio());
             simulationRenderer.render(simulation);
+
+            // Blitting FBO to default FBO.
+            framebuffer.setReadBuffer("color");
+            framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
 
             // Swap buffers.
             wnd.swapBuffers();

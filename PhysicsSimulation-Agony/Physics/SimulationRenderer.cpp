@@ -35,7 +35,7 @@ namespace PS_AGONY
         vaoCircle.bind();
 
         const auto& circles = simulation.getCircles();
-        const size_t circleCount = circles.radius.size();
+        const size_t circleCount = circles.getCount();
         for (size_t i = 0; i < circleCount; i++)
         {
             const Real radius = circles.radius[i];

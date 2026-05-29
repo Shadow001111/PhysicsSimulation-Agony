@@ -19,8 +19,9 @@ namespace PS_AGONY
 		std::vector<Real> velocityX;
 		std::vector<Real> velocityY;
 		std::vector<BodyType> bodyType;
-
 		std::vector<BodyIndex> shapeIndex;
+
+		size_t getCount() const noexcept { return positionX.size(); }
 	};
 
 	struct CirclesSoA
@@ -28,11 +29,15 @@ namespace PS_AGONY
 		std::vector<Real> radius;
 
 		std::vector<BodyIndex> bodyIndices;
+
+		size_t getCount() const noexcept { return radius.size(); }
 	};
 
 	struct SimulationSettings
 	{
-		Real updateInterval = 1.0;
+		Real updateInterval = 1 / 60.0;
+		
+		Vec2 gravity{ 0.0, -9.81 };
 	};
 
 	class Simulation
@@ -43,6 +48,9 @@ namespace PS_AGONY
 
 		// Settings.
 		SimulationSettings simulationSettings;
+
+		// Other.
+		Real updateTimeAccumulator = 0.0;
 	public:
 		Simulation() = default;
 		~Simulation() = default;
@@ -58,5 +66,6 @@ namespace PS_AGONY
 		const auto& getBodies() const noexcept { return bodies; }
 		const auto& getCircles() const noexcept { return circles; }
 	private:
+		void physicsStep(Real deltaTime);
 	};
 }
