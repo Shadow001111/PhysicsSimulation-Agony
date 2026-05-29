@@ -34,7 +34,7 @@ class FreeTypeLibrary
 public:
     bool initLibrary()
     {
-        TRACY_SCOPE_NC("Init FreeType library", 0);
+        TRACY_SCOPE_N("Init FreeType library");
 
         if (FT_Init_FreeType(&lib))
         {
@@ -46,7 +46,7 @@ public:
 
     bool initFace(const char* fontPath)
     {
-        TRACY_SCOPE_NC("Init FreeType face", 0);
+        TRACY_SCOPE_N("Init FreeType face");
 
         if (FT_New_Face(lib, fontPath, 0, &face))
         {
@@ -58,7 +58,7 @@ public:
 
     ~FreeTypeLibrary()
     {
-        TRACY_SCOPE_NC("Free FreeType resources", 0);
+        TRACY_SCOPE_N("Free FreeType resources");
 
         if (face)
         {
@@ -216,7 +216,7 @@ void TextRenderer::createInstanceVBO(size_t glyphCount)
 
 std::vector<uint8_t> TextRenderer::loadGlyphs(FT_Face face, Font& font)
 {
-    TRACY_SCOPE_NC("Load glyphs", 1);
+    TRACY_SCOPE_N("Load glyphs");
 
     // Pre-pass
     uint32_t glyphDataCount = 0;
@@ -258,7 +258,7 @@ std::vector<uint8_t> TextRenderer::loadGlyphs(FT_Face face, Font& font)
     while (gindex != 0)
     {
         {
-            TRACY_SCOPE_NC("Load char", 1);
+            TRACY_SCOPE_N("Load char");
             if (FT_Load_Char(face, charcode, FT_LOAD_RENDER)) [[unlikely]]
             {
                 std::cerr << "[TextRenderer]: Failed to load glyph: '" << charcode << "'.\n";
@@ -270,7 +270,7 @@ std::vector<uint8_t> TextRenderer::loadGlyphs(FT_Face face, Font& font)
         uint32_t glyphTextureId = Glyph::INVALID_GLYPH_TEXTUREE_ID;
         if (charcode > ' ')
         {
-            TRACY_SCOPE_NC("Process char", 2);
+            TRACY_SCOPE_N("Process char");
 
             glyphTextureId = textureIdCounter++;
 
@@ -315,13 +315,13 @@ std::vector<uint8_t> TextRenderer::loadGlyphs(FT_Face face, Font& font)
         font.glyphs.emplace(charcode, glyph);
 
         {
-            TRACY_SCOPE_NC("Next char", 3);
+            TRACY_SCOPE_N("Next char");
             charcode = FT_Get_Next_Char(face, charcode, &gindex);
         }
     }
 
     {
-        TRACY_SCOPE_NC("Upload data to gpu", 4);
+        TRACY_SCOPE_N("Upload data to gpu");
         font.textureArray.uploadSubData3D(
             textureData.data(),
             0, 0, 0,
@@ -335,7 +335,7 @@ std::vector<uint8_t> TextRenderer::loadGlyphs(FT_Face face, Font& font)
 
 bool TextRenderer::saveFontCache(const std::string& cachePath, const Font& font, const std::vector<uint8_t>& textureData)
 {
-    TRACY_SCOPE_NC("Save font cache", 0);
+    TRACY_SCOPE_N("Save font cache");
 
     std::error_code ec;
     std::filesystem::create_directories("cache", ec);
@@ -375,7 +375,7 @@ bool TextRenderer::saveFontCache(const std::string& cachePath, const Font& font,
 
 bool TextRenderer::loadFontCache(const std::string& cachePath, Font& font)
 {
-    TRACY_SCOPE_NC("Load font cache", 0);
+    TRACY_SCOPE_N("Load font cache");
 
     FileStream file(cachePath, FileStream::Mode::Read);
     if (!file) return false;
@@ -439,7 +439,7 @@ void TextRenderer::finalizeFontTexture(Font& font)
 void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDecoderFunction decoder, const float x, const float y, float rowHeight,
     const glm::vec3& color, TextAlignment alignment, const glm::vec2& bounds)
 {
-    TRACY_SCOPE_NC("Render text", 5);
+    TRACY_SCOPE_N("Render text");
 
     TextRenderer& inst = getInstance();
 
@@ -478,7 +478,7 @@ void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDe
     const bool hasReplacement = replaceCodepointIT != glyphs.end();
 
     {
-        TRACY_SCOPE_NC("Decode text", 0);
+        TRACY_SCOPE_N("Decode text");
         while (index < textLength)
         {
             uint32_t codepoint = decoder(text, textLength, index);
@@ -576,7 +576,7 @@ void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDe
     const float startX = currentX;
 
     {
-        TRACY_SCOPE_NC("Render glyphs", 5);
+        TRACY_SCOPE_N("Render glyphs");
         for (uint32_t codepoint : codepoints)
         {
             if (codepoint == '\n')
@@ -628,14 +628,14 @@ void TextRenderer::updateProjectionMatrixInternal()
 
 void TextRenderer::init()
 {
-    TRACY_SCOPE_NC("Init text renderer", 0);
+    TRACY_SCOPE_N("Init text renderer");
 
     getInstance();
 }
 
 bool TextRenderer::loadFont(const std::string& fontName, GLuint fontSize)
 {
-    TRACY_SCOPE_NC("Load font", 0);
+    TRACY_SCOPE_N("Load font");
 
     TextRenderer& inst = getInstance();
     auto& fonts = inst.fonts;

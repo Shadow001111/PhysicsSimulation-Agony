@@ -2,8 +2,12 @@
 
 #include "Core/FileLogger.h"
 #include "Core/TracyProfiler.h"
+#include "Core/UpdateTimer.h"
 
 #include "AudioEngine/Player.h"
+
+#include "Physics/Simulation.h"
+#include "Physics/SimulationRenderer.h"
 
 #include <iostream>
 
@@ -13,7 +17,7 @@ static int gameFunc()
     WindowManager wnd({
         .width = 1600,
         .height = 900,
-        .title = "Deep dip",
+        .title = "Physics simulation - AGONY",
         .nativeFullscreen = false,
         .bolderlessFullscreen = false,
         .resizable = false,
@@ -71,6 +75,12 @@ static int gameFunc()
     // Input settings.
     glfwSetInputMode(wnd.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+    // Simulation
+    PS_AGONY::Simulation simulation;
+
+    PS_AGONY::SimulationRenderer simulationRenderer;
+    simulationRenderer.init();
+
     // Main loop.
     double lastTime = glfwGetTime();
     while (!wnd.shouldClose())
@@ -79,7 +89,7 @@ static int gameFunc()
         wnd.pollEvents();
         windowInputManager.processInput();
 
-        // Check if window is iconified.
+        // Check if window is visible.
         const bool iconified = wnd.isZeroSize();
 
         // Time logic.
@@ -87,7 +97,8 @@ static int gameFunc()
         const double deltaTime = time - lastTime;
         lastTime = time;
 
-        // World.
+        // Simulation.
+        simulation.update(deltaTime);
 
         // Render.
         if (iconified)
@@ -102,6 +113,9 @@ static int gameFunc()
             // Blitting FBO to default FBO.
             framebuffer.setReadBuffer("color");
             framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
+
+            // Render simulation.
+            simulationRenderer.render(simulation);
 
             // Swap buffers.
             wnd.swapBuffers();

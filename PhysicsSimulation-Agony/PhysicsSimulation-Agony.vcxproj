@@ -183,7 +183,7 @@
     <ClCompile Include="Core\TracyPtofiler.cpp" />
     <ClCompile Include="Core\UpdateTimer.cpp" />
     <ClCompile Include="glad.c" />
-    <ClCompile Include="Graphics\Camera.cpp" />
+    <ClCompile Include="Graphics\Camera3D.cpp" />
     <ClCompile Include="Graphics\DrawCommands.cpp" />
     <ClCompile Include="Graphics\TextRenderer.cpp" />
     <ClCompile Include="Graphics\TextureLoader.cpp" />
@@ -194,6 +194,8 @@
     <ClCompile Include="OpenGLWrappers\Shader.cpp" />
     <ClCompile Include="OpenGLWrappers\Texture.cpp" />
     <ClCompile Include="OpenGLWrappers\VertexArray.cpp" />
+    <ClCompile Include="Physics\Simulation.cpp" />
+    <ClCompile Include="Physics\SimulationRenderer.cpp" />
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -260,7 +262,7 @@
     <ClInclude Include="Core\TracyProfiler.h" />
     <ClInclude Include="Core\Transform.h" />
     <ClInclude Include="Core\UpdateTimer.h" />
-    <ClInclude Include="Graphics\Camera.h" />
+    <ClInclude Include="Graphics\Camera3D.h" />
     <ClInclude Include="Graphics\DrawCommands.h" />
     <ClInclude Include="Graphics\quad_vertices.h" />
     <ClInclude Include="Graphics\TextRenderer.h" />
@@ -271,6 +273,9 @@
     <ClInclude Include="OpenGLWrappers\Shader.h" />
     <ClInclude Include="OpenGLWrappers\Texture.h" />
     <ClInclude Include="OpenGLWrappers\VertexArray.h" />
+    <ClInclude Include="Physics\Simulation.h" />
+    <ClInclude Include="Physics\Types.h" />
+    <ClInclude Include="Physics\SimulationRenderer.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

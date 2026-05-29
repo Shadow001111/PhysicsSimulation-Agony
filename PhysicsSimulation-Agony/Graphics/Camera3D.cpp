@@ -1,7 +1,7 @@
-#include "Camera.h"
+#include "Camera3D.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-void Camera::updateCameraVectors() const
+void Camera3D::updateCameraVectors() const
 {
 	if (!vectorsUpdateRequired) return;
 	vectorsUpdateRequired = false;
@@ -18,7 +18,7 @@ void Camera::updateCameraVectors() const
 	up = glm::normalize(glm::cross(right, this->forward));
 }
 
-void Camera::updateFrustum() const
+void Camera3D::updateFrustum() const
 {
 	if (!frustumUpdateRequired) return;
 	frustumUpdateRequired = false;
@@ -28,7 +28,7 @@ void Camera::updateFrustum() const
 	frustum.update(transform.position, forward, right, up, FOV, aspectRatio, nearPlane, farPlane);
 }
 
-Camera::Camera(
+Camera3D::Camera3D(
 	const Vec3Type& position,
 	FloatType yaw,
 	FloatType pitch,
@@ -41,45 +41,45 @@ Camera::Camera(
 {
 }
 
-glm::mat4 Camera::getViewMatrix() const
+glm::mat4 Camera3D::getViewMatrix() const
 {
 	updateCameraVectors();
 	return glm::lookAt(transform.position, transform.position + forward, up);
 }
 
-glm::mat4 Camera::getViewMatrixModified(const glm::dvec3& posMod) const
+glm::mat4 Camera3D::getViewMatrixModified(const glm::dvec3& posMod) const
 {
 	updateCameraVectors();
 	glm::dvec3 modifiedPos = glm::mod(transform.position, posMod);
 	return glm::lookAt(modifiedPos, modifiedPos + forward, up);
 }
 
-glm::mat4 Camera::getProjectionMatrix() const
+glm::mat4 Camera3D::getProjectionMatrix() const
 {
 	return glm::perspective(FOV, aspectRatio, nearPlane, farPlane);
 }
 
-void Camera::setPosition(const glm::dvec3& position)
+void Camera3D::setPosition(const glm::dvec3& position)
 {
 	transform.position = position;
 	frustumUpdateRequired = true;
 }
 
-void Camera::setYaw(FloatType yaw)
+void Camera3D::setYaw(FloatType yaw)
 {
 	transform.yaw = yaw;
 	vectorsUpdateRequired = true;
 	frustumUpdateRequired = true;
 }
 
-void Camera::setPitch(FloatType pitch)
+void Camera3D::setPitch(FloatType pitch)
 {
 	transform.pitch = glm::clamp(pitch, -HALF_PI, HALF_PI);
 	vectorsUpdateRequired = true;
 	frustumUpdateRequired = true;
 }
 
-void Camera::setYawPitch(FloatType yaw, FloatType pitch)
+void Camera3D::setYawPitch(FloatType yaw, FloatType pitch)
 {
 	transform.yaw = yaw;
 	transform.pitch = glm::clamp(pitch, -HALF_PI, HALF_PI);
@@ -87,7 +87,7 @@ void Camera::setYawPitch(FloatType yaw, FloatType pitch)
 	frustumUpdateRequired = true;
 }
 
-void Camera::setTransform(const TransformType& transform)
+void Camera3D::setTransform(const TransformType& transform)
 {
 	this->transform = transform;
 	this->transform.pitch = glm::clamp(transform.pitch, -HALF_PI, HALF_PI);
@@ -95,7 +95,7 @@ void Camera::setTransform(const TransformType& transform)
 	frustumUpdateRequired = true;
 }
 
-void Camera::setFOV(FloatType fov)
+void Camera3D::setFOV(FloatType fov)
 {
 	if (fov < 1.0f) fov = 1.0f;
 	if (fov > 90.0f) fov = 90.0f;
@@ -103,25 +103,25 @@ void Camera::setFOV(FloatType fov)
 	frustumUpdateRequired = true;
 }
 
-void Camera::setAspectRatio(FloatType aspect)
+void Camera3D::setAspectRatio(FloatType aspect)
 {
 	aspectRatio = aspect;
 	frustumUpdateRequired = true;
 }
 
-void Camera::setFarPlane(FloatType farPlane)
+void Camera3D::setFarPlane(FloatType farPlane)
 {
 	this->farPlane = farPlane;
 	frustumUpdateRequired = true;
 }
 
-void Camera::move(const Vec3Type& delta)
+void Camera3D::move(const Vec3Type& delta)
 {
 	transform.position += delta;
 	frustumUpdateRequired = true;
 }
 
-void Camera::rotate(FloatType deltaYaw, FloatType deltaPitch)
+void Camera3D::rotate(FloatType deltaYaw, FloatType deltaPitch)
 {
 	transform.yaw += deltaYaw;
 	transform.pitch = glm::clamp(transform.pitch + deltaPitch, -HALF_PI, HALF_PI);
@@ -129,25 +129,25 @@ void Camera::rotate(FloatType deltaYaw, FloatType deltaPitch)
 	frustumUpdateRequired = true;
 }
 
-Camera::Vec3Type Camera::getForward() const
+Camera3D::Vec3Type Camera3D::getForward() const
 {
 	updateCameraVectors();
 	return forward;
 }
 
-Camera::Vec3Type Camera::getUp() const
+Camera3D::Vec3Type Camera3D::getUp() const
 {
 	updateCameraVectors();
 	return up;
 }
 
-Camera::Vec3Type Camera::getRight() const
+Camera3D::Vec3Type Camera3D::getRight() const
 {
 	updateCameraVectors();
 	return right;
 }
 
-const Camera::FrustumType& Camera::getFrustum() const
+const Camera3D::FrustumType& Camera3D::getFrustum() const
 {
 	updateFrustum();
 	return frustum;

@@ -2,7 +2,7 @@
 #include "Core/Shapes/Frustum.h"
 #include "Core/Transform.h"
 
-class Camera
+class Camera3D
 {
 	using FloatType = double;
 	using Vec3Type = glm::vec<3, FloatType>;
@@ -30,7 +30,7 @@ class Camera
 	void updateCameraVectors() const;
 	void updateFrustum() const;
 public:
-	Camera(const Vec3Type& position, FloatType yaw, FloatType pitch, FloatType FOV, FloatType aspectRatio, FloatType nearPlane, FloatType farPlane);
+	Camera3D(const Vec3Type& position, FloatType yaw, FloatType pitch, FloatType FOV, FloatType aspectRatio, FloatType nearPlane, FloatType farPlane);
 
 	glm::mat4 getViewMatrix() const;
 	glm::mat4 getViewMatrixModified(const Vec3Type& posMod) const;
