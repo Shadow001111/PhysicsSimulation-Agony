@@ -60,6 +60,8 @@ namespace PS_AGONY
 
 		void buildCircleAABBs();
 
+		void markBodiesOfBroadPhase(const std::vector<BodyPair>& broadPhaseCollisions);
+
 		void narrowPhaseCollisionDetection();
 
 		void resolveCollisions();

@@ -1,6 +1,7 @@
 #include "Simulation.h"
 
 #include "Core/TracyProfiler.h"
+#include "Core/Portablity.h"
 
 namespace PS_AGONY
 {
@@ -101,15 +102,7 @@ namespace PS_AGONY
         const std::vector<BodyPair>& broadPhaseCollisions = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
         if (broadPhaseCollisions.empty()) return;
 
-        {
-            TRACY_SCOPE_N("Mark bodies of broad phase");
-
-            for (const BodyPair& pair : broadPhaseCollisions)
-            {
-                bodies.collisionDebug[pair.a] = 1;
-                bodies.collisionDebug[pair.b] = 1;
-            }
-        }
+        markBodiesOfBroadPhase(broadPhaseCollisions);
 
         // Narrow phase.
         narrowPhaseCollisionDetection();
@@ -122,14 +115,17 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Apply external forces");
 
+        Real* CORE_RESTRICT velocityX = bodies.velocityX.data();
+        Real* CORE_RESTRICT velocityY = bodies.velocityY.data();
+
         const Vec2 gravityDelta = simulationSettings.gravity * deltaTime;
         for (size_t i = 0; i < bodyCount; i++)
         {
-            bodies.velocityX[i] += gravityDelta.x;
+            velocityX[i] += gravityDelta.x;
         }
         for (size_t i = 0; i < bodyCount; i++)
         {
-            bodies.velocityY[i] += gravityDelta.y;
+            velocityY[i] += gravityDelta.y;
         }
     }
 
@@ -137,13 +133,18 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Intergrate");
 
+        Real* CORE_RESTRICT positionX = bodies.positionX.data();
+        Real* CORE_RESTRICT positionY = bodies.positionY.data();
+        const Real* CORE_RESTRICT velocityX = bodies.velocityX.data();
+        const Real* CORE_RESTRICT velocityY = bodies.velocityY.data();
+
         for (size_t i = 0; i < bodyCount; i++)
         {
-            bodies.positionX[i] += bodies.velocityX[i] * deltaTime;
+            positionX[i] += velocityX[i] * deltaTime;
         }
         for (size_t i = 0; i < bodyCount; i++)
         {
-            bodies.positionY[i] += bodies.velocityY[i] * deltaTime;
+            positionY[i] += velocityY[i] * deltaTime;
         }
     }
 
@@ -151,29 +152,34 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Boundary collision");
 
+        Real* CORE_RESTRICT positionX = bodies.positionX.data();
+        Real* CORE_RESTRICT positionY = bodies.positionY.data();
+        Real* CORE_RESTRICT velocityX = bodies.velocityX.data();
+        Real* CORE_RESTRICT velocityY = bodies.velocityY.data();
+
         const Real boundary = 10.0f;
         for (size_t i = 0; i < bodyCount; i++)
         {
-            const Real x = bodies.positionX[i];
+            const Real x = positionX[i];
             const Real absX = std::abs(x);
 
             if (absX > boundary)
             {
-                const Real sign = bodies.positionX[i] > 0.0 ? 1.0 : -1.0;
-                bodies.positionX[i] = boundary * sign;
-                bodies.velocityX[i] = -bodies.velocityX[i];
+                const Real sign = positionX[i] > 0.0 ? 1.0 : -1.0;
+                positionX[i] = boundary * sign;
+                velocityX[i] = -velocityX[i];
             }
         }
         for (size_t i = 0; i < bodyCount; i++)
         {
-            const Real y = bodies.positionY[i];
+            const Real y = positionY[i];
             const Real absY = std::abs(y);
 
             if (absY > boundary)
             {
-                const Real sign = bodies.positionY[i] > 0.0 ? 1.0 : -1.0;
-                bodies.positionY[i] = boundary * sign;
-                bodies.velocityY[i] = -bodies.velocityY[i];
+                const Real sign = positionY[i] > 0.0 ? 1.0 : -1.0;
+                positionY[i] = boundary * sign;
+                velocityY[i] = -velocityY[i];
             }
         }
     }
@@ -182,20 +188,43 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Build circle AABBs");
 
+        const Real* CORE_RESTRICT positionX = bodies.positionX.data();
+        const Real* CORE_RESTRICT positionY = bodies.positionY.data();
+        Real* CORE_RESTRICT aabbMinX = bodies.aabb.minX.data();
+        Real* CORE_RESTRICT aabbMinY = bodies.aabb.minY.data();
+        Real* CORE_RESTRICT aabbMaxX = bodies.aabb.maxX.data();
+        Real* CORE_RESTRICT aabbMaxY = bodies.aabb.maxY.data();
+
+        const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
+        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
+
         const size_t circleCount = circles.getCount();
 
         for (size_t i = 0; i < circleCount; i++)
         {
-            const Real radius = circles.radius[i];
-            const BodyIndex bodyIndex = circles.bodyIndices[i];
+            const Real radius = radiusPtr[i];
+            const BodyIndex bodyIndex = bodyIndexPtr[i];
 
-            const Real x = bodies.positionX[bodyIndex];
-            const Real y = bodies.positionY[bodyIndex];
+            const Real x = positionX[bodyIndex];
+            const Real y = positionY[bodyIndex];
 
-            bodies.aabb.minX[bodyIndex] = x - radius;
-            bodies.aabb.minY[bodyIndex] = y - radius;
-            bodies.aabb.maxX[bodyIndex] = x + radius;
-            bodies.aabb.maxY[bodyIndex] = y + radius;
+            aabbMinX[bodyIndex] = x - radius;
+            aabbMinY[bodyIndex] = y - radius;
+            aabbMaxX[bodyIndex] = x + radius;
+            aabbMaxY[bodyIndex] = y + radius;
+        }
+    }
+
+    void Simulation::markBodiesOfBroadPhase(const std::vector<BodyPair>& broadPhaseCollisions)
+    {
+        TRACY_SCOPE_N("Mark bodies of broad phase");
+
+        auto* CORE_RESTRICT collisionDebug = bodies.collisionDebug.data();
+
+        for (const BodyPair& pair : broadPhaseCollisions)
+        {
+            collisionDebug[pair.a] = 1;
+            collisionDebug[pair.b] = 1;
         }
     }
 
