@@ -187,14 +187,15 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Broad phase");
 
         std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.end(), 0);
+        broadPhaseCollisions.clear();
 
         if (bodyCount < 2) return; // No pairs to check.
 
-        broadPhaseCollisions.clear();
         broadPhaseCollisions.reserve(bodyCount);
 
         //justAABB(bodyCount);
-        sweepAndPrune(bodyCount);
+        //sweepAndPrune(bodyCount);
+        kdTrees(bodyCount);
     }
 
     void Simulation::narrowPhaseCollisionDetection()
@@ -249,7 +250,7 @@ namespace PS_AGONY
 
     void Simulation::sweepAndPrune(size_t bodyCount)
     {
-        TRACY_SCOPE_N("Sweet-and-prune");
+        TRACY_SCOPE_N("Sweet and prune");
 
         // Build list of body indices sorted by AABB minX.
         static std::vector<BodyIndex> sortedIndices;
@@ -295,5 +296,10 @@ namespace PS_AGONY
 
             activeList.push_back(current);
         }
+    }
+
+    void Simulation::kdTrees(size_t bodyCount)
+    {
+        TRACY_SCOPE_N("K-D trees");
     }
 }

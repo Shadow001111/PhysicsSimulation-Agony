@@ -135,5 +135,6 @@ namespace PS_AGONY
 
 		void justAABB(const size_t bodyCount);
 		void sweepAndPrune(size_t bodyCount);
+		void kdTrees(size_t bodyCount);
 	};
 }
