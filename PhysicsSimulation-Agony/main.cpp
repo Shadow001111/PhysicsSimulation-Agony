@@ -75,7 +75,7 @@ static int gameFunc()
 
         PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
 
-        const int bodyCount = 10;
+        const int bodyCount = 2'500;
         for (int i = 0; i < bodyCount; i++)
         {
             float x = Random::real<float>(-5.0f, 5.0f);

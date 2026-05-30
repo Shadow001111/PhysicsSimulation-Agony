@@ -92,7 +92,7 @@ namespace PS_AGONY
         }
 
         // Collision detection.
-        broadPhaseCollisionDetection();
+        broadPhaseCollisionDetection(bodyCount);
         narrowPhaseCollisionDetection();
 
         // Collision resolution.
@@ -180,13 +180,12 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::broadPhaseCollisionDetection()
+    void Simulation::broadPhaseCollisionDetection(const size_t bodyCount)
     {
         TRACY_SCOPE_N("Broad phase");
 
         std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.end(), 0);
 
-        const size_t bodyCount = bodies.getCount();
         if (bodyCount < 1) return;
 
         broadPhaseCollisions.reserve(bodyCount);
@@ -213,8 +212,8 @@ namespace PS_AGONY
                 {
                     broadPhaseCollisions.emplace_back(bodyIndexA, bodyIndexB);
 
-                    bodies.collisionDebug[bodyIndexA] = true;
-                    bodies.collisionDebug[bodyIndexB] = true;
+                    bodies.collisionDebug[bodyIndexA] = 1;
+                    bodies.collisionDebug[bodyIndexB] = 1;
                 }
             }
         }

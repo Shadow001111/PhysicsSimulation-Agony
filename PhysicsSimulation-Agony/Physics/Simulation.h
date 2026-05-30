@@ -125,7 +125,7 @@ namespace PS_AGONY
 
 		void buildCircleAABBs();
 
-		void broadPhaseCollisionDetection();
+		void broadPhaseCollisionDetection(const size_t bodyCount);
 
 		void narrowPhaseCollisionDetection();
 
