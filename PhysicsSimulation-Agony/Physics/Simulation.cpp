@@ -263,27 +263,23 @@ namespace PS_AGONY
         for (BodyIndex current : sortedIndices)
         {
             const Real minXA = bodies.aabb.minX[current];
-            const Real maxXA = bodies.aabb.maxX[current];
+            //const Real maxXA = bodies.aabb.maxX[current];
             const Real minYA = bodies.aabb.minY[current];
             const Real maxYA = bodies.aabb.maxY[current];
 
             // Remove from activeList any body whose maxX < current minX.
             activeList.erase(std::remove_if(activeList.begin(), activeList.end(),
                 [this, minXA](BodyIndex active) {
-                    return bodies.aabb.maxX[active] < minXA;
+                    return bodies.aabb.maxX[active] <= minXA;
                 }), activeList.end());
 
             // Check against all active bodies (they overlap in X).
             for (BodyIndex active : activeList)
             {
-                const Real minXB = bodies.aabb.minX[active];
-                const Real maxXB = bodies.aabb.maxX[active];
                 const Real minYB = bodies.aabb.minY[active];
                 const Real maxYB = bodies.aabb.maxY[active];
 
-                const bool doesIntersect =
-                    (minXA < maxXB && maxXA > minXB) &&
-                    (minYA < maxYB && maxYA > minYB);
+                const bool doesIntersect = (minYA < maxYB && maxYA > minYB);
 
                 if (doesIntersect)
                 {
