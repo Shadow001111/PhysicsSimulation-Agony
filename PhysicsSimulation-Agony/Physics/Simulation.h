@@ -81,7 +81,7 @@ namespace PS_AGONY
 		BodyIndex a, b;
 	};
 
-	struct KDNode
+	struct BvhNode
 	{
 		static constexpr uint32_t KD_LEAF_SIZE = 8;
 		static constexpr uint32_t INVALID_INDEX = -1;
@@ -144,18 +144,18 @@ namespace PS_AGONY
 		// Broad phase methods
 
 		void justAABB(const size_t bodyCount);
-		void sweepAndPrune(size_t bodyCount);
-		void kdTrees(size_t bodyCount);
+		void sweepAndPruneXAxis(size_t bodyCount);
+		void boundVolumeHierarchy(size_t bodyCount);
 	private:
-		// KD trees methods
+		// BVH methods
 
-		uint32_t buildKDNode(
-			std::vector<KDNode>& nodes,
+		uint32_t buildBvhNode(
+			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,
 			uint32_t start, uint32_t end);
 
-		void queryKDPairs(
-			const std::vector<KDNode>& nodes,
+		void queryBvhPairs(
+			const std::vector<BvhNode>& nodes,
 			const std::vector<BodyIndex>& indices,
 			uint32_t nodeA, uint32_t nodeB);
 	};

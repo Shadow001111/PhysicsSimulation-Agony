@@ -4,8 +4,6 @@
 
 #include <numeric>
 
-#include <iostream>
-
 namespace PS_AGONY
 {
     static Real calculateCircleInertia(Real radius, Real mass)
@@ -197,7 +195,7 @@ namespace PS_AGONY
 
         //justAABB(bodyCount);
         //sweepAndPrune(bodyCount);
-        kdTrees(bodyCount);
+        boundVolumeHierarchy(bodyCount);
     }
 
     void Simulation::narrowPhaseCollisionDetection()
@@ -250,9 +248,9 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::sweepAndPrune(size_t bodyCount)
+    void Simulation::sweepAndPruneXAxis(size_t bodyCount)
     {
-        TRACY_SCOPE_N("Sweet and prune");
+        TRACY_SCOPE_N("Sweet and prune X");
 
         // Build list of body indices sorted by AABB minX.
         static std::vector<BodyIndex> sortedIndices;
@@ -300,24 +298,24 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::kdTrees(size_t bodyCount)
+    void Simulation::boundVolumeHierarchy(size_t bodyCount)
     {
-        TRACY_SCOPE_N("KD trees");
+        TRACY_SCOPE_N("BVH");
 
-        static std::vector<KDNode> kdNodes;
-        static std::vector<BodyIndex> kdIndices;
+        static std::vector<BvhNode> nodes;
+        static std::vector<BodyIndex> indices;
 
-        kdNodes.clear();
-        kdNodes.reserve(2 * bodyCount); // A balanced binary tree needs at most 2n nodes.
+        nodes.clear();
+        nodes.reserve(2 * bodyCount);
 
-        kdIndices.resize(bodyCount);
-        std::iota(kdIndices.begin(), kdIndices.end(), 0);
+        indices.resize(bodyCount);
+        std::iota(indices.begin(), indices.end(), 0);
 
-        buildKDNode(kdNodes, kdIndices, 0, bodyCount);
-        queryKDPairs(kdNodes, kdIndices, 0, 0); // Self-query the root finds all pairs.
+        buildBvhNode(nodes, indices, 0, bodyCount);
+        queryBvhPairs(nodes, indices, 0, 0); // Self-query the root finds all pairs.
     }
 
-    uint32_t Simulation::buildKDNode(std::vector<KDNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
+    uint32_t Simulation::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
     {
         // Compute merged bounding box.
         Real minX =  std::numeric_limits<Real>::max();
@@ -334,10 +332,10 @@ namespace PS_AGONY
         }
 
         const uint32_t nodeIdx = nodes.size();
-        nodes.emplace_back(minX, maxX, minY, maxY, KDNode::INVALID_INDEX, KDNode::INVALID_INDEX, start, end);
+        nodes.emplace_back(minX, maxX, minY, maxY, BvhNode::INVALID_INDEX, BvhNode::INVALID_INDEX, start, end);
 
         const uint32_t rangeSize = end - start;
-        if (rangeSize <= KDNode::KD_LEAF_SIZE)
+        if (rangeSize <= BvhNode::KD_LEAF_SIZE)
             return nodeIdx;
 
         // Partition on the widest axis at the median centroid.
@@ -359,8 +357,8 @@ namespace PS_AGONY
                 return centroid(a) < centroid(b);
             });
 
-        const uint32_t left = buildKDNode(nodes, indices, start, mid);
-        const uint32_t right = buildKDNode(nodes, indices, mid, end);
+        const uint32_t left = buildBvhNode(nodes, indices, start, mid);
+        const uint32_t right = buildBvhNode(nodes, indices, mid, end);
 
         // Re-access by index: recursive calls may have reallocated nodes.
         nodes[nodeIdx].left = left;
@@ -368,18 +366,18 @@ namespace PS_AGONY
         return nodeIdx;
     }
 
-    void Simulation::queryKDPairs(const std::vector<KDNode>& nodes, const std::vector<BodyIndex>& indices, uint32_t nodeA, uint32_t nodeB)
+    void Simulation::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices, uint32_t nodeA, uint32_t nodeB)
     {
-        const KDNode& a = nodes[nodeA];
-        const KDNode& b = nodes[nodeB];
+        const BvhNode& a = nodes[nodeA];
+        const BvhNode& b = nodes[nodeB];
 
         // Prune entire subtree pair if their bounding boxes don't overlap.
         if (a.minX >= b.maxX || a.maxX <= b.minX ||
             a.minY >= b.maxY || a.maxY <= b.minY)
             return;
 
-        const bool aLeaf = (a.left == -1);
-        const bool bLeaf = (b.left == -1);
+        const bool aLeaf = (a.left == BvhNode::INVALID_INDEX);
+        const bool bLeaf = (b.left == BvhNode::INVALID_INDEX);
 
         if (aLeaf && bLeaf)
         {
@@ -446,21 +444,21 @@ namespace PS_AGONY
         {
             // Self-query internal node.
             const uint32_t L = a.left, R = a.right;
-            queryKDPairs(nodes, indices, L, L);
-            queryKDPairs(nodes, indices, L, R);
-            queryKDPairs(nodes, indices, R, R);
+            queryBvhPairs(nodes, indices, L, L);
+            queryBvhPairs(nodes, indices, L, R);
+            queryBvhPairs(nodes, indices, R, R);
         }
         else if (aLeaf || (!bLeaf && (a.end - a.start) < (b.end - b.start)))
         {
             // Split the larger node B.
-            queryKDPairs(nodes, indices, nodeA, b.left);
-            queryKDPairs(nodes, indices, nodeA, b.right);
+            queryBvhPairs(nodes, indices, nodeA, b.left);
+            queryBvhPairs(nodes, indices, nodeA, b.right);
         }
         else
         {
             // Split node A.
-            queryKDPairs(nodes, indices, a.left, nodeB);
-            queryKDPairs(nodes, indices, a.right, nodeB);
+            queryBvhPairs(nodes, indices, a.left, nodeB);
+            queryBvhPairs(nodes, indices, a.right, nodeB);
         }
     }
 }
