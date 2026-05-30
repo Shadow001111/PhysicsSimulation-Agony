@@ -300,6 +300,133 @@ namespace PS_AGONY
 
     void Simulation::kdTrees(size_t bodyCount)
     {
-        TRACY_SCOPE_N("K-D trees");
+        TRACY_SCOPE_N("KD trees");
+
+        static std::vector<KDNode> kdNodes;
+        static std::vector<BodyIndex> kdIndices;
+
+        kdNodes.clear();
+        kdNodes.reserve(2 * bodyCount); // A balanced binary tree needs at most 2n nodes.
+
+        kdIndices.resize(bodyCount);
+        std::iota(kdIndices.begin(), kdIndices.end(), 0);
+
+        buildKDNode(kdNodes, kdIndices, 0, (int32_t)bodyCount);
+        queryKDPairs(kdNodes, kdIndices, 0, 0); // Self-query the root finds all pairs.
+    }
+
+    int32_t Simulation::buildKDNode(std::vector<KDNode>& nodes, std::vector<BodyIndex>& indices, int32_t start, int32_t end)
+    {
+        // Compute merged bounding box for all bodies in [start, end).
+        Real minX = std::numeric_limits<Real>::max();
+        Real maxX = -std::numeric_limits<Real>::max();
+        Real minY = std::numeric_limits<Real>::max();
+        Real maxY = -std::numeric_limits<Real>::max();
+        for (int32_t i = start; i < end; i++)
+        {
+            const BodyIndex b = indices[i];
+            minX = std::min(minX, bodies.aabb.minX[b]);
+            maxX = std::max(maxX, bodies.aabb.maxX[b]);
+            minY = std::min(minY, bodies.aabb.minY[b]);
+            maxY = std::max(maxY, bodies.aabb.maxY[b]);
+        }
+
+        const int32_t nodeIdx = (int32_t)nodes.size();
+        nodes.emplace_back(minX, maxX, minY, maxY, -1, -1, start, end);
+
+        if (end - start <= KDNode::KD_LEAF_SIZE)
+            return nodeIdx;
+
+        // Partition on the widest axis at the median centroid.
+        const bool splitX = (maxX - minX) >= (maxY - minY);
+        const int32_t mid = start + (end - start) / 2;// (start + end) / 2;
+
+        auto centroid = [this, splitX](BodyIndex i) -> float
+            {
+                if (splitX)
+                    return 0.5f * (bodies.aabb.minX[i] + bodies.aabb.maxX[i]);
+                else
+                    return 0.5f * (bodies.aabb.minY[i] + bodies.aabb.maxY[i]);
+            };
+
+        std::nth_element(indices.begin() + start, indices.begin() + mid, indices.begin() + end,
+            [&](BodyIndex a, BodyIndex b)
+            {
+                return centroid(a) < centroid(b);
+            });
+
+        const int32_t left = buildKDNode(nodes, indices, start, mid);
+        const int32_t right = buildKDNode(nodes, indices, mid, end);
+
+        // Re-access by index: recursive calls may have reallocated nodes.
+        nodes[nodeIdx].left = left;
+        nodes[nodeIdx].right = right;
+        return nodeIdx;
+    }
+
+    void Simulation::queryKDPairs(const std::vector<KDNode>& nodes, const std::vector<BodyIndex>& indices, int32_t nodeA, int32_t nodeB)
+    {
+        const KDNode& a = nodes[nodeA];
+        const KDNode& b = nodes[nodeB];
+
+        // Prune entire subtree pair if their bounding boxes don't overlap.
+        if (a.minX >= b.maxX || a.maxX <= b.minX ||
+            a.minY >= b.maxY || a.maxY <= b.minY)
+            return;
+
+        const bool aLeaf = (a.left == -1);
+        const bool bLeaf = (b.left == -1);
+
+        if (aLeaf && bLeaf)
+        {
+            if (nodeA == nodeB)
+            {
+                // Self-query leaf: unique pairs only.
+                for (int32_t i = a.start; i < a.end; ++i)
+                    for (int32_t j = i + 1; j < a.end; ++j)
+                        checkAndRecord(indices[i], indices[j]);
+            }
+            else
+            {
+                // Cross-query: all pairs between two distinct leaves.
+                for (int32_t i = a.start; i < a.end; ++i)
+                    for (int32_t j = b.start; j < b.end; ++j)
+                        checkAndRecord(indices[i], indices[j]);
+            }
+            return;
+        }
+
+        if (nodeA == nodeB)
+        {
+            // Self-query internal: left-left, left-right, right-right.
+            // Copy child indices before recursing - a is a reference into nodes.
+            const int32_t L = a.left, R = a.right;
+            queryKDPairs(nodes, indices, L, L);
+            queryKDPairs(nodes, indices, L, R);
+            queryKDPairs(nodes, indices, R, R);
+        }
+        else if (aLeaf || (!bLeaf && (a.end - a.start) < (b.end - b.start)))
+        {
+            // Split the larger node B.
+            queryKDPairs(nodes, indices, nodeA, b.left);
+            queryKDPairs(nodes, indices, nodeA, b.right);
+        }
+        else
+        {
+            // Split A.
+            queryKDPairs(nodes, indices, a.left, nodeB);
+            queryKDPairs(nodes, indices, a.right, nodeB);
+        }
+    }
+
+    void Simulation::checkAndRecord(BodyIndex i, BodyIndex j)
+    {
+        if ((bodies.aabb.minX[i] < bodies.aabb.maxX[j] && bodies.aabb.maxX[i] > bodies.aabb.minX[j]) &&
+            (bodies.aabb.minY[i] < bodies.aabb.maxY[j] && bodies.aabb.maxY[i] > bodies.aabb.minY[j]))
+        {
+            broadPhaseCollisions.emplace_back(i, j);
+            bodies.collisionDebug[i] = 1;
+            bodies.collisionDebug[j] = 1;
+        }
     }
 }

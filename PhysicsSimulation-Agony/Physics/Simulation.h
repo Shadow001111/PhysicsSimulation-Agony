@@ -81,6 +81,15 @@ namespace PS_AGONY
 		BodyIndex a, b;
 	};
 
+	struct KDNode
+	{
+		static constexpr int32_t KD_LEAF_SIZE = 8;
+
+		Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
+		int32_t left, right; // Child node indices; -1 for leaves.
+		int32_t start, end; // Range in kdIndices: [start, end).
+	};
+
 	class Simulation
 	{
 		// Bodies SoA.
@@ -136,5 +145,19 @@ namespace PS_AGONY
 		void justAABB(const size_t bodyCount);
 		void sweepAndPrune(size_t bodyCount);
 		void kdTrees(size_t bodyCount);
+	private:
+		// KD trees methods
+
+		int32_t buildKDNode(
+			std::vector<KDNode>& nodes,
+			std::vector<BodyIndex>& indices,
+			int32_t start, int32_t end);
+
+		void queryKDPairs(
+			const std::vector<KDNode>& nodes,
+			const std::vector<BodyIndex>& indices,
+			int32_t nodeA, int32_t nodeB);
+
+		void checkAndRecord(BodyIndex i, BodyIndex j);
 	};
 }
