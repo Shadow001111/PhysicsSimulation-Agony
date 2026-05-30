@@ -1,10 +1,9 @@
 #version 460 core
 
 in vec2 uv;
+in flat vec3 color;
 
 out vec4 fragColor;
-
-const vec3 color = vec3(1.0);
 
 void main()
 {

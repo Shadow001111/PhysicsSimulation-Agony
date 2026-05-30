@@ -50,8 +50,15 @@ namespace PS_AGONY
 
         bodies.materialIndex.push_back(materialIndex);
 
+        bodies.aabb.minX.push_back(0.0);
+        bodies.aabb.minY.push_back(0.0);
+        bodies.aabb.maxX.push_back(0.0);
+        bodies.aabb.maxY.push_back(0.0);
+
         bodies.bodyType.push_back(BodyType::Circle);
         bodies.shapeIndex.push_back(newCircleIndex);
+
+        bodies.collisionDebug.push_back(0);
 
         circles.radius.push_back(radius);
         circles.bodyIndices.push_back(newBodyIndex);
@@ -71,10 +78,12 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Physics step");
 
         const size_t bodyCount = bodies.getCount();
+        if (bodyCount == 0) return;
 
         // Self-explanatory.
         applyExternalForces(bodyCount, deltaTime);
         integrate(bodyCount, deltaTime);
+        boundaryCollisionResolution(bodyCount);
 
         // Build AABBs.
         {
@@ -83,8 +92,11 @@ namespace PS_AGONY
         }
 
         // Collision detection.
+        broadPhaseCollisionDetection();
+        narrowPhaseCollisionDetection();
 
         // Collision resolution.
+        resolveCollisions();
     }
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
@@ -116,6 +128,37 @@ namespace PS_AGONY
         }
     }
 
+    void Simulation::boundaryCollisionResolution(size_t bodyCount)
+    {
+        TRACY_SCOPE_N("Boundary collision");
+
+        const Real boundary = 10.0f;
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            const Real x = bodies.positionX[i];
+            const Real absX = std::abs(x);
+
+            if (absX > boundary)
+            {
+                const Real sign = bodies.positionX[i] > 0.0 ? 1.0 : -1.0;
+                bodies.positionX[i] = boundary * sign;
+                bodies.velocityX[i] = -bodies.velocityX[i];
+            }
+        }
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            const Real y = bodies.positionY[i];
+            const Real absY = std::abs(y);
+
+            if (absY > boundary)
+            {
+                const Real sign = bodies.positionY[i] > 0.0 ? 1.0 : -1.0;
+                bodies.positionY[i] = boundary * sign;
+                bodies.velocityY[i] = -bodies.velocityY[i];
+            }
+        }
+    }
+
     void Simulation::buildCircleAABBs()
     {
         TRACY_SCOPE_N("Build circle AABBs");
@@ -135,5 +178,63 @@ namespace PS_AGONY
             bodies.aabb.maxX[bodyIndex] = x + radius;
             bodies.aabb.maxY[bodyIndex] = y + radius;
         }
+    }
+
+    void Simulation::broadPhaseCollisionDetection()
+    {
+        TRACY_SCOPE_N("Broad phase");
+
+        std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.end(), 0);
+
+        const size_t bodyCount = bodies.getCount();
+        if (bodyCount < 1) return;
+
+        broadPhaseCollisions.reserve(bodyCount);
+
+        for (size_t bodyIndexA = 0; bodyIndexA < bodyCount - 1; bodyIndexA++)
+        {
+            const Real minXA = bodies.aabb.minX[bodyIndexA];
+            const Real minYA = bodies.aabb.minY[bodyIndexA];
+            const Real maxXA = bodies.aabb.maxX[bodyIndexA];
+            const Real maxYA = bodies.aabb.maxY[bodyIndexA];
+
+            for (size_t bodyIndexB = bodyIndexA + 1; bodyIndexB < bodyCount; bodyIndexB++)
+            {
+                const Real minXB = bodies.aabb.minX[bodyIndexB];
+                const Real minYB = bodies.aabb.minY[bodyIndexB];
+                const Real maxXB = bodies.aabb.maxX[bodyIndexB];
+                const Real maxYB = bodies.aabb.maxY[bodyIndexB];
+            
+                const bool doesIntersect =
+                    (minXA < maxXB && maxXA > minXB) &&
+                    (minYA < maxYB && maxYA > minYB);
+
+                if (doesIntersect)
+                {
+                    broadPhaseCollisions.emplace_back(bodyIndexA, bodyIndexB);
+
+                    bodies.collisionDebug[bodyIndexA] = true;
+                    bodies.collisionDebug[bodyIndexB] = true;
+                }
+            }
+        }
+    }
+
+    void Simulation::narrowPhaseCollisionDetection()
+    {
+        TRACY_SCOPE_N("Narrow phase");
+
+        const size_t bodyPairCount = broadPhaseCollisions.size();
+        if (bodyPairCount == 0) return;
+
+        for (size_t i = 0; i < bodyPairCount; i++)
+        {
+            BodyPair bodyPair = broadPhaseCollisions[i];
+        }
+    }
+
+    void Simulation::resolveCollisions()
+    {
+        TRACY_SCOPE_N("Resolve collisions");
     }
 }

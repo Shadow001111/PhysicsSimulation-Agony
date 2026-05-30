@@ -53,8 +53,9 @@ namespace PS_AGONY
 		AABBSoA aabb;
 
 		std::vector<BodyType> bodyType;
-
 		std::vector<BodyIndex> shapeIndex;
+
+		std::vector<uint8_t> collisionDebug;
 
 		size_t getCount() const noexcept { return positionX.size(); }
 	};
@@ -75,6 +76,11 @@ namespace PS_AGONY
 		Vec2 gravity{ 0.0, -9.81 };
 	};
 
+	struct BodyPair
+	{
+		BodyIndex a, b;
+	};
+
 	class Simulation
 	{
 		// Bodies SoA.
@@ -86,6 +92,9 @@ namespace PS_AGONY
 
 		// Settings.
 		SimulationSettings simulationSettings;
+
+		// Collisions.
+		std::vector<BodyPair> broadPhaseCollisions;
 
 		// Other.
 		Real updateTimeAccumulator = 0.0;
@@ -112,6 +121,14 @@ namespace PS_AGONY
 
 		void integrate(size_t bodyCount, Real deltaTime);
 
+		void boundaryCollisionResolution(size_t bodyCount);
+
 		void buildCircleAABBs();
+
+		void broadPhaseCollisionDetection();
+
+		void narrowPhaseCollisionDetection();
+
+		void resolveCollisions();
 	};
 }

@@ -88,9 +88,12 @@ namespace PS_AGONY
             const Real positionX = bodies.positionX[bodyIndex];
             const Real positionY = bodies.positionY[bodyIndex];
 
+            const auto collisionDebug = bodies.collisionDebug[bodyIndex];
+
             circleResources.renderData[i].x = positionX;
             circleResources.renderData[i].y = positionY;
             circleResources.renderData[i].radius = radius;
+            circleResources.renderData[i].collisionDebug = collisionDebug;
         }
 
         // Move data to gpu.
@@ -122,8 +125,16 @@ namespace PS_AGONY
         circleResources.vao.bindVertexBuffer(1, circleResources.instanceVbo.getID(), 0, SIZEOF_RENDER_DATA);
 
         circleResources.vao.enableAttribute(1);
-        circleResources.vao.setFloatAttribute(1, 3, 0, 1);
+        circleResources.vao.setFloatAttribute(1, 2, 0, 1);
         circleResources.vao.setAttributeDivisor(1, 1);
+
+        circleResources.vao.enableAttribute(2);
+        circleResources.vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
+        circleResources.vao.setAttributeDivisor(2, 1);
+
+        circleResources.vao.enableAttribute(3);
+        circleResources.vao.setIntAttribute(3, 1, sizeof(float) * 3, 1);
+        circleResources.vao.setAttributeDivisor(3, 1);
 
         circleResources.renderData.resize(newCapacity / SIZEOF_RENDER_DATA);
     }

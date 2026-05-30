@@ -12,6 +12,7 @@ namespace PS_AGONY
 	struct CircleRenderData
 	{
 		float x, y, radius;
+		uint32_t collisionDebug;
 	};
 
 	struct CircleRenderResources
