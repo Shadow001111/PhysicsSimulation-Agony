@@ -135,7 +135,7 @@ namespace PS_AGONY
 
 		void buildCircleAABBs();
 
-		void broadPhaseCollisionDetection(const size_t bodyCount);
+		void broadPhaseCollisionDetection(size_t bodyCount);
 
 		void narrowPhaseCollisionDetection();
 
@@ -143,9 +143,10 @@ namespace PS_AGONY
 	private:
 		// Broad phase methods
 
-		void justAABB(const size_t bodyCount);
+		void justAABB(size_t bodyCount);
 		void sweepAndPruneXAxis(size_t bodyCount);
 		void boundVolumeHierarchy(size_t bodyCount);
+		void uniformSpaceGrid(size_t bodyCount);
 	private:
 		// BVH methods
 

@@ -3,6 +3,7 @@
 #include "Core/TracyProfiler.h"
 
 #include <numeric>
+#include "robin_hood.h"
 
 namespace PS_AGONY
 {
@@ -182,7 +183,7 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::broadPhaseCollisionDetection(const size_t bodyCount)
+    void Simulation::broadPhaseCollisionDetection(size_t bodyCount)
     {
         TRACY_SCOPE_N("Broad phase");
 
@@ -195,7 +196,8 @@ namespace PS_AGONY
 
         //justAABB(bodyCount);
         //sweepAndPrune(bodyCount);
-        boundVolumeHierarchy(bodyCount);
+        //boundVolumeHierarchy(bodyCount);
+        uniformSpaceGrid(bodyCount);
     }
 
     void Simulation::narrowPhaseCollisionDetection()
@@ -216,7 +218,7 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Resolve collisions");
     }
 
-    void Simulation::justAABB(const size_t bodyCount)
+    void Simulation::justAABB(size_t bodyCount)
     {
         TRACY_SCOPE_N("AABB checks");
 
@@ -313,6 +315,138 @@ namespace PS_AGONY
 
         buildBvhNode(nodes, indices, 0, bodyCount);
         queryBvhPairs(nodes, indices, 0, 0); // Self-query the root finds all pairs.
+    }
+
+    void Simulation::uniformSpaceGrid(size_t bodyCount)
+    {
+        TRACY_SCOPE_N("Uniform Grid");
+
+        // Compute world bounds from all AABBs.
+        Real globalMinX = std::numeric_limits<Real>::max();
+        Real globalMaxX = -std::numeric_limits<Real>::max();
+        Real globalMinY = std::numeric_limits<Real>::max();
+        Real globalMaxY = -std::numeric_limits<Real>::max();
+
+        Real totalExtent = Real(0.0);
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            const Real minX = bodies.aabb.minX[i];
+            const Real maxX = bodies.aabb.maxX[i];
+            const Real minY = bodies.aabb.minY[i];
+            const Real maxY = bodies.aabb.maxY[i];
+
+            globalMinX = std::min(globalMinX, minX);
+            globalMaxX = std::max(globalMaxX, maxX);
+            globalMinY = std::min(globalMinY, minY);
+            globalMaxY = std::max(globalMaxY, maxY);
+
+            const Real extentX = maxX - minX;
+            const Real extentY = maxY - minY;
+            totalExtent += std::max(extentX, extentY);
+        }
+
+        const Real averageBodyExtent = totalExtent / Real(bodyCount);
+
+        const Real worldWidth = std::max(globalMaxX - globalMinX, Real(1e-3));
+        const Real worldHeight = std::max(globalMaxY - globalMinY, Real(1e-3));
+        const Real worldArea = worldWidth * worldHeight;
+
+        // Determine cell size.
+        Real cellSize = std::max(
+            std::sqrt(worldArea / Real(bodyCount)),
+            averageBodyExtent * Real(2.0)
+        );
+        cellSize = std::max(cellSize, Real(0.25));
+
+        const Real invCellSize = Real(1.0) / cellSize;
+
+        // Grid size.
+        const int gridWidth = std::max(1, static_cast<int>(std::ceil(worldWidth * invCellSize)));
+        const int gridHeight = std::max(1, static_cast<int>(std::ceil(worldHeight * invCellSize)));
+
+        // Map each occupied cell to a list of body indices.
+        static robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> grid;
+        grid.clear();
+        grid.reserve(bodyCount * 4);
+
+        // TODO: Change to murmur hash or something else.
+        auto getCellKey = [](int cx, int cy) -> uint64_t {
+            return (static_cast<uint64_t>(cx) << 32) | static_cast<uint64_t>(cy);
+            };
+
+        for (BodyIndex bodyIndex = 0; bodyIndex < bodyCount; bodyIndex++)
+        {
+            const Real minX = bodies.aabb.minX[bodyIndex];
+            const Real maxX = bodies.aabb.maxX[bodyIndex];
+            const Real minY = bodies.aabb.minY[bodyIndex];
+            const Real maxY = bodies.aabb.maxY[bodyIndex];
+
+            int cx0 = static_cast<int>(std::floor((minX - globalMinX) * invCellSize));
+            int cx1 = static_cast<int>(std::floor((maxX - globalMinX) * invCellSize));
+            int cy0 = static_cast<int>(std::floor((minY - globalMinY) * invCellSize));
+            int cy1 = static_cast<int>(std::floor((maxY - globalMinY) * invCellSize));
+
+            cx0 = std::clamp(cx0, 0, gridWidth  - 1);
+            cx1 = std::clamp(cx1, 0, gridWidth  - 1);
+            cy0 = std::clamp(cy0, 0, gridHeight - 1);
+            cy1 = std::clamp(cy1, 0, gridHeight - 1);
+
+            for (int cx = cx0; cx <= cx1; cx++)
+            for (int cy = cy0; cy <= cy1; cy++)
+                 grid[getCellKey(cx, cy)].push_back(bodyIndex);
+        }
+
+        // For each cell, test all pairs inside it.
+        static robin_hood::unordered_flat_set<uint64_t> testedPairs;
+        testedPairs.clear();
+        testedPairs.reserve(bodyCount * 8);
+
+        auto pairKey = [](BodyIndex a, BodyIndex b) -> uint64_t
+            {
+                const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
+                const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
+                return (static_cast<uint64_t>(hi) << 32) | static_cast<uint64_t>(lo);
+            };
+
+        for (auto& entry : grid)
+        {
+            const std::vector<BodyIndex>& bodiesInCell = entry.second;
+            const size_t bodyInCellCount = bodiesInCell.size();
+            if (bodyInCellCount < 2) continue;
+
+            for (size_t i = 0; i < bodyInCellCount; i++)
+            {
+                const BodyIndex bodyIndexA = bodiesInCell[i];
+                const Real minXA = bodies.aabb.minX[bodyIndexA];
+                const Real minYA = bodies.aabb.minY[bodyIndexA];
+                const Real maxXA = bodies.aabb.maxX[bodyIndexA];
+                const Real maxYA = bodies.aabb.maxY[bodyIndexA];
+
+                for (size_t j = i + 1; j < bodyInCellCount; j++)
+                {
+                    const BodyIndex bodyIndexB = bodiesInCell[j];
+                    const uint64_t key = pairKey(bodyIndexA, bodyIndexB);
+                    if (!testedPairs.insert(key).second)
+                        continue;
+
+                    const Real minXB = bodies.aabb.minX[bodyIndexB];
+                    const Real minYB = bodies.aabb.minY[bodyIndexB];
+                    const Real maxXB = bodies.aabb.maxX[bodyIndexB];
+                    const Real maxYB = bodies.aabb.maxY[bodyIndexB];
+
+                    const bool doesIntersect =
+                        (minXA < maxXB && maxXA > minXB) &&
+                        (minYA < maxYB && maxYA > minYB);
+
+                    if (doesIntersect)
+                    {
+                        broadPhaseCollisions.emplace_back(bodyIndexA, bodyIndexB);
+                        bodies.collisionDebug[bodyIndexA] = 1;
+                        bodies.collisionDebug[bodyIndexB] = 1;
+                    }
+                }
+            }
+        }
     }
 
     uint32_t Simulation::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
