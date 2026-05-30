@@ -14,7 +14,6 @@ namespace PS_AGONY
 
         this->bodies = &bodiesRef;
 
-        std::fill(bodies->collisionDebug.begin(), bodies->collisionDebug.end(), 0);
         collidingBodyPairs.clear();
 
         const size_t bodyCount = bodies->getCount();
@@ -71,8 +70,6 @@ namespace PS_AGONY
                 if (doesIntersect)
                 {
                     collidingBodyPairs.emplace_back(current, active);
-                    bodies->collisionDebug[current] = 1;
-                    bodies->collisionDebug[active] = 1;
                 }
             }
 
@@ -235,8 +232,6 @@ namespace PS_AGONY
                         if (doesIntersect)
                         {
                             collidingBodyPairs.emplace_back(bodyIndexA, bodyIndexB);
-                            bodies->collisionDebug[bodyIndexA] = 1;
-                            bodies->collisionDebug[bodyIndexB] = 1;
                         }
                     }
                 }
@@ -332,8 +327,6 @@ namespace PS_AGONY
                             (minYi < maxYj && maxYi > minYj))
                         {
                             collidingBodyPairs.emplace_back(bi, bj);
-                            bodies->collisionDebug[bi] = 1;
-                            bodies->collisionDebug[bj] = 1;
                         }
                     }
                 }
@@ -360,8 +353,6 @@ namespace PS_AGONY
                             (minYi < maxYj && maxYi > minYj))
                         {
                             collidingBodyPairs.emplace_back(bi, bj);
-                            bodies->collisionDebug[bi] = 1;
-                            bodies->collisionDebug[bj] = 1;
                         }
                     }
                 }

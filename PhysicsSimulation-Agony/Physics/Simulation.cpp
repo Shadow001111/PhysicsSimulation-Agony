@@ -95,8 +95,21 @@ namespace PS_AGONY
         // Early return.
         if (bodyCount < 2) return;
 
-        // Collision detection.
+        // Broad phase.
         const std::vector<BodyPair>& broadPhaseCollisions = broadPhaseCollisionDetector.findCollisions(bodies);
+        {
+            TRACY_SCOPE_N("Mark bodies of broad phase");
+
+            std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.end(), 0); // Equal to 'bodyCount'.
+
+            for (const BodyPair& pair : broadPhaseCollisions)
+            {
+                bodies.collisionDebug[pair.a] = 1;
+                bodies.collisionDebug[pair.b] = 1;
+            }
+        }
+
+        // Narrow phase.
         narrowPhaseCollisionDetection();
 
         // Collision resolution.

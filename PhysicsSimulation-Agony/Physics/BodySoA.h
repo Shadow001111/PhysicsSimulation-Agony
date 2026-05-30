@@ -48,7 +48,7 @@ namespace PS_AGONY
 		std::vector<BodyType> bodyType;
 		std::vector<BodyIndex> shapeIndex;
 
-		mutable std::vector<uint8_t> collisionDebug;
+		std::vector<uint8_t> collisionDebug;
 
 		size_t getCount() const noexcept { return positionX.size(); }
 	};
