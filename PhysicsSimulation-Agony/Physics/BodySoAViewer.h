@@ -4,18 +4,41 @@
 
 namespace PS_AGONY
 {
+    class AABBSoAViewer
+    {
+        size_t count = 0;
+    public:
+        const Real* minX = nullptr;
+        const Real* minY = nullptr;
+        const Real* maxX = nullptr;
+        const Real* maxY = nullptr;
+
+        AABBSoAViewer() = default;
+
+        AABBSoAViewer(const AABBSoA& aabb) :
+            count(aabb.minX.size()),
+            minX(aabb.minX.data()),
+            minY(aabb.minY.data()),
+            maxX(aabb.maxX.data()),
+            maxY(aabb.maxY.data())
+        {
+        }
+
+        size_t getCount() const noexcept { return count; }
+    };
+
     class BodySoAViewer
     {
-        struct AABBSoAViewer
+        struct AABBSoAViewer_Internal
         {
             const Real* minX = nullptr;
             const Real* minY = nullptr;
             const Real* maxX = nullptr;
             const Real* maxY = nullptr;
 
-            AABBSoAViewer() = default;
+            AABBSoAViewer_Internal() = default;
 
-            AABBSoAViewer(const AABBSoA& aabb) :
+            AABBSoAViewer_Internal(const AABBSoA& aabb) :
                 minX(aabb.minX.data()),
                 minY(aabb.minY.data()),
                 maxX(aabb.maxX.data()),
@@ -23,7 +46,7 @@ namespace PS_AGONY
             {}
         };
 
-        size_t bodyCount = 0;
+        size_t count = 0;
     public:
         const Real* positionX = nullptr;
         const Real* positionY = nullptr;
@@ -43,7 +66,7 @@ namespace PS_AGONY
 
         const MaterialIndex* materialIndex = nullptr;
 
-        AABBSoAViewer aabb;
+        AABBSoAViewer_Internal aabb;
 
         const BodyType* bodyType = nullptr;
         const BodyIndex* shapeIndex = nullptr;
@@ -53,7 +76,7 @@ namespace PS_AGONY
         BodySoAViewer() = default;
 
         explicit BodySoAViewer(const BodySoA& bodies) noexcept :
-            bodyCount(bodies.getCount()),
+            count(bodies.getCount()),
             positionX(bodies.positionX.data()),
             positionY(bodies.positionY.data()),
             velocityX(bodies.velocityX.data()),
@@ -71,6 +94,6 @@ namespace PS_AGONY
             collisionDebug(bodies.collisionDebug.data())
         {}
 
-        size_t getCount() const noexcept { return bodyCount; }
+        size_t getCount() const noexcept { return count; }
     };
 }

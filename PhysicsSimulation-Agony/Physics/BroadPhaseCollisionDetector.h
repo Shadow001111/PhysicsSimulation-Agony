@@ -1,5 +1,4 @@
 #pragma once
-//#include "BodySoA.h"
 #include "BodySoAViewer.h"
 
 #include <vector>
@@ -23,7 +22,7 @@ namespace PS_AGONY
 			uint32_t start, end; // Range in kdIndices: [start, end).
 		};
 
-		BodySoAViewer bodies;
+		AABBSoAViewer bodiesAABB;
 
 		std::vector<BodyPair> collidingBodyPairs;
 	public:
@@ -34,7 +33,7 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector(BroadPhaseCollisionDetector&&) = default;
 		BroadPhaseCollisionDetector& operator=(BroadPhaseCollisionDetector&&) = default;
 
-		const std::vector<BodyPair>& findCollisions(const BodySoAViewer& bodiesViewer);
+		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer);
 	private:
 		void sweepAndPruneXAxis(size_t bodyCount);
 		void boundVolumeHierarchy(size_t bodyCount);
