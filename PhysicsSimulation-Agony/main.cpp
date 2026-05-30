@@ -108,7 +108,7 @@ static int gameFunc()
         const double deltaTime = time - lastTime;
         lastTime = time;
 
-        std::cout << 1.0f / deltaTime << "\n";
+        //std::cout << 1.0f / deltaTime << "\n";
 
         // Simulation.
         simulation.update(deltaTime);

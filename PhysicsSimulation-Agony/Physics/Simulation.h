@@ -130,5 +130,10 @@ namespace PS_AGONY
 		void narrowPhaseCollisionDetection();
 
 		void resolveCollisions();
+	private:
+		// Broad phase methods
+
+		void justAABB(const size_t bodyCount);
+		void sweepAndPrune(size_t bodyCount);
 	};
 }

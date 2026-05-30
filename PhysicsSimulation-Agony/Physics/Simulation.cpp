@@ -2,6 +2,8 @@
 
 #include "Core/TracyProfiler.h"
 
+#include <numeric>
+
 namespace PS_AGONY
 {
     static Real calculateCircleInertia(Real radius, Real mass)
@@ -186,10 +188,35 @@ namespace PS_AGONY
 
         std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.end(), 0);
 
-        if (bodyCount < 1) return;
+        if (bodyCount < 2) return; // No pairs to check.
 
+        broadPhaseCollisions.clear();
         broadPhaseCollisions.reserve(bodyCount);
 
+        //justAABB(bodyCount);
+        sweepAndPrune(bodyCount);
+    }
+
+    void Simulation::narrowPhaseCollisionDetection()
+    {
+        TRACY_SCOPE_N("Narrow phase");
+
+        const size_t bodyPairCount = broadPhaseCollisions.size();
+        if (bodyPairCount == 0) return;
+
+        //for (size_t i = 0; i < bodyPairCount; i++)
+        //{
+        //    BodyPair bodyPair = broadPhaseCollisions[i];
+        //}
+    }
+
+    void Simulation::resolveCollisions()
+    {
+        TRACY_SCOPE_N("Resolve collisions");
+    }
+
+    void Simulation::justAABB(const size_t bodyCount)
+    {
         for (size_t bodyIndexA = 0; bodyIndexA < bodyCount - 1; bodyIndexA++)
         {
             const Real minXA = bodies.aabb.minX[bodyIndexA];
@@ -203,7 +230,7 @@ namespace PS_AGONY
                 const Real minYB = bodies.aabb.minY[bodyIndexB];
                 const Real maxXB = bodies.aabb.maxX[bodyIndexB];
                 const Real maxYB = bodies.aabb.maxY[bodyIndexB];
-            
+
                 const bool doesIntersect =
                     (minXA < maxXB && maxXA > minXB) &&
                     (minYA < maxYB && maxYA > minYB);
@@ -211,7 +238,6 @@ namespace PS_AGONY
                 if (doesIntersect)
                 {
                     broadPhaseCollisions.emplace_back(bodyIndexA, bodyIndexB);
-
                     bodies.collisionDebug[bodyIndexA] = 1;
                     bodies.collisionDebug[bodyIndexB] = 1;
                 }
@@ -219,21 +245,55 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::narrowPhaseCollisionDetection()
+    void Simulation::sweepAndPrune(size_t bodyCount)
     {
-        TRACY_SCOPE_N("Narrow phase");
+        // Build list of body indices sorted by AABB minX.
+        static std::vector<BodyIndex> sortedIndices;
+        sortedIndices.resize(bodyCount);
 
-        const size_t bodyPairCount = broadPhaseCollisions.size();
-        if (bodyPairCount == 0) return;
+        std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+        std::sort(sortedIndices.begin(), sortedIndices.end(),
+            [this](BodyIndex a, BodyIndex b) {
+                return bodies.aabb.minX[a] < bodies.aabb.minX[b];
+            });
 
-        for (size_t i = 0; i < bodyPairCount; i++)
+        static std::vector<BodyIndex> activeList; // Bodies currently overlapping in X.
+        activeList.clear();
+
+        for (BodyIndex current : sortedIndices)
         {
-            BodyPair bodyPair = broadPhaseCollisions[i];
-        }
-    }
+            const Real minXA = bodies.aabb.minX[current];
+            const Real maxXA = bodies.aabb.maxX[current];
+            const Real minYA = bodies.aabb.minY[current];
+            const Real maxYA = bodies.aabb.maxY[current];
 
-    void Simulation::resolveCollisions()
-    {
-        TRACY_SCOPE_N("Resolve collisions");
+            // Remove from activeList any body whose maxX < current minX.
+            activeList.erase(std::remove_if(activeList.begin(), activeList.end(),
+                [this, minXA](BodyIndex active) {
+                    return bodies.aabb.maxX[active] < minXA;
+                }), activeList.end());
+
+            // Check against all active bodies (they overlap in X).
+            for (BodyIndex active : activeList)
+            {
+                const Real minXB = bodies.aabb.minX[active];
+                const Real maxXB = bodies.aabb.maxX[active];
+                const Real minYB = bodies.aabb.minY[active];
+                const Real maxYB = bodies.aabb.maxY[active];
+
+                const bool doesIntersect =
+                    (minXA < maxXB && maxXA > minXB) &&
+                    (minYA < maxYB && maxYA > minYB);
+
+                if (doesIntersect)
+                {
+                    broadPhaseCollisions.emplace_back(current, active);
+                    bodies.collisionDebug[current] = 1;
+                    bodies.collisionDebug[active] = 1;
+                }
+            }
+
+            activeList.push_back(current);
+        }
     }
 }
