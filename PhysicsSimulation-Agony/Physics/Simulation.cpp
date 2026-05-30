@@ -217,6 +217,8 @@ namespace PS_AGONY
 
     void Simulation::justAABB(const size_t bodyCount)
     {
+        TRACY_SCOPE_N("AABB checks");
+
         for (size_t bodyIndexA = 0; bodyIndexA < bodyCount - 1; bodyIndexA++)
         {
             const Real minXA = bodies.aabb.minX[bodyIndexA];
@@ -247,6 +249,8 @@ namespace PS_AGONY
 
     void Simulation::sweepAndPrune(size_t bodyCount)
     {
+        TRACY_SCOPE_N("Sweet-and-prune");
+
         // Build list of body indices sorted by AABB minX.
         static std::vector<BodyIndex> sortedIndices;
         sortedIndices.resize(bodyCount);
@@ -263,11 +267,11 @@ namespace PS_AGONY
         for (BodyIndex current : sortedIndices)
         {
             const Real minXA = bodies.aabb.minX[current];
-            //const Real maxXA = bodies.aabb.maxX[current];
             const Real minYA = bodies.aabb.minY[current];
             const Real maxYA = bodies.aabb.maxY[current];
 
             // Remove from activeList any body whose maxX < current minX.
+            // For some reason, this is faster than removing with swap and pop.
             activeList.erase(std::remove_if(activeList.begin(), activeList.end(),
                 [this, minXA](BodyIndex active) {
                     return bodies.aabb.maxX[active] <= minXA;
