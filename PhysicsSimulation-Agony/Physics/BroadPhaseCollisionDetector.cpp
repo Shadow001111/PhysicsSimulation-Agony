@@ -5,7 +5,6 @@
 
 #include <numeric>
 #include <cmath>
-#include "robin_hood.h"
 
 namespace PS_AGONY
 {
@@ -39,19 +38,20 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         // Build list of body indices sorted by AABB minX.
-        static std::vector<BodyIndex> sortedIndices;
-        sortedIndices.resize(bodyCount);
+        auto* CORE_RESTRICT sortedIndices = &functionResources.bodyIndexVector1;
+        auto* CORE_RESTRICT activeList = &functionResources.bodyIndexVector2; // Bodies currently overlapping in X.
 
-        std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
-        std::sort(sortedIndices.begin(), sortedIndices.end(),
+        sortedIndices->resize(bodyCount);
+
+        std::iota(sortedIndices->begin(), sortedIndices->end(), 0);
+        std::sort(sortedIndices->begin(), sortedIndices->end(),
             [&](BodyIndex a, BodyIndex b) {
                 return aabbMinX[a] < aabbMinX[b];
             });
 
-        static std::vector<BodyIndex> activeList; // Bodies currently overlapping in X.
-        activeList.clear();
+        activeList->clear();
 
-        for (BodyIndex current : sortedIndices)
+        for (BodyIndex current : *sortedIndices)
         {
             const Real minXA = aabbMinX[current];
             const Real minYA = aabbMinY[current];
@@ -59,13 +59,13 @@ namespace PS_AGONY
 
             // Remove from activeList any body whose maxX < current minX.
             // For some reason, this is faster than removing with swap and pop.
-            activeList.erase(std::remove_if(activeList.begin(), activeList.end(),
+            activeList->erase(std::remove_if(activeList->begin(), activeList->end(),
                 [&](BodyIndex active) {
                     return aabbMaxX[active] <= minXA;
-                }), activeList.end());
+                }), activeList->end());
 
             // Check against all active bodies (they overlap in X).
-            for (BodyIndex active : activeList)
+            for (BodyIndex active : *activeList)
             {
                 const Real minYB = aabbMinY[active];
                 const Real maxYB = aabbMaxY[active];
@@ -78,7 +78,7 @@ namespace PS_AGONY
                 }
             }
 
-            activeList.push_back(current);
+            activeList->push_back(current);
         }
     }
 
@@ -86,17 +86,17 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("BVH");
 
-        static std::vector<BvhNode> nodes;
-        static std::vector<BodyIndex> indices;
+        auto* CORE_RESTRICT nodes = &functionResources.bvhNodeVector1;
+        auto* CORE_RESTRICT indices = &functionResources.bodyIndexVector1;
 
-        nodes.clear();
-        nodes.reserve(2 * bodyCount);
+        nodes->clear();
+        nodes->reserve(2 * bodyCount);
 
-        indices.resize(bodyCount);
-        std::iota(indices.begin(), indices.end(), 0);
+        indices->resize(bodyCount);
+        std::iota(indices->begin(), indices->end(), 0);
 
-        buildBvhNode(nodes, indices, 0, bodyCount);
-        queryBvhPairs(nodes, indices, 0, 0); // Self-query the root finds all pairs.
+        buildBvhNode(*nodes, *indices, 0, bodyCount);
+        queryBvhPairs(*nodes, *indices, 0, 0); // Self-query the root finds all pairs.
     }
 
     void BroadPhaseCollisionDetector::uniformSpaceGrid(size_t bodyCount)
@@ -108,10 +108,12 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
+        auto* CORE_RESTRICT grid = &functionResources.spaceGrid;
+
         // Compute world bounds from all AABBs.
-        Real globalMinX = std::numeric_limits<Real>::max();
+        Real globalMinX =  std::numeric_limits<Real>::max();
         Real globalMaxX = -std::numeric_limits<Real>::max();
-        Real globalMinY = std::numeric_limits<Real>::max();
+        Real globalMinY =  std::numeric_limits<Real>::max();
         Real globalMaxY = -std::numeric_limits<Real>::max();
 
         Real totalExtent = Real(0.0);
@@ -155,9 +157,8 @@ namespace PS_AGONY
         const int gridHeight = std::max(1, static_cast<int>(std::ceil(worldHeight * invCellSize)));
 
         // Map each occupied cell to a list of body indices.
-        static robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> grid;
-        grid.clear();
-        grid.reserve(bodyCount * 4);
+        grid->clear();
+        grid->reserve(bodyCount * 4);
 
         auto getCellKey = [](int cx, int cy) -> uint64_t {
             constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
@@ -186,15 +187,15 @@ namespace PS_AGONY
                 cy1 = std::clamp(cy1, 0, gridHeight - 1);
 
                 for (int cx = cx0; cx <= cx1; cx++)
-                    for (int cy = cy0; cy <= cy1; cy++)
-                        grid[getCellKey(cx, cy)].push_back(bodyIndex);
+                for (int cy = cy0; cy <= cy1; cy++)
+                    (*grid)[getCellKey(cx, cy)].push_back(bodyIndex);
             }
         }
 
         // For each cell, test all pairs inside it.
-        static robin_hood::unordered_flat_set<uint64_t> testedPairs;
-        testedPairs.clear();
-        testedPairs.reserve(bodyCount * 8);
+        auto* CORE_RESTRICT testedPairs = &functionResources.uint64Set;
+        testedPairs->clear();
+        testedPairs->reserve(bodyCount * 8);
 
         auto pairKey = [](BodyIndex a, BodyIndex b) -> uint64_t
             {
@@ -209,7 +210,7 @@ namespace PS_AGONY
 
         {
             TRACY_SCOPE_N("Test pairs");
-            for (auto& entry : grid)
+            for (auto& entry : *grid)
             {
                 const std::vector<BodyIndex>& bodiesInCell = entry.second;
                 const size_t bodyInCellCount = bodiesInCell.size();
@@ -227,7 +228,7 @@ namespace PS_AGONY
                     {
                         const BodyIndex bodyIndexB = bodiesInCell[j];
                         const uint64_t key = pairKey(bodyIndexA, bodyIndexB);
-                        if (!testedPairs.insert(key).second)
+                        if (!testedPairs->insert(key).second)
                             continue;
 
                         const Real minXB = aabbMinX[bodyIndexB];

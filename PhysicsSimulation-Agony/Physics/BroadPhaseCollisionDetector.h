@@ -2,6 +2,7 @@
 #include "BodySoAViewer.h"
 
 #include <vector>
+#include "robin_hood.h"
 
 namespace PS_AGONY
 {
@@ -22,7 +23,20 @@ namespace PS_AGONY
 			uint32_t start, end; // Range in kdIndices: [start, end).
 		};
 
+		struct FunctionResources
+		{
+			std::vector<BodyIndex> bodyIndexVector1;
+			std::vector<BodyIndex> bodyIndexVector2;
+
+			std::vector<BvhNode> bvhNodeVector1;
+
+			robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> spaceGrid;
+
+			robin_hood::unordered_flat_set<uint64_t> uint64Set;
+		};
+
 		AABBSoAViewer bodiesAABB;
+		FunctionResources functionResources;
 
 		std::vector<BodyPair> collidingBodyPairs;
 	public:
