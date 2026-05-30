@@ -83,11 +83,12 @@ namespace PS_AGONY
 
 	struct KDNode
 	{
-		static constexpr int32_t KD_LEAF_SIZE = 8;
+		static constexpr uint32_t KD_LEAF_SIZE = 8;
+		static constexpr uint32_t INVALID_INDEX = -1;
 
 		Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
-		int32_t left, right; // Child node indices; -1 for leaves.
-		int32_t start, end; // Range in kdIndices: [start, end).
+		uint32_t left, right; // Child node indices; INVALID_INDEX for leaves.
+		uint32_t start, end; // Range in kdIndices: [start, end).
 	};
 
 	class Simulation
@@ -148,16 +149,14 @@ namespace PS_AGONY
 	private:
 		// KD trees methods
 
-		int32_t buildKDNode(
+		uint32_t buildKDNode(
 			std::vector<KDNode>& nodes,
 			std::vector<BodyIndex>& indices,
-			int32_t start, int32_t end);
+			uint32_t start, uint32_t end);
 
 		void queryKDPairs(
 			const std::vector<KDNode>& nodes,
 			const std::vector<BodyIndex>& indices,
-			int32_t nodeA, int32_t nodeB);
-
-		void checkAndRecord(BodyIndex i, BodyIndex j);
+			uint32_t nodeA, uint32_t nodeB);
 	};
 }

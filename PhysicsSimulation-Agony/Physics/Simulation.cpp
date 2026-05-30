@@ -4,6 +4,8 @@
 
 #include <numeric>
 
+#include <iostream>
+
 namespace PS_AGONY
 {
     static Real calculateCircleInertia(Real radius, Real mass)
@@ -311,18 +313,18 @@ namespace PS_AGONY
         kdIndices.resize(bodyCount);
         std::iota(kdIndices.begin(), kdIndices.end(), 0);
 
-        buildKDNode(kdNodes, kdIndices, 0, (int32_t)bodyCount);
+        buildKDNode(kdNodes, kdIndices, 0, bodyCount);
         queryKDPairs(kdNodes, kdIndices, 0, 0); // Self-query the root finds all pairs.
     }
 
-    int32_t Simulation::buildKDNode(std::vector<KDNode>& nodes, std::vector<BodyIndex>& indices, int32_t start, int32_t end)
+    uint32_t Simulation::buildKDNode(std::vector<KDNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
     {
-        // Compute merged bounding box for all bodies in [start, end).
-        Real minX = std::numeric_limits<Real>::max();
+        // Compute merged bounding box.
+        Real minX =  std::numeric_limits<Real>::max();
         Real maxX = -std::numeric_limits<Real>::max();
-        Real minY = std::numeric_limits<Real>::max();
+        Real minY =  std::numeric_limits<Real>::max();
         Real maxY = -std::numeric_limits<Real>::max();
-        for (int32_t i = start; i < end; i++)
+        for (uint32_t i = start; i < end; i++)
         {
             const BodyIndex b = indices[i];
             minX = std::min(minX, bodies.aabb.minX[b]);
@@ -331,22 +333,24 @@ namespace PS_AGONY
             maxY = std::max(maxY, bodies.aabb.maxY[b]);
         }
 
-        const int32_t nodeIdx = (int32_t)nodes.size();
-        nodes.emplace_back(minX, maxX, minY, maxY, -1, -1, start, end);
+        const uint32_t nodeIdx = nodes.size();
+        nodes.emplace_back(minX, maxX, minY, maxY, KDNode::INVALID_INDEX, KDNode::INVALID_INDEX, start, end);
 
-        if (end - start <= KDNode::KD_LEAF_SIZE)
+        const uint32_t rangeSize = end - start;
+        if (rangeSize <= KDNode::KD_LEAF_SIZE)
             return nodeIdx;
 
         // Partition on the widest axis at the median centroid.
         const bool splitX = (maxX - minX) >= (maxY - minY);
-        const int32_t mid = start + (end - start) / 2;// (start + end) / 2;
+        const uint32_t mid = start + rangeSize / 2;// (start + end) / 2;
 
+        // Removed '*0.5' because there's no difference for order.
         auto centroid = [this, splitX](BodyIndex i) -> float
             {
                 if (splitX)
-                    return 0.5f * (bodies.aabb.minX[i] + bodies.aabb.maxX[i]);
+                    return bodies.aabb.minX[i] + bodies.aabb.maxX[i];
                 else
-                    return 0.5f * (bodies.aabb.minY[i] + bodies.aabb.maxY[i]);
+                    return bodies.aabb.minY[i] + bodies.aabb.maxY[i];
             };
 
         std::nth_element(indices.begin() + start, indices.begin() + mid, indices.begin() + end,
@@ -355,8 +359,8 @@ namespace PS_AGONY
                 return centroid(a) < centroid(b);
             });
 
-        const int32_t left = buildKDNode(nodes, indices, start, mid);
-        const int32_t right = buildKDNode(nodes, indices, mid, end);
+        const uint32_t left = buildKDNode(nodes, indices, start, mid);
+        const uint32_t right = buildKDNode(nodes, indices, mid, end);
 
         // Re-access by index: recursive calls may have reallocated nodes.
         nodes[nodeIdx].left = left;
@@ -364,7 +368,7 @@ namespace PS_AGONY
         return nodeIdx;
     }
 
-    void Simulation::queryKDPairs(const std::vector<KDNode>& nodes, const std::vector<BodyIndex>& indices, int32_t nodeA, int32_t nodeB)
+    void Simulation::queryKDPairs(const std::vector<KDNode>& nodes, const std::vector<BodyIndex>& indices, uint32_t nodeA, uint32_t nodeB)
     {
         const KDNode& a = nodes[nodeA];
         const KDNode& b = nodes[nodeB];
@@ -382,25 +386,66 @@ namespace PS_AGONY
             if (nodeA == nodeB)
             {
                 // Self-query leaf: unique pairs only.
-                for (int32_t i = a.start; i < a.end; ++i)
-                    for (int32_t j = i + 1; j < a.end; ++j)
-                        checkAndRecord(indices[i], indices[j]);
+                for (uint32_t i = a.start; i < a.end; i++)
+                {
+                    const BodyIndex bi = indices[i];
+                    const Real minXi = bodies.aabb.minX[bi];
+                    const Real maxXi = bodies.aabb.maxX[bi];
+                    const Real minYi = bodies.aabb.minY[bi];
+                    const Real maxYi = bodies.aabb.maxY[bi];
+                    for (uint32_t j = i + 1; j < a.end; j++)
+                    {
+                        const BodyIndex bj = indices[j];
+                        const Real minXj = bodies.aabb.minX[bj];
+                        const Real maxXj = bodies.aabb.maxX[bj];
+                        const Real minYj = bodies.aabb.minY[bj];
+                        const Real maxYj = bodies.aabb.maxY[bj];
+
+                        if ((minXi < maxXj && maxXi > minXj) &&
+                            (minYi < maxYj && maxYi > minYj))
+                        {
+                            broadPhaseCollisions.emplace_back(bi, bj);
+                            bodies.collisionDebug[bi] = 1;
+                            bodies.collisionDebug[bj] = 1;
+                        }
+                    }
+                }
             }
             else
             {
                 // Cross-query: all pairs between two distinct leaves.
-                for (int32_t i = a.start; i < a.end; ++i)
-                    for (int32_t j = b.start; j < b.end; ++j)
-                        checkAndRecord(indices[i], indices[j]);
+                for (uint32_t i = a.start; i < a.end; i++)
+                {
+                    const BodyIndex bi = indices[i];
+                    const Real minXi = bodies.aabb.minX[bi];
+                    const Real maxXi = bodies.aabb.maxX[bi];
+                    const Real minYi = bodies.aabb.minY[bi];
+                    const Real maxYi = bodies.aabb.maxY[bi];
+                    for (uint32_t j = b.start; j < b.end; j++)
+                    {
+                        const BodyIndex bj = indices[j];
+                        const Real minXj = bodies.aabb.minX[bj];
+                        const Real maxXj = bodies.aabb.maxX[bj];
+                        const Real minYj = bodies.aabb.minY[bj];
+                        const Real maxYj = bodies.aabb.maxY[bj];
+
+                        if ((minXi < maxXj && maxXi > minXj) &&
+                            (minYi < maxYj && maxYi > minYj))
+                        {
+                            broadPhaseCollisions.emplace_back(bi, bj);
+                            bodies.collisionDebug[bi] = 1;
+                            bodies.collisionDebug[bj] = 1;
+                        }
+                    }
+                }
             }
             return;
         }
 
         if (nodeA == nodeB)
         {
-            // Self-query internal: left-left, left-right, right-right.
-            // Copy child indices before recursing - a is a reference into nodes.
-            const int32_t L = a.left, R = a.right;
+            // Self-query internal node.
+            const uint32_t L = a.left, R = a.right;
             queryKDPairs(nodes, indices, L, L);
             queryKDPairs(nodes, indices, L, R);
             queryKDPairs(nodes, indices, R, R);
@@ -413,20 +458,9 @@ namespace PS_AGONY
         }
         else
         {
-            // Split A.
+            // Split node A.
             queryKDPairs(nodes, indices, a.left, nodeB);
             queryKDPairs(nodes, indices, a.right, nodeB);
-        }
-    }
-
-    void Simulation::checkAndRecord(BodyIndex i, BodyIndex j)
-    {
-        if ((bodies.aabb.minX[i] < bodies.aabb.maxX[j] && bodies.aabb.maxX[i] > bodies.aabb.minX[j]) &&
-            (bodies.aabb.minY[i] < bodies.aabb.maxY[j] && bodies.aabb.maxY[i] > bodies.aabb.minY[j]))
-        {
-            broadPhaseCollisions.emplace_back(i, j);
-            bodies.collisionDebug[i] = 1;
-            bodies.collisionDebug[j] = 1;
         }
     }
 }
