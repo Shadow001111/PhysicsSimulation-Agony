@@ -170,6 +170,7 @@
     <ClCompile Include="AudioEngine\Player.cpp" />
     <ClCompile Include="AudioEngine\ResourceManager.cpp" />
     <ClCompile Include="AudioEngine\SoundData.cpp" />
+    <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\Camera2D.cpp" />
     <ClCompile Include="Core\Decoding\UTFDecoder.cpp" />
     <ClCompile Include="Core\FileLogger.cpp" />
@@ -228,6 +229,7 @@
     <ClInclude Include="AudioEngine\ResourceManager.h" />
     <ClInclude Include="AudioEngine\SoundData.h" />
     <ClInclude Include="AudioEngine\SoundSample.h" />
+    <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BodySoA.h" />
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="Core\Assert.h" />

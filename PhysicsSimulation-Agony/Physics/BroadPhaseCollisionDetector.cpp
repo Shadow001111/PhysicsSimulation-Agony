@@ -1,0 +1,393 @@
+#include "BroadPhaseCollisionDetector.h"
+
+#include "Core/TracyProfiler.h"
+
+#include <numeric>
+#include <cmath>
+#include "robin_hood.h"
+
+namespace PS_AGONY
+{
+    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const BodiesSoA& bodiesRef)
+    {
+        TRACY_SCOPE_N("Broad phase");
+
+        this->bodies = &bodiesRef;
+
+        std::fill(bodies->collisionDebug.begin(), bodies->collisionDebug.end(), 0);
+        collidingBodyPairs.clear();
+
+        const size_t bodyCount = bodies->getCount();
+        if (bodyCount < 2) return collidingBodyPairs; // No pairs to check.
+
+        collidingBodyPairs.reserve(bodyCount);
+
+        //justAABB(bodyCount);
+        //sweepAndPrune(bodyCount);
+        boundVolumeHierarchy(bodyCount);
+        //uniformSpaceGrid(bodyCount); // Hella slow.
+
+        return collidingBodyPairs;
+    }
+
+    void BroadPhaseCollisionDetector::sweepAndPruneXAxis(size_t bodyCount)
+    {
+        TRACY_SCOPE_N("Sweep and prune X");
+
+        // Build list of body indices sorted by AABB minX.
+        static std::vector<BodyIndex> sortedIndices;
+        sortedIndices.resize(bodyCount);
+
+        std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+        std::sort(sortedIndices.begin(), sortedIndices.end(),
+            [this](BodyIndex a, BodyIndex b) {
+                return bodies->aabb.minX[a] < bodies->aabb.minX[b];
+            });
+
+        static std::vector<BodyIndex> activeList; // Bodies currently overlapping in X.
+        activeList.clear();
+
+        for (BodyIndex current : sortedIndices)
+        {
+            const Real minXA = bodies->aabb.minX[current];
+            const Real minYA = bodies->aabb.minY[current];
+            const Real maxYA = bodies->aabb.maxY[current];
+
+            // Remove from activeList any body whose maxX < current minX.
+            // For some reason, this is faster than removing with swap and pop.
+            activeList.erase(std::remove_if(activeList.begin(), activeList.end(),
+                [this, minXA](BodyIndex active) {
+                    return bodies->aabb.maxX[active] <= minXA;
+                }), activeList.end());
+
+            // Check against all active bodies (they overlap in X).
+            for (BodyIndex active : activeList)
+            {
+                const Real minYB = bodies->aabb.minY[active];
+                const Real maxYB = bodies->aabb.maxY[active];
+
+                const bool doesIntersect = (minYA < maxYB && maxYA > minYB);
+
+                if (doesIntersect)
+                {
+                    collidingBodyPairs.emplace_back(current, active);
+                    bodies->collisionDebug[current] = 1;
+                    bodies->collisionDebug[active] = 1;
+                }
+            }
+
+            activeList.push_back(current);
+        }
+    }
+
+    void BroadPhaseCollisionDetector::boundVolumeHierarchy(size_t bodyCount)
+    {
+        TRACY_SCOPE_N("BVH");
+
+        static std::vector<BvhNode> nodes;
+        static std::vector<BodyIndex> indices;
+
+        nodes.clear();
+        nodes.reserve(2 * bodyCount);
+
+        indices.resize(bodyCount);
+        std::iota(indices.begin(), indices.end(), 0);
+
+        buildBvhNode(nodes, indices, 0, bodyCount);
+        queryBvhPairs(nodes, indices, 0, 0); // Self-query the root finds all pairs.
+    }
+
+    void BroadPhaseCollisionDetector::uniformSpaceGrid(size_t bodyCount)
+    {
+        TRACY_SCOPE_N("Uniform grid");
+
+        // Compute world bounds from all AABBs.
+        Real globalMinX = std::numeric_limits<Real>::max();
+        Real globalMaxX = -std::numeric_limits<Real>::max();
+        Real globalMinY = std::numeric_limits<Real>::max();
+        Real globalMaxY = -std::numeric_limits<Real>::max();
+
+        Real totalExtent = Real(0.0);
+        {
+            TRACY_SCOPE_N("Determine world AABB and bodies' total extent");
+            for (size_t i = 0; i < bodyCount; i++)
+            {
+                const Real minX = bodies->aabb.minX[i];
+                const Real maxX = bodies->aabb.maxX[i];
+                const Real minY = bodies->aabb.minY[i];
+                const Real maxY = bodies->aabb.maxY[i];
+
+                globalMinX = std::min(globalMinX, minX);
+                globalMaxX = std::max(globalMaxX, maxX);
+                globalMinY = std::min(globalMinY, minY);
+                globalMaxY = std::max(globalMaxY, maxY);
+
+                const Real extentX = maxX - minX;
+                const Real extentY = maxY - minY;
+                totalExtent += std::max(extentX, extentY);
+            }
+        }
+
+        const Real averageBodyExtent = totalExtent / Real(bodyCount);
+
+        const Real worldWidth = std::max(globalMaxX - globalMinX, Real(1e-3));
+        const Real worldHeight = std::max(globalMaxY - globalMinY, Real(1e-3));
+        const Real worldArea = worldWidth * worldHeight;
+
+        // Determine cell size.
+        Real cellSize = std::max(
+            std::sqrt(worldArea / Real(bodyCount)),
+            averageBodyExtent * Real(2.0)
+        );
+        cellSize = std::max(cellSize, Real(0.25));
+
+        const Real invCellSize = Real(1.0) / cellSize;
+
+        // Grid size.
+        const int gridWidth = std::max(1, static_cast<int>(std::ceil(worldWidth * invCellSize)));
+        const int gridHeight = std::max(1, static_cast<int>(std::ceil(worldHeight * invCellSize)));
+
+        // Map each occupied cell to a list of body indices.
+        static robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> grid;
+        grid.clear();
+        grid.reserve(bodyCount * 4);
+
+        auto getCellKey = [](int cx, int cy) -> uint64_t {
+            constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
+            uint64_t h = (uint64_t)cx + addConst;
+            h ^= (uint64_t)cy + addConst + (h << 6) + (h >> 2);
+            return h;
+            };
+
+        {
+            TRACY_SCOPE_N("Put bodies into cells");
+            for (BodyIndex bodyIndex = 0; bodyIndex < bodyCount; bodyIndex++)
+            {
+                const Real minX = bodies->aabb.minX[bodyIndex];
+                const Real maxX = bodies->aabb.maxX[bodyIndex];
+                const Real minY = bodies->aabb.minY[bodyIndex];
+                const Real maxY = bodies->aabb.maxY[bodyIndex];
+
+                int cx0 = static_cast<int>(std::floor((minX - globalMinX) * invCellSize));
+                int cx1 = static_cast<int>(std::floor((maxX - globalMinX) * invCellSize));
+                int cy0 = static_cast<int>(std::floor((minY - globalMinY) * invCellSize));
+                int cy1 = static_cast<int>(std::floor((maxY - globalMinY) * invCellSize));
+
+                cx0 = std::clamp(cx0, 0, gridWidth - 1);
+                cx1 = std::clamp(cx1, 0, gridWidth - 1);
+                cy0 = std::clamp(cy0, 0, gridHeight - 1);
+                cy1 = std::clamp(cy1, 0, gridHeight - 1);
+
+                for (int cx = cx0; cx <= cx1; cx++)
+                    for (int cy = cy0; cy <= cy1; cy++)
+                        grid[getCellKey(cx, cy)].push_back(bodyIndex);
+            }
+        }
+
+        // For each cell, test all pairs inside it.
+        static robin_hood::unordered_flat_set<uint64_t> testedPairs;
+        testedPairs.clear();
+        testedPairs.reserve(bodyCount * 8);
+
+        auto pairKey = [](BodyIndex a, BodyIndex b) -> uint64_t
+            {
+                const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
+                const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
+
+                constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
+                uint64_t h = (uint64_t)lo + addConst;
+                h ^= (uint64_t)hi + addConst + (h << 6) + (h >> 2);
+                return h;
+            };
+
+        {
+            TRACY_SCOPE_N("Test pairs");
+            for (auto& entry : grid)
+            {
+                const std::vector<BodyIndex>& bodiesInCell = entry.second;
+                const size_t bodyInCellCount = bodiesInCell.size();
+                if (bodyInCellCount < 2) continue;
+
+                for (size_t i = 0; i < bodyInCellCount; i++)
+                {
+                    const BodyIndex bodyIndexA = bodiesInCell[i];
+                    const Real minXA = bodies->aabb.minX[bodyIndexA];
+                    const Real minYA = bodies->aabb.minY[bodyIndexA];
+                    const Real maxXA = bodies->aabb.maxX[bodyIndexA];
+                    const Real maxYA = bodies->aabb.maxY[bodyIndexA];
+
+                    for (size_t j = i + 1; j < bodyInCellCount; j++)
+                    {
+                        const BodyIndex bodyIndexB = bodiesInCell[j];
+                        const uint64_t key = pairKey(bodyIndexA, bodyIndexB);
+                        if (!testedPairs.insert(key).second)
+                            continue;
+
+                        const Real minXB = bodies->aabb.minX[bodyIndexB];
+                        const Real minYB = bodies->aabb.minY[bodyIndexB];
+                        const Real maxXB = bodies->aabb.maxX[bodyIndexB];
+                        const Real maxYB = bodies->aabb.maxY[bodyIndexB];
+
+                        const bool doesIntersect =
+                            (minXA < maxXB && maxXA > minXB) &&
+                            (minYA < maxYB && maxYA > minYB);
+
+                        if (doesIntersect)
+                        {
+                            collidingBodyPairs.emplace_back(bodyIndexA, bodyIndexB);
+                            bodies->collisionDebug[bodyIndexA] = 1;
+                            bodies->collisionDebug[bodyIndexB] = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    uint32_t BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
+    {
+        // Compute merged bounding box.
+        Real minX = std::numeric_limits<Real>::max();
+        Real maxX = -std::numeric_limits<Real>::max();
+        Real minY = std::numeric_limits<Real>::max();
+        Real maxY = -std::numeric_limits<Real>::max();
+        for (uint32_t i = start; i < end; i++)
+        {
+            const BodyIndex b = indices[i];
+            minX = std::min(minX, bodies->aabb.minX[b]);
+            maxX = std::max(maxX, bodies->aabb.maxX[b]);
+            minY = std::min(minY, bodies->aabb.minY[b]);
+            maxY = std::max(maxY, bodies->aabb.maxY[b]);
+        }
+
+        const uint32_t nodeIdx = nodes.size();
+        nodes.emplace_back(minX, maxX, minY, maxY, BvhNode::INVALID_INDEX, BvhNode::INVALID_INDEX, start, end);
+
+        const uint32_t rangeSize = end - start;
+        if (rangeSize <= BvhNode::KD_LEAF_SIZE)
+            return nodeIdx;
+
+        // Partition on the widest axis at the median centroid.
+        const bool splitX = (maxX - minX) >= (maxY - minY);
+        const uint32_t mid = start + rangeSize / 2;// (start + end) / 2;
+
+        // Removed '*0.5' because there's no difference for order.
+        auto centroid = [this, splitX](BodyIndex i) -> float
+            {
+                if (splitX)
+                    return bodies->aabb.minX[i] + bodies->aabb.maxX[i];
+                else
+                    return bodies->aabb.minY[i] + bodies->aabb.maxY[i];
+            };
+
+        std::nth_element(indices.begin() + start, indices.begin() + mid, indices.begin() + end,
+            [&](BodyIndex a, BodyIndex b)
+            {
+                return centroid(a) < centroid(b);
+            });
+
+        const uint32_t left = buildBvhNode(nodes, indices, start, mid);
+        const uint32_t right = buildBvhNode(nodes, indices, mid, end);
+
+        // Re-access by index: recursive calls may have reallocated nodes.
+        nodes[nodeIdx].left = left;
+        nodes[nodeIdx].right = right;
+        return nodeIdx;
+    }
+
+    void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices, uint32_t nodeA, uint32_t nodeB)
+    {
+        const BvhNode& a = nodes[nodeA];
+        const BvhNode& b = nodes[nodeB];
+
+        // Prune entire subtree pair if their bounding boxes don't overlap.
+        if (a.minX >= b.maxX || a.maxX <= b.minX ||
+            a.minY >= b.maxY || a.maxY <= b.minY)
+            return;
+
+        const bool aLeaf = (a.left == BvhNode::INVALID_INDEX);
+        const bool bLeaf = (b.left == BvhNode::INVALID_INDEX);
+
+        if (aLeaf && bLeaf)
+        {
+            if (nodeA == nodeB)
+            {
+                // Self-query leaf: unique pairs only.
+                for (uint32_t i = a.start; i < a.end; i++)
+                {
+                    const BodyIndex bi = indices[i];
+                    const Real minXi = bodies->aabb.minX[bi];
+                    const Real maxXi = bodies->aabb.maxX[bi];
+                    const Real minYi = bodies->aabb.minY[bi];
+                    const Real maxYi = bodies->aabb.maxY[bi];
+                    for (uint32_t j = i + 1; j < a.end; j++)
+                    {
+                        const BodyIndex bj = indices[j];
+                        const Real minXj = bodies->aabb.minX[bj];
+                        const Real maxXj = bodies->aabb.maxX[bj];
+                        const Real minYj = bodies->aabb.minY[bj];
+                        const Real maxYj = bodies->aabb.maxY[bj];
+
+                        if ((minXi < maxXj && maxXi > minXj) &&
+                            (minYi < maxYj && maxYi > minYj))
+                        {
+                            collidingBodyPairs.emplace_back(bi, bj);
+                            bodies->collisionDebug[bi] = 1;
+                            bodies->collisionDebug[bj] = 1;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Cross-query: all pairs between two distinct leaves.
+                for (uint32_t i = a.start; i < a.end; i++)
+                {
+                    const BodyIndex bi = indices[i];
+                    const Real minXi = bodies->aabb.minX[bi];
+                    const Real maxXi = bodies->aabb.maxX[bi];
+                    const Real minYi = bodies->aabb.minY[bi];
+                    const Real maxYi = bodies->aabb.maxY[bi];
+                    for (uint32_t j = b.start; j < b.end; j++)
+                    {
+                        const BodyIndex bj = indices[j];
+                        const Real minXj = bodies->aabb.minX[bj];
+                        const Real maxXj = bodies->aabb.maxX[bj];
+                        const Real minYj = bodies->aabb.minY[bj];
+                        const Real maxYj = bodies->aabb.maxY[bj];
+
+                        if ((minXi < maxXj && maxXi > minXj) &&
+                            (minYi < maxYj && maxYi > minYj))
+                        {
+                            collidingBodyPairs.emplace_back(bi, bj);
+                            bodies->collisionDebug[bi] = 1;
+                            bodies->collisionDebug[bj] = 1;
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        if (nodeA == nodeB)
+        {
+            // Self-query internal node.
+            const uint32_t L = a.left, R = a.right;
+            queryBvhPairs(nodes, indices, L, L);
+            queryBvhPairs(nodes, indices, L, R);
+            queryBvhPairs(nodes, indices, R, R);
+        }
+        else if (aLeaf || (!bLeaf && (a.end - a.start) < (b.end - b.start)))
+        {
+            // Split the larger node B.
+            queryBvhPairs(nodes, indices, nodeA, b.left);
+            queryBvhPairs(nodes, indices, nodeA, b.right);
+        }
+        else
+        {
+            // Split node A.
+            queryBvhPairs(nodes, indices, a.left, nodeB);
+            queryBvhPairs(nodes, indices, a.right, nodeB);
+        }
+    }
+}

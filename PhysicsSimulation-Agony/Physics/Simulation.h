@@ -3,25 +3,12 @@
 #include "BodySoA.h"
 #include "Material.h"
 
+#include "BroadPhaseCollisionDetector.h"
+
 #include <vector>
 
 namespace PS_AGONY
 {
-	struct BodyPair
-	{
-		BodyIndex a, b;
-	};
-
-	struct BvhNode
-	{
-		static constexpr uint32_t KD_LEAF_SIZE = 8;
-		static constexpr uint32_t INVALID_INDEX = -1;
-
-		Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
-		uint32_t left, right; // Child node indices; INVALID_INDEX for leaves.
-		uint32_t start, end; // Range in kdIndices: [start, end).
-	};
-
 	class Simulation
 	{
 		struct SimulationSettings
@@ -42,7 +29,7 @@ namespace PS_AGONY
 		SimulationSettings simulationSettings;
 
 		// Collisions.
-		std::vector<BodyPair> broadPhaseCollisions;
+		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 
 		// Other.
 		Real updateTimeAccumulator = 0.0;
@@ -73,29 +60,8 @@ namespace PS_AGONY
 
 		void buildCircleAABBs();
 
-		void broadPhaseCollisionDetection(size_t bodyCount);
-
 		void narrowPhaseCollisionDetection();
 
 		void resolveCollisions();
-	private:
-		// Broad phase methods
-
-		void justAABB(size_t bodyCount);
-		void sweepAndPruneXAxis(size_t bodyCount);
-		void boundVolumeHierarchy(size_t bodyCount);
-		void uniformSpaceGrid(size_t bodyCount);
-	private:
-		// BVH methods
-
-		uint32_t buildBvhNode(
-			std::vector<BvhNode>& nodes,
-			std::vector<BodyIndex>& indices,
-			uint32_t start, uint32_t end);
-
-		void queryBvhPairs(
-			const std::vector<BvhNode>& nodes,
-			const std::vector<BodyIndex>& indices,
-			uint32_t nodeA, uint32_t nodeB);
 	};
 }

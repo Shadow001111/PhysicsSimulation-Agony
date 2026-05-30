@@ -144,6 +144,9 @@
     <ClCompile Include="Physics\Camera2D.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="WindowManager.h">
@@ -390,6 +393,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Material.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\BroadPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
