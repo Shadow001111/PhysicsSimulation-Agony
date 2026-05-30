@@ -398,5 +398,8 @@
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\BodySoAViewer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

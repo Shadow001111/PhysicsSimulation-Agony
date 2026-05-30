@@ -19,8 +19,8 @@ namespace PS_AGONY
 		};
 
 		// Bodies SoA.
-		BodiesSoA bodies;
-		CirclesSoA circles;
+		BodySoA bodies;
+		CircleSoA circles;
 
 		// Materials.
 		std::vector<Material> materials;

@@ -8,15 +8,15 @@
 
 namespace PS_AGONY
 {
-    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const BodiesSoA& bodiesRef)
+    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const BodySoAViewer& bodiesViewer)
     {
         TRACY_SCOPE_N("Broad phase");
 
-        this->bodies = &bodiesRef;
+        bodies = bodiesViewer;
 
         collidingBodyPairs.clear();
 
-        const size_t bodyCount = bodies->getCount();
+        const size_t bodyCount = bodies.getCount();
         if (bodyCount < 2) return collidingBodyPairs; // No pairs to check.
 
         collidingBodyPairs.reserve(bodyCount);
@@ -40,7 +40,7 @@ namespace PS_AGONY
         std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
         std::sort(sortedIndices.begin(), sortedIndices.end(),
             [this](BodyIndex a, BodyIndex b) {
-                return bodies->aabb.minX[a] < bodies->aabb.minX[b];
+                return bodies.aabb.minX[a] < bodies.aabb.minX[b];
             });
 
         static std::vector<BodyIndex> activeList; // Bodies currently overlapping in X.
@@ -48,22 +48,22 @@ namespace PS_AGONY
 
         for (BodyIndex current : sortedIndices)
         {
-            const Real minXA = bodies->aabb.minX[current];
-            const Real minYA = bodies->aabb.minY[current];
-            const Real maxYA = bodies->aabb.maxY[current];
+            const Real minXA = bodies.aabb.minX[current];
+            const Real minYA = bodies.aabb.minY[current];
+            const Real maxYA = bodies.aabb.maxY[current];
 
             // Remove from activeList any body whose maxX < current minX.
             // For some reason, this is faster than removing with swap and pop.
             activeList.erase(std::remove_if(activeList.begin(), activeList.end(),
                 [this, minXA](BodyIndex active) {
-                    return bodies->aabb.maxX[active] <= minXA;
+                    return bodies.aabb.maxX[active] <= minXA;
                 }), activeList.end());
 
             // Check against all active bodies (they overlap in X).
             for (BodyIndex active : activeList)
             {
-                const Real minYB = bodies->aabb.minY[active];
-                const Real maxYB = bodies->aabb.maxY[active];
+                const Real minYB = bodies.aabb.minY[active];
+                const Real maxYB = bodies.aabb.maxY[active];
 
                 const bool doesIntersect = (minYA < maxYB && maxYA > minYB);
 
@@ -109,10 +109,10 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Determine world AABB and bodies' total extent");
             for (size_t i = 0; i < bodyCount; i++)
             {
-                const Real minX = bodies->aabb.minX[i];
-                const Real maxX = bodies->aabb.maxX[i];
-                const Real minY = bodies->aabb.minY[i];
-                const Real maxY = bodies->aabb.maxY[i];
+                const Real minX = bodies.aabb.minX[i];
+                const Real maxX = bodies.aabb.maxX[i];
+                const Real minY = bodies.aabb.minY[i];
+                const Real maxY = bodies.aabb.maxY[i];
 
                 globalMinX = std::min(globalMinX, minX);
                 globalMaxX = std::max(globalMaxX, maxX);
@@ -160,10 +160,10 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Put bodies into cells");
             for (BodyIndex bodyIndex = 0; bodyIndex < bodyCount; bodyIndex++)
             {
-                const Real minX = bodies->aabb.minX[bodyIndex];
-                const Real maxX = bodies->aabb.maxX[bodyIndex];
-                const Real minY = bodies->aabb.minY[bodyIndex];
-                const Real maxY = bodies->aabb.maxY[bodyIndex];
+                const Real minX = bodies.aabb.minX[bodyIndex];
+                const Real maxX = bodies.aabb.maxX[bodyIndex];
+                const Real minY = bodies.aabb.minY[bodyIndex];
+                const Real maxY = bodies.aabb.maxY[bodyIndex];
 
                 int cx0 = static_cast<int>(std::floor((minX - globalMinX) * invCellSize));
                 int cx1 = static_cast<int>(std::floor((maxX - globalMinX) * invCellSize));
@@ -208,10 +208,10 @@ namespace PS_AGONY
                 for (size_t i = 0; i < bodyInCellCount; i++)
                 {
                     const BodyIndex bodyIndexA = bodiesInCell[i];
-                    const Real minXA = bodies->aabb.minX[bodyIndexA];
-                    const Real minYA = bodies->aabb.minY[bodyIndexA];
-                    const Real maxXA = bodies->aabb.maxX[bodyIndexA];
-                    const Real maxYA = bodies->aabb.maxY[bodyIndexA];
+                    const Real minXA = bodies.aabb.minX[bodyIndexA];
+                    const Real minYA = bodies.aabb.minY[bodyIndexA];
+                    const Real maxXA = bodies.aabb.maxX[bodyIndexA];
+                    const Real maxYA = bodies.aabb.maxY[bodyIndexA];
 
                     for (size_t j = i + 1; j < bodyInCellCount; j++)
                     {
@@ -220,10 +220,10 @@ namespace PS_AGONY
                         if (!testedPairs.insert(key).second)
                             continue;
 
-                        const Real minXB = bodies->aabb.minX[bodyIndexB];
-                        const Real minYB = bodies->aabb.minY[bodyIndexB];
-                        const Real maxXB = bodies->aabb.maxX[bodyIndexB];
-                        const Real maxYB = bodies->aabb.maxY[bodyIndexB];
+                        const Real minXB = bodies.aabb.minX[bodyIndexB];
+                        const Real minYB = bodies.aabb.minY[bodyIndexB];
+                        const Real maxXB = bodies.aabb.maxX[bodyIndexB];
+                        const Real maxYB = bodies.aabb.maxY[bodyIndexB];
 
                         const bool doesIntersect =
                             (minXA < maxXB && maxXA > minXB) &&
@@ -249,10 +249,10 @@ namespace PS_AGONY
         for (uint32_t i = start; i < end; i++)
         {
             const BodyIndex b = indices[i];
-            minX = std::min(minX, bodies->aabb.minX[b]);
-            maxX = std::max(maxX, bodies->aabb.maxX[b]);
-            minY = std::min(minY, bodies->aabb.minY[b]);
-            maxY = std::max(maxY, bodies->aabb.maxY[b]);
+            minX = std::min(minX, bodies.aabb.minX[b]);
+            maxX = std::max(maxX, bodies.aabb.maxX[b]);
+            minY = std::min(minY, bodies.aabb.minY[b]);
+            maxY = std::max(maxY, bodies.aabb.maxY[b]);
         }
 
         const uint32_t nodeIdx = nodes.size();
@@ -270,9 +270,9 @@ namespace PS_AGONY
         auto centroid = [this, splitX](BodyIndex i) -> float
             {
                 if (splitX)
-                    return bodies->aabb.minX[i] + bodies->aabb.maxX[i];
+                    return bodies.aabb.minX[i] + bodies.aabb.maxX[i];
                 else
-                    return bodies->aabb.minY[i] + bodies->aabb.maxY[i];
+                    return bodies.aabb.minY[i] + bodies.aabb.maxY[i];
             };
 
         std::nth_element(indices.begin() + start, indices.begin() + mid, indices.begin() + end,
@@ -311,17 +311,17 @@ namespace PS_AGONY
                 for (uint32_t i = a.start; i < a.end; i++)
                 {
                     const BodyIndex bi = indices[i];
-                    const Real minXi = bodies->aabb.minX[bi];
-                    const Real maxXi = bodies->aabb.maxX[bi];
-                    const Real minYi = bodies->aabb.minY[bi];
-                    const Real maxYi = bodies->aabb.maxY[bi];
+                    const Real minXi = bodies.aabb.minX[bi];
+                    const Real maxXi = bodies.aabb.maxX[bi];
+                    const Real minYi = bodies.aabb.minY[bi];
+                    const Real maxYi = bodies.aabb.maxY[bi];
                     for (uint32_t j = i + 1; j < a.end; j++)
                     {
                         const BodyIndex bj = indices[j];
-                        const Real minXj = bodies->aabb.minX[bj];
-                        const Real maxXj = bodies->aabb.maxX[bj];
-                        const Real minYj = bodies->aabb.minY[bj];
-                        const Real maxYj = bodies->aabb.maxY[bj];
+                        const Real minXj = bodies.aabb.minX[bj];
+                        const Real maxXj = bodies.aabb.maxX[bj];
+                        const Real minYj = bodies.aabb.minY[bj];
+                        const Real maxYj = bodies.aabb.maxY[bj];
 
                         if ((minXi < maxXj && maxXi > minXj) &&
                             (minYi < maxYj && maxYi > minYj))
@@ -337,17 +337,17 @@ namespace PS_AGONY
                 for (uint32_t i = a.start; i < a.end; i++)
                 {
                     const BodyIndex bi = indices[i];
-                    const Real minXi = bodies->aabb.minX[bi];
-                    const Real maxXi = bodies->aabb.maxX[bi];
-                    const Real minYi = bodies->aabb.minY[bi];
-                    const Real maxYi = bodies->aabb.maxY[bi];
+                    const Real minXi = bodies.aabb.minX[bi];
+                    const Real maxXi = bodies.aabb.maxX[bi];
+                    const Real minYi = bodies.aabb.minY[bi];
+                    const Real maxYi = bodies.aabb.maxY[bi];
                     for (uint32_t j = b.start; j < b.end; j++)
                     {
                         const BodyIndex bj = indices[j];
-                        const Real minXj = bodies->aabb.minX[bj];
-                        const Real maxXj = bodies->aabb.maxX[bj];
-                        const Real minYj = bodies->aabb.minY[bj];
-                        const Real maxYj = bodies->aabb.maxY[bj];
+                        const Real minXj = bodies.aabb.minX[bj];
+                        const Real maxXj = bodies.aabb.maxX[bj];
+                        const Real minYj = bodies.aabb.minY[bj];
+                        const Real maxYj = bodies.aabb.maxY[bj];
 
                         if ((minXi < maxXj && maxXi > minXj) &&
                             (minYi < maxYj && maxYi > minYj))

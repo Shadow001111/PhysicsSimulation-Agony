@@ -98,7 +98,7 @@ namespace PS_AGONY
         if (bodyCount < 2) return;
 
         // Broad phase.
-        const std::vector<BodyPair>& broadPhaseCollisions = broadPhaseCollisionDetector.findCollisions(bodies);
+        const std::vector<BodyPair>& broadPhaseCollisions = broadPhaseCollisionDetector.findCollisions(BodySoAViewer(bodies));
         if (broadPhaseCollisions.empty()) return;
 
         {

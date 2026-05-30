@@ -229,6 +229,7 @@
     <ClInclude Include="AudioEngine\ResourceManager.h" />
     <ClInclude Include="AudioEngine\SoundData.h" />
     <ClInclude Include="AudioEngine\SoundSample.h" />
+    <ClInclude Include="Physics\BodySoAViewer.h" />
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BodySoA.h" />
     <ClInclude Include="Physics\Camera2D.h" />

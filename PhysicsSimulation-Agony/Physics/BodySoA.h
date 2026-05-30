@@ -20,7 +20,7 @@ namespace PS_AGONY
 		std::vector<Real> maxY;
 	};
 
-	struct BodiesSoA
+	struct BodySoA
 	{
 		std::vector<Real> positionX;
 		std::vector<Real> positionY;
@@ -53,7 +53,7 @@ namespace PS_AGONY
 		size_t getCount() const noexcept { return positionX.size(); }
 	};
 
-	struct CirclesSoA
+	struct CircleSoA
 	{
 		std::vector<Real> radius;
 
