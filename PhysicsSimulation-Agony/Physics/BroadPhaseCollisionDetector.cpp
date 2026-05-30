@@ -1,6 +1,7 @@
 #include "BroadPhaseCollisionDetector.h"
 
 #include "Core/TracyProfiler.h"
+#include "Core/Portablity.h"
 
 #include <numeric>
 #include <cmath>
@@ -32,10 +33,10 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Sweep and prune X");
 
-        const Real* __restrict aabbMinX = bodiesAABB.minX;
-        const Real* __restrict aabbMinY = bodiesAABB.minY;
-        const Real* __restrict aabbMaxX = bodiesAABB.maxX;
-        const Real* __restrict aabbMaxY = bodiesAABB.maxY;
+        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
+        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
+        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         // Build list of body indices sorted by AABB minX.
         static std::vector<BodyIndex> sortedIndices;
@@ -102,10 +103,10 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Uniform grid");
 
-        const Real* __restrict aabbMinX = bodiesAABB.minX;
-        const Real* __restrict aabbMinY = bodiesAABB.minY;
-        const Real* __restrict aabbMaxX = bodiesAABB.maxX;
-        const Real* __restrict aabbMaxY = bodiesAABB.maxY;
+        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
+        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
+        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         // Compute world bounds from all AABBs.
         Real globalMinX = std::numeric_limits<Real>::max();
@@ -250,10 +251,10 @@ namespace PS_AGONY
 
     uint32_t BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
     {
-        const Real* __restrict aabbMinX = bodiesAABB.minX;
-        const Real* __restrict aabbMinY = bodiesAABB.minY;
-        const Real* __restrict aabbMaxX = bodiesAABB.maxX;
-        const Real* __restrict aabbMaxY = bodiesAABB.maxY;
+        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
+        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
+        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         // Compute merged bounding box.
         Real minX = std::numeric_limits<Real>::max();
@@ -306,10 +307,10 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices, uint32_t nodeA, uint32_t nodeB)
     {
-        const Real* __restrict aabbMinX = bodiesAABB.minX;
-        const Real* __restrict aabbMinY = bodiesAABB.minY;
-        const Real* __restrict aabbMaxX = bodiesAABB.maxX;
-        const Real* __restrict aabbMaxY = bodiesAABB.maxY;
+        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
+        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
+        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         const BvhNode& a = nodes[nodeA];
         const BvhNode& b = nodes[nodeB];

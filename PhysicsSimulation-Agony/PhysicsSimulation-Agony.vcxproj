@@ -281,6 +281,7 @@
     <ClInclude Include="OpenGLWrappers\VertexArray.h" />
     <ClInclude Include="Physics\GlmTypes.h" />
     <ClInclude Include="Physics\Material.h" />
+    <ClInclude Include="Core\Portablity.h" />
     <ClInclude Include="Physics\Simulation.h" />
     <ClInclude Include="Physics\Types.h" />
     <ClInclude Include="Physics\SimulationRenderer.h" />
