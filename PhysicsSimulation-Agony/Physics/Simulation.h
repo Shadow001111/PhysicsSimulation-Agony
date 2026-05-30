@@ -1,81 +1,12 @@
 #pragma once
 #include "GlmTypes.h"
+#include "BodySoA.h"
+#include "Material.h"
 
 #include <vector>
 
 namespace PS_AGONY
 {
-	enum class BodyType : uint8_t
-	{
-		Circle,
-		Box,
-		Polygon
-	};
-
-	struct Material
-	{
-		Real elasticity = 1.0;
-		Real staticFriction = 0.0;
-		Real dynamicFriction = 0.0;
-	};
-
-	struct AABBSoA
-	{
-		std::vector<Real> minX;
-		std::vector<Real> minY;
-		std::vector<Real> maxX;
-		std::vector<Real> maxY;
-	};
-
-	struct BodiesSoA
-	{
-		std::vector<Real> positionX;
-		std::vector<Real> positionY;
-
-		std::vector<Real> velocityX;
-		std::vector<Real> velocityY;
-
-		std::vector<Real> rotation;
-
-		std::vector<Real> angularVelocity;
-
-		std::vector<Real> mass;
-		std::vector<Real> invMass;
-
-		std::vector<Real> inertia;
-		std::vector<Real> invInertia;
-
-		// std::vector<Real> localCenterOfMassX;
-		// std::vector<Real> localCenterOfMassY;
-
-		std::vector<MaterialIndex> materialIndex;
-
-		AABBSoA aabb;
-
-		std::vector<BodyType> bodyType;
-		std::vector<BodyIndex> shapeIndex;
-
-		std::vector<uint8_t> collisionDebug;
-
-		size_t getCount() const noexcept { return positionX.size(); }
-	};
-
-	struct CirclesSoA
-	{
-		std::vector<Real> radius;
-
-		std::vector<BodyIndex> bodyIndices;
-
-		size_t getCount() const noexcept { return radius.size(); }
-	};
-
-	struct SimulationSettings
-	{
-		Real updateInterval = 1 / 60.0;
-		
-		Vec2 gravity{ 0.0, -9.81 };
-	};
-
 	struct BodyPair
 	{
 		BodyIndex a, b;
@@ -93,6 +24,13 @@ namespace PS_AGONY
 
 	class Simulation
 	{
+		struct SimulationSettings
+		{
+			Real updateInterval = 1 / 60.0;
+
+			Vec2 gravity{ 0.0, -9.81 };
+		};
+
 		// Bodies SoA.
 		BodiesSoA bodies;
 		CirclesSoA circles;
