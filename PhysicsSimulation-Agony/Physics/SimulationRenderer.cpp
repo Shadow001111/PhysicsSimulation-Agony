@@ -2,6 +2,7 @@
 #include "Simulation.h"
 
 #include "Core/TracyProfiler.h"
+#include "Core/Portablity.h"
 
 namespace PS_AGONY
 {
@@ -80,20 +81,22 @@ namespace PS_AGONY
         ensureCircleInstanceVboCapacity(circleCount);
 
         // Prepare instance data.
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
+        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
+        const auto* CORE_RESTRICT collisionDebugPtr = bodies.collisionDebug.data();
+
+        CircleRenderData* CORE_RESTRICT renderDataPtr = circleResources.renderData.data();
+
         for (size_t i = 0; i < circleCount; i++)
         {
-            const Real radius = circles.radius[i];
-            const BodyIndex bodyIndex = circles.bodyIndices[i];
+            const BodyIndex bodyIndex = bodyIndexPtr[i];
 
-            const Real positionX = bodies.positionX[bodyIndex];
-            const Real positionY = bodies.positionY[bodyIndex];
-
-            const auto collisionDebug = bodies.collisionDebug[bodyIndex];
-
-            circleResources.renderData[i].x = positionX;
-            circleResources.renderData[i].y = positionY;
-            circleResources.renderData[i].radius = radius;
-            circleResources.renderData[i].collisionDebug = collisionDebug;
+            renderDataPtr[i].x = positionXPtr[bodyIndex];
+            renderDataPtr[i].y = positionYPtr[bodyIndex];
+            renderDataPtr[i].radius = radiusPtr[i];
+            renderDataPtr[i].collisionDebug = collisionDebugPtr[bodyIndex];
         }
 
         // Move data to gpu.
