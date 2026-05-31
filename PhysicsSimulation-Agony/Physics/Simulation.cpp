@@ -3,6 +3,8 @@
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
     static Real calculateCircleInertia(Real radius, Real mass)
@@ -10,6 +12,12 @@ namespace PS_AGONY
         return Real(0.5) * radius * radius * mass;
     }
     
+
+    Simulation::Simulation()
+    {
+        materials.reserve(16);
+        materials.emplace_back(); // Default material.
+    }
 
     void Simulation::update(Real deltaTime)
     {
@@ -50,7 +58,7 @@ namespace PS_AGONY
         bodies.inertia.push_back(inertia);
         bodies.invInertia.push_back(inertia == 0.0 ? 0.0 : 1.0 / inertia);
 
-        bodies.materialIndex.push_back(materialIndex);
+        bodies.materialIndex.push_back(materialIndex < materials.size() ? materialIndex : 0);
 
         bodies.aabb.minX.push_back(0.0);
         bodies.aabb.minY.push_back(0.0);
@@ -81,6 +89,12 @@ namespace PS_AGONY
 
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
+
+        if (materials.empty()) [[unlikely]]
+        {
+            std::cerr << "[AGONY][Simulation]: Material count is zero, which must be impossible.\n";
+            materials.emplace_back(); // Default material.
+        }
 
         applyExternalForces(bodyCount, deltaTime);
         integrate(bodyCount, deltaTime);
@@ -246,8 +260,6 @@ namespace PS_AGONY
 
         const MaterialIndex* CORE_RESTRICT materialIndexPtr = bodies.materialIndex.data();
         const Material* CORE_RESTRICT materialPtr = materials.data();
-        const MaterialIndex materialCount = materials.size();
-        if (materialCount == 0) return;
 
         for (const auto& data : narrowPhaseCollisions)
         {
@@ -280,22 +292,19 @@ namespace PS_AGONY
             }
 
             // Fetch material.
-            MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
-            MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
-
-            materialIndexA = materialIndexA < materialCount ? materialIndexA : 0;
-            materialIndexB = materialIndexB < materialCount ? materialIndexB : 0;
+            const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
+            const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
 
             const Material* materialA = materialPtr + materialIndexA;
             const Material* materialB = materialPtr + materialIndexB;
 
             // Combine materials.
-            const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5);
+            const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
 
             // Compute impulse and apply it.
             const Real invTotalInvMass = Real(1.0) / totalInvMass;
 
-            const Real impulse = (elasticity + Real(1.0)) * velocityAlongNormal * invTotalInvMass;
+            const Real impulse = elasticity * velocityAlongNormal * invTotalInvMass;
             const Vec2 impulseVec = normal * impulse;
 
             velocityXPtr[bodyIndexA] += impulseVec.x * invMassA;

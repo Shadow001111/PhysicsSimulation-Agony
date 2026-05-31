@@ -16,7 +16,7 @@ namespace PS_AGONY
 		{
 			//
 			Real updateInterval = 1 / 300.0;
-			uint32_t collisionSolvingIterations = 8; // 8.
+			uint32_t collisionSolvingIterations = 8;
 
 			// Environment.
 			Vec2 gravity{ 0.0, -9.81 };
@@ -43,7 +43,7 @@ namespace PS_AGONY
 		// Other.
 		Real updateTimeAccumulator = 0.0;
 	public:
-		Simulation() = default;
+		Simulation();
 		~Simulation() = default;
 		Simulation(const Simulation&) = delete;
 		Simulation& operator=(const Simulation&) = delete;
