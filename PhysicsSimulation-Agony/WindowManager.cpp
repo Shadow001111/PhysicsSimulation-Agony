@@ -1,13 +1,9 @@
 #include "WindowManager.h"
 
-#include "Core/TracyProfiler.h"
-
 #include <iostream>
 
 WindowManager::WindowManager(const WindowParams& params)
 {
-    TRACY_SCOPE_N("Window manager init");
-
     if (!glfwInit())
     {
         std::cerr << "[WindowManager]: Failed to initialize GLFW\n";

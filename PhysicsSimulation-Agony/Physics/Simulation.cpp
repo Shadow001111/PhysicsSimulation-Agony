@@ -2,6 +2,7 @@
 
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
+#include "Core/Simd.h"
 
 namespace PS_AGONY
 {
@@ -112,43 +113,76 @@ namespace PS_AGONY
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
     {
+        using RealSimd = Simd<Real>;
+
         TRACY_SCOPE_N("Apply external forces");
 
-        Real* CORE_RESTRICT velocityX = bodies.velocityX.data();
-        Real* CORE_RESTRICT velocityY = bodies.velocityY.data();
+        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
 
         const Vec2 gravityDelta = simulationSettings.gravity * deltaTime;
-        for (size_t i = 0; i < bodyCount; i++)
+        const RealSimd gravityDeltaXV{ simulationSettings.gravity.x * deltaTime };
+        const RealSimd gravityDeltaYV{ simulationSettings.gravity.y * deltaTime };
+
+        size_t i = 0;
+        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
         {
-            velocityX[i] += gravityDelta.x;
+            RealSimd velX = RealSimd::loadu(velocityXPtr + i);
+            RealSimd velY = RealSimd::loadu(velocityYPtr + i);
+
+            velX += gravityDeltaXV;
+            velY += gravityDeltaYV;
+
+            velX.storeu(velocityXPtr + i);
+            velY.storeu(velocityYPtr + i);
         }
-        for (size_t i = 0; i < bodyCount; i++)
+        for (; i < bodyCount; i++)
         {
-            velocityY[i] += gravityDelta.y;
+            velocityXPtr[i] += gravityDelta.x;
+            velocityYPtr[i] += gravityDelta.y;
         }
     }
 
     void Simulation::integrate(size_t bodyCount, Real deltaTime)
     {
+        using RealSimd = Simd<Real>;
+
         TRACY_SCOPE_N("Intergrate");
 
-        Real* CORE_RESTRICT positionX = bodies.positionX.data();
-        Real* CORE_RESTRICT positionY = bodies.positionY.data();
-        const Real* CORE_RESTRICT velocityX = bodies.velocityX.data();
-        const Real* CORE_RESTRICT velocityY = bodies.velocityY.data();
+        Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
+        const Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
 
-        for (size_t i = 0; i < bodyCount; i++)
+        const RealSimd deltaTimeV{ deltaTime };
+
+        // Note: having single loop (x and y interleaved) is a very-little faster than doing two separate passes.
+        size_t i = 0;
+        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
         {
-            positionX[i] += velocityX[i] * deltaTime;
+            const RealSimd velX = RealSimd::loadu(velocityXPtr + i);
+            const RealSimd velY = RealSimd::loadu(velocityYPtr + i);
+
+            RealSimd posX = RealSimd::loadu(positionXPtr + i);
+            RealSimd posY = RealSimd::loadu(positionYPtr + i);
+
+            posX = RealSimd::mul_add(velX, deltaTimeV, posX);
+            posY = RealSimd::mul_add(velY, deltaTimeV, posY);
+
+            posX.storeu(positionXPtr + i);
+            posY.storeu(positionYPtr + i);
         }
-        for (size_t i = 0; i < bodyCount; i++)
+        for (; i < bodyCount; i++)
         {
-            positionY[i] += velocityY[i] * deltaTime;
+            positionXPtr[i] += velocityXPtr[i] * deltaTime;
+            positionYPtr[i] += velocityYPtr[i] * deltaTime;
         }
     }
 
     void Simulation::boundaryCollisionResolution(size_t bodyCount)
     {
+        // Note: I won't used SIMD here, because this method will get deleted.
+
         TRACY_SCOPE_N("Boundary collision");
 
         Real* CORE_RESTRICT positionX = bodies.positionX.data();
@@ -160,7 +194,10 @@ namespace PS_AGONY
         for (size_t i = 0; i < bodyCount; i++)
         {
             const Real x = positionX[i];
+            const Real y = positionY[i];
+
             const Real absX = std::abs(x);
+            const Real absY = std::abs(y);
 
             if (absX > boundary)
             {
@@ -168,11 +205,6 @@ namespace PS_AGONY
                 positionX[i] = boundary * sign;
                 velocityX[i] = -velocityX[i];
             }
-        }
-        for (size_t i = 0; i < bodyCount; i++)
-        {
-            const Real y = positionY[i];
-            const Real absY = std::abs(y);
 
             if (absY > boundary)
             {
