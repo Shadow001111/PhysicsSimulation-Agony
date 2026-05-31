@@ -6,11 +6,6 @@
 
 namespace PS_AGONY
 {
-	struct BodyPair
-	{
-		BodyIndex a, b;
-	};
-
 	class BroadPhaseCollisionDetector
 	{
 		struct BvhNode
@@ -43,7 +38,7 @@ namespace PS_AGONY
 		AABBSoAViewer bodiesAABB;
 		FunctionResources functionResources;
 
-		std::vector<BodyPair> collidingBodyPairs;
+		std::vector<BodyPair> broadCollisionData;
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;
@@ -56,7 +51,7 @@ namespace PS_AGONY
 	private:
 		void sweepAndPruneXAxis(size_t bodyCount);
 		void boundVolumeHierarchy(size_t bodyCount);
-		void uniformSpaceGrid(size_t bodyCount);
+		//void uniformSpaceGrid(size_t bodyCount);
 	private:
 		void buildBvhNode(
 			std::vector<BvhNode>& nodes,

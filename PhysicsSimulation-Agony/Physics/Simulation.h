@@ -14,7 +14,7 @@ namespace PS_AGONY
 	{
 		struct SimulationSettings
 		{
-			Real updateInterval = 1 / 60.0;
+			Real updateInterval = 1 / 300.0;
 
 			Vec2 gravity{ 0.0, -9.81 };
 		};
@@ -58,14 +58,8 @@ namespace PS_AGONY
 
 		void integrate(size_t bodyCount, Real deltaTime);
 
-		void boundaryCollisionResolution(size_t bodyCount);
-
 		void buildCircleAABBs();
 
-		void markBodiesOfBroadPhase(const std::vector<BodyPair>& broadPhaseCollisions);
-
-		void narrowPhaseCollisionDetection();
-
-		void resolveCollisions();
+		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 	};
 }

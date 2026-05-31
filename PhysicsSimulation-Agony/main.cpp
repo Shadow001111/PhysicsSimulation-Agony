@@ -4,8 +4,6 @@
 #include "Core/TracyProfiler.h"
 #include "Core/Random.h"
 
-#include "AudioEngine/Player.h"
-
 #include "Physics/Simulation.h"
 #include "Physics/SimulationRenderer.h"
 
@@ -64,7 +62,7 @@ static int gameFunc()
     //glfwSetInputMode(wnd.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // Simulation
-    PS_AGONY::Simulation simulation;
+    PS_AGONY::Simulation simulation{};
 
     {
         PS_AGONY::Material material0 = {
@@ -75,15 +73,25 @@ static int gameFunc()
 
         PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
 
+        {
+            constexpr float boundary = 9.0f;
+            constexpr float radius = 100.0f;
+
+            simulation.createCircle({ -(boundary + radius),  0.0 }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
+            simulation.createCircle({  (boundary + radius),  0.0 }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
+            simulation.createCircle({  0.0, -(boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
+            simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
+        }
+
         const int bodyCount = 2'500;
         for (int i = 0; i < bodyCount; i++)
         {
-            float x = Random::real<float>(-5.0f, 5.0f);
-            float y = Random::real<float>(-5.0f, 5.0f);
-            float vx = Random::real<float>(-2.0f, 2.0f);
-            float vy = Random::real<float>(-2.0f, 2.0f);
-            float r = Random::real<float>(0.2f, 0.5f);
-            float mass = Random::real<float>(0.2f, 0.5f);
+            const float x = Random::real<float>(-5.0f, 5.0f);
+            const float y = Random::real<float>(-5.0f, 5.0f);
+            const float vx = Random::real<float>(-2.0f, 2.0f);
+            const float vy = Random::real<float>(-2.0f, 2.0f);
+            const float r = Random::real<float>(0.1f, 0.2f);
+            const float mass = r * r;
 
             simulation.createCircle({ x, y }, { vx, vy }, r, 0.0, 0.0, mass, material0Index);
         }

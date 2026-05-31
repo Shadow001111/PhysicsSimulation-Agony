@@ -4,8 +4,6 @@
 #include "Core/Portablity.h"
 
 #include <numeric>
-#include <cmath>
-#include <iostream>
 
 namespace PS_AGONY
 {
@@ -23,18 +21,16 @@ namespace PS_AGONY
 
         bodiesAABB = bodiesAABBViewer;
 
-        collidingBodyPairs.clear();
+        broadCollisionData.clear();
 
         const size_t bodyCount = bodiesAABB.getCount();
-        if (bodyCount < 2) return collidingBodyPairs; // No pairs to check.
+        if (bodyCount < 2) return broadCollisionData; // No pairs to check.
 
-        collidingBodyPairs.reserve(bodyCount);
+        broadCollisionData.reserve(bodyCount);
 
-        //sweepAndPruneXAxis(bodyCount);
         boundVolumeHierarchy(bodyCount); // The best.
-        //uniformSpaceGrid(bodyCount); // Hella slow.
 
-        return collidingBodyPairs;
+        return broadCollisionData;
     }
 
     void BroadPhaseCollisionDetector::sweepAndPruneXAxis(size_t bodyCount)
@@ -83,7 +79,7 @@ namespace PS_AGONY
 
                 if (doesIntersect)
                 {
-                    collidingBodyPairs.emplace_back(current, active);
+                    broadCollisionData.emplace_back(current, active);
                 }
             }
 
@@ -114,156 +110,156 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::uniformSpaceGrid(size_t bodyCount)
-    {
-        TRACY_SCOPE_N("Uniform grid");
-
-        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
-        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
-        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
-
-        auto* CORE_RESTRICT grid = &functionResources.spaceGrid;
-
-        // Compute world bounds from all AABBs.
-        Real globalMinX =  std::numeric_limits<Real>::max();
-        Real globalMaxX = -std::numeric_limits<Real>::max();
-        Real globalMinY =  std::numeric_limits<Real>::max();
-        Real globalMaxY = -std::numeric_limits<Real>::max();
-
-        Real totalExtent = Real(0.0);
-        {
-            TRACY_SCOPE_N("Determine world AABB and bodies' total extent");
-            for (size_t i = 0; i < bodyCount; i++)
-            {
-                const Real minX = aabbMinX[i];
-                const Real maxX = aabbMaxX[i];
-                const Real minY = aabbMinY[i];
-                const Real maxY = aabbMaxY[i];
-
-                globalMinX = std::min(globalMinX, minX);
-                globalMaxX = std::max(globalMaxX, maxX);
-                globalMinY = std::min(globalMinY, minY);
-                globalMaxY = std::max(globalMaxY, maxY);
-
-                const Real extentX = maxX - minX;
-                const Real extentY = maxY - minY;
-                totalExtent += std::max(extentX, extentY);
-            }
-        }
-
-        const Real averageBodyExtent = totalExtent / Real(bodyCount);
-
-        const Real worldWidth = std::max(globalMaxX - globalMinX, Real(1e-3));
-        const Real worldHeight = std::max(globalMaxY - globalMinY, Real(1e-3));
-        const Real worldArea = worldWidth * worldHeight;
-
-        // Determine cell size.
-        Real cellSize = std::max(
-            std::sqrt(worldArea / Real(bodyCount)),
-            averageBodyExtent * Real(2.0)
-        );
-        cellSize = std::max(cellSize, Real(0.25));
-
-        const Real invCellSize = Real(1.0) / cellSize;
-
-        // Grid size.
-        const int gridWidth = std::max(1, static_cast<int>(std::ceil(worldWidth * invCellSize)));
-        const int gridHeight = std::max(1, static_cast<int>(std::ceil(worldHeight * invCellSize)));
-
-        // Map each occupied cell to a list of body indices.
-        grid->clear();
-        grid->reserve(bodyCount * 4);
-
-        auto getCellKey = [](int cx, int cy) -> uint64_t {
-            constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
-            uint64_t h = (uint64_t)cx + addConst;
-            h ^= (uint64_t)cy + addConst + (h << 6) + (h >> 2);
-            return h;
-            };
-
-        {
-            TRACY_SCOPE_N("Put bodies into cells");
-            for (BodyIndex bodyIndex = 0; bodyIndex < bodyCount; bodyIndex++)
-            {
-                const Real minX = aabbMinX[bodyIndex];
-                const Real maxX = aabbMaxX[bodyIndex];
-                const Real minY = aabbMinY[bodyIndex];
-                const Real maxY = aabbMaxY[bodyIndex];
-
-                int cx0 = static_cast<int>(std::floor((minX - globalMinX) * invCellSize));
-                int cx1 = static_cast<int>(std::floor((maxX - globalMinX) * invCellSize));
-                int cy0 = static_cast<int>(std::floor((minY - globalMinY) * invCellSize));
-                int cy1 = static_cast<int>(std::floor((maxY - globalMinY) * invCellSize));
-
-                cx0 = std::clamp(cx0, 0, gridWidth - 1);
-                cx1 = std::clamp(cx1, 0, gridWidth - 1);
-                cy0 = std::clamp(cy0, 0, gridHeight - 1);
-                cy1 = std::clamp(cy1, 0, gridHeight - 1);
-
-                for (int cx = cx0; cx <= cx1; cx++)
-                for (int cy = cy0; cy <= cy1; cy++)
-                    (*grid)[getCellKey(cx, cy)].push_back(bodyIndex);
-            }
-        }
-
-        // For each cell, test all pairs inside it.
-        auto* CORE_RESTRICT testedPairs = &functionResources.uint64Set;
-        testedPairs->clear();
-        testedPairs->reserve(bodyCount * 8);
-
-        auto pairKey = [](BodyIndex a, BodyIndex b) -> uint64_t
-            {
-                const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
-                const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
-
-                constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
-                uint64_t h = (uint64_t)lo + addConst;
-                h ^= (uint64_t)hi + addConst + (h << 6) + (h >> 2);
-                return h;
-            };
-
-        {
-            TRACY_SCOPE_N("Test pairs");
-            for (auto& entry : *grid)
-            {
-                const std::vector<BodyIndex>& bodiesInCell = entry.second;
-                const size_t bodyInCellCount = bodiesInCell.size();
-                if (bodyInCellCount < 2) continue;
-
-                for (size_t i = 0; i < bodyInCellCount; i++)
-                {
-                    const BodyIndex bodyIndexA = bodiesInCell[i];
-                    const Real minXA = aabbMinX[bodyIndexA];
-                    const Real minYA = aabbMinY[bodyIndexA];
-                    const Real maxXA = aabbMaxX[bodyIndexA];
-                    const Real maxYA = aabbMaxY[bodyIndexA];
-
-                    for (size_t j = i + 1; j < bodyInCellCount; j++)
-                    {
-                        const BodyIndex bodyIndexB = bodiesInCell[j];
-                        const uint64_t key = pairKey(bodyIndexA, bodyIndexB);
-                        if (!testedPairs->insert(key).second)
-                            continue;
-
-                        const Real minXB = aabbMinX[bodyIndexB];
-                        const Real minYB = aabbMinY[bodyIndexB];
-                        const Real maxXB = aabbMaxX[bodyIndexB];
-                        const Real maxYB = aabbMaxY[bodyIndexB];
-
-                        const bool doesIntersect =
-                            (minXA < maxXB && maxXA > minXB) &&
-                            (minYA < maxYB && maxYA > minYB);
-
-                        if (doesIntersect)
-                        {
-                            collidingBodyPairs.emplace_back(bodyIndexA, bodyIndexB);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    //void BroadPhaseCollisionDetector::uniformSpaceGrid(size_t bodyCount)
+    //{
+    //    TRACY_SCOPE_N("Uniform grid");
+    //
+    //    const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
+    //    const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
+    //    const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
+    //    const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
+    //
+    //    auto* CORE_RESTRICT grid = &functionResources.spaceGrid;
+    //
+    //    // Compute world bounds from all AABBs.
+    //    Real globalMinX =  std::numeric_limits<Real>::max();
+    //    Real globalMaxX = -std::numeric_limits<Real>::max();
+    //    Real globalMinY =  std::numeric_limits<Real>::max();
+    //    Real globalMaxY = -std::numeric_limits<Real>::max();
+    //
+    //    Real totalExtent = Real(0.0);
+    //    {
+    //        TRACY_SCOPE_N("Determine world AABB and bodies' total extent");
+    //        for (size_t i = 0; i < bodyCount; i++)
+    //        {
+    //            const Real minX = aabbMinX[i];
+    //            const Real maxX = aabbMaxX[i];
+    //            const Real minY = aabbMinY[i];
+    //            const Real maxY = aabbMaxY[i];
+    //
+    //            globalMinX = std::min(globalMinX, minX);
+    //            globalMaxX = std::max(globalMaxX, maxX);
+    //            globalMinY = std::min(globalMinY, minY);
+    //            globalMaxY = std::max(globalMaxY, maxY);
+    //
+    //            const Real extentX = maxX - minX;
+    //            const Real extentY = maxY - minY;
+    //            totalExtent += std::max(extentX, extentY);
+    //        }
+    //    }
+    //
+    //    const Real averageBodyExtent = totalExtent / Real(bodyCount);
+    //
+    //    const Real worldWidth = std::max(globalMaxX - globalMinX, Real(1e-3));
+    //    const Real worldHeight = std::max(globalMaxY - globalMinY, Real(1e-3));
+    //    const Real worldArea = worldWidth * worldHeight;
+    //
+    //    // Determine cell size.
+    //    Real cellSize = std::max(
+    //        std::sqrt(worldArea / Real(bodyCount)),
+    //        averageBodyExtent * Real(2.0)
+    //    );
+    //    cellSize = std::max(cellSize, Real(0.25));
+    //
+    //    const Real invCellSize = Real(1.0) / cellSize;
+    //
+    //    // Grid size.
+    //    const int gridWidth = std::max(1, static_cast<int>(std::ceil(worldWidth * invCellSize)));
+    //    const int gridHeight = std::max(1, static_cast<int>(std::ceil(worldHeight * invCellSize)));
+    //
+    //    // Map each occupied cell to a list of body indices.
+    //    grid->clear();
+    //    grid->reserve(bodyCount * 4);
+    //
+    //    auto getCellKey = [](int cx, int cy) -> uint64_t {
+    //        constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
+    //        uint64_t h = (uint64_t)cx + addConst;
+    //        h ^= (uint64_t)cy + addConst + (h << 6) + (h >> 2);
+    //        return h;
+    //        };
+    //
+    //    {
+    //        TRACY_SCOPE_N("Put bodies into cells");
+    //        for (BodyIndex bodyIndex = 0; bodyIndex < bodyCount; bodyIndex++)
+    //        {
+    //            const Real minX = aabbMinX[bodyIndex];
+    //            const Real maxX = aabbMaxX[bodyIndex];
+    //            const Real minY = aabbMinY[bodyIndex];
+    //            const Real maxY = aabbMaxY[bodyIndex];
+    //
+    //            int cx0 = static_cast<int>(std::floor((minX - globalMinX) * invCellSize));
+    //            int cx1 = static_cast<int>(std::floor((maxX - globalMinX) * invCellSize));
+    //            int cy0 = static_cast<int>(std::floor((minY - globalMinY) * invCellSize));
+    //            int cy1 = static_cast<int>(std::floor((maxY - globalMinY) * invCellSize));
+    //
+    //            cx0 = std::clamp(cx0, 0, gridWidth - 1);
+    //            cx1 = std::clamp(cx1, 0, gridWidth - 1);
+    //            cy0 = std::clamp(cy0, 0, gridHeight - 1);
+    //            cy1 = std::clamp(cy1, 0, gridHeight - 1);
+    //
+    //            for (int cx = cx0; cx <= cx1; cx++)
+    //            for (int cy = cy0; cy <= cy1; cy++)
+    //                (*grid)[getCellKey(cx, cy)].push_back(bodyIndex);
+    //        }
+    //    }
+    //
+    //    // For each cell, test all pairs inside it.
+    //    auto* CORE_RESTRICT testedPairs = &functionResources.uint64Set;
+    //    testedPairs->clear();
+    //    testedPairs->reserve(bodyCount * 8);
+    //
+    //    auto pairKey = [](BodyIndex a, BodyIndex b) -> uint64_t
+    //        {
+    //            const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
+    //            const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
+    //
+    //            constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
+    //            uint64_t h = (uint64_t)lo + addConst;
+    //            h ^= (uint64_t)hi + addConst + (h << 6) + (h >> 2);
+    //            return h;
+    //        };
+    //
+    //    {
+    //        TRACY_SCOPE_N("Test pairs");
+    //        for (auto& entry : *grid)
+    //        {
+    //            const std::vector<BodyIndex>& bodiesInCell = entry.second;
+    //            const size_t bodyInCellCount = bodiesInCell.size();
+    //            if (bodyInCellCount < 2) continue;
+    //
+    //            for (size_t i = 0; i < bodyInCellCount; i++)
+    //            {
+    //                const BodyIndex bodyIndexA = bodiesInCell[i];
+    //                const Real minXA = aabbMinX[bodyIndexA];
+    //                const Real minYA = aabbMinY[bodyIndexA];
+    //                const Real maxXA = aabbMaxX[bodyIndexA];
+    //                const Real maxYA = aabbMaxY[bodyIndexA];
+    //
+    //                for (size_t j = i + 1; j < bodyInCellCount; j++)
+    //                {
+    //                    const BodyIndex bodyIndexB = bodiesInCell[j];
+    //                    const uint64_t key = pairKey(bodyIndexA, bodyIndexB);
+    //                    if (!testedPairs->insert(key).second)
+    //                        continue;
+    //
+    //                    const Real minXB = aabbMinX[bodyIndexB];
+    //                    const Real minYB = aabbMinY[bodyIndexB];
+    //                    const Real maxXB = aabbMaxX[bodyIndexB];
+    //                    const Real maxYB = aabbMaxY[bodyIndexB];
+    //
+    //                    const bool doesIntersect =
+    //                        (minXA < maxXB && maxXA > minXB) &&
+    //                        (minYA < maxYB && maxYA > minYB);
+    //
+    //                    if (doesIntersect)
+    //                    {
+    //                        collidingBodyPairs.emplace_back(bodyIndexA, bodyIndexB);
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
 
     void BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t bodyCount)
     {
@@ -436,7 +432,7 @@ namespace PS_AGONY
                             if ((minXi < maxXj && maxXi > minXj) &&
                                 (minYi < maxYj && maxYi > minYj))
                             {
-                                collidingBodyPairs.emplace_back(bi, bj);
+                                broadCollisionData.emplace_back(bi, bj);
                             }
                         }
                     }
@@ -462,7 +458,7 @@ namespace PS_AGONY
                             if ((minXi < maxXj && maxXi > minXj) &&
                                 (minYi < maxYj && maxYi > minYj))
                             {
-                                collidingBodyPairs.emplace_back(bi, bj);
+                                broadCollisionData.emplace_back(bi, bj);
                             }
                         }
                     }

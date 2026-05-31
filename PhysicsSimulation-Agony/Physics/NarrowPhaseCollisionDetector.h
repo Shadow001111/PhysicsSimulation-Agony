@@ -10,9 +10,44 @@ namespace PS_AGONY
 		Vec2 normal;
 		Real depth;
 		Vec2 contact1, contact2;
+		uint32_t contactCount;
 	};
 
 	class NarrowPhaseCollisionDetector
 	{
+		using CollisionFunc = void (NarrowPhaseCollisionDetector::*)(BodyIndex, BodyIndex);
+
+		static const CollisionFunc collisionFunctions[static_cast<size_t>(BodyType::COUNT)][static_cast<size_t>(BodyType::COUNT)];
+
+		std::vector<BodyCollisionData> narrowCollisionData;
+
+		//struct FunctionResources
+		//{
+		//
+		//};
+
+		// SoA data viewers.
+		BodySoAViewer bodies;
+		CircleSoAViewer circles;
+	public:
+		NarrowPhaseCollisionDetector() = default;
+		~NarrowPhaseCollisionDetector() = default;
+		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = default;
+		NarrowPhaseCollisionDetector& operator=(const NarrowPhaseCollisionDetector&) = default;
+		NarrowPhaseCollisionDetector(NarrowPhaseCollisionDetector&&) = default;
+		NarrowPhaseCollisionDetector& operator=(NarrowPhaseCollisionDetector&&) = default;
+
+		void setDataViewers(
+			const BodySoAViewer& bodies,
+			const CircleSoAViewer& circles
+		);
+		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs);
+	private:
+		void collisionCircleCircle(BodyIndex indexA, BodyIndex indexB);
+		void collisionCircleBox(BodyIndex indexA, BodyIndex indexB);
+		void collisionCirclePolygon(BodyIndex indexA, BodyIndex indexB);
+		void collisionBoxBox(BodyIndex indexA, BodyIndex indexB);
+		void collisionBoxPolygon(BodyIndex indexA, BodyIndex indexB);
+		void collisionPolygonPolygon(BodyIndex indexA, BodyIndex indexB);
 	};
 }

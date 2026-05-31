@@ -15,7 +15,8 @@ namespace PS_AGONY
 	{
 		Circle,
 		Box,
-		Polygon
+		Polygon,
+		COUNT
 	};
 
 	struct AABBSoA

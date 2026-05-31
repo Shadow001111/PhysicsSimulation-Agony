@@ -6,4 +6,9 @@ namespace PS_AGONY
 	using Real = float;
 	using BodyIndex = uint32_t;
 	using MaterialIndex = uint32_t;
+
+	struct BodyPair
+	{
+		BodyIndex a, b;
+	};
 }

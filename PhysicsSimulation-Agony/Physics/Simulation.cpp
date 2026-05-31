@@ -9,7 +9,7 @@ namespace PS_AGONY
     {
         return Real(0.5) * radius * radius * mass;
     }
-
+    
 
     void Simulation::update(Real deltaTime)
     {
@@ -85,7 +85,6 @@ namespace PS_AGONY
         // Self-explanatory.
         applyExternalForces(bodyCount, deltaTime);
         integrate(bodyCount, deltaTime);
-        boundaryCollisionResolution(bodyCount);
 
         // Build AABBs.
         {
@@ -99,15 +98,19 @@ namespace PS_AGONY
         if (bodyCount < 2) return;
 
         // Broad phase.
-        const std::vector<BodyPair>& broadPhaseCollisions = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
-        if (broadPhaseCollisions.empty()) return;
-        markBodiesOfBroadPhase(broadPhaseCollisions);
+        const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
+        if (broadCollisionData.empty()) return;
 
         // Narrow phase.
-        narrowPhaseCollisionDetection();
+        narrowPhaseCollisionDetector.setDataViewers(
+            BodySoAViewer(bodies),
+            CircleSoAViewer(circles)
+        );
+        const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
+        if (narrowCollisionData.empty()) return;
 
         // Collision resolution.
-        resolveCollisions();
+        resolveCollisions(narrowCollisionData);
     }
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
@@ -118,10 +121,13 @@ namespace PS_AGONY
 
         Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+        const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
 
         const Vec2 gravityDelta = simulationSettings.gravity * deltaTime;
-        const RealSimd gravityDeltaXV{ simulationSettings.gravity.x * deltaTime };
-        const RealSimd gravityDeltaYV{ simulationSettings.gravity.y * deltaTime };
+        const RealSimd gravityDeltaXV{ gravityDelta.x };
+        const RealSimd gravityDeltaYV{ gravityDelta.y };
+
+        const RealSimd zeros = RealSimd(Real(0));
 
         size_t i = 0;
         for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
@@ -129,16 +135,25 @@ namespace PS_AGONY
             RealSimd velX = RealSimd::load(velocityXPtr + i);
             RealSimd velY = RealSimd::load(velocityYPtr + i);
 
-            velX += gravityDeltaXV;
-            velY += gravityDeltaYV;
+            const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+            const auto movableMask = invMassV != zeros;
+
+            RealSimd newVelX = velX + gravityDeltaXV;
+            RealSimd newVelY = velY + gravityDeltaYV;
+
+            velX = RealSimd::blendv(velX, newVelX, movableMask);
+            velY = RealSimd::blendv(velY, newVelY, movableMask);
 
             velX.store(velocityXPtr + i);
             velY.store(velocityYPtr + i);
         }
         for (; i < bodyCount; i++)
         {
-            velocityXPtr[i] += gravityDelta.x;
-            velocityYPtr[i] += gravityDelta.y;
+            const Real invMass = invMassPtr[i];
+            const Real movableMask = invMass != Real(0.0);
+        
+            velocityXPtr[i] += gravityDelta.x * movableMask;
+            velocityYPtr[i] += gravityDelta.y * movableMask;
         }
     }
 
@@ -178,42 +193,6 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::boundaryCollisionResolution(size_t bodyCount)
-    {
-        // Note: I won't used SIMD here, because this method will get deleted.
-
-        TRACY_SCOPE_N("Boundary collision");
-
-        Real* CORE_RESTRICT positionX = bodies.positionX.data();
-        Real* CORE_RESTRICT positionY = bodies.positionY.data();
-        Real* CORE_RESTRICT velocityX = bodies.velocityX.data();
-        Real* CORE_RESTRICT velocityY = bodies.velocityY.data();
-
-        const Real boundary = 10.0f;
-        for (size_t i = 0; i < bodyCount; i++)
-        {
-            const Real x = positionX[i];
-            const Real y = positionY[i];
-
-            const Real absX = std::abs(x);
-            const Real absY = std::abs(y);
-
-            if (absX > boundary)
-            {
-                const Real sign = positionX[i] > 0.0 ? 1.0 : -1.0;
-                positionX[i] = boundary * sign;
-                velocityX[i] = -velocityX[i];
-            }
-
-            if (absY > boundary)
-            {
-                const Real sign = positionY[i] > 0.0 ? 1.0 : -1.0;
-                positionY[i] = boundary * sign;
-                velocityY[i] = -velocityY[i];
-            }
-        }
-    }
-
     void Simulation::buildCircleAABBs()
     {
         TRACY_SCOPE_N("Build circle AABBs");
@@ -245,34 +224,70 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::markBodiesOfBroadPhase(const std::vector<BodyPair>& broadPhaseCollisions)
-    {
-        TRACY_SCOPE_N("Mark bodies of broad phase");
-
-        auto* CORE_RESTRICT collisionDebug = bodies.collisionDebug.data();
-
-        for (const BodyPair& pair : broadPhaseCollisions)
-        {
-            collisionDebug[pair.a] = 1;
-            collisionDebug[pair.b] = 1;
-        }
-    }
-
-    void Simulation::narrowPhaseCollisionDetection()
-    {
-        TRACY_SCOPE_N("Narrow phase");
-
-        //const size_t bodyPairCount = broadPhaseCollisions.size();
-        //if (bodyPairCount == 0) return;
-
-        //for (size_t i = 0; i < bodyPairCount; i++)
-        //{
-        //    BodyPair bodyPair = broadPhaseCollisions[i];
-        //}
-    }
-
-    void Simulation::resolveCollisions()
+    void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         TRACY_SCOPE_N("Resolve collisions");
+
+        Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+        const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
+
+        // TODO: Rotations, inertia, friction.
+        const Real elasticity = 1.0 + 0.8;
+
+        for (const auto& data : narrowPhaseCollisions)
+        {
+            // Gather data.
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
+
+            const Vec2 normal = data.normal;
+            const Real depth = data.depth;
+        
+            const Vec2 velocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
+            const Vec2 velocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
+            
+            // Velocity resolution.
+            const Vec2 relativeVelocity = velocityB - velocityA;
+            const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
+            if (velocityAlongNormal > Real(0))
+            {
+                continue;
+            }
+
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0))
+            {
+                continue;
+            }
+
+            const Real invTotalInvMass = Real(1.0) / totalInvMass;
+
+            const Real impulse = elasticity * velocityAlongNormal * invTotalInvMass;
+            const Vec2 impulseVec = normal * impulse;
+
+            velocityXPtr[bodyIndexA] += impulseVec.x * invMassA;
+            velocityYPtr[bodyIndexA] += impulseVec.y * invMassA;
+
+            velocityXPtr[bodyIndexB] -= impulseVec.x * invMassB;
+            velocityYPtr[bodyIndexB] -= impulseVec.y * invMassB;
+
+            // Position resolution.
+            const Vec2 correctionVec2 = normal * depth;
+
+            const Real ratioA = invMassA * invTotalInvMass;
+            const Real ratioB = invMassB * invTotalInvMass;
+
+            positionXPtr[bodyIndexA] -= correctionVec2.x * ratioA;
+            positionYPtr[bodyIndexA] -= correctionVec2.y * ratioA;
+
+            positionXPtr[bodyIndexB] += correctionVec2.x * ratioB;
+            positionYPtr[bodyIndexB] += correctionVec2.y * ratioB;
+        }
     }
 }

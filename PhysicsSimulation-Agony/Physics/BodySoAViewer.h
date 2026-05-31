@@ -15,12 +15,12 @@ namespace PS_AGONY
 
         AABBSoAViewer() = default;
 
-        AABBSoAViewer(const AABBSoA& aabb) :
-            count(aabb.minX.size()),
-            minX(aabb.minX.data()),
-            minY(aabb.minY.data()),
-            maxX(aabb.maxX.data()),
-            maxY(aabb.maxY.data())
+        explicit AABBSoAViewer(const AABBSoA& data) :
+            count(data.minX.size()),
+            minX(data.minX.data()),
+            minY(data.minY.data()),
+            maxX(data.maxX.data()),
+            maxY(data.maxY.data())
         {
         }
 
@@ -38,11 +38,11 @@ namespace PS_AGONY
 
             AABBSoAViewer_Internal() = default;
 
-            AABBSoAViewer_Internal(const AABBSoA& aabb) :
-                minX(aabb.minX.data()),
-                minY(aabb.minY.data()),
-                maxX(aabb.maxX.data()),
-                maxY(aabb.maxY.data())
+            AABBSoAViewer_Internal(const AABBSoA& data) :
+                minX(data.minX.data()),
+                minY(data.minY.data()),
+                maxX(data.maxX.data()),
+                maxY(data.maxY.data())
             {}
         };
 
@@ -75,23 +75,41 @@ namespace PS_AGONY
     public:
         BodySoAViewer() = default;
 
-        explicit BodySoAViewer(const BodySoA& bodies) noexcept :
-            count(bodies.getCount()),
-            positionX(bodies.positionX.data()),
-            positionY(bodies.positionY.data()),
-            velocityX(bodies.velocityX.data()),
-            velocityY(bodies.velocityY.data()),
-            rotation(bodies.rotation.data()),
-            angularVelocity(bodies.angularVelocity.data()),
-            mass(bodies.mass.data()),
-            invMass(bodies.invMass.data()),
-            inertia(bodies.inertia.data()),
-            invInertia(bodies.invInertia.data()),
-            materialIndex(bodies.materialIndex.data()),
-            aabb(bodies.aabb),
-            bodyType(bodies.bodyType.data()),
-            shapeIndex(bodies.shapeIndex.data()),
-            collisionDebug(bodies.collisionDebug.data())
+        explicit BodySoAViewer(const BodySoA& data) noexcept :
+            count(data.getCount()),
+            positionX(data.positionX.data()),
+            positionY(data.positionY.data()),
+            velocityX(data.velocityX.data()),
+            velocityY(data.velocityY.data()),
+            rotation(data.rotation.data()),
+            angularVelocity(data.angularVelocity.data()),
+            mass(data.mass.data()),
+            invMass(data.invMass.data()),
+            inertia(data.inertia.data()),
+            invInertia(data.invInertia.data()),
+            materialIndex(data.materialIndex.data()),
+            aabb(data.aabb),
+            bodyType(data.bodyType.data()),
+            shapeIndex(data.shapeIndex.data()),
+            collisionDebug(data.collisionDebug.data())
+        {}
+
+        size_t getCount() const noexcept { return count; }
+    };
+
+    class CircleSoAViewer
+    {
+        size_t count = 0;
+    public:
+        const Real* radius = nullptr;
+        const BodyIndex* bodyIndices = nullptr;
+    public:
+        CircleSoAViewer() = default;
+
+        explicit CircleSoAViewer(const CircleSoA& data) :
+            count(data.getCount()),
+            radius(data.radius.data()),
+            bodyIndices(data.bodyIndices.data())
         {}
 
         size_t getCount() const noexcept { return count; }
