@@ -16,11 +16,6 @@ namespace PS_AGONY
         return d;
     }
 
-    static constexpr uint64_t bvhMaxStackSize(uint64_t n, uint64_t leafSize)
-    {
-        return 3ull * bvhDepth(n, leafSize) + 1ull;
-    }
-
 
     const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const AABBSoAViewer& bodiesAABBViewer)
     {
@@ -277,22 +272,23 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
-        // Task stack.
         struct BuildTask
         {
             uint32_t start, end;
             uint32_t parentIdx; // INVALID_INDEX for the root.
-            bool isRight;   // Which child slot to fill in the parent.
+            bool isRight; // Which child slot to fill in the parent.
         };
 
-        auto& stack = functionResources.bvhBuildTaskVector;
-        stack.clear();
-        stack.push_back({ 0, bodyCount, BvhNode::INVALID_INDEX, false });
+        // Local stack.
+        constexpr uint64_t MAX_STACK_CAPACITY = bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
+        BuildTask stack[MAX_STACK_CAPACITY];
+        uint32_t stackSize = 0;
 
-        while (!stack.empty())
+        stack[stackSize++] = { 0, bodyCount, BvhNode::INVALID_INDEX, false };
+
+        while (stackSize > 0)
         {
-            const BvhBuildTask task = stack.back();
-            stack.pop_back();
+            const BuildTask task = stack[--stackSize];
 
             // Compute merged bounding box.
             Real minX =  std::numeric_limits<Real>::max();
@@ -343,8 +339,8 @@ namespace PS_AGONY
                 });
 
             // Push right before left so left is popped and processed first (LIFO).
-            stack.emplace_back( mid,        task.end, nodeIdx, true  ); // right child
-            stack.emplace_back( task.start, mid,      nodeIdx, false ); // left child
+            stack[stackSize++] = { mid,        task.end, nodeIdx, true  }; // right child
+            stack[stackSize++] = { task.start, mid,      nodeIdx, false }; // left child
         }
     }
 
@@ -356,7 +352,7 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         // Local stack.
-        constexpr uint32_t MAX_STACK_CAPACITY = bvhMaxStackSize(UINT32_MAX, BvhNode::KD_LEAF_SIZE);
+        constexpr uint64_t MAX_STACK_CAPACITY = 2ull * bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
         BvhNodePair stack[MAX_STACK_CAPACITY];
         uint32_t stackSize = 0;
 

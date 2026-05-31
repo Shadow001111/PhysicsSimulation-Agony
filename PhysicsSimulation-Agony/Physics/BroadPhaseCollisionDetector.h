@@ -25,20 +25,12 @@ namespace PS_AGONY
 
 		struct BvhNodePair { uint32_t a, b; };
 
-		struct BvhBuildTask
-		{
-			uint32_t start, end;
-			uint32_t parentIdx; // INVALID_INDEX for the root.
-			bool isRight;   // Which child slot to fill in the parent.
-		};
-
 		struct FunctionResources
 		{
 			std::vector<BodyIndex> bodyIndexVector1;
 			std::vector<BodyIndex> bodyIndexVector2;
 
 			std::vector<BvhNode> bvhNodeVector1;
-			std::vector<BvhBuildTask> bvhBuildTaskVector;
 
 			robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> spaceGrid;
 
