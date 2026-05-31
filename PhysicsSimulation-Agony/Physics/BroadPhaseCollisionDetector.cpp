@@ -9,6 +9,19 @@
 
 namespace PS_AGONY
 {
+    static constexpr uint64_t bvhDepth(uint64_t n, uint64_t leafSize)
+    {
+        uint64_t d = 0ull;
+        while (n > leafSize) { n = (n + 1ull) >> 1ull; ++d; } // Right child = ceil(n/2).
+        return d;
+    }
+
+    static constexpr uint64_t bvhMaxStackSize(uint64_t n, uint64_t leafSize)
+    {
+        return 3ull * bvhDepth(n, leafSize) + 1ull;
+    }
+
+
     const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const AABBSoAViewer& bodiesAABBViewer)
     {
         TRACY_SCOPE_N("Broad phase");
@@ -335,18 +348,6 @@ namespace PS_AGONY
         }
     }
 
-    static constexpr uint32_t bvhDepth(uint32_t n, uint32_t leafSize)
-    {
-        uint32_t d = 0;
-        while (n > leafSize) { n = (n + 1) >> 1; ++d; } // right child = ceil(n/2)
-        return d;
-    }
-
-    static constexpr uint32_t bvhMaxStackSize(uint32_t n, uint32_t leafSize)
-    {
-        return 3 * bvhDepth(n, leafSize) + 1;
-    }
-
     void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
     {
         const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
@@ -354,16 +355,16 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
-        auto& stack = functionResources.bvhNodePairVector;
-        stack.clear();
-        stack.emplace_back( 0, 0 );
+        // Local stack.
+        constexpr uint32_t MAX_STACK_CAPACITY = bvhMaxStackSize(UINT32_MAX, BvhNode::KD_LEAF_SIZE);
+        BvhNodePair stack[MAX_STACK_CAPACITY];
+        uint32_t stackSize = 0;
 
-        //constexpr uint32_t STACK_CAPACITY = bvhMaxStackSize(30'500, BvhNode::KD_LEAF_SIZE);
+        stack[stackSize++] = { 0, 0 };
 
-        while (!stack.empty())
+        while (stackSize > 0)
         {
-            const BvhNodePair nodePair = stack.back();
-            stack.pop_back();
+            const BvhNodePair nodePair = stack[--stackSize];
 
             const BvhNode& nodeA = nodes[nodePair.a];
             const BvhNode& nodeB = nodes[nodePair.b];
@@ -437,21 +438,21 @@ namespace PS_AGONY
             {
                 // Self-query internal node.
                 const uint32_t L = nodeA.left, R = nodeA.right;
-                stack.emplace_back( R, R );
-                stack.emplace_back( L, R );
-                stack.emplace_back( L, L );
+                stack[stackSize++] = { R, R };
+                stack[stackSize++] = { L, R };
+                stack[stackSize++] = { L, L };
             }
             else if (aLeaf || (!bLeaf && (nodeA.end - nodeA.start) < (nodeB.end - nodeB.start)))
             {
                 // Split the larger node B.
-                stack.push_back({ nodePair.a, nodeB.right });
-                stack.push_back({ nodePair.a, nodeB.left });
+                stack[stackSize++] = { nodePair.a, nodeB.right };
+                stack[stackSize++] = { nodePair.a, nodeB.left  };
             }
             else
             {
                 // Split node A.
-                stack.push_back({ nodeA.right, nodePair.b });
-                stack.push_back({ nodeA.left,  nodePair.b });
+                stack[stackSize++] = { nodeA.right, nodePair.b };
+                stack[stackSize++] = { nodeA.left,  nodePair.b };
             }
         }
     }

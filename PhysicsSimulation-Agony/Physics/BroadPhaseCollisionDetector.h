@@ -39,7 +39,6 @@ namespace PS_AGONY
 
 			std::vector<BvhNode> bvhNodeVector1;
 			std::vector<BvhBuildTask> bvhBuildTaskVector;
-			std::vector<BvhNodePair> bvhNodePairVector;
 
 			robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> spaceGrid;
 
