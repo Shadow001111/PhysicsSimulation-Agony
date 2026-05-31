@@ -101,7 +101,6 @@ namespace PS_AGONY
         // Broad phase.
         const std::vector<BodyPair>& broadPhaseCollisions = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
         if (broadPhaseCollisions.empty()) return;
-
         markBodiesOfBroadPhase(broadPhaseCollisions);
 
         // Narrow phase.

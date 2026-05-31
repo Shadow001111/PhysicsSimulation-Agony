@@ -4,6 +4,7 @@
 #include "Material.h"
 
 #include "BroadPhaseCollisionDetector.h"
+#include "NarrowPhaseCollisionDetector.h"
 
 #include <vector>
 
@@ -30,6 +31,7 @@ namespace PS_AGONY
 
 		// Collisions.
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
+		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
 
 		// Other.
 		Real updateTimeAccumulator = 0.0;

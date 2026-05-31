@@ -5,6 +5,7 @@
 
 #include <numeric>
 #include <cmath>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -86,17 +87,23 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("BVH");
 
-        auto* CORE_RESTRICT nodes = &functionResources.bvhNodeVector1;
-        auto* CORE_RESTRICT indices = &functionResources.bodyIndexVector1;
+        auto& nodes = functionResources.bvhNodeVector1;
+        auto& indices = functionResources.bodyIndexVector1;
 
-        nodes->clear();
-        nodes->reserve(2 * bodyCount);
+        nodes.clear();
+        nodes.reserve(2 * bodyCount);
 
-        indices->resize(bodyCount);
-        std::iota(indices->begin(), indices->end(), 0);
+        indices.resize(bodyCount);
+        std::iota(indices.begin(), indices.end(), 0);
 
-        buildBvhNode(*nodes, *indices, 0, bodyCount);
-        queryBvhPairs(*nodes, *indices, 0, 0); // Self-query the root finds all pairs.
+        {
+            TRACY_SCOPE_N("Build nodes");
+            buildBvhNode(nodes, indices, bodyCount);
+        }
+        {
+            TRACY_SCOPE_N("Query pairs");
+            queryBvhPairs(nodes, indices); // Self-query the root finds all pairs.
+        }
     }
 
     void BroadPhaseCollisionDetector::uniformSpaceGrid(size_t bodyCount)
@@ -250,156 +257,202 @@ namespace PS_AGONY
         }
     }
 
-    uint32_t BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t start, uint32_t end)
+    void BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t bodyCount)
     {
         const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
         const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
         const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
-        // Compute merged bounding box.
-        Real minX = std::numeric_limits<Real>::max();
-        Real maxX = -std::numeric_limits<Real>::max();
-        Real minY = std::numeric_limits<Real>::max();
-        Real maxY = -std::numeric_limits<Real>::max();
-        for (uint32_t i = start; i < end; i++)
+        // Task stack.
+        struct BuildTask
         {
-            const BodyIndex b = indices[i];
-            minX = std::min(minX, aabbMinX[b]);
-            maxX = std::max(maxX, aabbMaxX[b]);
-            minY = std::min(minY, aabbMinY[b]);
-            maxY = std::max(maxY, aabbMaxY[b]);
+            uint32_t start, end;
+            uint32_t parentIdx; // INVALID_INDEX for the root.
+            bool isRight;   // Which child slot to fill in the parent.
+        };
+
+        auto& stack = functionResources.bvhBuildTaskVector;
+        stack.clear();
+        stack.push_back({ 0, bodyCount, BvhNode::INVALID_INDEX, false });
+
+        while (!stack.empty())
+        {
+            const BvhBuildTask task = stack.back();
+            stack.pop_back();
+
+            // Compute merged bounding box.
+            Real minX =  std::numeric_limits<Real>::max();
+            Real maxX = -std::numeric_limits<Real>::max();
+            Real minY =  std::numeric_limits<Real>::max();
+            Real maxY = -std::numeric_limits<Real>::max();
+            for (uint32_t i = task.start; i < task.end; i++)
+            {
+                const BodyIndex b = indices[i];
+                minX = std::min(minX, aabbMinX[b]);
+                maxX = std::max(maxX, aabbMaxX[b]);
+                minY = std::min(minY, aabbMinY[b]);
+                maxY = std::max(maxY, aabbMaxY[b]);
+            }
+
+            const uint32_t nodeIdx = nodes.size();
+            nodes.emplace_back(minX, maxX, minY, maxY, BvhNode::INVALID_INDEX, BvhNode::INVALID_INDEX, task.start, task.end);
+
+            // Wire into parent if one exists.
+            if (task.parentIdx != BvhNode::INVALID_INDEX)
+            {
+                if (task.isRight) nodes[task.parentIdx].right = nodeIdx;
+                else              nodes[task.parentIdx].left = nodeIdx;
+            }
+
+            // Check range.
+            const uint32_t rangeSize = task.end - task.start;
+            if (rangeSize <= BvhNode::KD_LEAF_SIZE)
+                continue;
+
+            // Partition on the widest axis at the median centroid.
+            const bool splitX = (maxX - minX) >= (maxY - minY);
+            const uint32_t mid = task.start + rangeSize / 2;// (task.start + task.end) / 2;
+
+            // Removed '*0.5' because there's no difference for order.
+            auto centroid = [&](BodyIndex i) -> float
+                {
+                    if (splitX)
+                        return aabbMinX[i] + aabbMaxX[i];
+                    else
+                        return aabbMinY[i] + aabbMaxY[i];
+                };
+
+            std::nth_element(indices.begin() + task.start, indices.begin() + mid, indices.begin() + task.end,
+                [&](BodyIndex a, BodyIndex b)
+                {
+                    return centroid(a) < centroid(b);
+                });
+
+            // Push right before left so left is popped and processed first (LIFO).
+            stack.emplace_back( mid,        task.end, nodeIdx, true  ); // right child
+            stack.emplace_back( task.start, mid,      nodeIdx, false ); // left child
         }
-
-        const uint32_t nodeIdx = nodes.size();
-        nodes.emplace_back(minX, maxX, minY, maxY, BvhNode::INVALID_INDEX, BvhNode::INVALID_INDEX, start, end);
-
-        const uint32_t rangeSize = end - start;
-        if (rangeSize <= BvhNode::KD_LEAF_SIZE)
-            return nodeIdx;
-
-        // Partition on the widest axis at the median centroid.
-        const bool splitX = (maxX - minX) >= (maxY - minY);
-        const uint32_t mid = start + rangeSize / 2;// (start + end) / 2;
-
-        // Removed '*0.5' because there's no difference for order.
-        auto centroid = [&](BodyIndex i) -> float
-            {
-                if (splitX)
-                    return aabbMinX[i] + aabbMaxX[i];
-                else
-                    return aabbMinY[i] + aabbMaxY[i];
-            };
-
-        std::nth_element(indices.begin() + start, indices.begin() + mid, indices.begin() + end,
-            [&](BodyIndex a, BodyIndex b)
-            {
-                return centroid(a) < centroid(b);
-            });
-
-        const uint32_t left = buildBvhNode(nodes, indices, start, mid);
-        const uint32_t right = buildBvhNode(nodes, indices, mid, end);
-
-        // Re-access by index: recursive calls may have reallocated nodes.
-        nodes[nodeIdx].left = left;
-        nodes[nodeIdx].right = right;
-        return nodeIdx;
     }
 
-    void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices, uint32_t nodeA, uint32_t nodeB)
+    static constexpr uint32_t bvhDepth(uint32_t n, uint32_t leafSize)
+    {
+        uint32_t d = 0;
+        while (n > leafSize) { n = (n + 1) >> 1; ++d; } // right child = ceil(n/2)
+        return d;
+    }
+
+    static constexpr uint32_t bvhMaxStackSize(uint32_t n, uint32_t leafSize)
+    {
+        return 3 * bvhDepth(n, leafSize) + 1;
+    }
+
+    void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
     {
         const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
         const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
         const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
-        const BvhNode& a = nodes[nodeA];
-        const BvhNode& b = nodes[nodeB];
+        auto& stack = functionResources.bvhNodePairVector;
+        stack.clear();
+        stack.emplace_back( 0, 0 );
 
-        // Prune entire subtree pair if their bounding boxes don't overlap.
-        if (a.minX >= b.maxX || a.maxX <= b.minX ||
-            a.minY >= b.maxY || a.maxY <= b.minY)
-            return;
+        //constexpr uint32_t STACK_CAPACITY = bvhMaxStackSize(30'500, BvhNode::KD_LEAF_SIZE);
 
-        const bool aLeaf = (a.left == BvhNode::INVALID_INDEX);
-        const bool bLeaf = (b.left == BvhNode::INVALID_INDEX);
-
-        if (aLeaf && bLeaf)
+        while (!stack.empty())
         {
-            if (nodeA == nodeB)
-            {
-                // Self-query leaf: unique pairs only.
-                for (uint32_t i = a.start; i < a.end; i++)
-                {
-                    const BodyIndex bi = indices[i];
-                    const Real minXi = aabbMinX[bi];
-                    const Real maxXi = aabbMaxX[bi];
-                    const Real minYi = aabbMinY[bi];
-                    const Real maxYi = aabbMaxY[bi];
-                    for (uint32_t j = i + 1; j < a.end; j++)
-                    {
-                        const BodyIndex bj = indices[j];
-                        const Real minXj = aabbMinX[bj];
-                        const Real maxXj = aabbMaxX[bj];
-                        const Real minYj = aabbMinY[bj];
-                        const Real maxYj = aabbMaxY[bj];
+            const BvhNodePair nodePair = stack.back();
+            stack.pop_back();
 
-                        if ((minXi < maxXj && maxXi > minXj) &&
-                            (minYi < maxYj && maxYi > minYj))
+            const BvhNode& nodeA = nodes[nodePair.a];
+            const BvhNode& nodeB = nodes[nodePair.b];
+
+            // Prune entire subtree pair if their bounding boxes don't overlap.
+            if (nodeA.minX >= nodeB.maxX || nodeA.maxX <= nodeB.minX ||
+                nodeA.minY >= nodeB.maxY || nodeA.maxY <= nodeB.minY)
+                continue;
+
+            const bool aLeaf = (nodeA.left == BvhNode::INVALID_INDEX);
+            const bool bLeaf = (nodeB.left == BvhNode::INVALID_INDEX);
+
+            if (aLeaf && bLeaf)
+            {
+                if (nodePair.a == nodePair.b)
+                {
+                    // Self-query leaf: unique pairs only.
+                    for (uint32_t i = nodeA.start; i < nodeA.end; i++)
+                    {
+                        const BodyIndex bi = indices[i];
+                        const Real minXi = aabbMinX[bi];
+                        const Real maxXi = aabbMaxX[bi];
+                        const Real minYi = aabbMinY[bi];
+                        const Real maxYi = aabbMaxY[bi];
+                        for (uint32_t j = i + 1; j < nodeA.end; j++)
                         {
-                            collidingBodyPairs.emplace_back(bi, bj);
+                            const BodyIndex bj = indices[j];
+                            const Real minXj = aabbMinX[bj];
+                            const Real maxXj = aabbMaxX[bj];
+                            const Real minYj = aabbMinY[bj];
+                            const Real maxYj = aabbMaxY[bj];
+
+                            if ((minXi < maxXj && maxXi > minXj) &&
+                                (minYi < maxYj && maxYi > minYj))
+                            {
+                                collidingBodyPairs.emplace_back(bi, bj);
+                            }
                         }
                     }
                 }
+                else
+                {
+                    // Cross-query: all pairs between two distinct leaves.
+                    for (uint32_t i = nodeA.start; i < nodeA.end; i++)
+                    {
+                        const BodyIndex bi = indices[i];
+                        const Real minXi = aabbMinX[bi];
+                        const Real maxXi = aabbMaxX[bi];
+                        const Real minYi = aabbMinY[bi];
+                        const Real maxYi = aabbMaxY[bi];
+                        for (uint32_t j = nodeB.start; j < nodeB.end; j++)
+                        {
+                            const BodyIndex bj = indices[j];
+                            const Real minXj = aabbMinX[bj];
+                            const Real maxXj = aabbMaxX[bj];
+                            const Real minYj = aabbMinY[bj];
+                            const Real maxYj = aabbMaxY[bj];
+
+                            if ((minXi < maxXj && maxXi > minXj) &&
+                                (minYi < maxYj && maxYi > minYj))
+                            {
+                                collidingBodyPairs.emplace_back(bi, bj);
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if (nodePair.a == nodePair.b)
+            {
+                // Self-query internal node.
+                const uint32_t L = nodeA.left, R = nodeA.right;
+                stack.emplace_back( R, R );
+                stack.emplace_back( L, R );
+                stack.emplace_back( L, L );
+            }
+            else if (aLeaf || (!bLeaf && (nodeA.end - nodeA.start) < (nodeB.end - nodeB.start)))
+            {
+                // Split the larger node B.
+                stack.push_back({ nodePair.a, nodeB.right });
+                stack.push_back({ nodePair.a, nodeB.left });
             }
             else
             {
-                // Cross-query: all pairs between two distinct leaves.
-                for (uint32_t i = a.start; i < a.end; i++)
-                {
-                    const BodyIndex bi = indices[i];
-                    const Real minXi = aabbMinX[bi];
-                    const Real maxXi = aabbMaxX[bi];
-                    const Real minYi = aabbMinY[bi];
-                    const Real maxYi = aabbMaxY[bi];
-                    for (uint32_t j = b.start; j < b.end; j++)
-                    {
-                        const BodyIndex bj = indices[j];
-                        const Real minXj = aabbMinX[bj];
-                        const Real maxXj = aabbMaxX[bj];
-                        const Real minYj = aabbMinY[bj];
-                        const Real maxYj = aabbMaxY[bj];
-
-                        if ((minXi < maxXj && maxXi > minXj) &&
-                            (minYi < maxYj && maxYi > minYj))
-                        {
-                            collidingBodyPairs.emplace_back(bi, bj);
-                        }
-                    }
-                }
+                // Split node A.
+                stack.push_back({ nodeA.right, nodePair.b });
+                stack.push_back({ nodeA.left,  nodePair.b });
             }
-            return;
-        }
-
-        if (nodeA == nodeB)
-        {
-            // Self-query internal node.
-            const uint32_t L = a.left, R = a.right;
-            queryBvhPairs(nodes, indices, L, L);
-            queryBvhPairs(nodes, indices, L, R);
-            queryBvhPairs(nodes, indices, R, R);
-        }
-        else if (aLeaf || (!bLeaf && (a.end - a.start) < (b.end - b.start)))
-        {
-            // Split the larger node B.
-            queryBvhPairs(nodes, indices, nodeA, b.left);
-            queryBvhPairs(nodes, indices, nodeA, b.right);
-        }
-        else
-        {
-            // Split node A.
-            queryBvhPairs(nodes, indices, a.left, nodeB);
-            queryBvhPairs(nodes, indices, a.right, nodeB);
         }
     }
 }

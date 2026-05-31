@@ -147,6 +147,9 @@
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="WindowManager.h">
@@ -402,6 +405,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Core\Portablity.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

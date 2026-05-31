@@ -23,12 +23,23 @@ namespace PS_AGONY
 			uint32_t start, end; // Range in kdIndices: [start, end).
 		};
 
+		struct BvhNodePair { uint32_t a, b; };
+
+		struct BvhBuildTask
+		{
+			uint32_t start, end;
+			uint32_t parentIdx; // INVALID_INDEX for the root.
+			bool isRight;   // Which child slot to fill in the parent.
+		};
+
 		struct FunctionResources
 		{
 			std::vector<BodyIndex> bodyIndexVector1;
 			std::vector<BodyIndex> bodyIndexVector2;
 
 			std::vector<BvhNode> bvhNodeVector1;
+			std::vector<BvhBuildTask> bvhBuildTaskVector;
+			std::vector<BvhNodePair> bvhNodePairVector;
 
 			robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> spaceGrid;
 
@@ -53,15 +64,14 @@ namespace PS_AGONY
 		void boundVolumeHierarchy(size_t bodyCount);
 		void uniformSpaceGrid(size_t bodyCount);
 	private:
-		uint32_t buildBvhNode(
+		void buildBvhNode(
 			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,
-			uint32_t start, uint32_t end);
+			uint32_t bodyCount);
 
 		void queryBvhPairs(
 			const std::vector<BvhNode>& nodes,
-			const std::vector<BodyIndex>& indices,
-			uint32_t nodeA, uint32_t nodeB);
+			const std::vector<BodyIndex>& indices);
 	};
 }
 
