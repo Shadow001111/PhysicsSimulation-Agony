@@ -274,6 +274,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
 
+        BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
+
         // Compute centroids.
         // Note: Removed '*0.5' because it doesn't impact order.
         Real* CORE_RESTRICT centroidXPtr = nullptr;
@@ -288,7 +290,6 @@ namespace PS_AGONY
         }
 
         {
-            TRACY_SCOPE_N("Compute centroids");
             size_t i = 0;
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
             {
@@ -326,8 +327,6 @@ namespace PS_AGONY
 
         while (stackSize > 0)
         {
-            TRACY_SCOPE_N("Stack loop");
-
             const BuildTask task = stack[--stackSize];
 
             // Compute merged bounding box.
@@ -335,16 +334,13 @@ namespace PS_AGONY
             Real maxX = -std::numeric_limits<Real>::max();
             Real minY =  std::numeric_limits<Real>::max();
             Real maxY = -std::numeric_limits<Real>::max();
+            for (uint32_t i = task.start; i < task.end; i++)
             {
-                TRACY_SCOPE_N("Compute merged bounding box");
-                for (uint32_t i = task.start; i < task.end; i++)
-                {
-                    const BodyIndex b = indices[i];
-                    minX = std::min(minX, aabbMinXPtr[b]);
-                    maxX = std::max(maxX, aabbMaxXPtr[b]);
-                    minY = std::min(minY, aabbMinYPtr[b]);
-                    maxY = std::max(maxY, aabbMaxYPtr[b]);
-                }
+                const BodyIndex b = indicesPtr[i];
+                minX = std::min(minX, aabbMinXPtr[b]);
+                maxX = std::max(maxX, aabbMaxXPtr[b]);
+                minY = std::min(minY, aabbMinYPtr[b]);
+                maxY = std::max(maxY, aabbMaxYPtr[b]);
             }
 
             const uint32_t nodeIdx = nodes.size();
@@ -366,25 +362,20 @@ namespace PS_AGONY
             const bool splitX = (maxX - minX) >= (maxY - minY);
             const uint32_t mid = task.start + rangeSize / 2; // (task.start + task.end) / 2;
 
-            {
-                TRACY_SCOPE_N("Nth element"); // The bottleneck.
-
-                const auto begin = indices.begin();
-                if (splitX)
+            if (splitX)
                 {
-                    std::nth_element(begin + task.start, begin + mid, begin + task.end,
+                    std::nth_element(indicesPtr + task.start, indicesPtr + mid, indicesPtr + task.end,
                         [&](BodyIndex a, BodyIndex b) {
                         return centroidXPtr[a] < centroidXPtr[b];
                         });
                 }
-                else
+            else
                 {
-                    std::nth_element(begin + task.start, begin + mid, begin + task.end,
+                    std::nth_element(indicesPtr + task.start, indicesPtr + mid, indicesPtr + task.end,
                         [&](BodyIndex a, BodyIndex b) {
                         return centroidYPtr[a] < centroidYPtr[b];
                         });
                 }
-            }
 
             // Push right before left so left is popped and processed first (LIFO).
             stack[stackSize++] = { mid,        task.end, nodeIdx, true  }; // Right child.
@@ -423,6 +414,7 @@ namespace PS_AGONY
 
             if (aLeaf && bLeaf)
             {
+                // The bottleneck.
                 if (nodePair.a == nodePair.b)
                 {
                     // Self-query leaf: unique pairs only.
@@ -475,10 +467,8 @@ namespace PS_AGONY
                         }
                     }
                 }
-                continue;
             }
-
-            if (nodePair.a == nodePair.b)
+            else if (nodePair.a == nodePair.b)
             {
                 // Self-query internal node.
                 const uint32_t L = nodeA.left, R = nodeA.right;
