@@ -17,22 +17,31 @@ inline constexpr size_t kSimdBytes = kSimdBits / 8;
 // Allowed element types
 template<typename T>
 concept SimdElement =
-std::is_same_v<T, int32_t> ||
-std::is_same_v<T, int64_t> ||
-std::is_same_v<T, float> ||
-std::is_same_v<T, double>;
+    std::is_same_v<T, int32_t>  || std::is_same_v<T, int64_t>  ||
+    std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
+    std::is_same_v<T, float>    || std::is_same_v<T, double>;
 
 // Register type trait
 template<typename T, size_t Bits> struct SimdReg;
 template<> struct SimdReg<int32_t, 128> { using type = __m128i; };
-template<> struct SimdReg<int64_t, 128> { using type = __m128i; };
-template<> struct SimdReg<float, 128>   { using type = __m128;  };
-template<> struct SimdReg<double, 128>  { using type = __m128d; };
 template<> struct SimdReg<int32_t, 256> { using type = __m256i; };
+
+template<> struct SimdReg<int64_t, 128> { using type = __m128i; };
 template<> struct SimdReg<int64_t, 256> { using type = __m256i; };
+
+template<> struct SimdReg<uint32_t, 128> { using type = __m128i; };
+template<> struct SimdReg<uint32_t, 256> { using type = __m256i; };
+
+template<> struct SimdReg<uint64_t, 128> { using type = __m128i; };
+template<> struct SimdReg<uint64_t, 256> { using type = __m256i; };
+
+template<> struct SimdReg<float, 128>   { using type = __m128;  };
 template<> struct SimdReg<float, 256>   { using type = __m256;  };
+
+template<> struct SimdReg<double, 128>  { using type = __m128d; };
 template<> struct SimdReg<double, 256>  { using type = __m256d; };
 
+// Simd class
 template<SimdElement T, size_t Bits = kSimdBits>
 struct Simd
 {
@@ -64,6 +73,16 @@ struct Simd
             if constexpr (Bits == 256) s.reg = _mm256_set1_epi64x(static_cast<int64_t>(val));
             else                       s.reg = _mm_set1_epi64x(static_cast<int64_t>(val));
         }
+        else if constexpr (std::is_same_v<T, uint32_t>)
+        {
+            if constexpr (Bits == 256) s.reg = _mm256_set1_epi32(static_cast<int32_t>(val));
+            else                       s.reg = _mm_set1_epi32(static_cast<int32_t>(val));
+        }
+        else if constexpr (std::is_same_v<T, uint64_t>)
+        {
+            if constexpr (Bits == 256) s.reg = _mm256_set1_epi64x(static_cast<int64_t>(val));
+            else                       s.reg = _mm_set1_epi64x(static_cast<int64_t>(val));
+        }
         else if constexpr (std::is_same_v<T, float>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_set1_ps(static_cast<float>(val));
@@ -80,7 +99,7 @@ struct Simd
     [[nodiscard]] static Simd fill_lanes_with_zero() noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>) // Integers only
         {
             if constexpr (Bits == 256) s.reg = _mm256_setzero_si256();
             else                       s.reg = _mm_setzero_si128();
@@ -100,9 +119,7 @@ struct Simd
 
     [[nodiscard]] static Simd fill_lanes_with_full_value() noexcept
     {
-        if constexpr (std::is_same_v<T, int32_t>)
-            return fill_lanes_with_value(static_cast<T>(-1));
-        else if constexpr (std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
             return fill_lanes_with_value(static_cast<T>(-1));
         else if constexpr (std::is_same_v<T, float>)
             return Simd<int32_t, Bits>::fill_lanes_with_value(-1).as_float();
@@ -118,6 +135,27 @@ struct Simd
     }
 
     // Loads in reverse order (first argument becomes highest lane)
+    template<typename... Args>
+    [[nodiscard]] static Simd set(Args... vals) noexcept
+        requires std::is_integral_v<T>
+    {
+        static_assert(sizeof...(vals) == lanes);
+        static_assert((std::is_convertible_v<Args, T> && ...));
+
+        Simd s;
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+        {
+            if constexpr (Bits == 256) s.reg = _mm256_set_epi32(static_cast<int32_t>(vals)...);
+            else                       s.reg = _mm_set_epi32(static_cast<int32_t>(vals)...);
+        }
+        else // int64_t or uint64_t
+        {
+            if constexpr (Bits == 256) s.reg = _mm256_set_epi64x(static_cast<int64_t>(vals)...);
+            else                       s.reg = _mm_set_epi64x(static_cast<int64_t>(vals)...);
+        }
+        return s;
+    }
+
     template<typename... Args>
     [[nodiscard]] static Simd set(Args... vals) noexcept
         requires (std::is_same_v<T, float>)
@@ -149,7 +187,7 @@ struct Simd
     [[nodiscard]] static Simd load(const T* ptr) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_load_si256(reinterpret_cast<const __m256i*>(ptr));
             else                       s.reg = _mm_load_si128(reinterpret_cast<const __m128i*>(ptr));
@@ -170,7 +208,7 @@ struct Simd
     [[nodiscard]] static Simd loadu(const T* ptr) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(ptr));
             else                       s.reg = _mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr));
@@ -192,7 +230,7 @@ struct Simd
 
     void store(T* ptr) const noexcept
     {
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) _mm256_store_si256(reinterpret_cast<__m256i*>(ptr), reg);
             else                       _mm_store_si128(reinterpret_cast<__m128i*>(ptr), reg);
@@ -211,7 +249,7 @@ struct Simd
 
     void storeu(T* ptr) const noexcept
     {
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) _mm256_storeu_si256(reinterpret_cast<__m256i*>(ptr), reg);
             else                       _mm_storeu_si128(reinterpret_cast<__m128i*>(ptr), reg);
@@ -246,7 +284,7 @@ struct Simd
     [[nodiscard]] static Simd bitwise_and(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_and_si256(a.reg, b.reg);
             else                       s.reg = _mm_and_si128(a.reg, b.reg);
@@ -267,7 +305,7 @@ struct Simd
     [[nodiscard]] static Simd bitwise_or(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_or_si256(a.reg, b.reg);
             else                       s.reg = _mm_or_si128(a.reg, b.reg);
@@ -288,7 +326,7 @@ struct Simd
     [[nodiscard]] static Simd bitwise_xor(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_xor_si256(a.reg, b.reg);
             else                       s.reg = _mm_xor_si128(a.reg, b.reg);
@@ -315,7 +353,7 @@ struct Simd
     [[nodiscard]] static Simd bitwise_andnot(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_andnot_si256(a.reg, b.reg);
             else                       s.reg = _mm_andnot_si128(a.reg, b.reg);
@@ -333,16 +371,16 @@ struct Simd
         return s;
     }
 
-    [[nodiscard]] static Simd shift_left(const Simd& a, int32_t count) noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+    [[nodiscard]] static Simd logical_shift_left(const Simd& a, int32_t count) noexcept
+        requires (std::is_integral_v<T>)
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_slli_epi32(a.reg, count);
             else                       s.reg = _mm_slli_epi32(a.reg, count);
         }
-        else // int64_t
+        else // int64_t or uint64_t
         {
             if constexpr (Bits == 256) s.reg = _mm256_slli_epi64(a.reg, count);
             else                       s.reg = _mm_slli_epi64(a.reg, count);
@@ -350,11 +388,11 @@ struct Simd
         return s;
     }
 
-    [[nodiscard]] static Simd shift_right(const Simd& a, int32_t count) noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+    [[nodiscard]] static Simd logical_shift_right(const Simd& a, int32_t count) noexcept
+        requires (std::is_integral_v<T>)
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_srli_epi32(a.reg, count);
             else                       s.reg = _mm_srli_epi32(a.reg, count);
@@ -367,38 +405,67 @@ struct Simd
         return s;
     }
 
+    [[nodiscard]] static Simd arithmetic_shift_right(const Simd& a, int32_t count) noexcept
+        requires (std::is_integral_v<T>)
+    {
+        if constexpr (std::is_unsigned_v<T>)
+        {
+            // For unsigned, arithmetic right shift is same as logical shift
+            return logical_shift_right(a, count);
+        }
+        else // Signed
+        {
+            if constexpr (std::is_same_v<T, int32_t>)
+            {
+                Simd s;
+                if constexpr (Bits == 256) s.reg = _mm256_srai_epi32(a.reg, count);
+                else                       s.reg = _mm_srai_epi32(a.reg, count);
+                return s;
+            }
+            else // int64_t
+            {
+                // No native 64-bit arithmetic shift; emulate via sign + logical shift
+                if (count == 0) return a;
+                Simd sign = logical_shift_right(a, 63); // All ones if negative, else 0
+                Simd logical = logical_shift_right(a, count);
+                Simd high_mask = logical_shift_left(sign, 64 - count);
+                return bitwise_or(logical, high_mask);
+            }
+        }
+    }
+
     [[nodiscard]] Simd operator&(const Simd& other) const noexcept { return bitwise_and(*this, other); }
     [[nodiscard]] Simd operator|(const Simd& other) const noexcept { return bitwise_or(*this, other); }
     [[nodiscard]] Simd operator^(const Simd& other) const noexcept { return bitwise_xor(*this, other); }
     [[nodiscard]] Simd operator~()                  const noexcept { return bitwise_not(*this); }
     [[nodiscard]] Simd operator<<(int32_t count) const noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
-        { return shift_left(*this, count); }
+        requires (std::is_integral_v<T>)
+        { return logical_shift_left(*this, count); }
     [[nodiscard]] Simd operator>>(int32_t count) const noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
-        { return shift_right(*this, count); }
+        requires (std::is_integral_v<T>)
+        { return logical_shift_right(*this, count); }
 
     Simd& operator&=(const Simd& other) noexcept { *this = bitwise_and(*this, other); return *this; }
     Simd& operator|=(const Simd& other) noexcept { *this = bitwise_or(*this, other);  return *this; }
     Simd& operator^=(const Simd& other) noexcept { *this = bitwise_xor(*this, other); return *this; }
     Simd& operator<<=(int32_t count) noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
-        { *this = shift_left(*this, count);  return *this; }
+        requires (std::is_integral_v<T>)
+        { *this = logical_shift_left(*this, count);  return *this; }
     Simd& operator>>=(int32_t count) noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
-        { *this = shift_right(*this, count); return *this; }
+        requires (std::is_integral_v<T>)
+        { *this = logical_shift_right(*this, count); return *this; }
 
     // Arithmetic
 
     [[nodiscard]] static Simd add(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_add_epi32(a.reg, b.reg);
             else                       s.reg = _mm_add_epi32(a.reg, b.reg);
         }
-        else if constexpr (std::is_same_v<T, int64_t>)
+        else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_add_epi64(a.reg, b.reg);
             else                       s.reg = _mm_add_epi64(a.reg, b.reg);
@@ -419,12 +486,12 @@ struct Simd
     [[nodiscard]] static Simd sub(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_sub_epi32(a.reg, b.reg);
             else                       s.reg = _mm_sub_epi32(a.reg, b.reg);
         }
-        else if constexpr (std::is_same_v<T, int64_t>)
+        else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_sub_epi64(a.reg, b.reg);
             else                       s.reg = _mm_sub_epi64(a.reg, b.reg);
@@ -443,10 +510,10 @@ struct Simd
     }
 
     [[nodiscard]] static Simd mul(const Simd& a, const Simd& b) noexcept
-        requires (!std::is_same_v<T, int64_t>)   // no 64-bit integer multiply in SSE/AVX2
+        requires (!std::is_same_v<T, int64_t> && !std::is_same_v<T, uint64_t>)   // no 64-bit integer multiply in SSE/AVX2
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
         {
             // mullo: low 32 Bits of each 32x32->64 product (wrapping)
             if constexpr (Bits == 256) s.reg = _mm256_mullo_epi32(a.reg, b.reg);
@@ -556,7 +623,7 @@ struct Simd
 
     [[nodiscard]] static Simd negate(const Simd& a) noexcept
     {
-        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)
+        if constexpr (std::is_integral_v<T>)
             return sub(fill_lanes_with_zero(), a);
         else if constexpr (std::is_same_v<T, float>)
         {
@@ -682,12 +749,12 @@ struct Simd
     [[nodiscard]] static Simd compare_equal(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+        if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_cmpeq_epi32(a.reg, b.reg);
             else                       s.reg = _mm_cmpeq_epi32(a.reg, b.reg);
         }
-        else if constexpr (std::is_same_v<T, int64_t>)
+        else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_cmpeq_epi64(a.reg, b.reg);
             else                       s.reg = _mm_cmpeq_epi64(a.reg, b.reg);
@@ -718,7 +785,7 @@ struct Simd
             if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_NEQ_OQ);
             else                       s.reg = _mm_cmpneq_pd(a.reg, b.reg);
         }
-        else // integers (int32_t, int64_t)
+        else // Integers
         {
             Simd eq = compare_equal(a, b);
             Simd ones = fill_lanes_with_full_value();
@@ -731,27 +798,53 @@ struct Simd
     [[nodiscard]] static Simd compare_less(const Simd& a, const Simd& b) noexcept
     {
         Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
+
+        if constexpr (std::is_unsigned_v<T>)
         {
-            if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi32(b.reg, a.reg);
-            else                       s.reg = _mm_cmpgt_epi32(b.reg, a.reg);
-        }
-        else if constexpr (std::is_same_v<T, int64_t>)
-        {
-            if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi64(b.reg, a.reg);
-            else                       s.reg = _mm_cmpgt_epi64(b.reg, a.reg);
-        }
-        else if constexpr (std::is_same_v<T, float>)
-        {
-            if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_LT_OQ);
-            else                       s.reg = _mm_cmplt_ps(a.reg, b.reg);
+            // a < b  ->  (a ^ signBit) < (b ^ signBit) as signed
+            constexpr T signBit = (T(1) << (sizeof(T) * 8 - 1));
+            Simd a_xor = Simd::bitwise_xor(a, Simd(signBit));
+            Simd b_xor = Simd::bitwise_xor(b, Simd(signBit));
+            if constexpr (std::is_same_v<T, uint32_t>)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi32(b_xor.reg, a_xor.reg);
+                else                       s.reg = _mm_cmpgt_epi32(b_xor.reg, a_xor.reg);
+            }
+            else // uint64_t
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi64(b_xor.reg, a_xor.reg);
+                else                       s.reg = _mm_cmpgt_epi64(b_xor.reg, a_xor.reg);
+            }
         }
         else
         {
-            if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_LT_OQ);
-            else                       s.reg = _mm_cmplt_pd(a.reg, b.reg);
+            if constexpr (std::is_same_v<T, int32_t>)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi32(b.reg, a.reg);
+                else                       s.reg = _mm_cmpgt_epi32(b.reg, a.reg);
+            }
+            else if constexpr (std::is_same_v<T, int64_t>)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi64(b.reg, a.reg);
+                else                       s.reg = _mm_cmpgt_epi64(b.reg, a.reg);
+            }
+            else if constexpr (std::is_same_v<T, float>)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_LT_OQ);
+                else                       s.reg = _mm_cmplt_ps(a.reg, b.reg);
+            }
+            else
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_LT_OQ);
+                else                       s.reg = _mm_cmplt_pd(a.reg, b.reg);
+            }
         }
         return s;
+    }
+
+    [[nodiscard]] static Simd compare_greater(const Simd& a, const Simd& b) noexcept
+    {
+        return compare_less(b, a);
     }
 
     [[nodiscard]] static Simd compare_less_equal(const Simd& a, const Simd& b) noexcept
@@ -767,38 +860,12 @@ struct Simd
             if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_LE_OQ);
             else                       s.reg = _mm_cmple_pd(a.reg, b.reg);
         }
-        else // integers (int32_t, int64_t)
+        else // Integers
         {
             Simd gt = compare_greater(a, b);
             Simd ones = fill_lanes_with_full_value();
             if constexpr (Bits == 256) s.reg = _mm256_xor_si256(gt.reg, ones.reg);
             else                       s.reg = _mm_xor_si128(gt.reg, ones.reg);
-        }
-        return s;
-    }
-
-    [[nodiscard]] static Simd compare_greater(const Simd& a, const Simd& b) noexcept
-    {
-        Simd s;
-        if constexpr (std::is_same_v<T, int32_t>)
-        {
-            if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi32(a.reg, b.reg);
-            else                       s.reg = _mm_cmpgt_epi32(a.reg, b.reg);
-        }
-        else if constexpr (std::is_same_v<T, int64_t>)
-        {
-            if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi64(a.reg, b.reg);
-            else                       s.reg = _mm_cmpgt_epi64(a.reg, b.reg);
-        }
-        else if constexpr (std::is_same_v<T, float>)
-        {
-            if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_GT_OQ);
-            else                       s.reg = _mm_cmpgt_ps(a.reg, b.reg);
-        }
-        else
-        {
-            if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_GT_OQ);
-            else                       s.reg = _mm_cmpgt_pd(a.reg, b.reg);
         }
         return s;
     }
@@ -867,7 +934,7 @@ struct Simd
             if constexpr (Bits == 256) s.reg = _mm256_blendv_pd(a.reg, b.reg, mask.reg);
             else                       s.reg = _mm_blendv_pd(a.reg, b.reg, mask.reg);
         }
-        else // integers (int32_t, int64_t)
+        else // Integers
         {
             if constexpr (Bits == 256) s.reg = _mm256_blendv_epi8(a.reg, b.reg, mask.reg);
             else                       s.reg = _mm_blendv_epi8(a.reg, b.reg, mask.reg);
@@ -875,10 +942,9 @@ struct Simd
         return s;
     }
 
-    // Min / max (int64_t not natively available in SSE/AVX2, excluded)
+    // Min / max
 
     [[nodiscard]] static Simd min(const Simd& a, const Simd& b) noexcept
-        requires (!std::is_same_v<T, int64_t>)
     {
         Simd s;
         if constexpr (std::is_same_v<T, int32_t>)
@@ -886,21 +952,30 @@ struct Simd
             if constexpr (Bits == 256) s.reg = _mm256_min_epi32(a.reg, b.reg);
             else                       s.reg = _mm_min_epi32(a.reg, b.reg);
         }
+        else if constexpr (std::is_same_v<T, uint32_t>)
+        {
+            if constexpr (Bits == 256) s.reg = _mm256_min_epu32(a.reg, b.reg);
+            else                       s.reg = _mm_min_epu32(a.reg, b.reg);
+        }
         else if constexpr (std::is_same_v<T, float>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_min_ps(a.reg, b.reg);
             else                       s.reg = _mm_min_ps(a.reg, b.reg);
         }
-        else
+        else if constexpr (std::is_same_v<T, double>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_min_pd(a.reg, b.reg);
             else                       s.reg = _mm_min_pd(a.reg, b.reg);
+        }
+        else // int64_t, uint64_t
+        {
+            Simd mask = compare_less(a, b);
+            return blendv(a, b, mask);
         }
         return s;
     }
 
     [[nodiscard]] static Simd max(const Simd& a, const Simd& b) noexcept
-        requires (!std::is_same_v<T, int64_t>)
     {
         Simd s;
         if constexpr (std::is_same_v<T, int32_t>)
@@ -908,15 +983,25 @@ struct Simd
             if constexpr (Bits == 256) s.reg = _mm256_max_epi32(a.reg, b.reg);
             else                       s.reg = _mm_max_epi32(a.reg, b.reg);
         }
+        else if constexpr (std::is_same_v<T, uint32_t>)
+        {
+            if constexpr (Bits == 256) s.reg = _mm256_max_epu32(a.reg, b.reg);
+            else                       s.reg = _mm_max_epu32(a.reg, b.reg);
+        }
         else if constexpr (std::is_same_v<T, float>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_max_ps(a.reg, b.reg);
             else                       s.reg = _mm_max_ps(a.reg, b.reg);
         }
-        else
+        else if constexpr (std::is_same_v<T, double>)
         {
             if constexpr (Bits == 256) s.reg = _mm256_max_pd(a.reg, b.reg);
             else                       s.reg = _mm_max_pd(a.reg, b.reg);
+        }
+        else // int64_t, uint64_t
+        {
+            Simd mask = compare_greater(a, b);
+            return blendv(a, b, mask);
         }
         return s;
     }
@@ -925,7 +1010,7 @@ struct Simd
 
     template<int Index>
     [[nodiscard]] static Simd<T, 128> extract_int_128(const Simd& a) noexcept
-        requires (std::is_same_v<T, int32_t>&& Bits == 256)
+        requires (std::is_integral_v<T> && Bits == 256)
     {
         Simd<T, 128> s;
         s.reg = _mm256_extracti128_si256(a.reg, Index);
@@ -935,7 +1020,7 @@ struct Simd
     // Narrow-saturate (int32_t, 128-bit only)
 
     [[nodiscard]] static Simd<T, 128> narrow_saturate_16_to_8(const Simd& low, const Simd& high) noexcept
-        requires (std::is_same_v<T, int32_t>&& Bits == 128)
+        requires (std::is_same_v<T, int32_t> && Bits == 128)
     {
         Simd<T, 128> s;
         s.reg = _mm_packs_epi16(low.reg, high.reg);
@@ -943,7 +1028,7 @@ struct Simd
     }
 
     [[nodiscard]] static Simd<T, 128> narrow_saturate_32_to_16(const Simd& low, const Simd& high) noexcept
-        requires (std::is_same_v<T, int32_t>&& Bits == 128)
+        requires (std::is_same_v<T, int32_t> && Bits == 128)
     {
         Simd<T, 128> s;
         s.reg = _mm_packs_epi32(low.reg, high.reg);
@@ -971,11 +1056,25 @@ struct Simd
     }
 
     [[nodiscard]] Simd<float> to_float() const noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+        requires (std::is_same_v<T, int32_t>)
     {
         Simd<float> s;
         if constexpr (Bits == 256) s.reg = _mm256_cvtepi32_ps(reg);
         else                       s.reg = _mm_cvtepi32_ps(reg);
+        return s;
+    }
+
+    [[nodiscard]] Simd<float> to_float() const noexcept
+        requires (std::is_same_v<T, uint32_t>)
+    {
+        // Convert unsigned 32-bit to float using bias method:
+        // (float)(a ^ 0x80000000) + 2147483648.0f
+        Simd<float> s;
+        Simd<uint32_t> biased = bitwise_xor(*this, Simd<uint32_t>(0x80000000U));
+        Simd<float> as_signed_float;
+        if constexpr (Bits == 256) as_signed_float.reg = _mm256_cvtepi32_ps(biased.reg);
+        else                       as_signed_float.reg = _mm_cvtepi32_ps(biased.reg);
+        s.reg = as_signed_float.reg + Simd<float>(2147483648.0f).reg;
         return s;
     }
 
@@ -990,15 +1089,6 @@ struct Simd
         return s;
     }
 
-    [[nodiscard]] Simd<float> as_float() const noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
-    {
-        Simd<float> s;
-        if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(reg);
-        else                       s.reg = _mm_castsi128_ps(reg);
-        return s;
-    }
-
     [[nodiscard]] Simd<int32_t> as_int32() const noexcept
         requires std::is_same_v<T, double>
     {
@@ -1008,12 +1098,21 @@ struct Simd
         return s;
     }
 
-    [[nodiscard]] Simd<double> as_double() const noexcept
-        requires (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+    [[nodiscard]] Simd<uint32_t> as_uint32() const noexcept
+        requires std::is_same_v<T, float>
     {
-        Simd<double> s;
-        if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(reg);
-        else                       s.reg = _mm_castsi128_pd(reg);
+        Simd<uint32_t> s;
+        if constexpr (Bits == 256) s.reg = _mm256_castps_si256(reg);
+        else                       s.reg = _mm_castps_si128(reg);
+        return s;
+    }
+
+    [[nodiscard]] Simd<uint32_t> as_uint32() const noexcept
+        requires std::is_same_v<T, double>
+    {
+        Simd<uint32_t> s;
+        if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
+        else                       s.reg = _mm_castpd_si128(reg);
         return s;
     }
 
@@ -1026,8 +1125,26 @@ struct Simd
         return s;
     }
 
+    [[nodiscard]] Simd<uint64_t> as_uint64() const noexcept
+        requires std::is_same_v<T, double>
+    {
+        Simd<uint64_t> s;
+        if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
+        else                       s.reg = _mm_castpd_si128(reg);
+        return s;
+    }
+
+    [[nodiscard]] Simd<float> as_float() const noexcept
+        requires (std::is_integral_v<T>)
+    {
+        Simd<float> s;
+        if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(reg);
+        else                       s.reg = _mm_castsi128_ps(reg);
+        return s;
+    }
+
     [[nodiscard]] Simd<double> as_double() const noexcept
-        requires std::is_same_v<T, int64_t>
+        requires (std::is_integral_v<T>)
     {
         Simd<double> s;
         if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(reg);
@@ -1038,15 +1155,21 @@ struct Simd
 
 using SimdI = Simd<int32_t>;
 using SimdL = Simd<int64_t>;
+using SimdU = Simd<uint32_t>;
+using SimdUL = Simd<uint64_t>;
 using SimdF = Simd<float>;
 using SimdD = Simd<double>;
 
 using Simd128I = Simd<int32_t, 128>;
 using Simd128L = Simd<int64_t, 128>;
+using Simd128U = Simd<uint32_t, 128>;
+using Simd128UL = Simd<uint64_t, 128>;
 using Simd128F = Simd<float, 128>;
 using Simd128D = Simd<double, 128>;
 
 using Simd256I = Simd<int32_t, 256>;
 using Simd256L = Simd<int64_t, 256>;
+using Simd256U = Simd<uint32_t, 256>;
+using Simd256UL = Simd<uint64_t, 256>;
 using Simd256F = Simd<float, 256>;
 using Simd256D = Simd<double, 256>;
