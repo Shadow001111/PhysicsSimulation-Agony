@@ -127,14 +127,14 @@ namespace PS_AGONY
         size_t i = 0;
         for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
         {
-            RealSimd velX = RealSimd::loadu(velocityXPtr + i);
-            RealSimd velY = RealSimd::loadu(velocityYPtr + i);
+            RealSimd velX = RealSimd::load(velocityXPtr + i);
+            RealSimd velY = RealSimd::load(velocityYPtr + i);
 
             velX += gravityDeltaXV;
             velY += gravityDeltaYV;
 
-            velX.storeu(velocityXPtr + i);
-            velY.storeu(velocityYPtr + i);
+            velX.store(velocityXPtr + i);
+            velY.store(velocityYPtr + i);
         }
         for (; i < bodyCount; i++)
         {
@@ -160,17 +160,17 @@ namespace PS_AGONY
         size_t i = 0;
         for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
         {
-            const RealSimd velX = RealSimd::loadu(velocityXPtr + i);
-            const RealSimd velY = RealSimd::loadu(velocityYPtr + i);
+            const RealSimd velX = RealSimd::load(velocityXPtr + i);
+            const RealSimd velY = RealSimd::load(velocityYPtr + i);
 
-            RealSimd posX = RealSimd::loadu(positionXPtr + i);
-            RealSimd posY = RealSimd::loadu(positionYPtr + i);
+            RealSimd posX = RealSimd::load(positionXPtr + i);
+            RealSimd posY = RealSimd::load(positionYPtr + i);
 
             posX = RealSimd::mul_add(velX, deltaTimeV, posX);
             posY = RealSimd::mul_add(velY, deltaTimeV, posY);
 
-            posX.storeu(positionXPtr + i);
-            posY.storeu(positionYPtr + i);
+            posX.store(positionXPtr + i);
+            posY.store(positionYPtr + i);
         }
         for (; i < bodyCount; i++)
         {

@@ -230,6 +230,7 @@
     <ClInclude Include="AudioEngine\ResourceManager.h" />
     <ClInclude Include="AudioEngine\SoundData.h" />
     <ClInclude Include="AudioEngine\SoundSample.h" />
+    <ClInclude Include="Core\MemoryAllocation\AlignedAllocator.h" />
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BodySoAViewer.h" />
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
