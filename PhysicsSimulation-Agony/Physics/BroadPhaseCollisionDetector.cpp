@@ -321,10 +321,10 @@ namespace PS_AGONY
 
             // Partition on the widest axis at the median centroid.
             const bool splitX = (maxX - minX) >= (maxY - minY);
-            const uint32_t mid = task.start + rangeSize / 2;// (task.start + task.end) / 2;
+            const uint32_t mid = task.start + rangeSize / 2; // (task.start + task.end) / 2;
 
             // Removed '*0.5' because there's no difference for order.
-            auto centroid = [&](BodyIndex i) -> float
+            auto centroid = [&](BodyIndex i) -> Real
                 {
                     if (splitX)
                         return aabbMinX[i] + aabbMaxX[i];
