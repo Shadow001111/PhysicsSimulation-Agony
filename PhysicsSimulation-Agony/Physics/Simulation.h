@@ -14,9 +14,16 @@ namespace PS_AGONY
 	{
 		struct SimulationSettings
 		{
+			//
 			Real updateInterval = 1 / 300.0;
+			uint32_t collisionSolvingIterations = 8; // 8.
 
+			// Environment.
 			Vec2 gravity{ 0.0, -9.81 };
+
+			// Baumgarte stabilization.
+			const Real positionCorrectionPercent = 0.8;
+			const Real slop = 0.0;
 		};
 
 		// Bodies SoA.
@@ -57,6 +64,8 @@ namespace PS_AGONY
 		void applyExternalForces(size_t bodyCount, Real deltaTime);
 
 		void integrate(size_t bodyCount, Real deltaTime);
+
+		void iterativeCollisionSolving();
 
 		void buildCircleAABBs();
 

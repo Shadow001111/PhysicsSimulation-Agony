@@ -82,35 +82,9 @@ namespace PS_AGONY
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
 
-        // Self-explanatory.
         applyExternalForces(bodyCount, deltaTime);
         integrate(bodyCount, deltaTime);
-
-        // Build AABBs.
-        {
-            TRACY_SCOPE_N("Build AABBs");
-            buildCircleAABBs();
-        }
-
-        std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.end(), 0); // Equal to 'bodyCount'.
-
-        // Early return.
-        if (bodyCount < 2) return;
-
-        // Broad phase.
-        const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
-        if (broadCollisionData.empty()) return;
-
-        // Narrow phase.
-        narrowPhaseCollisionDetector.setDataViewers(
-            BodySoAViewer(bodies),
-            CircleSoAViewer(circles)
-        );
-        const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
-        if (narrowCollisionData.empty()) return;
-
-        // Collision resolution.
-        resolveCollisions(narrowCollisionData);
+        iterativeCollisionSolving();
     }
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
@@ -193,6 +167,42 @@ namespace PS_AGONY
         }
     }
 
+    void Simulation::iterativeCollisionSolving()
+    {
+        const size_t bodyCount = bodies.getCount();
+
+        // Solves until runs out of iterations or no collision is found.
+        for (uint32_t i = 0; i < simulationSettings.collisionSolvingIterations; i++)
+        {
+            // Clear debug data.
+            std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.begin() + bodyCount, 0);
+
+            // Early return.
+            if (bodyCount < 2) return;
+
+            // Build AABBs.
+            {
+                TRACY_SCOPE_N("Build AABBs");
+                buildCircleAABBs();
+            }
+
+            // Broad phase.
+            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
+            if (broadCollisionData.empty()) return;
+
+            // Narrow phase.
+            narrowPhaseCollisionDetector.setDataViewers(
+                BodySoAViewer(bodies),
+                CircleSoAViewer(circles)
+            );
+            const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
+            if (narrowCollisionData.empty()) return;
+
+            // Collision resolution.
+            resolveCollisions(narrowCollisionData);
+        }
+    }
+
     void Simulation::buildCircleAABBs()
     {
         TRACY_SCOPE_N("Build circle AABBs");
@@ -234,12 +244,14 @@ namespace PS_AGONY
         Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
         const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
 
-        // TODO: Rotations, inertia, friction.
-        const Real elasticity = 1.0 + 0.8;
+        const MaterialIndex* CORE_RESTRICT materialIndexPtr = bodies.materialIndex.data();
+        const Material* CORE_RESTRICT materialPtr = materials.data();
+        const MaterialIndex materialCount = materials.size();
+        if (materialCount == 0) return;
 
         for (const auto& data : narrowPhaseCollisions)
         {
-            // Gather data.
+            // Fetch data.
             const BodyIndex bodyIndexA = data.bodyA;
             const BodyIndex bodyIndexB = data.bodyB;
 
@@ -249,7 +261,7 @@ namespace PS_AGONY
             const Vec2 velocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
             const Vec2 velocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
             
-            // Velocity resolution.
+            // Compute velocity along normal.
             const Vec2 relativeVelocity = velocityB - velocityA;
             const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
             if (velocityAlongNormal > Real(0))
@@ -257,18 +269,33 @@ namespace PS_AGONY
                 continue;
             }
 
+            // Fetch inv masses and compute their sum.
             const Real invMassA = invMassPtr[bodyIndexA];
             const Real invMassB = invMassPtr[bodyIndexB];
 
             const Real totalInvMass = invMassA + invMassB;
-            if (totalInvMass <= Real(0))
+            if (totalInvMass <= Real(0)) [[unlikely]]
             {
                 continue;
             }
 
+            // Fetch material.
+            MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
+            MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
+
+            materialIndexA = materialIndexA < materialCount ? materialIndexA : 0;
+            materialIndexB = materialIndexB < materialCount ? materialIndexB : 0;
+
+            const Material* materialA = materialPtr + materialIndexA;
+            const Material* materialB = materialPtr + materialIndexB;
+
+            // Combine materials.
+            const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5);
+
+            // Compute impulse and apply it.
             const Real invTotalInvMass = Real(1.0) / totalInvMass;
 
-            const Real impulse = elasticity * velocityAlongNormal * invTotalInvMass;
+            const Real impulse = (elasticity + Real(1.0)) * velocityAlongNormal * invTotalInvMass;
             const Vec2 impulseVec = normal * impulse;
 
             velocityXPtr[bodyIndexA] += impulseVec.x * invMassA;
@@ -278,7 +305,13 @@ namespace PS_AGONY
             velocityYPtr[bodyIndexB] -= impulseVec.y * invMassB;
 
             // Position resolution.
-            const Vec2 correctionVec2 = normal * depth;
+            const Real correction = (depth - simulationSettings.slop) * simulationSettings.positionCorrectionPercent;
+            if (correction <= Real(0)) [[unlikely]]
+            {
+                continue;
+            }
+
+            const Vec2 correctionVec2 = normal * correction;
 
             const Real ratioA = invMassA * invTotalInvMass;
             const Real ratioB = invMassB * invTotalInvMass;
