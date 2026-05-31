@@ -267,11 +267,50 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t bodyCount)
     {
-        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
-        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
-        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
+        using RealSimd = Simd<Real>;
 
+        const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
+        const Real* CORE_RESTRICT aabbMinYPtr = bodiesAABB.minY;
+        const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
+
+        // Compute centroids.
+        // Note: Removed '*0.5' because it doesn't impact order.
+        Real* CORE_RESTRICT centroidXPtr = nullptr;
+        Real* CORE_RESTRICT centroidYPtr = nullptr;
+        {
+            auto& centroidX = functionResources.centroidX;
+            auto& centroidY = functionResources.centroidY;
+            centroidX.resize(bodyCount);
+            centroidY.resize(bodyCount);
+            centroidXPtr = centroidX.data();
+            centroidYPtr = centroidY.data();
+        }
+
+        {
+            TRACY_SCOPE_N("Compute centroids");
+            size_t i = 0;
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                const RealSimd minX = RealSimd::load(aabbMinXPtr + i);
+                const RealSimd maxX = RealSimd::load(aabbMaxXPtr + i);
+                const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
+                const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
+
+                const RealSimd centroidX = minX + maxX;
+                const RealSimd centroidY = minY + maxY;
+
+                centroidX.store(centroidXPtr + i);
+                centroidY.store(centroidYPtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                centroidXPtr[i] = aabbMinXPtr[i] + aabbMaxXPtr[i];
+                centroidYPtr[i] = aabbMinYPtr[i] + aabbMaxYPtr[i];
+            }
+        }
+
+        // Local stack.
         struct BuildTask
         {
             uint32_t start, end;
@@ -279,7 +318,6 @@ namespace PS_AGONY
             bool isRight; // Which child slot to fill in the parent.
         };
 
-        // Local stack.
         constexpr uint64_t MAX_STACK_CAPACITY = bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
         BuildTask stack[MAX_STACK_CAPACITY];
         uint32_t stackSize = 0;
@@ -288,6 +326,8 @@ namespace PS_AGONY
 
         while (stackSize > 0)
         {
+            TRACY_SCOPE_N("Stack loop");
+
             const BuildTask task = stack[--stackSize];
 
             // Compute merged bounding box.
@@ -295,13 +335,16 @@ namespace PS_AGONY
             Real maxX = -std::numeric_limits<Real>::max();
             Real minY =  std::numeric_limits<Real>::max();
             Real maxY = -std::numeric_limits<Real>::max();
-            for (uint32_t i = task.start; i < task.end; i++)
             {
-                const BodyIndex b = indices[i];
-                minX = std::min(minX, aabbMinX[b]);
-                maxX = std::max(maxX, aabbMaxX[b]);
-                minY = std::min(minY, aabbMinY[b]);
-                maxY = std::max(maxY, aabbMaxY[b]);
+                TRACY_SCOPE_N("Compute merged bounding box");
+                for (uint32_t i = task.start; i < task.end; i++)
+                {
+                    const BodyIndex b = indices[i];
+                    minX = std::min(minX, aabbMinXPtr[b]);
+                    maxX = std::max(maxX, aabbMaxXPtr[b]);
+                    minY = std::min(minY, aabbMinYPtr[b]);
+                    maxY = std::max(maxY, aabbMaxYPtr[b]);
+                }
             }
 
             const uint32_t nodeIdx = nodes.size();
@@ -323,24 +366,29 @@ namespace PS_AGONY
             const bool splitX = (maxX - minX) >= (maxY - minY);
             const uint32_t mid = task.start + rangeSize / 2; // (task.start + task.end) / 2;
 
-            // Removed '*0.5' because there's no difference for order.
-            auto centroid = [&](BodyIndex i) -> Real
-                {
-                    if (splitX)
-                        return aabbMinX[i] + aabbMaxX[i];
-                    else
-                        return aabbMinY[i] + aabbMaxY[i];
-                };
+            {
+                TRACY_SCOPE_N("Nth element"); // The bottleneck.
 
-            std::nth_element(indices.begin() + task.start, indices.begin() + mid, indices.begin() + task.end,
-                [&](BodyIndex a, BodyIndex b)
+                const auto begin = indices.begin();
+                if (splitX)
                 {
-                    return centroid(a) < centroid(b);
-                });
+                    std::nth_element(begin + task.start, begin + mid, begin + task.end,
+                        [&](BodyIndex a, BodyIndex b) {
+                        return centroidXPtr[a] < centroidXPtr[b];
+                        });
+                }
+                else
+                {
+                    std::nth_element(begin + task.start, begin + mid, begin + task.end,
+                        [&](BodyIndex a, BodyIndex b) {
+                        return centroidYPtr[a] < centroidYPtr[b];
+                        });
+                }
+            }
 
             // Push right before left so left is popped and processed first (LIFO).
-            stack[stackSize++] = { mid,        task.end, nodeIdx, true  }; // right child
-            stack[stackSize++] = { task.start, mid,      nodeIdx, false }; // left child
+            stack[stackSize++] = { mid,        task.end, nodeIdx, true  }; // Right child.
+            stack[stackSize++] = { task.start, mid,      nodeIdx, false }; // Left child.
         }
     }
 

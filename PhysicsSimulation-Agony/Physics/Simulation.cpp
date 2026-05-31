@@ -2,7 +2,6 @@
 
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
-#include "Core/Simd.h"
 
 namespace PS_AGONY
 {

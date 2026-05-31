@@ -32,6 +32,9 @@ namespace PS_AGONY
 
 			std::vector<BvhNode> bvhNodeVector1;
 
+			SimdAlignedVector<Real> centroidX;
+			SimdAlignedVector<Real> centroidY;
+
 			robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> spaceGrid;
 
 			robin_hood::unordered_flat_set<uint64_t> uint64Set;

@@ -8,11 +8,8 @@
 
 namespace PS_AGONY
 {
-	namespace
-	{
-		template<typename T>
-		using SimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<T>::bytes>>;
-	}
+	template<typename T>
+	using SimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<T>::bytes>>;
 
 	enum class BodyType : uint8_t
 	{
