@@ -134,7 +134,7 @@ public:
 
     template<typename T, typename Func>
     static void parallelForEachInRange(T* array, size_t range, size_t minBatchSize, Func func);
-private:
+
     static std::pair<size_t, size_t> calculateBatchCountAndSize(size_t totalItems, size_t threadCount, size_t minBatchSize);
 };
 
@@ -157,21 +157,30 @@ void ParallelUtils::parallelFor(size_t start, size_t end, size_t minBatchSize, F
 
     std::latch doneLatch(batchCount);
 
-    for (size_t i = start; i < end; i += batchSize)
     {
-        size_t batchEnd = std::min(i + batchSize, end);
-        tasks.emplace_back([&, i, batchEnd]()
-            {
-                for (size_t j = i; j < batchEnd; j++)
-                    func(j);
-                doneLatch.count_down();
-            });
+        TRACY_SCOPE_N("Collect tasks");
+        for (size_t i = start; i < end; i += batchSize)
+        {
+            size_t batchEnd = std::min(i + batchSize, end);
+            tasks.emplace_back([&, i, batchEnd]()
+                {
+                    for (size_t j = i; j < batchEnd; j++)
+                        func(j);
+                    doneLatch.count_down();
+                });
+        }
     }
 
-    pool.enqueueBulk(std::move(tasks));
+    {
+        TRACY_SCOPE_N("Enqueue bulk");
+        pool.enqueueBulk(std::move(tasks));
+    }
 
     // Wait for all chunks to complete
-	doneLatch.wait();
+    {
+        TRACY_SCOPE_N("Wait");
+        doneLatch.wait();
+    }
 }
 
 template<typename Container, typename Func>

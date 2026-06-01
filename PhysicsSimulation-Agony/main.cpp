@@ -83,7 +83,7 @@ static int gameFunc()
             simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
         }
 
-        const int bodyCount = 1'406 - 4;// 2'500;
+        const int bodyCount = 1'406 - 4 - 1;// 2'500;
         for (int i = 0; i < bodyCount; i++)
         {
             const float x = Random::real<float>(-5.0f, 5.0f);
@@ -99,6 +99,10 @@ static int gameFunc()
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
+
+    // OpenGL states.
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
 
     // Main loop.
     double lastTime = glfwGetTime();
@@ -116,7 +120,7 @@ static int gameFunc()
         const double deltaTime = time - lastTime;
         lastTime = time;
 
-        //std::cout << 1.0f / deltaTime << "\n";
+        // std::cout << 1.0f / deltaTime << "\n";
 
         // Simulation.
         simulation.update(deltaTime);
