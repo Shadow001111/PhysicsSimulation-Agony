@@ -305,6 +305,8 @@ namespace PS_AGONY
 
             // Combine materials.
             const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
+			const Real staticFriction = (materialA->staticFriction + materialB->staticFriction) * Real(0.5);
+			const Real dynamicFriction = (materialA->dynamicFriction + materialB->dynamicFriction) * Real(0.5);
 
             // Compute impulse and apply it.
             const Real invTotalInvMass = Real(1.0) / totalInvMass;

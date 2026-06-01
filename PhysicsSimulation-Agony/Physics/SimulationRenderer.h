@@ -15,7 +15,7 @@ namespace PS_AGONY
 	{
 		struct CircleInstanceData
 		{
-			float x, y, radius;
+			float x, y, rotation, radius;
 		};
 
 		struct CircleRenderResources

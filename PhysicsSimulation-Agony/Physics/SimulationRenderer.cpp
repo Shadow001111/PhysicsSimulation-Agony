@@ -156,6 +156,7 @@ namespace PS_AGONY
         // Prepare instance data.
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
         const Real* CORE_RESTRICT radiusPtr = circles.radius;
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices;
 
@@ -167,6 +168,7 @@ namespace PS_AGONY
 
             renderDataPtr[i].x = positionXPtr[bodyIndex];
             renderDataPtr[i].y = positionYPtr[bodyIndex];
+			renderDataPtr[i].rotation = rotationPtr[bodyIndex];
             renderDataPtr[i].radius = radiusPtr[i];
         }
 
@@ -223,6 +225,10 @@ namespace PS_AGONY
         circleResources.vao.enableAttribute(2);
         circleResources.vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
         circleResources.vao.setAttributeDivisor(2, 1);
+
+        circleResources.vao.enableAttribute(3);
+        circleResources.vao.setFloatAttribute(3, 1, sizeof(float) * 3, 1);
+        circleResources.vao.setAttributeDivisor(3, 1);
 
         circleResources.instanceData.resize(newCapacity / SIZEOF_INSTANCE);
     }

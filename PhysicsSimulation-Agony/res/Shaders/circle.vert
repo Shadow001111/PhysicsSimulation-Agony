@@ -2,7 +2,8 @@
 
 layout (location = 0) in vec2 localPosition;
 layout (location = 1) in vec2 instancePosition;
-layout (location = 2) in float instanceRadius;
+layout (location = 2) in float instanceRotation;
+layout (location = 3) in float instanceRadius;
 
 out vec2 uv;
 out flat vec3 color;
@@ -31,11 +32,18 @@ vec3 randomColorFromInt(int id)
     return vec3(random(u), random(u + 123456u), random(u + 789012u));
 }
 
+vec2 rotate2D(vec2 v, float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+
 void main()
 {
-    uv = localPosition;
+    uv = rotate2D(localPosition, instanceRotation);
 
-    vec3 worldPos = vec3(instancePosition + localPosition * instanceRadius, 0.0);
+    vec3 worldPos = vec3(instancePosition + uv * instanceRadius, 0.0);
     vec4 clipPos = viewProjectionMatrix * vec4(worldPos, 1.0);
     gl_Position = clipPos;
 
