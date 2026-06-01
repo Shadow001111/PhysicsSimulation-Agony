@@ -67,8 +67,8 @@ static int gameFunc()
     {
         PS_AGONY::Material material0 = {
             .elasticity = 0.9,
-            .staticFriction = 0.0,
-            .dynamicFriction = 0.0
+            .staticFriction = 0.2,
+            .dynamicFriction = 0.2
         };
 
         PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
@@ -126,7 +126,7 @@ static int gameFunc()
 		// Handle input.
         {
             const PS_AGONY::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
-			const PS_AGONY::Real zoomSpeed = 1.0 * deltaTime;
+			const PS_AGONY::Real zoomSpeed = 2.0 * deltaTime;
 
             if (wnd.isKeyPressed(GLFW_KEY_W))
                 camera.position.y += cameraSpeed;

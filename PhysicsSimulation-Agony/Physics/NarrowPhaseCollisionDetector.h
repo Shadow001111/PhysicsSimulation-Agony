@@ -9,8 +9,23 @@ namespace PS_AGONY
 		BodyIndex bodyA, bodyB;
 		Vec2 normal;
 		Real depth;
-		Vec2 contact1, contact2;
+		Vec2 contacts[2];
 		uint32_t contactCount;
+
+		BodyCollisionData() = default;
+
+		BodyCollisionData(
+			BodyIndex bodyA, BodyIndex bodyB,
+			Vec2 normal,
+			Real depth,
+			Vec2 contact1, Vec2 contact2,
+			uint32_t contactCount
+		) :
+			bodyA(bodyA), bodyB(bodyB), normal(normal), depth(depth), contactCount(contactCount)
+		{
+			contacts[0] = contact1;
+			contacts[1] = contact2;
+		}
 	};
 
 	class NarrowPhaseCollisionDetector

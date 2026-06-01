@@ -127,14 +127,17 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-			const Vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
+			const glm::vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
 
-            const Vec2 rotatedLocalCenterOfMass = {
-                localCenterOfMass.x * std::cos(rotationPtr[i]) - localCenterOfMass.y * std::sin(rotationPtr[i]),
-                localCenterOfMass.x * std::sin(rotationPtr[i]) + localCenterOfMass.y * std::cos(rotationPtr[i])
+			const float cosRot = std::cos(rotationPtr[i]);
+			const float sinRot = std::sin(rotationPtr[i]);
+
+            const glm::vec2 rotatedLocalCenterOfMass = {
+                localCenterOfMass.x * cosRot - localCenterOfMass.y * sinRot,
+                localCenterOfMass.x * sinRot + localCenterOfMass.y * cosRot
 			};
 
-            const Vec2 worldCenterOfMass = {
+            const glm::vec2 worldCenterOfMass = {
                 positionXPtr[i] + rotatedLocalCenterOfMass.x,
                 positionYPtr[i] + rotatedLocalCenterOfMass.y
 			};

@@ -204,26 +204,18 @@ namespace PS_AGONY
     {
         const size_t bodyCount = bodies.getCount();
 
-        // Early return.
-        if (bodyCount < 2)
+        // Build AABBs.
         {
-            // Build AABBs.
-            {
-                TRACY_SCOPE_N("Build AABBs");
-                buildCircleAABBs();
-            }
-            return;
+            TRACY_SCOPE_N("Build AABBs");
+            buildCircleAABBs();
         }
+
+        // Early return.
+        if (bodyCount < 2) return;
 
         // Solves until runs out of iterations or no collision is found.
         for (uint32_t i = 0; i < simulationSettings.collisionSolvingIterations; i++)
         {
-            // Build AABBs.
-            {
-                TRACY_SCOPE_N("Build AABBs");
-                buildCircleAABBs();
-            }
-
             // Broad phase.
             const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
             if (broadCollisionData.empty()) return;
@@ -238,7 +230,15 @@ namespace PS_AGONY
 
             // Collision resolution.
             resolveCollisions(narrowCollisionData);
+
+            // Build AABBs.
+            {
+                TRACY_SCOPE_N("Build AABBs");
+                buildCircleAABBs();
+            }
         }
+
+        // Rebuiling AABB at the end for debug.
     }
 
     void Simulation::buildCircleAABBs()
@@ -276,36 +276,58 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Resolve collisions");
 
+		constexpr Real frictionEpsilon = Real(0.0001);
+
+        // Get pointers.
         Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
         Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
         Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+		Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
+		Real* CORE_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
         const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
+		const Real* CORE_RESTRICT invInertiaPtr = bodies.invInertia.data();
+		const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
+		const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
 
         const MaterialIndex* CORE_RESTRICT materialIndexPtr = bodies.materialIndex.data();
         const Material* CORE_RESTRICT materialPtr = materials.data();
 
+        // Lambdas.
+        auto getLinearVelocity = [&](BodyIndex bodyIndex) -> Vec2
+        {
+            const Real velocityX = velocityXPtr[bodyIndex];
+            const Real velocityY = velocityYPtr[bodyIndex];
+            return { velocityX, velocityY };
+			};
+
+        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+        {
+            const Real localCenterOfMassX = localCenterOfMassXPtr[bodyIndex];
+            const Real localCenterOfMassY = localCenterOfMassYPtr[bodyIndex];
+            const Real rotation = rotationPtr[bodyIndex];
+            const Real cosRot = std::cos(rotation);
+            const Real sinRot = std::sin(rotation);
+            const Real centerOfMassX = positionXPtr[bodyIndex] + localCenterOfMassX * cosRot - localCenterOfMassY * sinRot;
+            const Real centerOfMassY = positionYPtr[bodyIndex] + localCenterOfMassX * sinRot + localCenterOfMassY * cosRot;
+            return { centerOfMassX, centerOfMassY };
+			};
+
+        auto applyImpulse = [&](BodyIndex bodyIndex, Vec2 impulse, Vec2 rPerp, Real invMass, Real invInertia)
+        {
+            velocityXPtr[bodyIndex] += impulse.x * invMass;
+            velocityYPtr[bodyIndex] += impulse.y * invMass;
+			angularVelocityPtr[bodyIndex] += glm::dot(rPerp, impulse) * invInertia;
+		};
+
+        // Main loop.
         for (const auto& data : narrowPhaseCollisions)
         {
-            // Fetch data.
+			// Get body indices.
             const BodyIndex bodyIndexA = data.bodyA;
             const BodyIndex bodyIndexB = data.bodyB;
 
-            const Vec2 normal = data.normal;
-            const Real depth = data.depth;
-        
-            const Vec2 velocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
-            const Vec2 velocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
-            
-            // Compute velocity along normal.
-            const Vec2 relativeVelocity = velocityB - velocityA;
-            const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
-            if (velocityAlongNormal > Real(0))
-            {
-                continue;
-            }
-
-            // Fetch inv masses and compute their sum.
+            // Get inv masses.
             const Real invMassA = invMassPtr[bodyIndexA];
             const Real invMassB = invMassPtr[bodyIndexB];
 
@@ -315,29 +337,155 @@ namespace PS_AGONY
                 continue;
             }
 
-            // Fetch material.
+			// Get materials.
             const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
             const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
 
             const Material* materialA = materialPtr + materialIndexA;
             const Material* materialB = materialPtr + materialIndexB;
 
-            // Combine materials.
-            const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
-			const Real staticFriction = (materialA->staticFriction + materialB->staticFriction) * Real(0.5);
-			const Real dynamicFriction = (materialA->dynamicFriction + materialB->dynamicFriction) * Real(0.5);
+            const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
+            
+            // TODO: Maybe put this after applying collision impulses.
+            const Real staticFriction = std::sqrt(materialA->staticFriction * materialB->staticFriction);
+            const Real dynamicFriction = std::sqrt(materialA->dynamicFriction * materialB->dynamicFriction);
 
-            // Compute impulse and apply it.
-            const Real invTotalInvMass = Real(1.0) / totalInvMass;
+			// Compute world centers of mass.
+			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+			const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
-            const Real impulse = elasticity * velocityAlongNormal * invTotalInvMass;
-            const Vec2 impulseVec = normal * impulse;
+            //
+			const Real invInertiaA = invInertiaPtr[bodyIndexA];
+			const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
-            velocityXPtr[bodyIndexA] += impulseVec.x * invMassA;
-            velocityYPtr[bodyIndexA] += impulseVec.y * invMassA;
+			const Vec2 normal = data.normal;
+            const Real depth = data.depth;
 
-            velocityXPtr[bodyIndexB] -= impulseVec.x * invMassB;
-            velocityYPtr[bodyIndexB] -= impulseVec.y * invMassB;
+            // Calculate collision impulses.
+            Vec2 impulses[2];
+            Vec2 rAPerpArray[2];
+            Vec2 rBPerpArray[2];
+            Real jnArray[2];
+            uint32_t validContactCount = 0;
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+
+				const uint32_t contactCount = std::min(data.contactCount, 2u);
+
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 contactPoint = data.contacts[i];
+
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
+
+                    const Vec2 rAPerp = { -rA.y, rA.x };
+                    const Vec2 rBPerp = { -rB.y, rB.x };
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity = (linearVelocityB + angularLinearVelB) - (linearVelocityA + angularLinearVelA);
+
+                    const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
+                    if (velocityAlongNormal > Real(0))
+                    {
+                        continue;
+                    }
+
+                    const Real rAPerpDotN = glm::dot(rAPerp, normal);
+                    const Real rBPerpDotN = glm::dot(rBPerp, normal);
+
+                    const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom;
+
+                    impulses[validContactCount] = jn * normal;
+                    rAPerpArray[validContactCount] = rAPerp;
+                    rBPerpArray[validContactCount] = rBPerp;
+                    jnArray[validContactCount] = jn;
+
+                    validContactCount++;
+                }
+            }
+
+			// Check if there is at least one valid contact.
+            if (validContactCount == 0) continue;
+
+            // Apply collision impulses.
+            {
+				const Real impulseScale = Real(1) / static_cast<Real>(validContactCount);
+                for (uint32_t i = 0; i < validContactCount; i++)
+                {
+                    const Vec2 impulse = impulses[i] * impulseScale;
+                    applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
+					applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
+
+					jnArray[i] *= impulseScale; // Scale the normal impulse for later use in friction calculation.
+                }
+            }
+
+			// Calculate friction impulses.
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                for (uint32_t i = 0; i < validContactCount; i++)
+                {
+                    const Vec2 rAPerp = rAPerpArray[i];
+                    const Vec2 rBPerp = rBPerpArray[i];
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity = (linearVelocityB + angularLinearVelB) - (linearVelocityA + angularLinearVelA);
+
+					Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
+					const Real tangentLengthSq = glm::dot(tangent, tangent);
+                    if (tangentLengthSq < frictionEpsilon)
+                    {
+						impulses[i] = Vec2(0.0, 0.0);
+                        continue;
+                    }
+
+					tangent /= std::sqrt(tangentLengthSq);
+
+					const Real rAPerpDotT = glm::dot(rAPerp, tangent);
+					const Real rBPerpDotT = glm::dot(rBPerp, tangent);
+
+					const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
+					const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+					const Real jt = -glm::dot(relativeVelocity, tangent) / denom;
+
+					const Real jn = jnArray[i];
+                    if (std::abs(jt) <= jn * staticFriction)
+                    {
+                        impulses[i] = jt * tangent; // Static friction.
+                    }
+                    else
+                    {
+                        impulses[i] = -jn * dynamicFriction * tangent; // Dynamic friction.
+					}
+                }
+            }
+
+			// Apply friction impulses.
+            {
+                for (uint32_t i = 0; i < validContactCount; i++)
+                {
+                    const Vec2 impulse = impulses[i];
+                    applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
+                    applyImpulse(bodyIndexB, impulse, rBPerpArray[i], invMassB, invInertiaB);
+                }
+            }
 
             // Position resolution.
             const Real correction = (depth - simulationSettings.slop) * simulationSettings.positionCorrectionPercent;
@@ -348,6 +496,7 @@ namespace PS_AGONY
 
             const Vec2 correctionVec2 = normal * correction;
 
+			const Real invTotalInvMass = Real(1) / totalInvMass;
             const Real ratioA = invMassA * invTotalInvMass;
             const Real ratioB = invMassB * invTotalInvMass;
 
