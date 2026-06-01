@@ -107,6 +107,10 @@ namespace PS_AGONY
             buildBvhNode(nodes, indices, bodyCount);
         }
         {
+            TRACY_SCOPE_N("Reorder AABB by indices");
+            reorderAABBByIndices(indices);
+        }
+        {
             TRACY_SCOPE_N("Query pairs");
             queryBvhPairs(nodes, indices); // Self-query the root finds all pairs.
         }
@@ -387,12 +391,53 @@ namespace PS_AGONY
         }
     }
 
+    void BroadPhaseCollisionDetector::reorderAABBByIndices(const std::vector<BodyIndex>& indices)
+    {
+        const size_t bodyCount = indices.size();
+
+		Real* CORE_RESTRICT leafMinXPtr = nullptr;
+		Real* CORE_RESTRICT leafMaxXPtr = nullptr;
+		Real* CORE_RESTRICT leafMinYPtr = nullptr;
+		Real* CORE_RESTRICT leafMaxYPtr = nullptr;
+
+        {
+            auto& leafMinX = functionResources.leafMinX;
+            auto& leafMaxX = functionResources.leafMaxX;
+            auto& leafMinY = functionResources.leafMinY;
+            auto& leafMaxY = functionResources.leafMaxY;
+
+            leafMinX.resize(bodyCount);
+            leafMaxX.resize(bodyCount);
+            leafMinY.resize(bodyCount);
+            leafMaxY.resize(bodyCount);
+
+			leafMinXPtr = leafMinX.data();
+			leafMaxXPtr = leafMaxX.data();
+            leafMinYPtr = leafMinY.data();
+			leafMaxYPtr = leafMaxY.data();
+        }
+
+        const Real* CORE_RESTRICT srcMinXPtr = bodiesAABB.minX;
+        const Real* CORE_RESTRICT srcMaxXPtr = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT srcMinYPtr = bodiesAABB.minY;
+        const Real* CORE_RESTRICT srcMaxYPtr = bodiesAABB.maxY;
+
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            const BodyIndex b = indices[i];
+            leafMinXPtr[i] = srcMinXPtr[b];
+            leafMaxXPtr[i] = srcMaxXPtr[b];
+            leafMinYPtr[i] = srcMinYPtr[b];
+            leafMaxYPtr[i] = srcMaxYPtr[b];
+        }
+    }
+
     void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
     {
-        const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
-        const Real* CORE_RESTRICT aabbMinYPtr = bodiesAABB.minY;
-        const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
+        const Real* leafMinXPtr = functionResources.leafMinX.data();
+        const Real* leafMaxXPtr = functionResources.leafMaxX.data();
+        const Real* leafMinYPtr = functionResources.leafMinY.data();
+        const Real* leafMaxYPtr = functionResources.leafMaxY.data();
 
         // Local stack.
         constexpr uint64_t MAX_STACK_CAPACITY = 2ull * bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
@@ -441,14 +486,15 @@ namespace PS_AGONY
                 const auto gatherLeaf = [&](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
                     {
                         const uint32_t count = nodeEnd - nodeStart;
+
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            const BodyIndex b = indices[nodeStart + k];
-                            out.minX[k] = aabbMinXPtr[b];
-                            out.maxX[k] = aabbMaxXPtr[b];
-                            out.minY[k] = aabbMinYPtr[b]; 
-                            out.maxY[k] = aabbMaxYPtr[b];
+                            out.minX[k] = leafMinXPtr[nodeStart + k];
+                            out.maxX[k] = leafMaxXPtr[nodeStart + k];
+                            out.minY[k] = leafMinYPtr[nodeStart + k];
+                            out.maxY[k] = leafMaxYPtr[nodeStart + k];
                         }
+
                         constexpr Real DEAD = -std::numeric_limits<Real>::max();
                         for (uint32_t k = count; k < CAP; k++)
                             out.minX[k] = out.maxX[k] = out.minY[k] = out.maxY[k] = DEAD;

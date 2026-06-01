@@ -2,7 +2,6 @@
 #include "BodySoAViewer.h"
 
 #include <vector>
-#include "robin_hood.h"
 
 namespace PS_AGONY
 {
@@ -51,9 +50,10 @@ namespace PS_AGONY
 			SimdAlignedVector<Real> centroidX;
 			SimdAlignedVector<Real> centroidY;
 
-			robin_hood::unordered_flat_map<uint64_t, std::vector<BodyIndex>> spaceGrid;
-
-			robin_hood::unordered_flat_set<uint64_t> uint64Set;
+			SimdAlignedVector<Real> leafMinX;
+			SimdAlignedVector<Real> leafMaxX;
+			SimdAlignedVector<Real> leafMinY;
+			SimdAlignedVector<Real> leafMaxY;
 		};
 
 		AABBSoAViewer bodiesAABB;
@@ -72,12 +72,13 @@ namespace PS_AGONY
 	private:
 		void sweepAndPruneXAxis(size_t bodyCount);
 		void boundVolumeHierarchy(size_t bodyCount);
-		//void uniformSpaceGrid(size_t bodyCount);
 	private:
 		void buildBvhNode(
 			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,
 			uint32_t bodyCount);
+
+		void reorderAABBByIndices(const std::vector<BodyIndex>& indices);
 
 		void queryBvhPairs(
 			const std::vector<BvhNode>& nodes,
