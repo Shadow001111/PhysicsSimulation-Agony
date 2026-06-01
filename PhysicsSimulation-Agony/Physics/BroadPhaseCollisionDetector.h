@@ -16,6 +16,16 @@ namespace PS_AGONY
 			Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
 			uint32_t left, right; // Child node indices; INVALID_INDEX for leaves.
 			uint32_t start, end; // Range in kdIndices: [start, end).
+		
+			BvhNode() :
+				left(INVALID_INDEX), right(INVALID_INDEX),
+				start(0), end(0)
+			{}
+
+			BvhNode(uint32_t start, uint32_t end) :
+				left(INVALID_INDEX), right(INVALID_INDEX),
+				start(start), end(end)
+			{}
 		};
 
 		struct BvhNodePair { uint32_t a, b; };

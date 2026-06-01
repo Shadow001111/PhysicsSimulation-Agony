@@ -312,27 +312,33 @@ namespace PS_AGONY
         // Local stack.
         struct BuildTask
         {
-            uint32_t start, end;
-            uint32_t parentIdx; // INVALID_INDEX for the root.
-            bool isRight; // Which child slot to fill in the parent.
+            uint32_t nodeIdx; // INVALID_INDEX for the root.
         };
 
         constexpr uint64_t MAX_STACK_CAPACITY = bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
         BuildTask stack[MAX_STACK_CAPACITY];
         uint32_t stackSize = 0;
 
-        stack[stackSize++] = { 0, bodyCount, BvhNode::INVALID_INDEX, false };
+		nodes.emplace_back(0, bodyCount);
+
+        stack[stackSize++] = { 0 };
 
         while (stackSize > 0)
         {
             const BuildTask task = stack[--stackSize];
+
+            BvhNode& node = nodes[task.nodeIdx];
+
+			const uint32_t nodeStart = node.start;
+			const uint32_t nodeEnd = node.end;
+            const uint32_t rangeSize = nodeEnd - nodeStart;
 
             // Compute merged bounding box.
             Real minX =  std::numeric_limits<Real>::max();
             Real maxX = -std::numeric_limits<Real>::max();
             Real minY =  std::numeric_limits<Real>::max();
             Real maxY = -std::numeric_limits<Real>::max();
-            for (uint32_t i = task.start; i < task.end; i++)
+            for (uint32_t i = nodeStart; i < nodeEnd; i++)
             {
                 const BodyIndex b = indicesPtr[i];
                 minX = std::min(minX, aabbMinXPtr[b]);
@@ -340,44 +346,45 @@ namespace PS_AGONY
                 minY = std::min(minY, aabbMinYPtr[b]);
                 maxY = std::max(maxY, aabbMaxYPtr[b]);
             }
-
-            const uint32_t nodeIdx = nodes.size();
-            nodes.emplace_back(minX, maxX, minY, maxY, BvhNode::INVALID_INDEX, BvhNode::INVALID_INDEX, task.start, task.end);
-
-            // Wire into parent if one exists.
-            if (task.parentIdx != BvhNode::INVALID_INDEX)
-            {
-                if (task.isRight) nodes[task.parentIdx].right = nodeIdx;
-                else              nodes[task.parentIdx].left = nodeIdx;
-            }
+            node.minX = minX;
+            node.maxX = maxX;
+            node.minY = minY;
+            node.maxY = maxY;
 
             // Check range.
-            const uint32_t rangeSize = task.end - task.start;
-            if (rangeSize <= BvhNode::KD_LEAF_SIZE)
+            if (rangeSize <= BvhNode::KD_LEAF_SIZE) // Leaf.
                 continue;
 
             // Partition on the widest axis at the median centroid.
             const bool splitX = (maxX - minX) >= (maxY - minY);
-            const uint32_t mid = task.start + rangeSize / 2; // (task.start + task.end) / 2;
+            const uint32_t mid = nodeStart + rangeSize / 2; // (task.start + task.end) / 2;
 
             if (splitX)
-                {
-                    std::nth_element(indicesPtr + task.start, indicesPtr + mid, indicesPtr + task.end,
-                        [&](BodyIndex a, BodyIndex b) {
-                        return centroidXPtr[a] < centroidXPtr[b];
-                        });
-                }
+            {
+                std::nth_element(indicesPtr + nodeStart, indicesPtr + mid, indicesPtr + nodeEnd,
+                    [&](BodyIndex a, BodyIndex b) {
+                    return centroidXPtr[a] < centroidXPtr[b];
+                    });
+            }
             else
-                {
-                    std::nth_element(indicesPtr + task.start, indicesPtr + mid, indicesPtr + task.end,
-                        [&](BodyIndex a, BodyIndex b) {
-                        return centroidYPtr[a] < centroidYPtr[b];
-                        });
-                }
+            {
+                std::nth_element(indicesPtr + nodeStart, indicesPtr + mid, indicesPtr + nodeEnd,
+                    [&](BodyIndex a, BodyIndex b) {
+                    return centroidYPtr[a] < centroidYPtr[b];
+                    });
+            }
 
-            // Push right before left so left is popped and processed first (LIFO).
-            stack[stackSize++] = { mid,        task.end, nodeIdx, true  }; // Right child.
-            stack[stackSize++] = { task.start, mid,      nodeIdx, false }; // Left child.
+            const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
+			const uint32_t rightIdx = leftIdx + 1;
+
+			node.left = leftIdx;
+			node.right = rightIdx;
+
+            nodes.emplace_back(nodeStart, mid);
+			nodes.emplace_back(mid, nodeEnd);
+
+            stack[stackSize++] = { rightIdx };
+            stack[stackSize++] = { leftIdx };
         }
     }
 
