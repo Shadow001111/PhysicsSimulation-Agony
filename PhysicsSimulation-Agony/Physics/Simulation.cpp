@@ -25,11 +25,14 @@ namespace PS_AGONY
 
         updateTimeAccumulator += deltaTime;
 
-        const Real fixedDeltaTime = simulationSettings.updateInterval;
-        while (updateTimeAccumulator >= fixedDeltaTime)
+        uint32_t stepCount = std::floor(updateTimeAccumulator / simulationSettings.updateInterval);
+        updateTimeAccumulator -= stepCount * simulationSettings.updateInterval;
+
+        stepCount = std::min(stepCount, simulationSettings.maxIterationsPerUpdateCall);
+        const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.timeScale;
+        for (uint32_t i = 0; i < stepCount; i++)
         {
-            updateTimeAccumulator -= fixedDeltaTime;
-            physicsStep(fixedDeltaTime * simulationSettings.timeScale);
+            physicsStep(fixedDeltaTime);
         }
     }
 

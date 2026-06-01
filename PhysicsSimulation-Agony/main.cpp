@@ -7,7 +7,78 @@
 #include "Physics/Simulation.h"
 #include "Physics/SimulationRenderer.h"
 
+#include "Graphics/TextRenderer.h"
+
 #include <iostream>
+#include <iomanip>
+
+
+static std::string formatSize(size_t value)
+{
+    static const char* suffixes[] = { "", "k", "M", "G", "T", "P", "E" };
+    constexpr size_t suffixCount = sizeof(suffixes) / sizeof(suffixes[0]);
+    double scaled = static_cast<double>(value);
+    size_t suffixIndex = 0;
+
+    while (scaled >= 1000.0 && suffixIndex < suffixCount - 1)
+    {
+        scaled /= 1000.0;
+        ++suffixIndex;
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision((scaled < 10.0 && suffixIndex > 0) ? 1 : 0);
+    oss << scaled << suffixes[suffixIndex];
+    return oss.str();
+}
+
+static std::string formatSizeBinary(size_t value)
+{
+    static const char* suffixes[] = { "B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB" };
+    constexpr size_t suffixCount = sizeof(suffixes) / sizeof(suffixes[0]);
+    double scaled = static_cast<double>(value);
+    size_t suffixIndex = 0;
+
+    while (scaled >= 1024.0 && suffixIndex < suffixCount - 1)
+    {
+        scaled /= 1024.0;
+        ++suffixIndex;
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision((scaled < 10.0 && suffixIndex > 0) ? 1 : 0);
+    oss << scaled << suffixes[suffixIndex];
+    return oss.str();
+}
+
+
+struct DebugData
+{
+    float deltaTime = 0.0f;
+};
+
+static void renderDebugText(float aspectRatio, const DebugData& debugData)
+{
+    constexpr float rowHeight = 0.06f;
+    constexpr float sideOffset = 0.014f;
+
+    // Get string.
+
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(1);
+
+    const float FPS = 1.0f / debugData.deltaTime;
+    ss << "FPS: " << FPS << " (" << debugData.deltaTime * 1000.0f << " ms)";
+
+    const std::string text = ss.str();
+
+    // Prepare.
+    TextRenderer::setCustomCoordinateSpace(-aspectRatio, aspectRatio, -1.0f, 1.0f);
+    TextRenderer::startTextRendering();
+
+    // Render
+    TextRenderer::renderText(text, -aspectRatio + sideOffset, 1.0f - sideOffset, rowHeight, glm::vec3(1.0f, 0.0f, 0.0f));
+}
 
 static int gameFunc()
 {
@@ -58,6 +129,12 @@ static int gameFunc()
         framebuffer.bind();
     }
 
+    // Text renderer
+    TextRenderer::init();
+    TextRenderer::loadFont("RusEngMinecraft", 8);
+    TextRenderer::setCurrentFont("RusEngMinecraft");
+    TextRenderer::setGlyphInstanceBatchSize(1024);
+
     // Input settings.
     //glfwSetInputMode(wnd.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -83,7 +160,7 @@ static int gameFunc()
             simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
         }
 
-        const int bodyCount = 1'406 - 4 - 1;// 2'500;
+        const int bodyCount = 4'000;
         for (int i = 0; i < bodyCount; i++)
         {
             const float x = Random::real<float>(-5.0f, 5.0f);
@@ -109,6 +186,7 @@ static int gameFunc()
 
     // Main loop.
     double lastTime = glfwGetTime();
+    DebugData debugData;
     while (!wnd.shouldClose())
     {
         // Poll events.
@@ -122,6 +200,8 @@ static int gameFunc()
         const double time = glfwGetTime();
         const double deltaTime = time - lastTime;
         lastTime = time;
+
+        debugData.deltaTime = deltaTime;
 
 		// Handle input.
         {
@@ -161,6 +241,9 @@ static int gameFunc()
 
             // Render simulation.
             simulationRenderer.render(simulation);
+
+            // Render debug data.
+            renderDebugText(wnd.getAspectRatio(), debugData);
 
             // Blitting FBO to default FBO.
             framebuffer.setReadBuffer("color");
