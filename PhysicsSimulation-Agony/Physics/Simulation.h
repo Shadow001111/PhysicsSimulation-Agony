@@ -19,6 +19,7 @@ namespace PS_AGONY
 			uint32_t collisionSolvingIterations = 8;
 
 			// Environment.
+			Real timeScale = 1.0;
 			Vec2 gravity{ 0.0, -9.81 };
 
 			// Baumgarte stabilization.
@@ -56,8 +57,10 @@ namespace PS_AGONY
 
 		MaterialIndex createMaterial(const Material& material);
 
-		const auto& getBodies() const noexcept { return bodies; }
-		const auto& getCircles() const noexcept { return circles; }
+		void fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
+
+		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
+		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
 	private:
 		void physicsStep(Real deltaTime);
 

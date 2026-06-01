@@ -35,6 +35,20 @@ namespace PS_AGONY
         return broadCollisionData;
     }
 
+    void BroadPhaseCollisionDetector::fetchAABBs(std::vector<AABB>& outAABBs) const
+    {
+        // Collect BVH nodes (leafs) AABBs from previous time.
+		const auto& nodes = bvhFunctionResources.nodeVector;
+		outAABBs.reserve(outAABBs.size() + nodes.size());
+        for (const auto& node : nodes)
+        {
+            if (node.left == BvhNode::INVALID_INDEX && node.right == BvhNode::INVALID_INDEX) // Leaf check.
+            {
+                outAABBs.push_back({ node.minX, node.minY, node.maxX, node.maxY });
+            }
+        }
+    }
+
     void BroadPhaseCollisionDetector::sweepAndPruneXAxis(size_t bodyCount)
     {
         TRACY_SCOPE_N("Sweep and prune X");
@@ -45,8 +59,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
 
         // Build list of body indices sorted by AABB minX.
-        auto* CORE_RESTRICT sortedIndices = &functionResources.bodyIndexVector1;
-        auto* CORE_RESTRICT activeList = &functionResources.bodyIndexVector2; // Bodies currently overlapping in X.
+        auto* CORE_RESTRICT sortedIndices = &sharedFunctionResources.bodyIndexVector1;
+        auto* CORE_RESTRICT activeList = &sharedFunctionResources.bodyIndexVector2; // Bodies currently overlapping in X.
 
         sortedIndices->resize(bodyCount);
 
@@ -93,8 +107,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("BVH");
 
-        auto& nodes = functionResources.bvhNodeVector1;
-        auto& indices = functionResources.bodyIndexVector1;
+        auto& nodes = bvhFunctionResources.nodeVector;
+        auto& indices = sharedFunctionResources.bodyIndexVector1;
 
         nodes.clear();
         nodes.reserve(2 * bodyCount);
@@ -283,8 +297,8 @@ namespace PS_AGONY
         Real* CORE_RESTRICT centroidXPtr = nullptr;
         Real* CORE_RESTRICT centroidYPtr = nullptr;
         {
-            auto& centroidX = functionResources.centroidX;
-            auto& centroidY = functionResources.centroidY;
+            auto& centroidX = bvhFunctionResources.centroidX;
+            auto& centroidY = bvhFunctionResources.centroidY;
             centroidX.resize(bodyCount);
             centroidY.resize(bodyCount);
             centroidXPtr = centroidX.data();
@@ -401,10 +415,10 @@ namespace PS_AGONY
 		Real* CORE_RESTRICT leafMaxYPtr = nullptr;
 
         {
-            auto& leafMinX = functionResources.leafMinX;
-            auto& leafMaxX = functionResources.leafMaxX;
-            auto& leafMinY = functionResources.leafMinY;
-            auto& leafMaxY = functionResources.leafMaxY;
+            auto& leafMinX = bvhFunctionResources.leafMinX;
+            auto& leafMaxX = bvhFunctionResources.leafMaxX;
+            auto& leafMinY = bvhFunctionResources.leafMinY;
+            auto& leafMaxY = bvhFunctionResources.leafMaxY;
 
             leafMinX.resize(bodyCount);
             leafMaxX.resize(bodyCount);
@@ -434,10 +448,10 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
     {
-        const Real* leafMinXPtr = functionResources.leafMinX.data();
-        const Real* leafMaxXPtr = functionResources.leafMaxX.data();
-        const Real* leafMinYPtr = functionResources.leafMinY.data();
-        const Real* leafMaxYPtr = functionResources.leafMaxY.data();
+        const Real* leafMinXPtr = bvhFunctionResources.leafMinX.data();
+        const Real* leafMaxXPtr = bvhFunctionResources.leafMaxX.data();
+        const Real* leafMinYPtr = bvhFunctionResources.leafMinY.data();
+        const Real* leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
 
         // Local stack.
         constexpr uint64_t MAX_STACK_CAPACITY = 2ull * bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;

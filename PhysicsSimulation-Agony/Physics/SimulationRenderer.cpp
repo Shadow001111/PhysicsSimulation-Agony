@@ -21,12 +21,19 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("SimulationRenderer render");
 
+        // Set references.
+        bodies = simulation.getBodies();
+        circles = simulation.getCircles();
+
         // Camera.
         const Mat4 viewMatrix = camera.getViewMatrix();
         const Mat4 projectionMatrix = camera.getProjectionMatrix();
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
-        renderCircles(simulation, viewProjectionMatrix);
+        // Render.
+        renderBodies(viewProjectionMatrix);
+		//renderBodyAABBs(viewProjectionMatrix);
+		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
@@ -40,54 +47,122 @@ namespace PS_AGONY
             
             circleResources.shader.create(sources);
         }
+
+        // AABB.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/aabb.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/aabb.frag" }
+            };
+            aabbResources.shader.create(sources);
+        }
     }
 
     void SimulationRenderer::initBuffers()
     {
         // Circles.
-        const float circleVertices[3 * 2] =
         {
-            0.0f, 2.0f,
-            1.7321f, -1.0f,
-            -1.7321f, -1.0f
-        };
+            const float circleVertices[] =
+            {
+                0.0f, 2.0f,
+                1.7321f, -1.0f,
+                -1.7321f, -1.0f
+            };
 
-        circleResources.vbo.create();
-        circleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
+            circleResources.vbo.create();
+            circleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
 
-        circleResources.vao.create();
-        circleResources.vao.bindVertexBuffer(0, circleResources.vbo.getID(), 0, sizeof(float) * 2);
+            circleResources.vao.create();
+            circleResources.vao.bindVertexBuffer(0, circleResources.vbo.getID(), 0, sizeof(float) * 2);
 
-        circleResources.vao.enableAttribute(0);
-        circleResources.vao.setFloatAttribute(0, 2, 0, 0);
+            circleResources.vao.enableAttribute(0);
+            circleResources.vao.setFloatAttribute(0, 2, 0, 0);
 
-        ensureCircleInstanceVboCapacity(64);
+            ensureCircleInstanceVboCapacity(64);
+        }
+        // AABB.
+        {
+            const float vertices[] =
+            {
+                0.0f, 0.0f,
+				1.0f, 0.0f,
+				1.0f, 1.0f,
+				0.0f, 1.0f
+            };
+
+            aabbResources.vbo.create();
+            aabbResources.vbo.allocateStorage(sizeof(vertices), 0, vertices);
+
+            aabbResources.vao.create();
+            aabbResources.vao.bindVertexBuffer(0, aabbResources.vbo.getID(), 0, sizeof(float) * 2);
+
+            aabbResources.vao.enableAttribute(0);
+            aabbResources.vao.setFloatAttribute(0, 2, 0, 0);
+
+            // Initial instance VBO capacity
+            ensureAABBInstanceVboCapacity(64);
+        }
     }
 
-    void SimulationRenderer::renderCircles(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix)
     {
-        // Bodies reference.
-        const auto& bodies = simulation.getBodies();
+        renderCircles(viewProjectionMatrix);
+    }
 
-        // Circles reference.
-        const auto& circles = simulation.getCircles();
-        const size_t circleCount = circles.getCount();
-        if (circleCount == 0)
+    void SimulationRenderer::renderBodyAABBs(const Mat4& viewProjectionMatrix)
+    {
+        const size_t bodyCount = bodies.getCount();
+        if (bodyCount == 0) return;
+        
+        // Reserve space.
+        ensureAABBInstanceVboCapacity(bodyCount);
+
+        // Prepare instance data.
+        const Real* CORE_RESTRICT minXPtr = bodies.aabb.minX;
+        const Real* CORE_RESTRICT minYPtr = bodies.aabb.minY;
+        const Real* CORE_RESTRICT maxXPtr = bodies.aabb.maxX;
+        const Real* CORE_RESTRICT maxYPtr = bodies.aabb.maxY;
+
+        AABB* CORE_RESTRICT renderDataPtr = aabbResources.instanceData.data();
+
+        for (size_t i = 0; i < bodyCount; i++)
         {
-            return;
+			renderDataPtr[i].minX = minXPtr[i];
+			renderDataPtr[i].minY = minYPtr[i];
+			renderDataPtr[i].maxX = maxXPtr[i];
+			renderDataPtr[i].maxY = maxYPtr[i];
         }
+
+		renderAABBs({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    {
+        // Fetch AABBs.
+		aabbResources.instanceData.clear();
+        simulation.fetchBroadPhaseAABBs(aabbResources.instanceData);
+        if (aabbResources.instanceData.empty()) return;
+
+        // Reserve space.
+        ensureAABBInstanceVboCapacity(aabbResources.instanceData.size());
+		renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderCircles(const Mat4& viewProjectionMatrix)
+    {
+        const size_t circleCount = circles.getCount();
+        if (circleCount == 0) return;
 
         // Reserve space.
         ensureCircleInstanceVboCapacity(circleCount);
 
         // Prepare instance data.
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
-        const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
-        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
-        const auto* CORE_RESTRICT collisionDebugPtr = bodies.collisionDebug.data();
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT radiusPtr = circles.radius;
+        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices;
 
-        CircleRenderData* CORE_RESTRICT renderDataPtr = circleResources.renderData.data();
+        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < circleCount; i++)
         {
@@ -96,26 +171,43 @@ namespace PS_AGONY
             renderDataPtr[i].x = positionXPtr[bodyIndex];
             renderDataPtr[i].y = positionYPtr[bodyIndex];
             renderDataPtr[i].radius = radiusPtr[i];
-            renderDataPtr[i].collisionDebug = collisionDebugPtr[bodyIndex];
         }
 
         // Move data to gpu.
-        circleResources.instanceVbo.write(circleResources.renderData.data(), circleCount * sizeof(CircleRenderData));
+        circleResources.instanceVbo.write(renderDataPtr, circleCount * sizeof(CircleInstanceData));
 
-        // Bind things, set uniforms, draw.
+        // Bind things, set uniforms.
         circleResources.shader.use();
         circleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
         circleResources.vao.bind();
 
+        // Draw.
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, circleCount);
+    }
+
+    void SimulationRenderer::renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix)
+    {
+        // Move data to gpu.
+        const size_t count = aabbResources.instanceData.size();
+        aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(AABB));
+
+        // Bind things, set uniforms.
+        aabbResources.shader.use();
+        aabbResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+        aabbResources.shader.setVec3("color", color.x, color.y, color.z);
+
+        aabbResources.vao.bind();
+
+        // Draw.
+        glDrawArraysInstanced(GL_LINE_LOOP, 0, 4, count);
     }
 
     void SimulationRenderer::ensureCircleInstanceVboCapacity(size_t count)
     {
-        constexpr size_t SIZEOF_RENDER_DATA = sizeof(CircleRenderData);
+        constexpr size_t SIZEOF_INSTANCE = sizeof(CircleInstanceData);
 
-        const size_t neededCapacity = count * SIZEOF_RENDER_DATA;
+        const size_t neededCapacity = count * SIZEOF_INSTANCE;
         const size_t currentCapacity = circleResources.instanceVbo.getCapacity();
 
         if (neededCapacity <= currentCapacity) return;
@@ -125,7 +217,7 @@ namespace PS_AGONY
         circleResources.instanceVbo.create();
         circleResources.instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
 
-        circleResources.vao.bindVertexBuffer(1, circleResources.instanceVbo.getID(), 0, SIZEOF_RENDER_DATA);
+        circleResources.vao.bindVertexBuffer(1, circleResources.instanceVbo.getID(), 0, SIZEOF_INSTANCE);
 
         circleResources.vao.enableAttribute(1);
         circleResources.vao.setFloatAttribute(1, 2, 0, 1);
@@ -135,10 +227,29 @@ namespace PS_AGONY
         circleResources.vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
         circleResources.vao.setAttributeDivisor(2, 1);
 
-        circleResources.vao.enableAttribute(3);
-        circleResources.vao.setIntAttribute(3, 1, sizeof(float) * 3, 1);
-        circleResources.vao.setAttributeDivisor(3, 1);
+        circleResources.instanceData.resize(newCapacity / SIZEOF_INSTANCE);
+    }
 
-        circleResources.renderData.resize(newCapacity / SIZEOF_RENDER_DATA);
+    void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)
+    {
+        constexpr size_t SIZEOF_INSTANCE = sizeof(AABB);
+
+        const size_t neededCapacity = count * SIZEOF_INSTANCE;
+        const size_t currentCapacity = aabbResources.instanceVbo.getCapacity();
+
+        if (neededCapacity <= currentCapacity) return;
+
+        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
+
+        aabbResources.instanceVbo.create();
+        aabbResources.instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+        aabbResources.vao.bindVertexBuffer(1, aabbResources.instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+
+        aabbResources.vao.enableAttribute(1);
+        aabbResources.vao.setFloatAttribute(1, 4, 0, 1);
+        aabbResources.vao.setAttributeDivisor(1, 1);
+
+        aabbResources.instanceData.resize(newCapacity / SIZEOF_INSTANCE);
     }
 }

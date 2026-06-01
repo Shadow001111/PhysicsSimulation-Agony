@@ -29,7 +29,7 @@ namespace PS_AGONY
         while (updateTimeAccumulator >= fixedDeltaTime)
         {
             updateTimeAccumulator -= fixedDeltaTime;
-            physicsStep(fixedDeltaTime);
+            physicsStep(fixedDeltaTime * simulationSettings.timeScale);
         }
     }
 
@@ -81,6 +81,11 @@ namespace PS_AGONY
         const MaterialIndex materialIndex = materials.size();
         materials.push_back(material);
         return materialIndex;
+    }
+
+    void Simulation::fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
+    {
+		broadPhaseCollisionDetector.fetchAABBs(outAABBs);
     }
 
     void Simulation::physicsStep(Real deltaTime)

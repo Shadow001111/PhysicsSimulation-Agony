@@ -5,32 +5,47 @@
 #include "OpenGLWrappers/ImmutableBuffer.h"
 #include "OpenGLWrappers/VertexArray.h"
 
+#include "BodySoAViewer.h"
+
 namespace PS_AGONY
 {
 	class Simulation;
 
-	struct CircleRenderData
-	{
-		float x, y, radius;
-		uint32_t collisionDebug;
-	};
-
-	struct CircleRenderResources
-	{
-		VertexArray vao;
-		ImmutableBuffer vbo;
-		ImmutableBuffer instanceVbo;
-		Shader shader;
-		std::vector<CircleRenderData> renderData;
-	};
-
 	class SimulationRenderer
 	{
+		struct CircleInstanceData
+		{
+			float x, y, radius;
+		};
+
+		struct CircleRenderResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vbo;
+			ImmutableBuffer instanceVbo;
+			Shader shader;
+			std::vector<CircleInstanceData> instanceData;
+		};
+
+		struct AABBLineResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vbo;
+			ImmutableBuffer instanceVbo;
+			Shader shader;
+			std::vector<AABB> instanceData;
+		};
+
 		// Resources.
 		CircleRenderResources circleResources;
+		AABBLineResources aabbResources;
 
 		// Camera.
 		Camera2D camera;
+
+		// Simulation references.
+		BodySoAViewer bodies;
+		CircleSoAViewer circles;
 	public:
 		SimulationRenderer() = default;
 		~SimulationRenderer() = default;
@@ -47,9 +62,15 @@ namespace PS_AGONY
 		void initShaders();
 		void initBuffers();
 
-		void renderCircles(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+		void renderBodies(const Mat4& viewProjectionMatrix);
+		void renderBodyAABBs(const Mat4& viewProjectionMatrix);
+		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+
+		void renderCircles(const Mat4& viewProjectionMatrix);
+		void renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix);
 
 		void ensureCircleInstanceVboCapacity(size_t count);
+		void ensureAABBInstanceVboCapacity(size_t count);
 	};
 }
 

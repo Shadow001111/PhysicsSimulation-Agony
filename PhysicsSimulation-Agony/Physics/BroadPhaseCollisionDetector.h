@@ -31,7 +31,6 @@ namespace PS_AGONY
 
 		struct alignas(Simd<Real>::bytes) LeafAABB
 		{
-			// TODO: Ensure 'KD_LEAF_SIZE' is a multiple of SIMD lanes for efficient processing.
 			static_assert(BvhNode::KD_LEAF_SIZE % Simd<Real>::lanes == 0, "KD_LEAF_SIZE must be a multiple of SIMD lanes.");
 
 			Real minX[BvhNode::KD_LEAF_SIZE];
@@ -40,12 +39,15 @@ namespace PS_AGONY
 			Real maxY[BvhNode::KD_LEAF_SIZE];
 		};
 
-		struct FunctionResources
+		struct SharedFunctionResources
 		{
 			std::vector<BodyIndex> bodyIndexVector1;
 			std::vector<BodyIndex> bodyIndexVector2;
+		};
 
-			std::vector<BvhNode> bvhNodeVector1;
+		struct BvhFunctionResources
+		{
+			std::vector<BvhNode> nodeVector;
 
 			SimdAlignedVector<Real> centroidX;
 			SimdAlignedVector<Real> centroidY;
@@ -57,7 +59,8 @@ namespace PS_AGONY
 		};
 
 		AABBSoAViewer bodiesAABB;
-		FunctionResources functionResources;
+		SharedFunctionResources sharedFunctionResources;
+		BvhFunctionResources bvhFunctionResources;
 
 		std::vector<BodyPair> broadCollisionData;
 	public:
@@ -69,6 +72,8 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector& operator=(BroadPhaseCollisionDetector&&) = default;
 
 		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer);
+
+		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 	private:
 		void sweepAndPruneXAxis(size_t bodyCount);
 		void boundVolumeHierarchy(size_t bodyCount);

@@ -3,7 +3,6 @@
 layout (location = 0) in vec2 localPosition;
 layout (location = 1) in vec2 instancePosition;
 layout (location = 2) in float instanceRadius;
-layout (location = 3) in int instanceCollisionDebug;
 
 out vec2 uv;
 out flat vec3 color;
@@ -40,6 +39,5 @@ void main()
     vec4 clipPos = viewProjectionMatrix * vec4(worldPos, 1.0);
     gl_Position = clipPos;
 
-    int broadPhaseCollision = bitfieldExtract(instanceCollisionDebug, 0, 1);
     color = randomColorFromInt(gl_InstanceID);
 }

@@ -19,6 +19,12 @@ namespace PS_AGONY
 		COUNT
 	};
 
+	struct AABB
+	{
+		Real minX, minY;
+		Real maxX, maxY;
+	};
+
 	struct AABBSoA
 	{
 		SimdAlignedVector<Real> minX;
