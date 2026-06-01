@@ -12,6 +12,13 @@ namespace PS_AGONY
 {
 	class Simulation
 	{
+	public:
+		struct DebugData
+		{
+			uint32_t updatesHappened = 0;
+			uint32_t updatesSupposedToHappen = 0;
+		};
+	private:
 		struct SimulationSettings
 		{
 			//
@@ -44,6 +51,11 @@ namespace PS_AGONY
 
 		// Other.
 		Real updateTimeAccumulator = 0.0;
+
+		// Debug data.
+		Real debugDataResetTimeAccumulator = 0.0;
+		DebugData runtimeDebugData;
+		DebugData debugDataSnaphot;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -60,6 +72,7 @@ namespace PS_AGONY
 
 		void fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
 
+		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
 	private:

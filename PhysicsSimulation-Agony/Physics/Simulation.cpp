@@ -23,6 +23,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Simulation update");
 
+        // Physics steps.
         updateTimeAccumulator += deltaTime;
 
         uint32_t stepCount = std::floor(updateTimeAccumulator / simulationSettings.updateInterval);
@@ -34,6 +35,20 @@ namespace PS_AGONY
         {
             physicsStep(fixedDeltaTime);
         }
+
+        // Debug data.
+        debugDataResetTimeAccumulator += deltaTime;
+        if (debugDataResetTimeAccumulator > 1.0)
+        {
+            debugDataSnaphot = runtimeDebugData;
+
+            debugDataResetTimeAccumulator = 0.0;
+
+            runtimeDebugData.updatesHappened = 0;
+        }
+
+        runtimeDebugData.updatesHappened += stepCount;
+        runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
     }
 
     BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real radius, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex)

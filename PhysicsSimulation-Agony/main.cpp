@@ -54,7 +54,10 @@ static std::string formatSizeBinary(size_t value)
 
 struct DebugData
 {
-    float deltaTime = 0.0f;
+    float smoothedDelta = 0.0f; // Seconds.
+    float deltaTime = 0.0f; // Seconds.
+
+    PS_AGONY::Simulation::DebugData simulationDebugData;
 };
 
 static void renderDebugText(float aspectRatio, const DebugData& debugData)
@@ -62,14 +65,22 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
     constexpr float rowHeight = 0.06f;
     constexpr float sideOffset = 0.014f;
 
-    // Get string.
+    // Push data on stream.
 
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(1);
 
-    const float FPS = 1.0f / debugData.deltaTime;
-    ss << "FPS: " << FPS << " (" << debugData.deltaTime * 1000.0f << " ms)";
+    const float FPS = debugData.smoothedDelta > 0.0f
+        ? 1.0f / debugData.smoothedDelta
+        : 0.0f;
+    ss << "FPS: " << FPS << " (" << debugData.smoothedDelta * 1000.0f << " ms)\n";
 
+    float upsPercent = (float)debugData.simulationDebugData.updatesHappened / (float)debugData.simulationDebugData.updatesSupposedToHappen;
+    upsPercent = std::min(upsPercent, 1.0f);
+    ss << "UPS: " << debugData.simulationDebugData.updatesHappened << " / " << debugData.simulationDebugData.updatesSupposedToHappen
+       << " (" << upsPercent * 100.0f << "%)\n";
+
+    // Convert stream to string.
     const std::string text = ss.str();
 
     // Prepare.
@@ -160,7 +171,7 @@ static int gameFunc()
             simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
         }
 
-        const int bodyCount = 4'000;
+        const int bodyCount = 1'500;
         for (int i = 0; i < bodyCount; i++)
         {
             const float x = Random::real<float>(-5.0f, 5.0f);
@@ -184,9 +195,11 @@ static int gameFunc()
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
 
+    // Debug data.
+    DebugData debugData;
+
     // Main loop.
     double lastTime = glfwGetTime();
-    DebugData debugData;
     while (!wnd.shouldClose())
     {
         // Poll events.
@@ -224,6 +237,16 @@ static int gameFunc()
 
         // Simulation.
         simulation.update(deltaTime);
+        debugData.simulationDebugData = simulation.getDebugData();
+
+        // Smooth debug data.
+        {
+            constexpr float targetAlpha = 0.5f;
+
+            float oneMinusAlpha = pow(1.0 - targetAlpha, deltaTime * 60.0);
+            float alpha = 1.0 - oneMinusAlpha;
+            debugData.smoothedDelta = alpha * debugData.deltaTime + oneMinusAlpha * debugData.smoothedDelta;
+        }
 
         // Render.
         if (iconified)
