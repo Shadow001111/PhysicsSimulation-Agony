@@ -413,44 +413,49 @@ namespace PS_AGONY
             if (aLeaf && bLeaf)
             {
                 using RealSimd = Simd<Real>;
-                // This kernel assumes lanes == KD_LEAF_SIZE (i.e. AVX float).
-                // For SSE / double, widen UPPER_TRI_MASK and loop j in chunks of LANES.
-                static_assert(RealSimd::lanes == BvhNode::KD_LEAF_SIZE,
-                    "Adjust UPPER_TRI_MASK and add an inner j-chunk loop for other lane widths.");
-
+                constexpr uint32_t LANES = RealSimd::lanes;
                 constexpr uint32_t CAP = BvhNode::KD_LEAF_SIZE;
 
-                // Bit k is set iff k > i, so (overlap & UPPER_TRI_MASK[i]) yields
-                // only j > i hits - the strict upper triangle, no duplicate pairs.
-                static constexpr uint32_t UPPER_TRI_MASK[CAP] = {
-                    0xFEu, 0xFCu, 0xF8u, 0xF0u, 0xE0u, 0xC0u, 0x80u, 0x00u
-                };
+                constexpr uint32_t ALL_LANES_MASK = (1u << LANES) - 1u;
 
-                // Gather one leaf's body AABBs into the aligned local struct.
-                // Pad unused lanes with a reversed (impossible) AABB so they never fire.
-                const auto gatherLeaf = [&](LeafAABB& out, const BvhNode& node)
+                // Returns which lanes in the chunk starting at j_base represent a j > i.
+                // Bit k is set iff (j_base + k) > i.
+                //
+                //  i < j_base          -> whole chunk is strictly above i -> all bits set.
+                //  i >= j_base + LANES -> whole chunk is at or below i  -> no bits set.
+                //  otherwise           -> i falls inside the chunk; keep only k > (i - j_base).
+                const auto upperTriMask = [&](uint32_t i, uint32_t j_base) -> uint32_t
                     {
-						const uint32_t count = node.end - node.start;
+                        if (i < j_base)          return ALL_LANES_MASK;
+                        if (i >= j_base + LANES) return 0u;
+                        const uint32_t offset = i - j_base; // 0 .. LANES-1
+                        return (ALL_LANES_MASK << (offset + 1)) & ALL_LANES_MASK;
+                    };
+
+                const auto gatherLeaf = [&](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
+                    {
+                        const uint32_t count = nodeEnd - nodeStart;
                         for (uint32_t k = 0; k < count; k++)
                         {
-                            const BodyIndex b = indices[node.start + k];
-                            out.minX[k] = aabbMinXPtr[b];  out.maxX[k] = aabbMaxXPtr[b];
-                            out.minY[k] = aabbMinYPtr[b];  out.maxY[k] = aabbMaxYPtr[b];
+                            const BodyIndex b = indices[nodeStart + k];
+                            out.minX[k] = aabbMinXPtr[b];
+                            out.maxX[k] = aabbMaxXPtr[b];
+                            out.minY[k] = aabbMinYPtr[b]; 
+                            out.maxY[k] = aabbMaxYPtr[b];
                         }
                         constexpr Real DEAD = -std::numeric_limits<Real>::max();
                         for (uint32_t k = count; k < CAP; k++)
                             out.minX[k] = out.maxX[k] = out.minY[k] = out.maxY[k] = DEAD;
-                        // With maxX = maxY = DEAD, the test (minXi < maxXj) is always false
-                        // for any real body, so padded lanes can never produce a false positive.
-                        return count;
+						return count;
                     };
+
+                // Gather leaf A, it is needed in both paths.
+                LeafAABB leafA;
+                const uint32_t countA = gatherLeaf(leafA, nodeA.start, nodeA.end);
 
                 if (nodePair.a == nodePair.b)
                 {
                     // Self-query: emit upper-triangle pairs only.
-                    LeafAABB leafA;
-                    const uint32_t countA = gatherLeaf(leafA, nodeA);
-
                     for (uint32_t i = 0; i < countA; i++)
                     {
                         const RealSimd vMinXi(leafA.minX[i]);
@@ -458,33 +463,34 @@ namespace PS_AGONY
                         const RealSimd vMinYi(leafA.minY[i]);
                         const RealSimd vMaxYi(leafA.maxY[i]);
 
-                        // One load covers all 8 bodies (AVX). Lane j = body i+j in the leaf.
-                        const RealSimd vMinXj = RealSimd::load(leafA.minX);
-                        const RealSimd vMaxXj = RealSimd::load(leafA.maxX);
-                        const RealSimd vMinYj = RealSimd::load(leafA.minY);
-                        const RealSimd vMaxYj = RealSimd::load(leafA.maxY);
-
-                        const RealSimd overlap =
-                            (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
-                            (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
-
-                        uint32_t mask = overlap.movemask() & UPPER_TRI_MASK[i];
-                        while (mask)
+                        for (uint32_t j = 0; j < CAP; j += LANES)
                         {
-                            const uint32_t j = std::countr_zero(mask);
-                            mask &= mask - 1; // Clear lowest set bit.
-                            broadCollisionData.emplace_back(
-                                indices[nodeA.start + i],
-                                indices[nodeA.start + j]);
+                            const RealSimd vMinXj = RealSimd::load(leafA.minX + j);
+                            const RealSimd vMaxXj = RealSimd::load(leafA.maxX + j);
+                            const RealSimd vMinYj = RealSimd::load(leafA.minY + j);
+                            const RealSimd vMaxYj = RealSimd::load(leafA.maxY + j);
+
+                            const RealSimd overlap =
+                                (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                                (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                            uint32_t mask = overlap.movemask() & upperTriMask(i, j);
+                            while (mask)
+                            {
+                                const uint32_t lane = std::countr_zero(mask);
+                                mask &= mask - 1; // Clear lowest set bit.
+                                broadCollisionData.emplace_back(
+                                    indices[nodeA.start + i],
+                                    indices[nodeA.start + j + lane]);
+                            }
                         }
                     }
                 }
                 else
                 {
                     // Cross-query: all pairs between two distinct leaves.
-                    LeafAABB leafA, leafB;
-                    const uint32_t countA = gatherLeaf(leafA, nodeA);
-                    gatherLeaf(leafB, nodeB);
+                    LeafAABB leafB;
+                    gatherLeaf(leafB, nodeB.start, nodeB.end);
 
                     for (uint32_t i = 0; i < countA; i++)
                     {
@@ -493,23 +499,26 @@ namespace PS_AGONY
                         const RealSimd vMinYi(leafA.minY[i]);
                         const RealSimd vMaxYi(leafA.maxY[i]);
 
-                        const RealSimd vMinXj = RealSimd::load(leafB.minX);
-                        const RealSimd vMaxXj = RealSimd::load(leafB.maxX);
-                        const RealSimd vMinYj = RealSimd::load(leafB.minY);
-                        const RealSimd vMaxYj = RealSimd::load(leafB.maxY);
-
-                        const RealSimd overlap =
-                            (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
-                            (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
-
-                        uint32_t mask = overlap.movemask();
-                        while (mask)
+                        for (uint32_t j = 0; j < CAP; j += LANES)
                         {
-                            const uint32_t j = std::countr_zero(mask);
-                            mask &= mask - 1;
-                            broadCollisionData.emplace_back(
-                                indices[nodeA.start + i],
-                                indices[nodeB.start + j]);
+                            const RealSimd vMinXj = RealSimd::load(leafB.minX + j);
+                            const RealSimd vMaxXj = RealSimd::load(leafB.maxX + j);
+                            const RealSimd vMinYj = RealSimd::load(leafB.minY + j);
+                            const RealSimd vMaxYj = RealSimd::load(leafB.maxY + j);
+
+                            const RealSimd overlap =
+                                (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                                (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                            uint32_t mask = overlap.movemask();
+                            while (mask)
+                            {
+                                const uint32_t lane = std::countr_zero(mask);
+                                mask &= mask - 1;
+                                broadCollisionData.emplace_back(
+                                    indices[nodeA.start + i],
+                                    indices[nodeB.start + j + lane]);
+                            }
                         }
                     }
                 }

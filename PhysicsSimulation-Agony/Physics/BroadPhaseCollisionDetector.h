@@ -23,9 +23,7 @@ namespace PS_AGONY
 		struct alignas(Simd<Real>::bytes) LeafAABB
 		{
 			// TODO: Ensure 'KD_LEAF_SIZE' is a multiple of SIMD lanes for efficient processing.
-			//static_assert(BvhNode::KD_LEAF_SIZE % Simd<Real>::lanes == 0, "KD_LEAF_SIZE must be a multiple of SIMD lanes.");
-
-			static_assert(BvhNode::KD_LEAF_SIZE == Simd<Real>::lanes, "KD_LEAF_SIZE must be equal to SIMD lanes.");
+			static_assert(BvhNode::KD_LEAF_SIZE % Simd<Real>::lanes == 0, "KD_LEAF_SIZE must be a multiple of SIMD lanes.");
 
 			Real minX[BvhNode::KD_LEAF_SIZE];
 			Real maxX[BvhNode::KD_LEAF_SIZE];
