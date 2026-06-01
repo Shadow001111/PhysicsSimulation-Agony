@@ -100,6 +100,9 @@ static int gameFunc()
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
 
+    auto& camera = simulationRenderer.getCamera();
+	camera.setViewRangeH(20.0f, wnd.getAspectRatio());
+
     // OpenGL states.
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -120,7 +123,24 @@ static int gameFunc()
         const double deltaTime = time - lastTime;
         lastTime = time;
 
-        // std::cout << 1.0f / deltaTime << "\n";
+		// Handle input.
+        {
+            const PS_AGONY::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
+			const PS_AGONY::Real zoomSpeed = 1.0 * deltaTime;
+
+            if (wnd.isKeyPressed(GLFW_KEY_W))
+                camera.position.y += cameraSpeed;
+            if (wnd.isKeyPressed(GLFW_KEY_S))
+                camera.position.y -= cameraSpeed;
+            if (wnd.isKeyPressed(GLFW_KEY_A))
+                camera.position.x -= cameraSpeed;
+            if (wnd.isKeyPressed(GLFW_KEY_D))
+                camera.position.x += cameraSpeed;
+            if (wnd.isKeyPressed(GLFW_KEY_Q))
+                camera.setViewRangeH(camera.viewRange * (1.0 + zoomSpeed), wnd.getAspectRatio());
+            if (wnd.isKeyPressed(GLFW_KEY_E))
+				camera.setViewRangeH(camera.viewRange / (1.0 + zoomSpeed), wnd.getAspectRatio());
+        }
 
         // Simulation.
         simulation.update(deltaTime);
@@ -140,7 +160,6 @@ static int gameFunc()
             framebuffer.clearDrawBuffer("color", black);
 
             // Render simulation.
-            simulationRenderer.getCamera().setViewRangeH(20.0, wnd.getAspectRatio());
             simulationRenderer.render(simulation);
 
             // Blitting FBO to default FBO.

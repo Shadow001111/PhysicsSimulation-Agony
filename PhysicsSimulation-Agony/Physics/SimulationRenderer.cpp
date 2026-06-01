@@ -10,9 +10,6 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("SimulationRenderer init");
 
-        camera.position = { 0.0, 0.0 };
-        camera.viewRange = { 10.0, 10.0 };
-
         initShaders();
         initBuffers();
     }

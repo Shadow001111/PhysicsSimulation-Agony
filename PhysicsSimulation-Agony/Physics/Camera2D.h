@@ -6,8 +6,9 @@ namespace PS_AGONY
 	class Camera2D
 	{
 	public:
-		Vec2 position;
-		Vec2 viewRange;
+		Vec2 position{ 0.0, 0.0 };
+		Real aspectRatio{ 1.0} ;
+		Real viewRange{ 1.0 }; // Inverse zoom.
 
 		// Setters
 		void setViewRangeW(Real w, Real ratio);

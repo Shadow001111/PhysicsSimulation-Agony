@@ -6,14 +6,14 @@ namespace PS_AGONY
 {
     void Camera2D::setViewRangeW(Real w, Real ratio)
     {
-        viewRange.x = w;
-        viewRange.y = w / ratio;
+		viewRange = w / ratio;
+		aspectRatio = ratio;
     }
 
     void Camera2D::setViewRangeH(Real h, Real ratio)
     {
-        viewRange.x = h * ratio;
-        viewRange.y = h;
+		viewRange = h;
+		aspectRatio = ratio;
     }
 
     Mat4 Camera2D::getViewMatrix() const noexcept
@@ -26,8 +26,9 @@ namespace PS_AGONY
 
 	Mat4 Camera2D::getProjectionMatrix() const noexcept
     {
-        const Real halfW = viewRange.x * 0.5;
-        const Real halfH = viewRange.y * 0.5;
+		const Real halfRange = viewRange * Real(0.5);
+        const Real halfW = halfRange * aspectRatio;
+        const Real halfH = halfRange;
 
         return glm::ortho(
             -halfW,
