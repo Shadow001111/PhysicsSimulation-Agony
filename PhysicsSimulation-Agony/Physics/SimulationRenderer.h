@@ -16,6 +16,7 @@ namespace PS_AGONY
 		struct CircleInstanceData
 		{
 			float x, y, rotation, radius;
+			int color; // 3 bytes used.
 		};
 
 		struct CircleRenderResources
@@ -62,12 +63,21 @@ namespace PS_AGONY
 		void initShaders();
 		void initBuffers();
 
+		// Collect data and render.
+
 		void renderBodies(const Mat4& viewProjectionMatrix);
+		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix);
+		void renderCircleBodies(const Mat4& viewProjectionMatrix);
+
 		void renderBodyAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 
-		void renderCircles(const Mat4& viewProjectionMatrix);
+		// Render shapes.
+
+		void renderCircleShapes(const Mat4& viewProjectionMatrix);
 		void renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix);
+
+		// Buffer helpers.
 
 		void ensureCircleInstanceVboCapacity(size_t count);
 		void ensureAABBInstanceVboCapacity(size_t count);

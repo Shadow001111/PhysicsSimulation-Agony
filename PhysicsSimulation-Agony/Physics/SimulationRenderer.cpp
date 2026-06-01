@@ -103,7 +103,83 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix)
     {
-        renderCircles(viewProjectionMatrix);
+        renderCircleBodies(viewProjectionMatrix);
+		renderBodyCentersOfMass(viewProjectionMatrix);
+		//renderBodyAABBs(viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = bodies.getCount();
+        if (count == 0) return;
+
+        // Reserve space.
+        circleResources.instanceData.resize(count);
+
+        // Prepare instance data.
+		const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
+		const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+		const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
+        const Real* CORE_RESTRICT centerXPtr = bodies.localCenterOfMassX;
+        const Real* CORE_RESTRICT centerYPtr = bodies.localCenterOfMassY;
+
+        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+			const Vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
+
+            const Vec2 rotatedLocalCenterOfMass = {
+                localCenterOfMass.x * std::cos(rotationPtr[i]) - localCenterOfMass.y * std::sin(rotationPtr[i]),
+                localCenterOfMass.x * std::sin(rotationPtr[i]) + localCenterOfMass.y * std::cos(rotationPtr[i])
+			};
+
+            const Vec2 worldCenterOfMass = {
+                positionXPtr[i] + rotatedLocalCenterOfMass.x,
+                positionYPtr[i] + rotatedLocalCenterOfMass.y
+			};
+
+            renderDataPtr[i].x = worldCenterOfMass.x;
+            renderDataPtr[i].y = worldCenterOfMass.y;
+            renderDataPtr[i].rotation = 0.785f;
+            renderDataPtr[i].radius = 0.03f;
+			renderDataPtr[i].color = 0xFF0000;
+        }
+
+        // Render.
+        renderCircleShapes(viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = circles.getCount();
+        if (count == 0) return;
+
+		// Reserve space.
+		circleResources.instanceData.resize(count);
+
+        // Prepare instance data.
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
+        const Real* CORE_RESTRICT radiusPtr = circles.radius;
+        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices;
+
+        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const BodyIndex bodyIndex = bodyIndexPtr[i];
+
+            renderDataPtr[i].x = positionXPtr[bodyIndex];
+            renderDataPtr[i].y = positionYPtr[bodyIndex];
+            renderDataPtr[i].rotation = rotationPtr[bodyIndex];
+            renderDataPtr[i].radius = radiusPtr[i];
+			renderDataPtr[i].color = 0xFFFFFF;
+        }
+
+        // Render.
+		renderCircleShapes(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyAABBs(const Mat4& viewProjectionMatrix)
@@ -112,7 +188,7 @@ namespace PS_AGONY
         if (bodyCount == 0) return;
         
         // Reserve space.
-        ensureAABBInstanceVboCapacity(bodyCount);
+        aabbResources.instanceData.resize(bodyCount);
 
         // Prepare instance data.
         const Real* CORE_RESTRICT minXPtr = bodies.aabb.minX;
@@ -140,40 +216,20 @@ namespace PS_AGONY
         simulation.fetchBroadPhaseAABBs(aabbResources.instanceData);
         if (aabbResources.instanceData.empty()) return;
 
-        // Reserve space.
-        ensureAABBInstanceVboCapacity(aabbResources.instanceData.size());
+        // Render.
 		renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCircles(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderCircleShapes(const Mat4& viewProjectionMatrix)
     {
-        const size_t circleCount = circles.getCount();
-        if (circleCount == 0) return;
+        const size_t count = circleResources.instanceData.size();
+        if (count == 0) return;
 
         // Reserve space.
-        ensureCircleInstanceVboCapacity(circleCount);
-
-        // Prepare instance data.
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
-        const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
-        const Real* CORE_RESTRICT radiusPtr = circles.radius;
-        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices;
-
-        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
-
-        for (size_t i = 0; i < circleCount; i++)
-        {
-            const BodyIndex bodyIndex = bodyIndexPtr[i];
-
-            renderDataPtr[i].x = positionXPtr[bodyIndex];
-            renderDataPtr[i].y = positionYPtr[bodyIndex];
-			renderDataPtr[i].rotation = rotationPtr[bodyIndex];
-            renderDataPtr[i].radius = radiusPtr[i];
-        }
+        ensureCircleInstanceVboCapacity(count);
 
         // Move data to gpu.
-        circleResources.instanceVbo.write(renderDataPtr, circleCount * sizeof(CircleInstanceData));
+        circleResources.instanceVbo.write(circleResources.instanceData.data(), count * sizeof(CircleInstanceData));
 
         // Bind things, set uniforms.
         circleResources.shader.use();
@@ -182,13 +238,18 @@ namespace PS_AGONY
         circleResources.vao.bind();
 
         // Draw.
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 3, circleCount);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
     }
 
     void SimulationRenderer::renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix)
     {
-        // Move data to gpu.
         const size_t count = aabbResources.instanceData.size();
+		if (count == 0) return;
+
+		// Reserve space.
+		ensureAABBInstanceVboCapacity(count);
+
+        // Move data to gpu.
         aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(AABB));
 
         // Bind things, set uniforms.
@@ -230,7 +291,9 @@ namespace PS_AGONY
         circleResources.vao.setFloatAttribute(3, 1, sizeof(float) * 3, 1);
         circleResources.vao.setAttributeDivisor(3, 1);
 
-        circleResources.instanceData.resize(newCapacity / SIZEOF_INSTANCE);
+		circleResources.vao.enableAttribute(4);
+        circleResources.vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
+		circleResources.vao.setAttributeDivisor(4, 1);
     }
 
     void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)
@@ -252,7 +315,5 @@ namespace PS_AGONY
         aabbResources.vao.enableAttribute(1);
         aabbResources.vao.setFloatAttribute(1, 4, 0, 1);
         aabbResources.vao.setAttributeDivisor(1, 1);
-
-        aabbResources.instanceData.resize(newCapacity / SIZEOF_INSTANCE);
     }
 }

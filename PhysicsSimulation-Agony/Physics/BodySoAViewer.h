@@ -50,28 +50,22 @@ namespace PS_AGONY
     public:
         const Real* positionX = nullptr;
         const Real* positionY = nullptr;
-
         const Real* velocityX = nullptr;
         const Real* velocityY = nullptr;
-
         const Real* rotation = nullptr;
-
         const Real* angularVelocity = nullptr;
-
         const Real* mass = nullptr;
         const Real* invMass = nullptr;
-
         const Real* inertia = nullptr;
         const Real* invInertia = nullptr;
-
+		const Real* localCenterOfMassX = nullptr;
+		const Real* localCenterOfMassY = nullptr;
         const MaterialIndex* materialIndex = nullptr;
 
         AABBSoAViewer_Internal aabb;
 
         const BodyType* bodyType = nullptr;
         const BodyIndex* shapeIndex = nullptr;
-
-        const uint8_t* collisionDebug = nullptr;
     public:
         BodySoAViewer() = default;
 
@@ -87,11 +81,12 @@ namespace PS_AGONY
             invMass(data.invMass.data()),
             inertia(data.inertia.data()),
             invInertia(data.invInertia.data()),
+			localCenterOfMassX(data.localCenterOfMassX.data()),
+			localCenterOfMassY(data.localCenterOfMassY.data()),
             materialIndex(data.materialIndex.data()),
             aabb(data.aabb),
             bodyType(data.bodyType.data()),
-            shapeIndex(data.shapeIndex.data()),
-            collisionDebug(data.collisionDebug.data())
+            shapeIndex(data.shapeIndex.data())
         {}
 
         size_t getCount() const noexcept { return count; }

@@ -39,39 +39,28 @@ namespace PS_AGONY
         radius = std::max(Real(0.0), radius);
 
         const BodyIndex newBodyIndex = bodies.getCount();
-        const BodyIndex newCircleIndex = circles.getCount();
-
-        bodies.positionX.push_back(position.x);
-        bodies.positionY.push_back(position.y);
-
-        bodies.velocityX.push_back(velocity.x);
-        bodies.velocityY.push_back(velocity.y);
-
-        bodies.rotation.push_back(rotation);
-
-        bodies.angularVelocity.push_back(angularVelocity);
-
-        bodies.mass.push_back(mass);
-        bodies.invMass.push_back(mass == 0.0 ? 0.0 : 1.0 / mass);
+        const BodyIndex newShapeIndex = circles.getCount();
 
         const Real inertia = calculateCircleInertia(radius, mass);
-        bodies.inertia.push_back(inertia);
-        bodies.invInertia.push_back(inertia == 0.0 ? 0.0 : 1.0 / inertia);
 
-        bodies.materialIndex.push_back(materialIndex < materials.size() ? materialIndex : 0);
+        bodies.append(
+            position,
+            velocity,
+            rotation,
+            angularVelocity,
+            mass, mass == 0.0 ? 0.0 : 1.0 / mass,
+            inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
+			Vec2(0.0, 0.0),
+            materialIndex < materials.size() ? materialIndex : 0,
+            { position.x - radius, position.y - radius, position.x + radius, position.y + radius },
+            BodyType::Circle,
+            newShapeIndex
+		);
 
-        bodies.aabb.minX.push_back(0.0);
-        bodies.aabb.minY.push_back(0.0);
-        bodies.aabb.maxX.push_back(0.0);
-        bodies.aabb.maxY.push_back(0.0);
-
-        bodies.bodyType.push_back(BodyType::Circle);
-        bodies.shapeIndex.push_back(newCircleIndex);
-
-        bodies.collisionDebug.push_back(0);
-
-        circles.radius.push_back(radius);
-        circles.bodyIndices.push_back(newBodyIndex);
+        circles.append(
+            radius,
+            newBodyIndex
+		);
 
         return newBodyIndex;
     }
@@ -156,33 +145,58 @@ namespace PS_AGONY
 
         TRACY_SCOPE_N("Intergrate");
 
-        Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
-        const Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
-        const Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
-
         const RealSimd deltaTimeV{ deltaTime };
 
-        // Note: having single loop (x and y interleaved) is a very-little faster than doing two separate passes.
-        size_t i = 0;
-        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+        // Position.
         {
-            const RealSimd velX = RealSimd::load(velocityXPtr + i);
-            const RealSimd velY = RealSimd::load(velocityYPtr + i);
+            Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+            Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+            const Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
+            const Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
 
-            RealSimd posX = RealSimd::load(positionXPtr + i);
-            RealSimd posY = RealSimd::load(positionYPtr + i);
+            // Note: having single loop (x and y interleaved) is a very-little faster than doing two separate passes.
+            size_t i = 0;
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                const RealSimd velX = RealSimd::load(velocityXPtr + i);
+                const RealSimd velY = RealSimd::load(velocityYPtr + i);
 
-            posX = RealSimd::mul_add(velX, deltaTimeV, posX);
-            posY = RealSimd::mul_add(velY, deltaTimeV, posY);
+                RealSimd posX = RealSimd::load(positionXPtr + i);
+                RealSimd posY = RealSimd::load(positionYPtr + i);
 
-            posX.store(positionXPtr + i);
-            posY.store(positionYPtr + i);
+                posX = RealSimd::mul_add(velX, deltaTimeV, posX);
+                posY = RealSimd::mul_add(velY, deltaTimeV, posY);
+
+                posX.store(positionXPtr + i);
+                posY.store(positionYPtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                positionXPtr[i] += velocityXPtr[i] * deltaTime;
+                positionYPtr[i] += velocityYPtr[i] * deltaTime;
+            }
         }
-        for (; i < bodyCount; i++)
+
+        // Rotation.
         {
-            positionXPtr[i] += velocityXPtr[i] * deltaTime;
-            positionYPtr[i] += velocityYPtr[i] * deltaTime;
+            Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
+            const Real* CORE_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+
+            size_t i = 0;
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                const RealSimd angularVel = RealSimd::load(angularVelocityPtr + i);
+                
+                RealSimd rot = RealSimd::load(rotationPtr + i);
+                
+                rot = RealSimd::mul_add(angularVel, deltaTimeV, rot);
+                
+                rot.store(rotationPtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
+            }
         }
     }
 
@@ -190,15 +204,20 @@ namespace PS_AGONY
     {
         const size_t bodyCount = bodies.getCount();
 
+        // Early return.
+        if (bodyCount < 2)
+        {
+            // Build AABBs.
+            {
+                TRACY_SCOPE_N("Build AABBs");
+                buildCircleAABBs();
+            }
+            return;
+        }
+
         // Solves until runs out of iterations or no collision is found.
         for (uint32_t i = 0; i < simulationSettings.collisionSolvingIterations; i++)
         {
-            // Clear debug data.
-            std::fill(bodies.collisionDebug.begin(), bodies.collisionDebug.begin() + bodyCount, 0);
-
-            // Early return.
-            if (bodyCount < 2) return;
-
             // Build AABBs.
             {
                 TRACY_SCOPE_N("Build AABBs");
