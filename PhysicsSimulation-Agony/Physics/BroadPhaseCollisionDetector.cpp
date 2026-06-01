@@ -312,7 +312,7 @@ namespace PS_AGONY
         // Local stack.
         struct BuildTask
         {
-            uint32_t nodeIdx; // INVALID_INDEX for the root.
+            uint32_t nodeIdx;
         };
 
         constexpr uint64_t MAX_STACK_CAPACITY = bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
@@ -320,7 +320,6 @@ namespace PS_AGONY
         uint32_t stackSize = 0;
 
 		nodes.emplace_back(0, bodyCount);
-
         stack[stackSize++] = { 0 };
 
         while (stackSize > 0)
