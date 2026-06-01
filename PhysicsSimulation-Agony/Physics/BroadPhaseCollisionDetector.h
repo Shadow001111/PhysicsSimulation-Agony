@@ -39,12 +39,6 @@ namespace PS_AGONY
 			Real maxY[BvhNode::KD_LEAF_SIZE];
 		};
 
-		struct SharedFunctionResources
-		{
-			std::vector<BodyIndex> bodyIndexVector1;
-			std::vector<BodyIndex> bodyIndexVector2;
-		};
-
 		struct BvhFunctionResources
 		{
 			std::vector<BvhNode> nodeVector;
@@ -56,10 +50,11 @@ namespace PS_AGONY
 			SimdAlignedVector<Real> leafMaxX;
 			SimdAlignedVector<Real> leafMinY;
 			SimdAlignedVector<Real> leafMaxY;
+
+			std::vector<BodyIndex> bodyIndexVector1;
 		};
 
 		AABBSoAViewer bodiesAABB;
-		SharedFunctionResources sharedFunctionResources;
 		BvhFunctionResources bvhFunctionResources;
 
 		std::vector<BodyPair> broadCollisionData;
@@ -74,10 +69,11 @@ namespace PS_AGONY
 		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
+
+		size_t getMemoryUsage() const;
 	private:
-		void sweepAndPruneXAxis(size_t bodyCount);
 		void boundVolumeHierarchy(size_t bodyCount);
-	private:
+
 		void buildBvhNode(
 			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,

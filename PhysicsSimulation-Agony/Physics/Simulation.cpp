@@ -37,18 +37,22 @@ namespace PS_AGONY
         }
 
         // Debug data.
-        debugDataResetTimeAccumulator += deltaTime;
-        if (debugDataResetTimeAccumulator > 1.0)
         {
-            debugDataSnaphot = runtimeDebugData;
+            debugDataResetTimeAccumulator += deltaTime;
+            if (debugDataResetTimeAccumulator > 1.0)
+            {
+                debugDataSnaphot = runtimeDebugData;
 
-            debugDataResetTimeAccumulator = 0.0;
+                debugDataResetTimeAccumulator = 0.0;
 
-            runtimeDebugData.updatesHappened = 0;
+                runtimeDebugData.updatesHappened = 0;
+
+                collectMemoryUsage(debugDataSnaphot);
+            }
+
+            runtimeDebugData.updatesHappened += stepCount;
+            runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
         }
-
-        runtimeDebugData.updatesHappened += stepCount;
-        runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
     }
 
     BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real radius, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex)
@@ -544,5 +548,25 @@ namespace PS_AGONY
             positionXPtr[bodyIndexB] += correctionVec2.x * ratioB;
             positionYPtr[bodyIndexB] += correctionVec2.y * ratioB;
         }
+    }
+
+    void Simulation::collectMemoryUsage(DebugData& data) const
+    {
+        // Memory
+        {
+            auto& total = data.bodyDataMemoryUsage;
+
+            total = sizeof(BodySoA);
+            total += bodies.getMemoryUsage();
+        }
+        {
+            auto& total = data.circleDataMemoryUsage;
+
+            total = sizeof(CircleSoA);
+            total += circles.getMemoryUsage();
+        }
+        data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
+        data.broadPhaseDetectorMemoryUsage = sizeof(BroadPhaseCollisionDetector) + broadPhaseCollisionDetector.getMemoryUsage();
+        data.narrowPhaseDetectorMemoryUsage = sizeof(NarrowPhaseCollisionDetector) + narrowPhaseCollisionDetector.getMemoryUsage();
     }
 }

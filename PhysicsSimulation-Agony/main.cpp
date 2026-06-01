@@ -73,12 +73,18 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
     const float FPS = debugData.smoothedDelta > 0.0f
         ? 1.0f / debugData.smoothedDelta
         : 0.0f;
-    ss << "FPS: " << FPS << " (" << debugData.smoothedDelta * 1000.0f << " ms)\n";
+    ss << "FPS: " << FPS << " (" << debugData.smoothedDelta * 1000.0f << " ms)";
 
     float upsPercent = (float)debugData.simulationDebugData.updatesHappened / (float)debugData.simulationDebugData.updatesSupposedToHappen;
     upsPercent = std::min(upsPercent, 1.0f);
-    ss << "UPS: " << debugData.simulationDebugData.updatesHappened << " / " << debugData.simulationDebugData.updatesSupposedToHappen
-       << " (" << upsPercent * 100.0f << "%)\n";
+    ss << "\nUPS: " << debugData.simulationDebugData.updatesHappened << " / " << debugData.simulationDebugData.updatesSupposedToHappen
+       << " (" << upsPercent * 100.0f << "%)";
+
+    ss << "\nMemory:";
+    ss << "\n  Bodies data: " << formatSizeBinary(debugData.simulationDebugData.bodyDataMemoryUsage);
+    ss << "\n  Circles data: " << formatSizeBinary(debugData.simulationDebugData.circleDataMemoryUsage);
+    ss << "\n  Broad collision detector: " << formatSizeBinary(debugData.simulationDebugData.broadPhaseDetectorMemoryUsage);
+    ss << "\n  Narrow collision detector: " << formatSizeBinary(debugData.simulationDebugData.narrowPhaseDetectorMemoryUsage);
 
     // Convert stream to string.
     const std::string text = ss.str();

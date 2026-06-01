@@ -57,6 +57,8 @@ namespace PS_AGONY
 			const CircleSoAViewer& circles
 		);
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs);
+
+		size_t getMemoryUsage() const;
 	private:
 		void collisionCircleCircle(BodyIndex indexA, BodyIndex indexB);
 		void collisionCircleBox(BodyIndex indexA, BodyIndex indexB);

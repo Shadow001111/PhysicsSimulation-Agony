@@ -6,6 +6,8 @@
 
 #include <vector>
 
+#define PS_AGONY_VECTOR_MEMORY_USAGE(vector) (vector.capacity() * sizeof(vector[0]))
+
 namespace PS_AGONY
 {
 	template<typename T>
@@ -33,6 +35,15 @@ namespace PS_AGONY
 		SimdAlignedVector<Real> maxY;
 
 		size_t getCount() const noexcept { return minX.size(); }
+
+		size_t getMemoryUsage() const noexcept
+		{
+			return
+				PS_AGONY_VECTOR_MEMORY_USAGE(minX) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(minY) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(maxX) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(maxY);
+		}
 	};
 
 	struct BodySoA
@@ -95,6 +106,29 @@ namespace PS_AGONY
 		}
 
 		size_t getCount() const noexcept { return positionX.size(); }
+
+		size_t getMemoryUsage() const noexcept
+		{
+			return
+				PS_AGONY_VECTOR_MEMORY_USAGE(positionX) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(positionY) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(velocityX) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(velocityY) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(rotation) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(angularVelocity) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(mass) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(invMass) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(inertia) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(invInertia) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(localCenterOfMassX) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(localCenterOfMassY) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(rotationCos) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(rotationSin) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(materialIndex) +
+				aabb.getMemoryUsage() +
+				PS_AGONY_VECTOR_MEMORY_USAGE(bodyType) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(shapeIndex);
+		}
 	};
 
 	struct CircleSoA
@@ -112,5 +146,12 @@ namespace PS_AGONY
 		}
 
 		size_t getCount() const noexcept { return radius.size(); }
+
+		size_t getMemoryUsage() const noexcept
+		{
+			return
+				PS_AGONY_VECTOR_MEMORY_USAGE(radius) +
+				PS_AGONY_VECTOR_MEMORY_USAGE(bodyIndices);
+		}
 	};
 }

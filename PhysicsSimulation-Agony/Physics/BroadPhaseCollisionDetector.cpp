@@ -30,7 +30,7 @@ namespace PS_AGONY
 
         broadCollisionData.reserve(bodyCount);
 
-        boundVolumeHierarchy(bodyCount); // The best.
+        boundVolumeHierarchy(bodyCount);
 
         return broadCollisionData;
     }
@@ -49,58 +49,22 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::sweepAndPruneXAxis(size_t bodyCount)
+    size_t BroadPhaseCollisionDetector::getMemoryUsage() const
     {
-        TRACY_SCOPE_N("Sweep and prune X");
+        size_t total = 0;
 
-        const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
-        const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
-        const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.nodeVector);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.centroidX);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.centroidY);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMinX);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMaxX);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMinY);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMaxY);
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.bodyIndexVector1);
 
-        // Build list of body indices sorted by AABB minX.
-        auto* CORE_RESTRICT sortedIndices = &sharedFunctionResources.bodyIndexVector1;
-        auto* CORE_RESTRICT activeList = &sharedFunctionResources.bodyIndexVector2; // Bodies currently overlapping in X.
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(broadCollisionData);
 
-        sortedIndices->resize(bodyCount);
-
-        std::iota(sortedIndices->begin(), sortedIndices->end(), 0);
-        std::sort(sortedIndices->begin(), sortedIndices->end(),
-            [&](BodyIndex a, BodyIndex b) {
-                return aabbMinX[a] < aabbMinX[b];
-            });
-
-        activeList->clear();
-
-        for (BodyIndex current : *sortedIndices)
-        {
-            const Real minXA = aabbMinX[current];
-            const Real minYA = aabbMinY[current];
-            const Real maxYA = aabbMaxY[current];
-
-            // Remove from activeList any body whose maxX < current minX.
-            // For some reason, this is faster than removing with swap and pop.
-            activeList->erase(std::remove_if(activeList->begin(), activeList->end(),
-                [&](BodyIndex active) {
-                    return aabbMaxX[active] <= minXA;
-                }), activeList->end());
-
-            // Check against all active bodies (they overlap in X).
-            for (BodyIndex active : *activeList)
-            {
-                const Real minYB = aabbMinY[active];
-                const Real maxYB = aabbMaxY[active];
-
-                const bool doesIntersect = (minYA < maxYB && maxYA > minYB);
-
-                if (doesIntersect)
-                {
-                    broadCollisionData.emplace_back(current, active);
-                }
-            }
-
-            activeList->push_back(current);
-        }
+        return total;
     }
 
     void BroadPhaseCollisionDetector::boundVolumeHierarchy(size_t bodyCount)
@@ -108,7 +72,7 @@ namespace PS_AGONY
         TRACY_SCOPE_N("BVH");
 
         auto& nodes = bvhFunctionResources.nodeVector;
-        auto& indices = sharedFunctionResources.bodyIndexVector1;
+        auto& indices = bvhFunctionResources.bodyIndexVector1;
 
         nodes.clear();
         nodes.reserve(2 * bodyCount);

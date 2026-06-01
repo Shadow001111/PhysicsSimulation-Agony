@@ -75,6 +75,15 @@ namespace PS_AGONY
 		return narrowCollisionData;
 	}
 
+    size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
+    {
+        size_t total = 0;
+
+        total += PS_AGONY_VECTOR_MEMORY_USAGE(narrowCollisionData);
+
+        return total;
+    }
+
     void NarrowPhaseCollisionDetector::collisionCircleCircle(BodyIndex indexA, BodyIndex indexB)
     {
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;

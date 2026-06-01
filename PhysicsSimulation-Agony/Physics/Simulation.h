@@ -17,6 +17,12 @@ namespace PS_AGONY
 		{
 			uint32_t updatesHappened = 0;
 			uint32_t updatesSupposedToHappen = 0;
+
+			size_t bodyDataMemoryUsage = 0;
+			size_t circleDataMemoryUsage = 0;
+			size_t materialDataMemoryUsage = 0;
+			size_t broadPhaseDetectorMemoryUsage = 0;
+			size_t narrowPhaseDetectorMemoryUsage = 0;
 		};
 	private:
 		struct SimulationSettings
@@ -54,8 +60,8 @@ namespace PS_AGONY
 
 		// Debug data.
 		Real debugDataResetTimeAccumulator = 0.0;
-		DebugData runtimeDebugData;
-		DebugData debugDataSnaphot;
+		mutable DebugData runtimeDebugData;
+		mutable DebugData debugDataSnaphot;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -89,5 +95,7 @@ namespace PS_AGONY
 		void computeRotationCosSin();
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+
+		void collectMemoryUsage(DebugData& data) const;
 	};
 }
