@@ -70,7 +70,9 @@ namespace PS_AGONY
 
 		void iterativeCollisionSolving();
 
+		void buildAABBs();
 		void buildCircleAABBs();
+		void computeRotationCosSin();
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 	};

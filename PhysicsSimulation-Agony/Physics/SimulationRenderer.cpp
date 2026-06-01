@@ -119,9 +119,10 @@ namespace PS_AGONY
         // Prepare instance data.
 		const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
 		const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
-		const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
         const Real* CORE_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* CORE_RESTRICT centerYPtr = bodies.localCenterOfMassY;
+		const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
+		const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
 
         CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
@@ -129,8 +130,8 @@ namespace PS_AGONY
         {
 			const glm::vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
 
-			const float cosRot = std::cos(rotationPtr[i]);
-			const float sinRot = std::sin(rotationPtr[i]);
+			const float cosRot = static_cast<float>(rotationCosPtr[i]);
+			const float sinRot = static_cast<float>(rotationSinPtr[i]);
 
             const glm::vec2 rotatedLocalCenterOfMass = {
                 localCenterOfMass.x * cosRot - localCenterOfMass.y * sinRot,

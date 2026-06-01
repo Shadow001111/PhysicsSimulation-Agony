@@ -204,11 +204,11 @@ namespace PS_AGONY
     {
         const size_t bodyCount = bodies.getCount();
 
-        // Build AABBs.
-        {
-            TRACY_SCOPE_N("Build AABBs");
-            buildCircleAABBs();
-        }
+        // Rebuild AABBs.
+        buildAABBs();
+
+		// Compute rotation cos/sin for all bodies, which is used in collision resolution.
+		computeRotationCosSin();
 
         // Early return.
         if (bodyCount < 2) return;
@@ -231,14 +231,15 @@ namespace PS_AGONY
             // Collision resolution.
             resolveCollisions(narrowCollisionData);
 
-            // Build AABBs.
-            {
-                TRACY_SCOPE_N("Build AABBs");
-                buildCircleAABBs();
-            }
+			// Rebuild AABBs.
+            buildAABBs();
         }
+    }
 
-        // Rebuiling AABB at the end for debug.
+    void Simulation::buildAABBs()
+    {
+        TRACY_SCOPE_N("Build AABBs");
+        buildCircleAABBs();
     }
 
     void Simulation::buildCircleAABBs()
@@ -272,6 +273,23 @@ namespace PS_AGONY
         }
     }
 
+    void Simulation::computeRotationCosSin()
+    {
+        TRACY_SCOPE_N("Compute rotation cos/sin");
+
+        const Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
+        Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+
+        const size_t bodyCount = bodies.getCount();
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            const Real rot = rotationPtr[i];
+            rotationCosPtr[i] = std::cos(rot);
+            rotationSinPtr[i] = std::sin(rot);
+		}
+    }
+
     void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         TRACY_SCOPE_N("Resolve collisions");
@@ -283,12 +301,13 @@ namespace PS_AGONY
         Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
         Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
-		Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
 		Real* CORE_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
         const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
 		const Real* CORE_RESTRICT invInertiaPtr = bodies.invInertia.data();
 		const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
 		const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
+		const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+		const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
         const MaterialIndex* CORE_RESTRICT materialIndexPtr = bodies.materialIndex.data();
         const Material* CORE_RESTRICT materialPtr = materials.data();
@@ -303,13 +322,14 @@ namespace PS_AGONY
 
         auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
         {
+			const Real positionX = positionXPtr[bodyIndex];
+			const Real positionY = positionYPtr[bodyIndex];
             const Real localCenterOfMassX = localCenterOfMassXPtr[bodyIndex];
             const Real localCenterOfMassY = localCenterOfMassYPtr[bodyIndex];
-            const Real rotation = rotationPtr[bodyIndex];
-            const Real cosRot = std::cos(rotation);
-            const Real sinRot = std::sin(rotation);
-            const Real centerOfMassX = positionXPtr[bodyIndex] + localCenterOfMassX * cosRot - localCenterOfMassY * sinRot;
-            const Real centerOfMassY = positionYPtr[bodyIndex] + localCenterOfMassX * sinRot + localCenterOfMassY * cosRot;
+            const Real cosRot = rotationCosPtr[bodyIndex];
+            const Real sinRot = rotationSinPtr[bodyIndex];
+            const Real centerOfMassX = positionX + localCenterOfMassX * cosRot - localCenterOfMassY * sinRot;
+            const Real centerOfMassY = positionY + localCenterOfMassX * sinRot + localCenterOfMassY * cosRot;
             return { centerOfMassX, centerOfMassY };
 			};
 

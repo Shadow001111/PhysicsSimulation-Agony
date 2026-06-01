@@ -60,10 +60,11 @@ namespace PS_AGONY
         const Real* invInertia = nullptr;
 		const Real* localCenterOfMassX = nullptr;
 		const Real* localCenterOfMassY = nullptr;
+		const Real* rotationCos = nullptr;
+		const Real* rotationSin = nullptr;
+
         const MaterialIndex* materialIndex = nullptr;
-
         AABBSoAViewer_Internal aabb;
-
         const BodyType* bodyType = nullptr;
         const BodyIndex* shapeIndex = nullptr;
     public:
@@ -83,6 +84,8 @@ namespace PS_AGONY
             invInertia(data.invInertia.data()),
 			localCenterOfMassX(data.localCenterOfMassX.data()),
 			localCenterOfMassY(data.localCenterOfMassY.data()),
+			rotationCos(data.rotationCos.data()),
+			rotationSin(data.rotationSin.data()),
             materialIndex(data.materialIndex.data()),
             aabb(data.aabb),
             bodyType(data.bodyType.data()),

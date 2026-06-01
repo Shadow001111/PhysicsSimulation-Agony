@@ -49,6 +49,9 @@ namespace PS_AGONY
 		SimdAlignedVector<Real> invInertia;
 		SimdAlignedVector<Real> localCenterOfMassX;
 		SimdAlignedVector<Real> localCenterOfMassY;
+		SimdAlignedVector<Real> rotationCos;
+		SimdAlignedVector<Real> rotationSin;
+
 		std::vector<MaterialIndex> materialIndex;
 		AABBSoA aabb;
 		std::vector<BodyType> bodyType;
@@ -80,6 +83,8 @@ namespace PS_AGONY
 			this->invInertia.push_back(invInertia);
 			this->localCenterOfMassX.push_back(localCenterOfMass.x);
 			this->localCenterOfMassY.push_back(localCenterOfMass.y);
+			this->rotationCos.push_back(std::cos(rot));
+			this->rotationSin.push_back(std::sin(rot));
 			this->materialIndex.push_back(materialIndex);
 			this->aabb.minX.push_back(aabb.minX);
 			this->aabb.minY.push_back(aabb.minY);
