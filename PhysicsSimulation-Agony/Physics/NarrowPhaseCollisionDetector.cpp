@@ -187,8 +187,8 @@ namespace PS_AGONY
 
         const Real* CORE_RESTRICT radiusPtr = circles.radius;
 
-        const Real* CORE_RESTRICT widthPtr = boxes.width;
-        const Real* CORE_RESTRICT heightPtr = boxes.height;
+        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
 
         // Gather data.
         const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -202,8 +202,8 @@ namespace PS_AGONY
 
         const Real radiusA = radiusPtr[shapeA];
 
-        const Real halfWidthB = widthPtr[shapeB] * Real(0.5);
-        const Real halfHeightB = heightPtr[shapeB] * Real(0.5);
+        const Real halfWidthB = halfWidthPtr[shapeB];
+        const Real halfHeightB = halfHeightPtr[shapeB];
 
 
         // Get axes.
@@ -312,8 +312,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
-        const Real* CORE_RESTRICT widthPtr = boxes.width;
-        const Real* CORE_RESTRICT heightPtr = boxes.height;
+        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
 
         // Gather data.
         const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -327,10 +327,10 @@ namespace PS_AGONY
         const BodyIndex shapeA = shapeIndexPtr[indexA];
         const BodyIndex shapeB = shapeIndexPtr[indexB];
 
-        const Real halfWidthA = widthPtr[shapeA] * Real(0.5);
-        const Real halfHeightA = heightPtr[shapeA] * Real(0.5);
-        const Real halfWidthB = widthPtr[shapeB] * Real(0.5);
-        const Real halfHeightB = heightPtr[shapeB] * Real(0.5);
+        const Real halfWidthA = halfWidthPtr[shapeA];
+        const Real halfHeightA = halfHeightPtr[shapeA];
+        const Real halfWidthB = halfWidthPtr[shapeB];
+        const Real halfHeightB = halfHeightPtr[shapeB];
 
         // Get axes.
         const Vec2 rightA = { cosA, sinA };

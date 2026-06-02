@@ -116,9 +116,6 @@ namespace PS_AGONY
 
         const Real inertia = calculateBoxInertia(mass, width, height);
 
-        const Real halfWidth = width * Real(0.5);
-        const Real halfHeight = height * Real(0.5);
-
         bodies.append(
             position,
             velocity,
@@ -132,10 +129,13 @@ namespace PS_AGONY
             newShapeIndex
         );
 
+        const Real halfWidth = width * Real(0.5);
+        const Real halfHeight = height * Real(0.5);
+
         boxes.append(
             newBodyIndex,
-            width,
-            height
+            halfWidth,
+            halfHeight
         );
 
         return newBodyIndex;
@@ -366,8 +366,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
-        const Real* CORE_RESTRICT widthPtr = boxes.width.data();
-        const Real* CORE_RESTRICT heightPtr = boxes.height.data();
+        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth.data();
+        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight.data();
 
         Real* CORE_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
         Real* CORE_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
@@ -377,8 +377,8 @@ namespace PS_AGONY
         for (size_t i = 0; i < count; i++)
         {
             const BodyIndex bodyIndex = bodyIndexPtr[i];
-            const Real widthHalf = widthPtr[i] * Real(0.5);
-            const Real heightHalf = heightPtr[i] * Real(0.5);
+            const Real widthHalf = halfWidthPtr[i];
+            const Real heightHalf = halfHeightPtr[i];
 
             const Real x = positionXPtr[bodyIndex];
             const Real y = positionYPtr[bodyIndex];

@@ -140,9 +140,9 @@ namespace PS_AGONY
     {
         renderCircleBodies(viewProjectionMatrix);
         renderBoxBodies(viewProjectionMatrix);
-		renderBodyCentersOfMass(viewProjectionMatrix);
 
-		renderBodyAABBs(viewProjectionMatrix);
+		//renderBodyCentersOfMass(viewProjectionMatrix);
+		//renderBodyAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -235,8 +235,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
-        const Real* CORE_RESTRICT widthPtr = boxes.width;
-        const Real* CORE_RESTRICT heightPtr = boxes.height;
+        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices;
 
         BoxInstanceData* CORE_RESTRICT renderDataPtr = boxResources.instanceData.data();
@@ -248,8 +248,8 @@ namespace PS_AGONY
             renderDataPtr[i].x = positionXPtr[bodyIndex];
             renderDataPtr[i].y = positionYPtr[bodyIndex];
             renderDataPtr[i].rotation = rotationPtr[bodyIndex];
-            renderDataPtr[i].width = widthPtr[i];
-            renderDataPtr[i].height = heightPtr[i];
+            renderDataPtr[i].halfWidth = halfWidthPtr[i];
+            renderDataPtr[i].halfHeight = halfHeightPtr[i];
             renderDataPtr[i].color = 0xFFFFFF;
         }
 

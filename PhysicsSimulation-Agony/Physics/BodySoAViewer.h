@@ -118,16 +118,16 @@ namespace PS_AGONY
         size_t count = 0;
     public:
         const BodyIndex* bodyIndices = nullptr;
-        const Real* width = nullptr;
-        const Real* height = nullptr;
+        const Real* halfWidth = nullptr;
+        const Real* halfHeight = nullptr;
     
         BoxSoAViewer() = default;
 
         explicit BoxSoAViewer(const BoxSoA& data) :
             count(data.getCount()),
             bodyIndices(data.bodyIndices.data()),
-            width(data.width.data()),
-            height(data.height.data())
+            halfWidth(data.halfWidth.data()),
+            halfHeight(data.halfHeight.data())
         {
         }
 

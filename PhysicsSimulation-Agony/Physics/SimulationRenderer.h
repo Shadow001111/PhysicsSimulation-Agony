@@ -21,7 +21,7 @@ namespace PS_AGONY
 
 		struct BoxInstanceData
 		{
-			float x, y, rotation, width, height;
+			float x, y, rotation, halfWidth, halfHeight;
 			int color; // 3 bytes used.
 		};
 

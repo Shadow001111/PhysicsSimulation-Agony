@@ -163,18 +163,18 @@ namespace PS_AGONY
 	{
 		std::vector<BodyIndex> bodyIndices;
 
-		std::vector<Real> width;
-		std::vector<Real> height;
+		std::vector<Real> halfWidth;
+		std::vector<Real> halfHeight;
 
 		void append(
 			BodyIndex bodyIndex,
-			Real width,
-			Real height
+			Real halfWidth,
+			Real halfHeight
 		)
 		{
 			this->bodyIndices.push_back(bodyIndex);
-			this->width.push_back(width);
-			this->height.push_back(height);
+			this->halfWidth.push_back(halfWidth);
+			this->halfHeight.push_back(halfHeight);
 		}
 
 		size_t getCount() const noexcept { return bodyIndices.size(); }
@@ -183,8 +183,8 @@ namespace PS_AGONY
 		{
 			return
 				PS_AGONY::getVectorMemoryUsage(bodyIndices) +
-				PS_AGONY::getVectorMemoryUsage(width) +
-				PS_AGONY::getVectorMemoryUsage(height);
+				PS_AGONY::getVectorMemoryUsage(halfWidth) +
+				PS_AGONY::getVectorMemoryUsage(halfHeight);
 		}
 	};
 }
