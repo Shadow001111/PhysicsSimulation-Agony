@@ -196,7 +196,9 @@ static int gameFunc()
             simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
         }
 
-        const int bodyCount = 750;// 1'500;
+        Random::setSeed(0);
+
+        const int bodyCount = 500;
         for (int i = 0; i < bodyCount; i++)
         {
             const float x = Random::real<float>(-5.0f, 5.0f);
