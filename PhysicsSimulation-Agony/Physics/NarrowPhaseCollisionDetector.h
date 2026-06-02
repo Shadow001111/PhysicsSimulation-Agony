@@ -36,14 +36,10 @@ namespace PS_AGONY
 
 		std::vector<BodyCollisionData> narrowCollisionData;
 
-		//struct FunctionResources
-		//{
-		//
-		//};
-
 		// SoA data viewers.
 		BodySoAViewer bodies;
 		CircleSoAViewer circles;
+		BoxSoAViewer boxes;
 	public:
 		NarrowPhaseCollisionDetector() = default;
 		~NarrowPhaseCollisionDetector() = default;
@@ -54,7 +50,8 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			const BodySoAViewer& bodies,
-			const CircleSoAViewer& circles
+			const CircleSoAViewer& circles,
+			const BoxSoAViewer& boxes
 		);
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs);
 

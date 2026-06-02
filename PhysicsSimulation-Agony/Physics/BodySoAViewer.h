@@ -99,16 +99,37 @@ namespace PS_AGONY
     {
         size_t count = 0;
     public:
-        const Real* radius = nullptr;
         const BodyIndex* bodyIndices = nullptr;
-    public:
+        const Real* radius = nullptr;
+    
         CircleSoAViewer() = default;
 
         explicit CircleSoAViewer(const CircleSoA& data) :
             count(data.getCount()),
-            radius(data.radius.data()),
-            bodyIndices(data.bodyIndices.data())
+            bodyIndices(data.bodyIndices.data()),
+            radius(data.radius.data())
         {}
+
+        size_t getCount() const noexcept { return count; }
+    };
+
+    class BoxSoAViewer
+    {
+        size_t count = 0;
+    public:
+        const BodyIndex* bodyIndices = nullptr;
+        const Real* width = nullptr;
+        const Real* height = nullptr;
+    
+        BoxSoAViewer() = default;
+
+        explicit BoxSoAViewer(const BoxSoA& data) :
+            count(data.getCount()),
+            bodyIndices(data.bodyIndices.data()),
+            width(data.width.data()),
+            height(data.height.data())
+        {
+        }
 
         size_t getCount() const noexcept { return count; }
     };

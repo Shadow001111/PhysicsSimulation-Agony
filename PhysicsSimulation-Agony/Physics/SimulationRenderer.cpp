@@ -21,6 +21,7 @@ namespace PS_AGONY
         // Set references.
         bodies = simulation.getBodies();
         circles = simulation.getCircles();
+        boxes = simulation.getBoxes();
 
         // Camera.
         const Mat4 viewMatrix = camera.getViewMatrix();
@@ -35,7 +36,7 @@ namespace PS_AGONY
 
     void SimulationRenderer::initShaders()
     {
-        // Circles.
+        // Circle.
         {
             std::vector<Shader::ShaderSource> sources = {
                 { GL_VERTEX_SHADER, "res/Shaders/circle.vert" },
@@ -43,6 +44,16 @@ namespace PS_AGONY
             };
             
             circleResources.shader.create(sources);
+        }
+
+        // Box.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/box.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/box.frag" }
+            };
+
+            boxResources.shader.create(sources);
         }
 
         // AABB.
@@ -57,7 +68,7 @@ namespace PS_AGONY
 
     void SimulationRenderer::initBuffers()
     {
-        // Circles.
+        // Circle.
         {
             const float circleVertices[] =
             {
@@ -77,6 +88,30 @@ namespace PS_AGONY
 
             ensureCircleInstanceVboCapacity(64);
         }
+
+        // Circle.
+        {
+            const float vertices[] =
+            {
+                0.0f, 0.0f,
+                1.0f, 0.0f,
+                1.0f, 1.0f,
+                0.0f, 1.0f
+            };
+
+            boxResources.vbo.create();
+            boxResources.vbo.allocateStorage(sizeof(vertices), 0, vertices);
+
+            boxResources.vao.create();
+            boxResources.vao.bindVertexBuffer(0, boxResources.vbo.getID(), 0, sizeof(float) * 2);
+
+            boxResources.vao.enableAttribute(0);
+            boxResources.vao.setFloatAttribute(0, 2, 0, 0);
+
+            // Initial instance VBO capacity
+            ensureBoxInstanceVboCapacity(64);
+        }
+
         // AABB.
         {
             const float vertices[] =
@@ -104,8 +139,10 @@ namespace PS_AGONY
     void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix)
     {
         renderCircleBodies(viewProjectionMatrix);
+        renderBoxBodies(viewProjectionMatrix);
 		renderBodyCentersOfMass(viewProjectionMatrix);
-		//renderBodyAABBs(viewProjectionMatrix);
+
+		renderBodyAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -186,6 +223,40 @@ namespace PS_AGONY
 		renderCircleShapes(viewProjectionMatrix);
     }
 
+    void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = boxes.getCount();
+        if (count == 0) return;
+
+        // Reserve space.
+        boxResources.instanceData.resize(count);
+
+        // Prepare instance data.
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
+        const Real* CORE_RESTRICT widthPtr = boxes.width;
+        const Real* CORE_RESTRICT heightPtr = boxes.height;
+        const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices;
+
+        BoxInstanceData* CORE_RESTRICT renderDataPtr = boxResources.instanceData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const BodyIndex bodyIndex = bodyIndexPtr[i];
+
+            renderDataPtr[i].x = positionXPtr[bodyIndex];
+            renderDataPtr[i].y = positionYPtr[bodyIndex];
+            renderDataPtr[i].rotation = rotationPtr[bodyIndex];
+            renderDataPtr[i].width = widthPtr[i];
+            renderDataPtr[i].height = heightPtr[i];
+            renderDataPtr[i].color = 0xFFFFFF;
+        }
+
+        // Render.
+        renderBoxShapes(viewProjectionMatrix);
+    }
+
     void SimulationRenderer::renderBodyAABBs(const Mat4& viewProjectionMatrix)
     {
         const size_t bodyCount = bodies.getCount();
@@ -245,6 +316,27 @@ namespace PS_AGONY
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
     }
 
+    void SimulationRenderer::renderBoxShapes(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = boxResources.instanceData.size();
+        if (count == 0) return;
+
+        // Reserve space.
+        ensureBoxInstanceVboCapacity(count);
+
+        // Move data to gpu.
+        boxResources.instanceVbo.write(boxResources.instanceData.data(), count * sizeof(BoxInstanceData));
+
+        // Bind things, set uniforms.
+        boxResources.shader.use();
+        boxResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        boxResources.vao.bind();
+
+        // Draw.
+        glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, count);
+    }
+
     void SimulationRenderer::renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix)
     {
         const size_t count = aabbResources.instanceData.size();
@@ -271,53 +363,95 @@ namespace PS_AGONY
     {
         constexpr size_t SIZEOF_INSTANCE = sizeof(CircleInstanceData);
 
+        auto& vao = circleResources.vao;
+        auto& instanceVbo = circleResources.instanceVbo;
+
         const size_t neededCapacity = count * SIZEOF_INSTANCE;
-        const size_t currentCapacity = circleResources.instanceVbo.getCapacity();
+        const size_t currentCapacity = instanceVbo.getCapacity();
 
         if (neededCapacity <= currentCapacity) return;
 
         const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
 
-        circleResources.instanceVbo.create();
-        circleResources.instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+        instanceVbo.create();
+        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
 
-        circleResources.vao.bindVertexBuffer(1, circleResources.instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
 
-        circleResources.vao.enableAttribute(1);
-        circleResources.vao.setFloatAttribute(1, 2, 0, 1);
-        circleResources.vao.setAttributeDivisor(1, 1);
+        vao.enableAttribute(1);
+        vao.setFloatAttribute(1, 2, 0, 1);
+        vao.setAttributeDivisor(1, 1);
 
-        circleResources.vao.enableAttribute(2);
-        circleResources.vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
-        circleResources.vao.setAttributeDivisor(2, 1);
+        vao.enableAttribute(2);
+        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
+        vao.setAttributeDivisor(2, 1);
 
-        circleResources.vao.enableAttribute(3);
-        circleResources.vao.setFloatAttribute(3, 1, sizeof(float) * 3, 1);
-        circleResources.vao.setAttributeDivisor(3, 1);
+        vao.enableAttribute(3);
+        vao.setFloatAttribute(3, 1, sizeof(float) * 3, 1);
+        vao.setAttributeDivisor(3, 1);
 
-		circleResources.vao.enableAttribute(4);
-        circleResources.vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
-		circleResources.vao.setAttributeDivisor(4, 1);
+		vao.enableAttribute(4);
+        vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
+		vao.setAttributeDivisor(4, 1);
+    }
+
+    void SimulationRenderer::ensureBoxInstanceVboCapacity(size_t count)
+    {
+        constexpr size_t SIZEOF_INSTANCE = sizeof(BoxInstanceData);
+
+        auto& vao = boxResources.vao;
+        auto& instanceVbo = boxResources.instanceVbo;
+
+        const size_t neededCapacity = count * SIZEOF_INSTANCE;
+        const size_t currentCapacity = instanceVbo.getCapacity();
+
+        if (neededCapacity <= currentCapacity) return;
+
+        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
+
+        instanceVbo.create();
+        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+
+        vao.enableAttribute(1);
+        vao.setFloatAttribute(1, 2, 0, 1);
+        vao.setAttributeDivisor(1, 1);
+
+        vao.enableAttribute(2);
+        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
+        vao.setAttributeDivisor(2, 1);
+
+        vao.enableAttribute(3);
+        vao.setFloatAttribute(3, 2, sizeof(float) * 3, 1);
+        vao.setAttributeDivisor(3, 1);
+
+        vao.enableAttribute(4);
+        vao.setIntAttribute(4, 1, sizeof(float) * 5, 1);
+        vao.setAttributeDivisor(4, 1);
     }
 
     void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)
     {
         constexpr size_t SIZEOF_INSTANCE = sizeof(AABB);
 
+        auto& vao = aabbResources.vao;
+        auto& instanceVbo = aabbResources.instanceVbo;
+
         const size_t neededCapacity = count * SIZEOF_INSTANCE;
-        const size_t currentCapacity = aabbResources.instanceVbo.getCapacity();
+        const size_t currentCapacity = instanceVbo.getCapacity();
 
         if (neededCapacity <= currentCapacity) return;
 
         const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
 
-        aabbResources.instanceVbo.create();
-        aabbResources.instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+        instanceVbo.create();
+        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
 
-        aabbResources.vao.bindVertexBuffer(1, aabbResources.instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
 
-        aabbResources.vao.enableAttribute(1);
-        aabbResources.vao.setFloatAttribute(1, 4, 0, 1);
-        aabbResources.vao.setAttributeDivisor(1, 1);
+        vao.enableAttribute(1);
+        vao.setFloatAttribute(1, 4, 0, 1);
+        vao.setAttributeDivisor(1, 1);
     }
 }

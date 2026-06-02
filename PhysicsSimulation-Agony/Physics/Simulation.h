@@ -20,6 +20,8 @@ namespace PS_AGONY
 
 			size_t bodyDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
+			size_t boxDataMemoryUsage = 0;
+
 			size_t materialDataMemoryUsage = 0;
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
@@ -44,6 +46,7 @@ namespace PS_AGONY
 		// Bodies SoA.
 		BodySoA bodies;
 		CircleSoA circles;
+		BoxSoA boxes;
 
 		// Materials.
 		std::vector<Material> materials;
@@ -72,7 +75,8 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real radius, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex);
+		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius);
+		BodyIndex createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size);
 
 		MaterialIndex createMaterial(const Material& material);
 
@@ -81,6 +85,7 @@ namespace PS_AGONY
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
+		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(boxes); }
 	private:
 		void physicsStep(Real deltaTime);
 
@@ -92,6 +97,8 @@ namespace PS_AGONY
 
 		void buildAABBs();
 		void buildCircleAABBs();
+		void buildBoxAABBs();
+
 		void computeRotationCosSin();
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);

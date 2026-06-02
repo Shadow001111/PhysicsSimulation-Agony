@@ -81,7 +81,6 @@ namespace PS_AGONY
 			Real inertia, Real invInertia,
 			Vec2 localCenterOfMass,
 			MaterialIndex materialIndex,
-			const AABB& aabb,
 			BodyType bodyType,
 			BodyIndex shapeIndex
 		)
@@ -101,10 +100,10 @@ namespace PS_AGONY
 			this->rotationCos.push_back(std::cos(rot));
 			this->rotationSin.push_back(std::sin(rot));
 			this->materialIndex.push_back(materialIndex);
-			this->aabb.minX.push_back(aabb.minX);
-			this->aabb.minY.push_back(aabb.minY);
-			this->aabb.maxX.push_back(aabb.maxX);
-			this->aabb.maxY.push_back(aabb.maxY);
+			this->aabb.minX.push_back(0);
+			this->aabb.minY.push_back(0);
+			this->aabb.maxX.push_back(0);
+			this->aabb.maxY.push_back(0);
 			this->bodyType.push_back(bodyType);
 			this->shapeIndex.push_back(shapeIndex);
 		}
@@ -137,25 +136,55 @@ namespace PS_AGONY
 
 	struct CircleSoA
 	{
-		SimdAlignedVector<Real> radius;
 		std::vector<BodyIndex> bodyIndices;
 
+		SimdAlignedVector<Real> radius;
+
 		void append(
-			Real radius,
-			BodyIndex bodyIndex
+			BodyIndex bodyIndex,
+			Real radius
 		)
 		{
-			this->radius.push_back(radius);
 			this->bodyIndices.push_back(bodyIndex);
+			this->radius.push_back(radius);
 		}
 
-		size_t getCount() const noexcept { return radius.size(); }
+		size_t getCount() const noexcept { return bodyIndices.size(); }
 
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY::getVectorMemoryUsage(radius) +
-				PS_AGONY::getVectorMemoryUsage(bodyIndices);
+				PS_AGONY::getVectorMemoryUsage(bodyIndices) +
+				PS_AGONY::getVectorMemoryUsage(radius);
+		}
+	};
+
+	struct BoxSoA
+	{
+		std::vector<BodyIndex> bodyIndices;
+
+		std::vector<Real> width;
+		std::vector<Real> height;
+
+		void append(
+			BodyIndex bodyIndex,
+			Real width,
+			Real height
+		)
+		{
+			this->bodyIndices.push_back(bodyIndex);
+			this->width.push_back(width);
+			this->height.push_back(height);
+		}
+
+		size_t getCount() const noexcept { return bodyIndices.size(); }
+
+		size_t getMemoryUsage() const noexcept
+		{
+			return
+				PS_AGONY::getVectorMemoryUsage(bodyIndices) +
+				PS_AGONY::getVectorMemoryUsage(width) +
+				PS_AGONY::getVectorMemoryUsage(height);
 		}
 	};
 }

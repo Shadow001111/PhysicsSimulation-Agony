@@ -12,10 +12,6 @@
 #include <iostream>
 #include <iomanip>
 
-#ifdef _DEBUG
-#include <crtdbg.h>
-#endif
-
 
 static std::string formatSize(size_t value)
 {
@@ -97,12 +93,14 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
         const size_t total =
             simulationData.bodyDataMemoryUsage +
             simulationData.circleDataMemoryUsage +
+            simulationData.boxDataMemoryUsage +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage;
 
         ss << "\nMemory: " << formatSizeBinary(total);
         ss << "\n  Bodies data: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
         ss << "\n  Circles data: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
+        ss << "\n  Boxes data: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
         ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
         ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
     }
@@ -192,13 +190,13 @@ static int gameFunc()
             constexpr float boundary = 9.0f;
             constexpr float radius = 100.0f;
 
-            simulation.createCircle({ -(boundary + radius),  0.0 }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
-            simulation.createCircle({  (boundary + radius),  0.0 }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
-            simulation.createCircle({  0.0, -(boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
-            simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, radius, 0.0, 0.0, 0.0, material0Index);
+            simulation.createCircle({ -(boundary + radius),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
+            simulation.createCircle({  (boundary + radius),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
+            simulation.createCircle({  0.0, -(boundary + radius) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
+            simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
         }
 
-        const int bodyCount = 1'500;
+        const int bodyCount = 100;// 1'500;
         for (int i = 0; i < bodyCount; i++)
         {
             const float x = Random::real<float>(-5.0f, 5.0f);
@@ -206,9 +204,22 @@ static int gameFunc()
             const float vx = Random::real<float>(-2.0f, 2.0f);
             const float vy = Random::real<float>(-2.0f, 2.0f);
             const float r = Random::real<float>(0.1f, 0.2f);
-            const float mass = r * r;
-
-            simulation.createCircle({ x, y }, { vx, vy }, r, 0.0, 0.0, mass, material0Index);
+            const float mass = 3.14f * r * r;
+        
+            simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, material0Index, r);
+        }
+        for (int i = 0; i < bodyCount; i++)
+        {
+            const float x = Random::real<float>(-5.0f, 5.0f);
+            const float y = Random::real<float>(-5.0f, 5.0f);
+            const float vx = Random::real<float>(-2.0f, 2.0f);
+            const float vy = Random::real<float>(-2.0f, 2.0f);
+            const float rotation = Random::real<float>(0.0f, 6.28f);
+            const float width = Random::real<float>(0.2f, 0.4f);
+            const float height = Random::real<float>(0.2f, 0.4f);
+            const float mass = width * height;
+        
+            simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, material0Index, { width, height });
         }
     }
 
@@ -313,10 +324,6 @@ static int gameFunc()
 
 int main()
 {
-#ifdef _DEBUG
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif
-
     int result = 0;
 
     try

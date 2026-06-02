@@ -3,8 +3,8 @@
 layout (location = 0) in vec2 vertLocalPosition;
 layout (location = 1) in vec2 instancePosition;
 layout (location = 2) in float instanceRotation;
-layout (location = 3) in float instanceRadius;
-layout (location = 4) in int instanceColor; // 3 bytes used.
+layout (location = 3) in vec2 instanceSize;
+layout (location = 4) in int instanceColor;
 
 out vec2 uv;
 out flat vec3 color;
@@ -20,11 +20,11 @@ vec2 rotate2D(vec2 v, float angle)
 
 void main()
 {
-    vec3 worldPos = vec3(instancePosition + vertLocalPosition * instanceRadius, 0.0);
-    vec4 clipPos = viewProjectionMatrix * vec4(worldPos, 1.0);
-    gl_Position = clipPos;
+    vec2 localPosition = instanceSize *  mix(vec2(-0.5), vec2(0.5), vertLocalPosition);
+    vec2 worldPosition = instancePosition + rotate2D(localPosition, instanceRotation);
+    gl_Position = viewProjectionMatrix * vec4(worldPosition, 0.0, 1.0);
 
-    uv = rotate2D(vertLocalPosition, instanceRotation);
+    uv = localPosition;
 
     const float r = (instanceColor >> 16) / 255.0;
     const float g = ((instanceColor >> 8) & 255) / 255.0;

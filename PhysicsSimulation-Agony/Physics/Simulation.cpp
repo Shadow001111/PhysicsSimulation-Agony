@@ -7,9 +7,28 @@
 
 namespace PS_AGONY
 {
-    static Real calculateCircleInertia(Real radius, Real mass)
+    static Real calculateCircleInertia(Real mass, Real radius)
     {
         return Real(0.5) * radius * radius * mass;
+    }
+
+    static Real calculateBoxInertia(Real mass, Real width, Real height)
+    {
+        constexpr Real div = 1.0 / 12.0;
+        return div * mass * (width * width + height * height);
+    }
+
+
+    static __forceinline Vec2 rotate2D(Vec2 point, Real cos, Real sin)
+    {
+        const float nx = point.x * cos - point.y * sin;
+        const float ny = point.x * sin + point.y * cos;
+        return { nx, ny };
+    }
+
+    static __forceinline Vec2 rotate2D(Vec2 point, Real angle)
+    {
+        return rotate2D(point, std::cos(angle), std::sin(angle));
     }
     
 
@@ -55,7 +74,7 @@ namespace PS_AGONY
         }
     }
 
-    BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real radius, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex)
+    BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius)
     {
         mass = std::max(Real(0.0), mass);
         radius = std::max(Real(0.0), radius);
@@ -63,7 +82,7 @@ namespace PS_AGONY
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = circles.getCount();
 
-        const Real inertia = calculateCircleInertia(radius, mass);
+        const Real inertia = calculateCircleInertia(mass, radius);
 
         bodies.append(
             position,
@@ -74,15 +93,50 @@ namespace PS_AGONY
             inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
 			Vec2(0.0, 0.0),
             materialIndex < materials.size() ? materialIndex : 0,
-            { position.x - radius, position.y - radius, position.x + radius, position.y + radius },
             BodyType::Circle,
             newShapeIndex
 		);
 
         circles.append(
-            radius,
-            newBodyIndex
+            newBodyIndex,
+            radius
 		);
+
+        return newBodyIndex;
+    }
+
+    BodyIndex Simulation::createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size)
+    {
+        mass = std::max(Real(0.0), mass);
+        const Real width = std::max(Real(0.0), size.x);
+        const Real height = std::max(Real(0.0), size.y);
+
+        const BodyIndex newBodyIndex = bodies.getCount();
+        const BodyIndex newShapeIndex = boxes.getCount();
+
+        const Real inertia = calculateBoxInertia(mass, width, height);
+
+        const Real halfWidth = width * Real(0.5);
+        const Real halfHeight = height * Real(0.5);
+
+        bodies.append(
+            position,
+            velocity,
+            rotation,
+            angularVelocity,
+            mass, mass == 0.0 ? 0.0 : 1.0 / mass,
+            inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
+            Vec2(0.0, 0.0),
+            materialIndex < materials.size() ? materialIndex : 0,
+            BodyType::Box,
+            newShapeIndex
+        );
+
+        boxes.append(
+            newBodyIndex,
+            width,
+            height
+        );
 
         return newBodyIndex;
     }
@@ -245,7 +299,8 @@ namespace PS_AGONY
             // Narrow phase.
             narrowPhaseCollisionDetector.setDataViewers(
                 BodySoAViewer(bodies),
-                CircleSoAViewer(circles)
+                CircleSoAViewer(circles),
+                BoxSoAViewer(boxes)
             );
             const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
             if (narrowCollisionData.empty()) return;
@@ -262,36 +317,84 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Build AABBs");
         buildCircleAABBs();
+        buildBoxAABBs();
     }
 
     void Simulation::buildCircleAABBs()
     {
         TRACY_SCOPE_N("Build circle AABBs");
 
-        const Real* CORE_RESTRICT positionX = bodies.positionX.data();
-        const Real* CORE_RESTRICT positionY = bodies.positionY.data();
-        Real* CORE_RESTRICT aabbMinX = bodies.aabb.minX.data();
-        Real* CORE_RESTRICT aabbMinY = bodies.aabb.minY.data();
-        Real* CORE_RESTRICT aabbMaxX = bodies.aabb.maxX.data();
-        Real* CORE_RESTRICT aabbMaxY = bodies.aabb.maxY.data();
+        const size_t count = circles.getCount();
+        if (count == 0) return;
 
-        const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
+        const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
 
-        const size_t circleCount = circles.getCount();
+        Real* CORE_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
+        Real* CORE_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
+        Real* CORE_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
+        Real* CORE_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
 
-        for (size_t i = 0; i < circleCount; i++)
+        for (size_t i = 0; i < count; i++)
         {
-            const Real radius = radiusPtr[i];
             const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const Real radius = radiusPtr[i];
 
-            const Real x = positionX[bodyIndex];
-            const Real y = positionY[bodyIndex];
+            const Real x = positionXPtr[bodyIndex];
+            const Real y = positionYPtr[bodyIndex];
 
-            aabbMinX[bodyIndex] = x - radius;
-            aabbMinY[bodyIndex] = y - radius;
-            aabbMaxX[bodyIndex] = x + radius;
-            aabbMaxY[bodyIndex] = y + radius;
+            aabbMinXPtr[bodyIndex] = x - radius;
+            aabbMinYPtr[bodyIndex] = y - radius;
+            aabbMaxXPtr[bodyIndex] = x + radius;
+            aabbMaxYPtr[bodyIndex] = y + radius;
+        }
+    }
+
+    void Simulation::buildBoxAABBs()
+    {
+        TRACY_SCOPE_N("Build box AABBs");
+
+        const size_t count = boxes.getCount();
+        if (count == 0) return;
+
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+
+        const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
+        const Real* CORE_RESTRICT widthPtr = boxes.width.data();
+        const Real* CORE_RESTRICT heightPtr = boxes.height.data();
+
+        Real* CORE_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
+        Real* CORE_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
+        Real* CORE_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
+        Real* CORE_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const Real widthHalf = widthPtr[i] * Real(0.5);
+            const Real heightHalf = heightPtr[i] * Real(0.5);
+
+            const Real x = positionXPtr[bodyIndex];
+            const Real y = positionYPtr[bodyIndex];
+            const Real cos = rotationCosPtr[bodyIndex];
+            const Real sin = rotationSinPtr[bodyIndex];
+
+            const Real absCos = std::abs(cos);
+            const Real absSin = std::abs(sin);
+
+            const Real ex = absCos * widthHalf + absSin * heightHalf;
+            const Real ey = absSin * widthHalf + absCos * heightHalf;
+
+            aabbMinXPtr[bodyIndex] = x - ex;
+            aabbMinYPtr[bodyIndex] = y - ey;
+            aabbMaxXPtr[bodyIndex] = x + ex;
+            aabbMaxYPtr[bodyIndex] = y + ey;
         }
     }
 
@@ -555,15 +658,18 @@ namespace PS_AGONY
         // Memory
         {
             auto& total = data.bodyDataMemoryUsage;
-
             total = sizeof(BodySoA);
             total += bodies.getMemoryUsage();
         }
         {
             auto& total = data.circleDataMemoryUsage;
-
             total = sizeof(CircleSoA);
             total += circles.getMemoryUsage();
+        }
+        {
+            auto& total = data.boxDataMemoryUsage;
+            total = sizeof(BoxSoA);
+            total += boxes.getMemoryUsage();
         }
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = sizeof(BroadPhaseCollisionDetector) + broadPhaseCollisionDetector.getMemoryUsage();
