@@ -12,6 +12,10 @@
 #include <iostream>
 #include <iomanip>
 
+#ifdef _DEBUG
+#include <crtdbg.h>
+#endif
+
 
 static std::string formatSize(size_t value)
 {
@@ -65,26 +69,43 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
     constexpr float rowHeight = 0.06f;
     constexpr float sideOffset = 0.014f;
 
+    // References.
+    const auto& simulationData = debugData.simulationDebugData;
+
     // Push data on stream.
 
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(1);
 
-    const float FPS = debugData.smoothedDelta > 0.0f
-        ? 1.0f / debugData.smoothedDelta
-        : 0.0f;
-    ss << "FPS: " << FPS << " (" << debugData.smoothedDelta * 1000.0f << " ms)";
+    // Real-time counters?
+    {
+        const float smoothedDelta = debugData.smoothedDelta;
 
-    float upsPercent = (float)debugData.simulationDebugData.updatesHappened / (float)debugData.simulationDebugData.updatesSupposedToHappen;
-    upsPercent = std::min(upsPercent, 1.0f);
-    ss << "\nUPS: " << debugData.simulationDebugData.updatesHappened << " / " << debugData.simulationDebugData.updatesSupposedToHappen
-       << " (" << upsPercent * 100.0f << "%)";
+        const float FPS = smoothedDelta > 0.0f
+            ? 1.0f / smoothedDelta
+            : 0.0f;
+        ss << "FPS: " << FPS << " (" << smoothedDelta * 1000.0f << " ms)";
 
-    ss << "\nMemory:";
-    ss << "\n  Bodies data: " << formatSizeBinary(debugData.simulationDebugData.bodyDataMemoryUsage);
-    ss << "\n  Circles data: " << formatSizeBinary(debugData.simulationDebugData.circleDataMemoryUsage);
-    ss << "\n  Broad collision detector: " << formatSizeBinary(debugData.simulationDebugData.broadPhaseDetectorMemoryUsage);
-    ss << "\n  Narrow collision detector: " << formatSizeBinary(debugData.simulationDebugData.narrowPhaseDetectorMemoryUsage);
+        float upsPercent = (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen;
+        upsPercent = std::min(upsPercent, 1.0f);
+        ss << "\nUPS: " << simulationData.updatesHappened << " / " << simulationData.updatesSupposedToHappen
+            << " (" << upsPercent * 100.0f << "%)";
+    }
+
+    // Memory.
+    {
+        const size_t total =
+            simulationData.bodyDataMemoryUsage +
+            simulationData.circleDataMemoryUsage +
+            simulationData.broadPhaseDetectorMemoryUsage +
+            simulationData.narrowPhaseDetectorMemoryUsage;
+
+        ss << "\nMemory: " << formatSizeBinary(total);
+        ss << "\n  Bodies data: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
+        ss << "\n  Circles data: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
+        ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
+        ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
+    }
 
     // Convert stream to string.
     const std::string text = ss.str();
@@ -292,7 +313,11 @@ static int gameFunc()
 
 int main()
 {
-    int result;
+#ifdef _DEBUG
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
+
+    int result = 0;
 
     try
     {

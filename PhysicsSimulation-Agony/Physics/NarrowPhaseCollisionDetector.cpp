@@ -79,7 +79,7 @@ namespace PS_AGONY
     {
         size_t total = 0;
 
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(narrowCollisionData);
+        total += PS_AGONY::getVectorMemoryUsage(narrowCollisionData);
 
         return total;
     }

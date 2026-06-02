@@ -6,10 +6,14 @@
 
 #include <vector>
 
-#define PS_AGONY_VECTOR_MEMORY_USAGE(vector) (vector.capacity() * sizeof(vector[0]))
-
 namespace PS_AGONY
 {
+	template<typename Container>
+	inline size_t getVectorMemoryUsage(const Container& container)
+	{
+		return container.capacity() * sizeof(container[0]);
+	}
+
 	template<typename T>
 	using SimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<T>::bytes>>;
 
@@ -39,10 +43,10 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY_VECTOR_MEMORY_USAGE(minX) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(minY) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(maxX) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(maxY);
+				PS_AGONY::getVectorMemoryUsage(minX) +
+				PS_AGONY::getVectorMemoryUsage(minY) +
+				PS_AGONY::getVectorMemoryUsage(maxX) +
+				PS_AGONY::getVectorMemoryUsage(maxY);
 		}
 	};
 
@@ -110,24 +114,24 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY_VECTOR_MEMORY_USAGE(positionX) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(positionY) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(velocityX) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(velocityY) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(rotation) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(angularVelocity) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(mass) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(invMass) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(inertia) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(invInertia) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(localCenterOfMassX) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(localCenterOfMassY) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(rotationCos) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(rotationSin) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(materialIndex) +
+				PS_AGONY::getVectorMemoryUsage(positionX) +
+				PS_AGONY::getVectorMemoryUsage(positionY) +
+				PS_AGONY::getVectorMemoryUsage(velocityX) +
+				PS_AGONY::getVectorMemoryUsage(velocityY) +
+				PS_AGONY::getVectorMemoryUsage(rotation) +
+				PS_AGONY::getVectorMemoryUsage(angularVelocity) +
+				PS_AGONY::getVectorMemoryUsage(mass) +
+				PS_AGONY::getVectorMemoryUsage(invMass) +
+				PS_AGONY::getVectorMemoryUsage(inertia) +
+				PS_AGONY::getVectorMemoryUsage(invInertia) +
+				PS_AGONY::getVectorMemoryUsage(localCenterOfMassX) +
+				PS_AGONY::getVectorMemoryUsage(localCenterOfMassY) +
+				PS_AGONY::getVectorMemoryUsage(rotationCos) +
+				PS_AGONY::getVectorMemoryUsage(rotationSin) +
+				PS_AGONY::getVectorMemoryUsage(materialIndex) +
 				aabb.getMemoryUsage() +
-				PS_AGONY_VECTOR_MEMORY_USAGE(bodyType) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(shapeIndex);
+				PS_AGONY::getVectorMemoryUsage(bodyType) +
+				PS_AGONY::getVectorMemoryUsage(shapeIndex);
 		}
 	};
 
@@ -150,8 +154,8 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY_VECTOR_MEMORY_USAGE(radius) +
-				PS_AGONY_VECTOR_MEMORY_USAGE(bodyIndices);
+				PS_AGONY::getVectorMemoryUsage(radius) +
+				PS_AGONY::getVectorMemoryUsage(bodyIndices);
 		}
 	};
 }

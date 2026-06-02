@@ -4,8 +4,8 @@
 #include "Core/Portablity.h"
 
 #include <numeric>
-#include <iostream>
 #include <bit>
+#include <algorithm>
 
 namespace PS_AGONY
 {
@@ -53,16 +53,16 @@ namespace PS_AGONY
     {
         size_t total = 0;
 
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.nodeVector);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.centroidX);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.centroidY);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMinX);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMaxX);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMinY);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.leafMaxY);
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(bvhFunctionResources.bodyIndexVector1);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodeVector);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.centroidX);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.centroidY);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinX);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxX);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinY);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxY);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector1);
 
-        total += PS_AGONY_VECTOR_MEMORY_USAGE(broadCollisionData);
+        total += PS_AGONY::getVectorMemoryUsage(broadCollisionData);
 
         return total;
     }
@@ -349,7 +349,8 @@ namespace PS_AGONY
             }
             else
             {
-                std::nth_element(indicesPtr + nodeStart, indicesPtr + mid, indicesPtr + nodeEnd,
+                std::
+                    nth_element(indicesPtr + nodeStart, indicesPtr + mid, indicesPtr + nodeEnd,
                     [&](BodyIndex a, BodyIndex b) {
                     return centroidYPtr[a] < centroidYPtr[b];
                     });
