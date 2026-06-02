@@ -30,7 +30,7 @@ namespace PS_AGONY
 
         broadCollisionData.reserve(bodyCount);
 
-        boundVolumeHierarchy(bodyCount);
+        findCollisionsBVH(bodyCount);
 
         return broadCollisionData;
     }
@@ -67,7 +67,7 @@ namespace PS_AGONY
         return total;
     }
 
-    void BroadPhaseCollisionDetector::boundVolumeHierarchy(size_t bodyCount)
+    void BroadPhaseCollisionDetector::findCollisionsBVH(size_t bodyCount)
     {
         TRACY_SCOPE_N("BVH");
 
@@ -82,7 +82,7 @@ namespace PS_AGONY
 
         {
             TRACY_SCOPE_N("Build nodes");
-            buildBvhNode(nodes, indices, bodyCount);
+            buildBvhTree(nodes, indices, bodyCount);
         }
         {
             TRACY_SCOPE_N("Reorder AABB by indices");
@@ -245,7 +245,7 @@ namespace PS_AGONY
     //    }
     //}
 
-    void BroadPhaseCollisionDetector::buildBvhNode(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t bodyCount)
+    void BroadPhaseCollisionDetector::buildBvhTree(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t bodyCount)
     {
         using RealSimd = Simd<Real>;
 

@@ -72,9 +72,9 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 	private:
-		void boundVolumeHierarchy(size_t bodyCount);
+		void findCollisionsBVH(size_t bodyCount);
 
-		void buildBvhNode(
+		void buildBvhTree(
 			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,
 			uint32_t bodyCount);
