@@ -98,8 +98,6 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale)
     {
-        TRACY_SCOPE_N("Compute centroids");
-
         using RealSimd = Simd<Real>;
 
         // Get pointers.
@@ -119,6 +117,9 @@ namespace PS_AGONY
             centroidYPtr = centroidY.data();
         }
 
+        // Start tracing here, closer for capturing computation.
+        TRACY_SCOPE_N("Compute centroids");
+
         // Vector variables.
         const RealSimd globalMinXV(globalMin.x);
         const RealSimd globalMinYV(globalMin.y);
@@ -135,11 +136,9 @@ namespace PS_AGONY
             const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
             const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
 
-            const RealSimd cx = (minX + maxX) * RealSimd(0.5);
-            const RealSimd cy = (minY + maxY) * RealSimd(0.5);
-
-            const RealSimd tx = (cx - globalMinXV) * scaleXV;
-            const RealSimd ty = (cy - globalMinYV) * scaleYV;
+            // t = ((min + max) * 0.5 - globalMin) * scale
+            const RealSimd tx = RealSimd::mul_sub(minX + maxX, RealSimd(0.5), globalMinXV) * scaleXV;
+            const RealSimd ty = RealSimd::mul_sub(minY + maxY, RealSimd(0.5), globalMinYV) * scaleYV;
 
             tx.store(centroidXPtr + i);
             ty.store(centroidYPtr + i);
