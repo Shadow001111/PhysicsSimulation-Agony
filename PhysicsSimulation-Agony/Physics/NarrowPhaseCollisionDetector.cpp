@@ -350,38 +350,51 @@ namespace PS_AGONY
         const Vec2 rightB = { cosB, sinB };
         const Vec2 upB = { -sinB, cosB };
 
-        // SAT.
-        const Vec2 axes[4] = { rightA, upA, rightB, upB };
+        //const Vec2 axes[4] = { rightA, upA, rightB, upB };
 
-        Real depth = FLT_MAX;
+        // Relative rotation.
+        const Real relativeCos = cosA * cosB + sinA * sinB;
+        const Real relativeSin = cosA * sinB - sinA * cosB;
+        const Real absRelativeCos = std::abs(relativeCos);
+        const Real absRelativeSin = std::abs(relativeSin);
+
+        // Center gap in A's local frame: 2 dot products.
+        // B's frame projections are derived via the relative rotation - no extra dot products.
+        const Vec2 centerDelta = positionB - positionA;
+        const Real centerDeltaOnA0 = glm::dot(centerDelta, rightA);
+        const Real centerDeltaOnA1 = glm::dot(centerDelta, upA);
+        const Real centerDeltaOnB0 =  relativeCos * centerDeltaOnA0 + relativeSin * centerDeltaOnA1;   // dot(centerDelta, axisB0), for free
+        const Real centerDeltaOnB1 = -relativeSin * centerDeltaOnA0 + relativeCos * centerDeltaOnA1;   // dot(centerDelta, axisB1), for free
+
+        // Each box's projected half-width onto the other's axes - computed once, used twice each.
+        // projectedRadiusX_Yi = effective radius of box X along axis i of box Y's frame.
+        const Real projectedRadiusBOnA0 = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
+        const Real projectedRadiusBOnA1 = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
+        const Real projectedRadiusAOnB0 = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
+        const Real projectedRadiusAOnB1 = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
+
+        // SAT: 4 axes, pure scalar, no loops, no vector projections.
+        // overlap = (radiusA + radiusB) - |centerGap|; negative means separated.
+        // Normal is signed inline - no post-flip flag needed.
         Vec2 normal = {};
-        bool flipNormal = false;
+        Real depth = FLT_MAX;
 
-        for (size_t i = 0; i < 4; i++)
-        {
-            const Vec2& axis = axes[i];
-            const Vec2 rangeA = projectBox(positionA, rightA, upA, halfWidthA, halfHeightA, axis);
-            const Vec2 rangeB = projectBox(positionB, rightB, upB, halfWidthB, halfHeightB, axis);
-
-            if (rangeA.x >= rangeB.y || rangeB.x >= rangeA.y)
+        auto sat = [&](Real radiusA, Real radiusB, Real centerDeltaOnAxis, Vec2 axis) -> bool
             {
-                return;
-            }
+                const Real overlap = radiusA + radiusB - std::fabsf(centerDeltaOnAxis);
+                if (overlap < Real(0)) return false;
+                if (overlap < depth)
+                {
+                    depth = overlap;
+                    normal = centerDeltaOnAxis >= Real(0) ? axis : -axis;
+                }
+                return true;
+            };
 
-            const Real depthA = rangeB.y - rangeA.x;
-            const Real depthB = rangeA.y - rangeB.x;
-            const Real axisDepth = std::min(depthA, depthB);
-            if (axisDepth < depth)
-            {
-                depth = axisDepth;
-                normal = axis;
-                flipNormal = depthA < depthB;
-            }
-        }
-        if (flipNormal)
-        {
-            normal = -normal;
-        }
+        if (!sat(halfWidthA,  projectedRadiusBOnA0, centerDeltaOnA0, rightA)) return;
+        if (!sat(halfHeightA, projectedRadiusBOnA1, centerDeltaOnA1, upA)) return;
+        if (!sat(projectedRadiusAOnB0, halfWidthB,  centerDeltaOnB0, rightB)) return;
+        if (!sat(projectedRadiusAOnB1, halfHeightB, centerDeltaOnB1, upB)) return;
 
         // Compute 4 vertices.
         Vec2 vertsA[4], vertsB[4];
