@@ -3,6 +3,8 @@
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
     const NarrowPhaseCollisionDetector::CollisionFunc
@@ -38,23 +40,34 @@ namespace PS_AGONY
         const Vec2& axis)
     {
         const Real c = glm::dot(center, axis);
-        const Real r = halfWidth * std::abs(glm::dot(right, axis)) +
-            halfHeight * std::abs(glm::dot(up, axis));
+        const Real r =
+            halfWidth  * std::abs(glm::dot(right, axis)) +
+            halfHeight * std::abs(glm::dot(up,    axis));
         return { c - r, c + r };
     }
 
-    static inline Vec2 supportPointOnBox(
-        const Vec2& position,
-        const Vec2& right,
-        const Vec2& up,
-        const Real halfWidth,
-        const Real halfHeight,
-        const Vec2& direction)
+    struct Vector2AndSqDistance
     {
-        Vec2 point = position;
-        point += (glm::dot(direction, right) >= Real(0) ? Real(1) : Real(-1)) * halfWidth * right;
-        point += (glm::dot(direction, up) >= Real(0) ? Real(1) : Real(-1)) * halfHeight * up;
-        return point;
+        Vec2 vector;
+        Real squaredDistance;
+    };
+
+    static inline Vector2AndSqDistance findClosestPointOnSegment(const Vec2& start, const Vec2& end, const Vec2& point)
+    {
+        const Vec2 startToEnd = end - start;
+        const Vec2 startToPoint = point - start;
+
+        const Real d = glm::dot(startToEnd, startToPoint) / glm::dot(startToEnd, startToEnd);
+
+        const Vec2 closest = start + startToEnd * std::clamp(d, Real(0), Real(1));
+
+        const Vec2 deltaPosition = closest - point;
+
+        Vector2AndSqDistance result;
+        result.vector = closest;
+        result.squaredDistance = glm::dot(deltaPosition, deltaPosition);
+
+        return result;
     }
 
 
@@ -72,10 +85,6 @@ namespace PS_AGONY
     const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(const std::vector<BodyPair>& bodyPairs)
 	{
         TRACY_SCOPE_N("Narrow phase");
-
-        // Check viewers.
-        if (this->bodies.positionX == nullptr) return narrowCollisionData;
-        if (this->circles.radius == nullptr) return narrowCollisionData;
 
         // Prepare.
         narrowCollisionData.clear();
@@ -306,6 +315,8 @@ namespace PS_AGONY
 
     void NarrowPhaseCollisionDetector::collisionBoxBox(BodyIndex indexA, BodyIndex indexB)
     {
+        constexpr Real secondContactThreshold = Real(1e-4);
+
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
@@ -339,17 +350,16 @@ namespace PS_AGONY
         const Vec2 rightB = { cosB, sinB };
         const Vec2 upB = { -sinB, cosB };
 
-        // Delta position.
-        const Vec2 deltaPosition = positionB - positionA;
-
         // SAT.
         const Vec2 axes[4] = { rightA, upA, rightB, upB };
 
         Real depth = FLT_MAX;
         Vec2 normal = {};
+        bool flipNormal = false;
 
-        for (const Vec2& axis : axes)
+        for (size_t i = 0; i < 4; i++)
         {
+            const Vec2& axis = axes[i];
             const Vec2 rangeA = projectBox(positionA, rightA, upA, halfWidthA, halfHeightA, axis);
             const Vec2 rangeB = projectBox(positionB, rightB, upB, halfWidthB, halfHeightB, axis);
 
@@ -361,38 +371,99 @@ namespace PS_AGONY
             const Real depthA = rangeB.y - rangeA.x;
             const Real depthB = rangeA.y - rangeB.x;
             const Real axisDepth = std::min(depthA, depthB);
-
             if (axisDepth < depth)
             {
                 depth = axisDepth;
                 normal = axis;
+                flipNormal = depthA < depthB;
             }
         }
-
-        // Orient normal from A to B.
-        if (glm::dot(deltaPosition, normal) < Real(0))
+        if (flipNormal)
         {
             normal = -normal;
         }
 
-        // Contact.
-        const Vec2 contactOnA = supportPointOnBox(
-            positionA,
-            rightA,
-            upA,
-            halfWidthA,
-            halfHeightA,
-            normal
-        );
+        // Compute 4 vertices.
+        Vec2 vertsA[4], vertsB[4];
+        {
+            const Vec2 a1 = rightA * halfWidthA;
+            const Vec2 a2 = upA * halfHeightA;
+            const Vec2 b1 = rightB * halfWidthB;
+            const Vec2 b2 = upB * halfHeightB;
+
+            vertsA[0] = positionA + a1 + a2;
+            vertsA[1] = positionA - a1 + a2;
+            vertsA[2] = positionA - a1 - a2;
+            vertsA[3] = positionA + a1 - a2;
+
+            vertsB[0] = positionB + b1 + b2;
+            vertsB[1] = positionB - b1 + b2;
+            vertsB[2] = positionB - b1 - b2;
+            vertsB[3] = positionB + b1 - b2;
+        }
+
+        // Find up to 2 contact points: closest points from each box's vertices onto the other box's edges.
+        Vec2 contact1, contact2;
+        uint32_t contactCount = 1;
+        Real minDistanceSquared = FLT_MAX;
+        Real maxDistanceSquaredBetweenContacts = 0;
+
+        auto testEdgeAgainstVertices = [&](const Vec2 edgeA, const Vec2 edgeB, const Vec2* vertices)
+            {
+                const Vec2 startToEnd = edgeB - edgeA;
+                const Real startToEndSqDistance = glm::dot(startToEnd, startToEnd);
+                //if (startToEndSqDistance < Real(1e-16)) [[unlikely]] return;
+
+                const Real startToEndInvSqDistance = Real(1.0) / startToEndSqDistance;
+
+                for (size_t i = 0; i < 4; i++)
+                {
+                    const Vec2 vertex = vertices[i];
+
+                    const Vec2 startToPoint = vertex - edgeA;
+                    const Real d = glm::dot(startToEnd, startToPoint) * startToEndInvSqDistance;
+                    const Vec2 closest = edgeA + startToEnd * std::clamp(d, Real(0), Real(1));
+                    const Vec2 deltaPosition = closest - vertex;
+                    const Real pointToClosestSqDistance = glm::dot(deltaPosition, deltaPosition);
+
+                    if (std::fabsf(pointToClosestSqDistance - minDistanceSquared) < secondContactThreshold)
+                    {
+                        // Value contact2 that's furthest away from contact1.
+                        const Vec2 diff = closest - contact1;
+                        const Real squaredDistance = glm::dot(diff, diff);
+                        if (squaredDistance > maxDistanceSquaredBetweenContacts)
+                        {
+                            maxDistanceSquaredBetweenContacts = squaredDistance;
+                            contact2 = closest;
+                            contactCount = 2;
+                        }
+                    }
+                    else if (pointToClosestSqDistance < minDistanceSquared)
+                    {
+                        minDistanceSquared = pointToClosestSqDistance;
+                        maxDistanceSquaredBetweenContacts = 0;
+                        contact1 = closest;
+                        contactCount = 1;
+                    }
+                }
+            };
+        for (size_t i = 0; i < 4; i++)
+        {
+            testEdgeAgainstVertices(vertsA[i], vertsA[(i + 1) & 3], vertsB);
+        }
+        for (size_t i = 0; i < 4; i++)
+        {
+            testEdgeAgainstVertices(vertsB[i], vertsB[(i + 1) & 3], vertsA);
+        }
 
         // Result.
         narrowCollisionData.emplace_back(
             indexA, indexB,
             normal,
             depth,
-            contactOnA,    // Contact 1.
-            Vec2(),        // Contact 2.
-            1              // Single contact.
+            contact1,
+            contact2,
+            contactCount
         );
     }
 

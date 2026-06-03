@@ -191,45 +191,67 @@ static int gameFunc()
 
         PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
 
-        {
-            constexpr float boundary = 9.0f;
-            constexpr float thickness = 20.0f;
-
-            constexpr float halfThickness = thickness * 0.5f;
-            constexpr float length = boundary * 2.0f + 2.0f;
-
-            simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {thickness, length});
-            simulation.createBox({  (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {thickness, length});
-            simulation.createBox({  0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {length, thickness});
-            simulation.createBox({  0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {length, thickness});
-        }
-
         Random::setSeed(0);
 
-        const int bodyCount = 500;
-        for (int i = 0; i < bodyCount; i++)
+        if constexpr (true)
         {
-            const float x = Random::real<float>(-5.0f, 5.0f);
-            const float y = Random::real<float>(-5.0f, 5.0f);
-            const float vx = Random::real<float>(-2.0f, 2.0f);
-            const float vy = Random::real<float>(-2.0f, 2.0f);
-            const float r = Random::real<float>(0.1f, 0.2f);
-            const float mass = 3.14f * r * r;
-        
-            simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, material0Index, r);
+            {
+                constexpr float boundary = 9.0f;
+                constexpr float thickness = 20.0f;
+
+                constexpr float halfThickness = thickness * 0.5f;
+                constexpr float length = boundary * 2.0f + 2.0f;
+
+                simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
+                simulation.createBox({ (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
+                simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
+                simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
+            }
+
+            const int bodyCount = 500;
+            for (int i = 0; i < bodyCount; i++)
+            {
+                const float x = Random::real<float>(-5.0f, 5.0f);
+                const float y = Random::real<float>(-5.0f, 5.0f);
+                const float vx = Random::real<float>(-2.0f, 2.0f);
+                const float vy = Random::real<float>(-2.0f, 2.0f);
+                const float r = Random::real<float>(0.1f, 0.2f);
+                const float mass = 3.14f * r * r;
+
+                simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, material0Index, r);
+            }
+            for (int i = 0; i < bodyCount; i++)
+            {
+                const float x = Random::real<float>(-5.0f, 5.0f);
+                const float y = Random::real<float>(-5.0f, 5.0f);
+                const float vx = Random::real<float>(-2.0f, 2.0f);
+                const float vy = Random::real<float>(-2.0f, 2.0f);
+                const float rotation = Random::real<float>(0.0f, 6.28f);
+                const float width = Random::real<float>(0.2f, 0.4f);
+                const float height = Random::real<float>(0.2f, 0.4f);
+                const float mass = width * height;
+
+                simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, material0Index, { width, height });
+            }
         }
-        for (int i = 0; i < bodyCount; i++)
+        else
         {
-            const float x = Random::real<float>(-5.0f, 5.0f);
-            const float y = Random::real<float>(-5.0f, 5.0f);
-            const float vx = Random::real<float>(-2.0f, 2.0f);
-            const float vy = Random::real<float>(-2.0f, 2.0f);
-            const float rotation = Random::real<float>(0.0f, 6.28f);
-            const float width = Random::real<float>(0.2f, 0.4f);
-            const float height = Random::real<float>(0.2f, 0.4f);
-            const float mass = width * height;
-        
-            simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, material0Index, { width, height });
+            constexpr int boxCount = 500;
+            constexpr float boxSize = 0.1f;
+            constexpr float boxPadding = 0.03f;
+
+            constexpr float floorThickness = 1.0f;
+            constexpr float floorWidth = boxCount * (boxSize + boxPadding);
+
+            simulation.createBox({ 0.0f,  -floorThickness * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, { floorWidth, floorThickness });
+
+            constexpr float dx = boxSize + boxPadding;
+            for (int i = 0; i < boxCount; i++)
+            {
+                const float x = (-floorWidth + boxSize + boxPadding) * 0.5f + i * dx;
+
+                simulation.createBox({ x, boxSize * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, material0Index, { boxSize, boxSize });
+            }
         }
     }
 
