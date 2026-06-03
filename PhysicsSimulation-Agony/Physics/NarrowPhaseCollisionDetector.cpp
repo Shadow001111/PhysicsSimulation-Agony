@@ -338,9 +338,9 @@ namespace PS_AGONY
         const BodyIndex shapeA = shapeIndexPtr[indexA];
         const BodyIndex shapeB = shapeIndexPtr[indexB];
 
-        const Real halfWidthA = halfWidthPtr[shapeA];
+        const Real halfWidthA  = halfWidthPtr [shapeA];
         const Real halfHeightA = halfHeightPtr[shapeA];
-        const Real halfWidthB = halfWidthPtr[shapeB];
+        const Real halfWidthB  = halfWidthPtr [shapeB];
         const Real halfHeightB = halfHeightPtr[shapeB];
 
         // Get axes.
@@ -350,32 +350,24 @@ namespace PS_AGONY
         const Vec2 rightB = { cosB, sinB };
         const Vec2 upB = { -sinB, cosB };
 
-        //const Vec2 axes[4] = { rightA, upA, rightB, upB };
-
         // Relative rotation.
-        const Real relativeCos = cosA * cosB + sinA * sinB;
-        const Real relativeSin = cosA * sinB - sinA * cosB;
-        const Real absRelativeCos = std::abs(relativeCos);
-        const Real absRelativeSin = std::abs(relativeSin);
+        const Real absRelativeCos = std::abs(cosA * cosB + sinA * sinB);
+        const Real absRelativeSin = std::abs(cosA * sinB - sinA * cosB);
 
-        // Center gap in A's local frame: 2 dot products.
-        // B's frame projections are derived via the relative rotation - no extra dot products.
+        // Center delta.
         const Vec2 centerDelta = positionB - positionA;
-        const Real centerDeltaOnA0 = glm::dot(centerDelta, rightA);
-        const Real centerDeltaOnA1 = glm::dot(centerDelta, upA);
-        const Real centerDeltaOnB0 =  relativeCos * centerDeltaOnA0 + relativeSin * centerDeltaOnA1;   // dot(centerDelta, axisB0), for free
-        const Real centerDeltaOnB1 = -relativeSin * centerDeltaOnA0 + relativeCos * centerDeltaOnA1;   // dot(centerDelta, axisB1), for free
+        const Real centerDeltaOnRightA = glm::dot(centerDelta, rightA);
+        const Real centerDeltaOnUpA    = glm::dot(centerDelta, upA);
+        const Real centerDeltaOnRightB = glm::dot(centerDelta, rightB);
+        const Real centerDeltaOnUpB    = glm::dot(centerDelta, upB);
 
-        // Each box's projected half-width onto the other's axes - computed once, used twice each.
-        // projectedRadiusX_Yi = effective radius of box X along axis i of box Y's frame.
-        const Real projectedRadiusBOnA0 = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
-        const Real projectedRadiusBOnA1 = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
-        const Real projectedRadiusAOnB0 = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
-        const Real projectedRadiusAOnB1 = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
+        // Projection.
+        const Real projectedRadiusBOnRightA = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
+        const Real projectedRadiusBOnUpA    = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
+        const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
+        const Real projectedRadiusAOnUpB    = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
 
-        // SAT: 4 axes, pure scalar, no loops, no vector projections.
-        // overlap = (radiusA + radiusB) - |centerGap|; negative means separated.
-        // Normal is signed inline - no post-flip flag needed.
+        // SAT.
         Vec2 normal = {};
         Real depth = FLT_MAX;
 
@@ -391,10 +383,10 @@ namespace PS_AGONY
                 return true;
             };
 
-        if (!sat(halfWidthA,  projectedRadiusBOnA0, centerDeltaOnA0, rightA)) return;
-        if (!sat(halfHeightA, projectedRadiusBOnA1, centerDeltaOnA1, upA)) return;
-        if (!sat(projectedRadiusAOnB0, halfWidthB,  centerDeltaOnB0, rightB)) return;
-        if (!sat(projectedRadiusAOnB1, halfHeightB, centerDeltaOnB1, upB)) return;
+        if (!sat(halfWidthA,  projectedRadiusBOnRightA, centerDeltaOnRightA, rightA)) return;
+        if (!sat(halfHeightA, projectedRadiusBOnUpA, centerDeltaOnUpA, upA)) return;
+        if (!sat(projectedRadiusAOnRightB, halfWidthB,  centerDeltaOnRightB, rightB)) return;
+        if (!sat(projectedRadiusAOnUpB, halfHeightB, centerDeltaOnUpB, upB)) return;
 
         // Compute 4 vertices.
         Vec2 vertsA[4], vertsB[4];
@@ -427,7 +419,7 @@ namespace PS_AGONY
                 const Real startToEndSqDistance = glm::dot(startToEnd, startToEnd);
                 //if (startToEndSqDistance < Real(1e-16)) [[unlikely]] return;
 
-                const Real startToEndInvSqDistance = Real(1.0) / startToEndSqDistance;
+                const Real startToEndInvSqDistance = Real(1) / startToEndSqDistance;
 
                 for (size_t i = 0; i < 4; i++)
                 {
