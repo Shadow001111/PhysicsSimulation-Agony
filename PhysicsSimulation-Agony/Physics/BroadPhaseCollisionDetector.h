@@ -93,7 +93,7 @@ namespace PS_AGONY
 			return (part1By1(y) << 1) | part1By1(x);
 		}
 
-		void computeCentroids(uint32_t bodyCount);
+		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale);
 
 		void buildBvhTree(
 			std::vector<BvhNode>& nodes,

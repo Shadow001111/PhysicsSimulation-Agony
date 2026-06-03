@@ -96,12 +96,13 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::computeCentroids(uint32_t bodyCount)
+    void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale)
     {
         TRACY_SCOPE_N("Compute centroids");
 
         using RealSimd = Simd<Real>;
 
+        // Get pointers.
         const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
         const Real* CORE_RESTRICT aabbMinYPtr = bodiesAABB.minY;
         const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
@@ -118,6 +119,14 @@ namespace PS_AGONY
             centroidYPtr = centroidY.data();
         }
 
+        // Vector variables.
+        const RealSimd globalMinXV(globalMin.x);
+        const RealSimd globalMinYV(globalMin.y);
+
+        const RealSimd scaleXV(scale.x);
+        const RealSimd scaleYV(scale.y);
+
+        // Compute centroids.
         size_t i = 0;
         for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
         {
@@ -126,16 +135,25 @@ namespace PS_AGONY
             const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
             const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
 
-            const RealSimd centroidX = (minX + maxX) * Real(0.5);
-            const RealSimd centroidY = (minY + maxY) * Real(0.5);
+            const RealSimd cx = (minX + maxX) * RealSimd(0.5);
+            const RealSimd cy = (minY + maxY) * RealSimd(0.5);
 
-            centroidX.store(centroidXPtr + i);
-            centroidY.store(centroidYPtr + i);
+            const RealSimd tx = (cx - globalMinXV) * scaleXV;
+            const RealSimd ty = (cy - globalMinYV) * scaleYV;
+
+            tx.store(centroidXPtr + i);
+            ty.store(centroidYPtr + i);
         }
         for (; i < bodyCount; i++)
         {
-            centroidXPtr[i] = aabbMinXPtr[i] + aabbMaxXPtr[i];
-            centroidYPtr[i] = aabbMinYPtr[i] + aabbMaxYPtr[i];
+            const Real cx = (aabbMinXPtr[i] + aabbMaxXPtr[i]) * Real(0.5);
+            const Real cy = (aabbMinYPtr[i] + aabbMaxYPtr[i]) * Real(0.5);
+
+            const Real tx = (cx - globalMin.x) * scale.x;
+            const Real ty = (cy - globalMin.y) * scale.y;
+
+            centroidXPtr[i] = tx;
+            centroidYPtr[i] = ty;
         }
     }
 
@@ -174,28 +192,30 @@ namespace PS_AGONY
         }
 
         // Compute centroids.
-        computeCentroids(bodyCount);
+        {
+            const Real scaleX = Real(0xFFFFu) / (globalMaxX - globalMinX);
+            const Real scaleY = Real(0xFFFFu) / (globalMaxY - globalMinY);
+            computeCentroidsWithTransformations(bodyCount, { globalMinX, globalMinY }, { scaleX, scaleY });
+        }
 
         // Compute morton codes.
         auto& mortonCodes = bvhFunctionResources.mortonCodes;
         mortonCodes.resize(bodyCount);
         {
             TRACY_SCOPE_N("Morton codes");
-            const Real scaleX = Real(0xFFFFu) / (globalMaxX - globalMinX);
-            const Real scaleY = Real(0xFFFFu) / (globalMaxY - globalMinY);
 
             const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.centroidX.data();
             const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.centroidY.data();
 
             for (uint32_t b = 0; b < bodyCount; b++)
             {
-                const Real cx = centroidXPtr[b];
-                const Real cy = centroidYPtr[b];
+                const Real tx = centroidXPtr[b];
+                const Real ty = centroidYPtr[b];
 
                 const uint32_t qx = static_cast<uint32_t>(
-                    std::clamp((cx - globalMinX) * scaleX, Real(0), Real(0xFFFFu)));
+                    std::clamp(tx, Real(0), Real(0xFFFFu)));
                 const uint32_t qy = static_cast<uint32_t>(
-                    std::clamp((cy - globalMinY) * scaleY, Real(0), Real(0xFFFFu)));
+                    std::clamp(ty, Real(0), Real(0xFFFFu)));
 
                 mortonCodes[b] = morton2D(qx, qy);
             }
