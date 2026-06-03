@@ -121,11 +121,11 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Compute centroids");
 
         // Vector variables.
-        const RealSimd globalMinXV(globalMin.x);
-        const RealSimd globalMinYV(globalMin.y);
+        const RealSimd scaledGlobalMinXV(globalMin.x * scale.x);
+        const RealSimd scaledGlobalMinYV(globalMin.y * scale.y);
 
-        const RealSimd scaleXV(scale.x);
-        const RealSimd scaleYV(scale.y);
+        const RealSimd halfScaleXV(scale.x * Real(0.5));
+        const RealSimd halfScaleYV(scale.y * Real(0.5));
 
         // Compute centroids.
         size_t i = 0;
@@ -137,8 +137,10 @@ namespace PS_AGONY
             const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
 
             // t = ((min + max) * 0.5 - globalMin) * scale
-            const RealSimd tx = RealSimd::mul_sub(minX + maxX, RealSimd(0.5), globalMinXV) * scaleXV;
-            const RealSimd ty = RealSimd::mul_sub(minY + maxY, RealSimd(0.5), globalMinYV) * scaleYV;
+            // t = (min + max) * 0.5 * scale - globalMin * scale
+            // t = (min + max) * halfScale - scaledGlobalMin
+            const RealSimd tx = RealSimd::mul_sub(minX + maxX, halfScaleXV, scaledGlobalMinXV);
+            const RealSimd ty = RealSimd::mul_sub(minY + maxY, halfScaleYV, scaledGlobalMinYV);
 
             tx.store(centroidXPtr + i);
             ty.store(centroidYPtr + i);
@@ -203,6 +205,8 @@ namespace PS_AGONY
         {
             TRACY_SCOPE_N("Morton codes");
 
+            MortonCode* CORE_RESTRICT mortonCodePtr = mortonCodes.data();
+
             const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.centroidX.data();
             const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.centroidY.data();
 
@@ -216,7 +220,7 @@ namespace PS_AGONY
                 const uint32_t qy = static_cast<uint32_t>(
                     std::clamp(ty, Real(0), Real(0xFFFFu)));
 
-                mortonCodes[b] = morton2D(qx, qy);
+                mortonCodePtr[b] = morton2D(qx, qy);
             }
         }
 

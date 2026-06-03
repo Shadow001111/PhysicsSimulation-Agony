@@ -942,7 +942,7 @@ struct Simd
         return s;
     }
 
-    // Min / max
+    // Min / max / clamp
 
     [[nodiscard]] static Simd min(const Simd& a, const Simd& b) noexcept
     {
@@ -1004,6 +1004,11 @@ struct Simd
             return blendv(a, b, mask);
         }
         return s;
+    }
+
+    [[nodiscard]] static Simd clamp(const Simd& value, const Simd& minBoundary, const Simd& maxBoundary)
+    {
+        return min(maxBoundary, max(minBoundary, value));
     }
 
     // Extract
