@@ -16,10 +16,17 @@ namespace PS_AGONY
     using I32Simd = Simd<uint32_t>;
     using U32Simd = Simd<uint32_t>;
 
+    static constexpr uint64_t integralLog2(uint64_t n)
+    {
+        uint64_t d = 0ull;
+        while (n > 1) { n = (n + 1ull) >> 1ull; d++; }
+        return d;
+    }
+
     static constexpr uint64_t bvhDepth(uint64_t n, uint64_t leafSize)
     {
         uint64_t d = 0ull;
-        while (n > leafSize) { n = (n + 1ull) >> 1ull; ++d; } // Right child = ceil(n/2).
+        while (n > leafSize) { n = (n + 1ull) >> 1ull; d++; }
         return d;
     }
 
@@ -53,6 +60,31 @@ namespace PS_AGONY
         return (part1By1Simd(y) << 1) | part1By1Simd(x);
     }
 
+    static constexpr uint32_t upperTriMask(uint32_t i, uint32_t j_base, uint32_t LANES, uint32_t ALL_LANES_MASK)
+    {
+        if (i < j_base)          return ALL_LANES_MASK;
+        if (i >= j_base + LANES) return 0u;
+        const uint32_t offset = i - j_base; // 0 .. LANES-1.
+        return (ALL_LANES_MASK << (offset + 1)) & ALL_LANES_MASK;
+    };
+
+    template<uint32_t W, uint32_t H>
+    constexpr auto makeMaskArray()
+    {
+        constexpr uint32_t LANES = RealSimd::lanes;
+        constexpr uint32_t ALL_LANES_MASK = (1u << LANES) - 1u;
+        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+
+        std::array<std::array<uint32_t, H>, W> arr{};
+        for (uint32_t i = 0; i < W; i++)
+        {
+            for (uint32_t j_base = 0; j_base < H; j_base++)
+            {
+                arr[i][j_base] = upperTriMask(i, j_base << LANES_LOG2, LANES, ALL_LANES_MASK);
+            }
+        }
+        return arr;
+    }
 
     const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const AABBSoAViewer& bodiesAABBViewer)
     {
@@ -251,6 +283,61 @@ namespace PS_AGONY
         }
     }
 
+    void BroadPhaseCollisionDetector::sortBodyIndicesByMortonCodes(uint32_t bodyCount)
+    {
+        TRACY_SCOPE_N("Sort Morton");
+
+        constexpr uint32_t RADIX_BITS = 8;
+        constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
+        constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
+
+        const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+
+        std::array<uint32_t, RADIX_SIZE> count{};
+
+        auto radixPass = [&](uint32_t shift, const BodyIndex* src, BodyIndex* dst)
+            {
+                count.fill(0);
+
+                // Count buckets.
+                for (uint32_t i = 0; i < bodyCount; i++)
+                {
+                    const BodyIndex idx = src[i];
+                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
+                    ++count[key];
+                }
+
+                // Exclusive prefix sum.
+                uint32_t sum = 0;
+                for (uint32_t i = 0; i < RADIX_SIZE; i++)
+                {
+                    size_t c = count[i];
+                    count[i] = sum;
+                    sum += c;
+                }
+
+                // Scatter (stable).
+                for (uint32_t i = 0; i < bodyCount; i++)
+                {
+                    const BodyIndex idx = src[i];
+                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
+                    dst[count[key]++] = idx;
+                }
+            };
+
+        //
+        auto& temp = bvhFunctionResources.bodyIndexVector2;
+        temp.resize(bodyCount);
+
+        BodyIndex* CORE_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
+        BodyIndex* CORE_RESTRICT indexTempPtr = temp.data();
+
+        radixPass(0, indexPtr, indexTempPtr);
+        radixPass(8, indexTempPtr, indexPtr);
+        radixPass(16, indexPtr, indexTempPtr);
+        radixPass(24, indexTempPtr, indexPtr);
+    }
+
     void BroadPhaseCollisionDetector::buildBvhTree(
         std::vector<BvhNode>& nodes,
         std::vector<BodyIndex>& indices,
@@ -294,60 +381,12 @@ namespace PS_AGONY
 
         // Compute morton codes.
         computeMortonCodes(bodyCount);
+
+        // Sort indices by morton code.
+        sortBodyIndicesByMortonCodes(bodyCount);
         const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
-        // Sort indices by morton code with 8-bit radix sort.
-        {
-            TRACY_SCOPE_N("Sort Morton");
-
-            constexpr uint32_t RADIX_BITS = 8;
-            constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
-            constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
-
-            std::array<uint32_t, RADIX_SIZE> count{};
-
-            auto& temp = bvhFunctionResources.bodyIndexVector2;
-            temp.resize(bodyCount);
-
-            auto radixPass = [&](uint32_t shift, const BodyIndex* src, BodyIndex* dst)
-            {
-                count.fill(0);
-
-                // Count buckets.
-                for (uint32_t i = 0; i < bodyCount; i++)
-                {
-                    const BodyIndex idx = src[i];
-                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
-                    ++count[key];
-                }
-
-                // Exclusive prefix sum.
-                uint32_t sum = 0;
-                for (uint32_t i = 0; i < RADIX_SIZE; i++)
-                {
-                    size_t c = count[i];
-                    count[i] = sum;
-                    sum += c;
-                }
-
-                // Scatter (stable).
-                for (uint32_t i = 0; i < bodyCount; i++)
-                {
-                    const BodyIndex idx = src[i];
-                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
-                    dst[count[key]++] = idx;
-                }
-            };
-
-            radixPass(0, indices.data(), temp.data());
-            radixPass(8, temp.data(), indices.data());
-            radixPass(16, indices.data(), temp.data());
-            radixPass(24, temp.data(), indices.data());
-        }
-
-        // -------------------------------------------------------------------
-        // Step 4: Top-down tree build with Morton-code binary split.
-        //
+        // Top-down tree build with Morton-code binary split.
         // For a node covering sorted range [nodeStart, nodeEnd):
         //   • XOR the first and last Morton codes to find the highest bit
         //     where they differ (the "split bit").
@@ -356,18 +395,12 @@ namespace PS_AGONY
         //     (right child).
         //   • Fall back to a median split when all codes in the range are
         //     identical (perfectly overlapping bodies).
-        //
-        // The resulting tree mirrors the Z-order hierarchy, so spatially
-        // nearby bodies land in the same subtree - improving query pruning.
-        // -------------------------------------------------------------------
         {
             TRACY_SCOPE_N("Build tree");
             struct BuildTask { uint32_t nodeIdx; };
 
             // LBVH depth bound: up to 32 bit-split levels (one per Morton-code bit)
             // plus bvhDepth() median-fallback levels for same-code body clusters.
-            // The old formula (bvhDepth only, ~29) assumed a balanced median-split
-            // tree; the LBVH can be far deeper, overflowing that stack.
             constexpr uint64_t MAX_STACK_CAPACITY =
                 32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 2ull;
             std::array<BuildTask, MAX_STACK_CAPACITY> stack;
@@ -379,7 +412,7 @@ namespace PS_AGONY
             while (stackSize > 0)
             {
                 const BuildTask task = stack[--stackSize];
-                BvhNode& node = nodes[task.nodeIdx]; // Safe: nodes is reserved in buildBVHTree.
+                BvhNode& node = nodes[task.nodeIdx];
 
                 const uint32_t nodeStart = node.start;
                 const uint32_t nodeEnd = node.end;
@@ -414,7 +447,7 @@ namespace PS_AGONY
                 {
                     // All bodies hash to the same Morton cell; equal codes can't
                     // be meaningfully split, so fall back to a balanced median.
-                    mid = nodeStart + rangeSize / 2;
+                    mid = nodeStart + (rangeSize >> 1);
                 }
                 else
                 {
@@ -433,6 +466,7 @@ namespace PS_AGONY
                         else
                             hi = m;
                     }
+
                     // Clamp defensively to guarantee non-empty children.
                     mid = std::clamp(lo, nodeStart + 1u, nodeEnd - 1u);
                 }
@@ -495,6 +529,14 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
     {
+        constexpr uint32_t LANES = RealSimd::lanes;
+        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+
+        constexpr uint32_t CAP = BvhNode::KD_LEAF_SIZE;
+
+        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, CAP / LANES>();
+        
+        // Get pointers.
         const Real* leafMinXPtr = bvhFunctionResources.leafMinX.data();
         const Real* leafMaxXPtr = bvhFunctionResources.leafMaxX.data();
         const Real* leafMinYPtr = bvhFunctionResources.leafMinY.data();
@@ -504,8 +546,6 @@ namespace PS_AGONY
         // Self-query pushes up to 3 items per pop (net +2), so worst-case depth
         // for a tree of depth D is 2D+1 items.  LBVH depth = 32 bit-split levels
         // + bvhDepth median-fallback levels (~61 total), so we need ~123 entries.
-        // The old value (2*bvhDepth+1 ≈ 59) was sized for a balanced median tree
-        // only and would overflow for a deep LBVH.
         constexpr uint64_t MAX_STACK_CAPACITY =
             2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
         BvhNodePair stack[MAX_STACK_CAPACITY];
@@ -530,42 +570,23 @@ namespace PS_AGONY
 
             if (aLeaf && bLeaf)
             {
-                constexpr uint32_t LANES = RealSimd::lanes;
-                constexpr uint32_t CAP = BvhNode::KD_LEAF_SIZE;
-
-                constexpr uint32_t ALL_LANES_MASK = (1u << LANES) - 1u;
-
-                // Returns which lanes in the chunk starting at j_base represent a j > i.
-                // Bit k is set iff (j_base + k) > i.
-                //
-                //  i < j_base          -> whole chunk is strictly above i -> all bits set.
-                //  i >= j_base + LANES -> whole chunk is at or below i  -> no bits set.
-                //  otherwise           -> i falls inside the chunk; keep only k > (i - j_base).
-                const auto upperTriMask = [&](uint32_t i, uint32_t j_base) -> uint32_t
-                    {
-                        if (i < j_base)          return ALL_LANES_MASK;
-                        if (i >= j_base + LANES) return 0u;
-                        const uint32_t offset = i - j_base; // 0 .. LANES-1
-                        return (ALL_LANES_MASK << (offset + 1)) & ALL_LANES_MASK;
-                    };
-
                 const auto gatherLeaf = [&](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
+                {
+                    const uint32_t count = nodeEnd - nodeStart;
+
+                    for (uint32_t k = 0; k < count; k++)
                     {
-                        const uint32_t count = nodeEnd - nodeStart;
+                        out.minX[k] = leafMinXPtr[nodeStart + k];
+                        out.maxX[k] = leafMaxXPtr[nodeStart + k];
+                        out.minY[k] = leafMinYPtr[nodeStart + k];
+                        out.maxY[k] = leafMaxYPtr[nodeStart + k];
+                    }
 
-                        for (uint32_t k = 0; k < count; k++)
-                        {
-                            out.minX[k] = leafMinXPtr[nodeStart + k];
-                            out.maxX[k] = leafMaxXPtr[nodeStart + k];
-                            out.minY[k] = leafMinYPtr[nodeStart + k];
-                            out.maxY[k] = leafMaxYPtr[nodeStart + k];
-                        }
-
-                        constexpr Real DEAD = -std::numeric_limits<Real>::max();
-                        for (uint32_t k = count; k < CAP; k++)
-                            out.minX[k] = out.maxX[k] = out.minY[k] = out.maxY[k] = DEAD;
-						return count;
-                    };
+                    constexpr Real DEAD = -std::numeric_limits<Real>::max();
+                    for (uint32_t k = count; k < CAP; k++)
+                        out.minX[k] = out.maxX[k] = out.minY[k] = out.maxY[k] = DEAD;
+					return count;
+                };
 
                 // Gather leaf A, it is needed in both paths.
                 LeafAABB leafA;
@@ -592,7 +613,7 @@ namespace PS_AGONY
                                 (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
                                 (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
 
-                            uint32_t mask = overlap.movemask() & upperTriMask(i, j);
+                            uint32_t mask = overlap.movemask() & maskArray[i][j >> LANES_LOG2];
                             while (mask)
                             {
                                 const uint32_t lane = std::countr_zero(mask);

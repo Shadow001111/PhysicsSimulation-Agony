@@ -83,6 +83,8 @@ namespace PS_AGONY
 
 		void computeMortonCodes(uint32_t bodyCount);
 
+		void sortBodyIndicesByMortonCodes(uint32_t bodyCount);
+
 		void buildBvhTree(
 			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,
