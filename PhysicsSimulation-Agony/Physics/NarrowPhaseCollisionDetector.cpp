@@ -30,7 +30,6 @@ namespace PS_AGONY
         }
     };
 
-
     static inline Vec2 projectBox(
         const Vec2& center,
         const Vec2& right,
@@ -68,6 +67,22 @@ namespace PS_AGONY
         result.squaredDistance = glm::dot(deltaPosition, deltaPosition);
 
         return result;
+    }
+
+    static __forceinline void flip_sign_if_negative(glm::vec2& v, const float& sign)
+    {
+        constexpr uint32_t signBit = 1u << 31;
+        const uint32_t sign_mask = reinterpret_cast<const uint32_t&>(sign) & signBit;
+        reinterpret_cast<uint32_t&>(v.x) ^= sign_mask;
+        reinterpret_cast<uint32_t&>(v.y) ^= sign_mask;
+    }
+
+    static __forceinline void flip_sign_if_negative(glm::dvec2& v, const double& sign)
+    {
+        constexpr uint64_t signBit = 1ull << 63;
+        const uint64_t sign_mask = reinterpret_cast<const uint64_t&>(sign) & signBit;
+        reinterpret_cast<uint64_t&>(v.x) ^= sign_mask;
+        reinterpret_cast<uint64_t&>(v.y) ^= sign_mask;
     }
 
 
@@ -378,7 +393,10 @@ namespace PS_AGONY
                 if (overlap < depth)
                 {
                     depth = overlap;
-                    normal = centerDeltaOnAxis >= Real(0) ? axis : -axis;
+
+                    normal = axis;
+                    flip_sign_if_negative(normal, centerDeltaOnAxis);
+
                 }
                 return true;
             };
