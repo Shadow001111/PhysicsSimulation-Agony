@@ -48,7 +48,7 @@ namespace PS_AGONY
 			SimdAlignedVector<Real> transformedCentroidX;
 			SimdAlignedVector<Real> transformedCentroidY;
 
-			std::vector<MortonCode> mortonCodes;
+			SimdAlignedVector<MortonCode> mortonCodes;
 
 			SimdAlignedVector<Real> leafMinX;
 			SimdAlignedVector<Real> leafMaxX;

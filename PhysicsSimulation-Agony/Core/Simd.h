@@ -1060,6 +1060,43 @@ struct Simd
         return s;
     }
 
+    [[nodiscard]] Simd<uint32_t, Bits> to_uint32() const noexcept
+        requires std::is_same_v<T, float>
+    {
+        Simd<uint32_t, Bits> s;
+
+        if constexpr (Bits == 128)
+        {
+            const __m128  bias_f = _mm_set1_ps(2147483648.0f); // 2^31
+            const __m128i bias_i = _mm_set1_epi32(0x80000000u);
+
+            const __m128 mask = _mm_cmpge_ps(reg, bias_f);
+            const __m128 adjusted = _mm_sub_ps(reg, _mm_and_ps(mask, bias_f));
+            const __m128i signed_i = _mm_cvttps_epi32(adjusted);
+
+            s.reg = _mm_xor_si128(signed_i, _mm_and_si128(_mm_castps_si128(mask), bias_i));
+        }
+        else
+        {
+            const __m256  bias_f = _mm256_set1_ps(2147483648.0f); // 2^31
+            const __m256i bias_i = _mm256_set1_epi32(0x80000000u);
+
+            // mask = (reg >= 2^31)
+            const __m256 mask = _mm256_cmp_ps(reg, bias_f, _CMP_GE_OQ);
+
+            // subtract 2^31 only for lanes that need it
+            const __m256 adjusted = _mm256_sub_ps(reg, _mm256_and_ps(mask, bias_f));
+
+            // signed truncation of the adjusted value
+            const __m256i signed_i = _mm256_cvttps_epi32(adjusted);
+
+            // restore unsigned bit pattern
+            s.reg = _mm256_xor_si256(signed_i, _mm256_and_si256(_mm256_castps_si256(mask), bias_i));
+        }
+
+        return s;
+    }
+
     [[nodiscard]] Simd<float> to_float() const noexcept
         requires (std::is_same_v<T, int32_t>)
     {

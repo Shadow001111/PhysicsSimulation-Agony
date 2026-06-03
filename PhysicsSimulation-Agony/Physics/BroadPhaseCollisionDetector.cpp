@@ -7,6 +7,7 @@
 #include <bit>
 #include <algorithm>
 #include <array>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -211,11 +212,36 @@ namespace PS_AGONY
 
         TRACY_SCOPE_N("Compute morton codes");
 
-        for (uint32_t b = 0; b < bodyCount; b++)
+        if constexpr (RealSimd::lanes == U32Simd::lanes)
         {
-            const uint32_t qx = static_cast<uint32_t>(centroidXPtr[b]);
-            const uint32_t qy = static_cast<uint32_t>(centroidYPtr[b]);
-            mortonCodePtr[b] = morton2D(qx, qy);
+            size_t i = 0;
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                const RealSimd cx = RealSimd::load(centroidXPtr + i);
+                const RealSimd cy = RealSimd::load(centroidYPtr + i);
+
+                const U32Simd qx = cx.to_uint32();
+                const U32Simd qy = cy.to_uint32();
+
+                const U32Simd code = morton2DSimd(qx, qy);
+
+                code.store(mortonCodePtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                const uint32_t qx = static_cast<uint32_t>(centroidXPtr[i]);
+                const uint32_t qy = static_cast<uint32_t>(centroidYPtr[i]);
+                mortonCodePtr[i] = morton2D(qx, qy);
+            }
+        }
+        else
+        {
+            for (uint32_t i = 0; i < bodyCount; i++)
+            {
+                const uint32_t qx = static_cast<uint32_t>(centroidXPtr[i]);
+                const uint32_t qy = static_cast<uint32_t>(centroidYPtr[i]);
+                mortonCodePtr[i] = morton2D(qx, qy);
+            }
         }
     }
 
