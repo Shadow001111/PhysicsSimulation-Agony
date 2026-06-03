@@ -193,12 +193,15 @@ static int gameFunc()
 
         {
             constexpr float boundary = 9.0f;
-            constexpr float radius = 100.0f;
+            constexpr float thickness = 20.0f;
 
-            simulation.createCircle({ -(boundary + radius),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
-            simulation.createCircle({  (boundary + radius),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
-            simulation.createCircle({  0.0, -(boundary + radius) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
-            simulation.createCircle({  0.0,  (boundary + radius) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, radius);
+            constexpr float halfThickness = thickness * 0.5f;
+            constexpr float length = boundary * 2.0f + 2.0f;
+
+            simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {thickness, length});
+            simulation.createBox({  (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {thickness, length});
+            simulation.createBox({  0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {length, thickness});
+            simulation.createBox({  0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, {length, thickness});
         }
 
         Random::setSeed(0);
