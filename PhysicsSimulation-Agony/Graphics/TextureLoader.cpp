@@ -142,7 +142,7 @@ namespace TextureLoader
         const int mips = calculateMipmapLevels(width, height, params.createMipmaps);
 
         // When the internal format is compressed, OpenGL accepts ordinary pixel data via
-        // glTextureSubImage* and compresses it on the driver — no special path needed.
+        // glTextureSubImage* and compresses it on the driver - no special path needed.
         texture.create2D(width, height, fmt, mips);
         texture.uploadSubData2D(imageData.data(), 0, 0, width, height, GL_UNSIGNED_BYTE, 0);
         if (mips > 1) texture.generateMipmaps();

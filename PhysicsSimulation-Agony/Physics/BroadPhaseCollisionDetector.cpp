@@ -1,4 +1,4 @@
-#include "BroadPhaseCollisionDetector.h"
+﻿#include "BroadPhaseCollisionDetector.h"
 
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
@@ -6,6 +6,7 @@
 #include <numeric>
 #include <bit>
 #include <algorithm>
+#include <array>
 
 namespace PS_AGONY
 {
@@ -56,6 +57,7 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodeVector);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.centroidX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.centroidY);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinY);
@@ -90,163 +92,14 @@ namespace PS_AGONY
         }
         {
             TRACY_SCOPE_N("Query pairs");
-            queryBvhPairs(nodes, indices); // Self-query the root finds all pairs.
+            queryBvhPairs(nodes, indices);
         }
     }
 
-    //void BroadPhaseCollisionDetector::uniformSpaceGrid(size_t bodyCount)
-    //{
-    //    TRACY_SCOPE_N("Uniform grid");
-    //
-    //    const Real* CORE_RESTRICT aabbMinX = bodiesAABB.minX;
-    //    const Real* CORE_RESTRICT aabbMinY = bodiesAABB.minY;
-    //    const Real* CORE_RESTRICT aabbMaxX = bodiesAABB.maxX;
-    //    const Real* CORE_RESTRICT aabbMaxY = bodiesAABB.maxY;
-    //
-    //    auto* CORE_RESTRICT grid = &functionResources.spaceGrid;
-    //
-    //    // Compute world bounds from all AABBs.
-    //    Real globalMinX =  std::numeric_limits<Real>::max();
-    //    Real globalMaxX = -std::numeric_limits<Real>::max();
-    //    Real globalMinY =  std::numeric_limits<Real>::max();
-    //    Real globalMaxY = -std::numeric_limits<Real>::max();
-    //
-    //    Real totalExtent = Real(0.0);
-    //    {
-    //        TRACY_SCOPE_N("Determine world AABB and bodies' total extent");
-    //        for (size_t i = 0; i < bodyCount; i++)
-    //        {
-    //            const Real minX = aabbMinX[i];
-    //            const Real maxX = aabbMaxX[i];
-    //            const Real minY = aabbMinY[i];
-    //            const Real maxY = aabbMaxY[i];
-    //
-    //            globalMinX = std::min(globalMinX, minX);
-    //            globalMaxX = std::max(globalMaxX, maxX);
-    //            globalMinY = std::min(globalMinY, minY);
-    //            globalMaxY = std::max(globalMaxY, maxY);
-    //
-    //            const Real extentX = maxX - minX;
-    //            const Real extentY = maxY - minY;
-    //            totalExtent += std::max(extentX, extentY);
-    //        }
-    //    }
-    //
-    //    const Real averageBodyExtent = totalExtent / Real(bodyCount);
-    //
-    //    const Real worldWidth = std::max(globalMaxX - globalMinX, Real(1e-3));
-    //    const Real worldHeight = std::max(globalMaxY - globalMinY, Real(1e-3));
-    //    const Real worldArea = worldWidth * worldHeight;
-    //
-    //    // Determine cell size.
-    //    Real cellSize = std::max(
-    //        std::sqrt(worldArea / Real(bodyCount)),
-    //        averageBodyExtent * Real(2.0)
-    //    );
-    //    cellSize = std::max(cellSize, Real(0.25));
-    //
-    //    const Real invCellSize = Real(1.0) / cellSize;
-    //
-    //    // Grid size.
-    //    const int gridWidth = std::max(1, static_cast<int>(std::ceil(worldWidth * invCellSize)));
-    //    const int gridHeight = std::max(1, static_cast<int>(std::ceil(worldHeight * invCellSize)));
-    //
-    //    // Map each occupied cell to a list of body indices.
-    //    grid->clear();
-    //    grid->reserve(bodyCount * 4);
-    //
-    //    auto getCellKey = [](int cx, int cy) -> uint64_t {
-    //        constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
-    //        uint64_t h = (uint64_t)cx + addConst;
-    //        h ^= (uint64_t)cy + addConst + (h << 6) + (h >> 2);
-    //        return h;
-    //        };
-    //
-    //    {
-    //        TRACY_SCOPE_N("Put bodies into cells");
-    //        for (BodyIndex bodyIndex = 0; bodyIndex < bodyCount; bodyIndex++)
-    //        {
-    //            const Real minX = aabbMinX[bodyIndex];
-    //            const Real maxX = aabbMaxX[bodyIndex];
-    //            const Real minY = aabbMinY[bodyIndex];
-    //            const Real maxY = aabbMaxY[bodyIndex];
-    //
-    //            int cx0 = static_cast<int>(std::floor((minX - globalMinX) * invCellSize));
-    //            int cx1 = static_cast<int>(std::floor((maxX - globalMinX) * invCellSize));
-    //            int cy0 = static_cast<int>(std::floor((minY - globalMinY) * invCellSize));
-    //            int cy1 = static_cast<int>(std::floor((maxY - globalMinY) * invCellSize));
-    //
-    //            cx0 = std::clamp(cx0, 0, gridWidth - 1);
-    //            cx1 = std::clamp(cx1, 0, gridWidth - 1);
-    //            cy0 = std::clamp(cy0, 0, gridHeight - 1);
-    //            cy1 = std::clamp(cy1, 0, gridHeight - 1);
-    //
-    //            for (int cx = cx0; cx <= cx1; cx++)
-    //            for (int cy = cy0; cy <= cy1; cy++)
-    //                (*grid)[getCellKey(cx, cy)].push_back(bodyIndex);
-    //        }
-    //    }
-    //
-    //    // For each cell, test all pairs inside it.
-    //    auto* CORE_RESTRICT testedPairs = &functionResources.uint64Set;
-    //    testedPairs->clear();
-    //    testedPairs->reserve(bodyCount * 8);
-    //
-    //    auto pairKey = [](BodyIndex a, BodyIndex b) -> uint64_t
-    //        {
-    //            const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
-    //            const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
-    //
-    //            constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
-    //            uint64_t h = (uint64_t)lo + addConst;
-    //            h ^= (uint64_t)hi + addConst + (h << 6) + (h >> 2);
-    //            return h;
-    //        };
-    //
-    //    {
-    //        TRACY_SCOPE_N("Test pairs");
-    //        for (auto& entry : *grid)
-    //        {
-    //            const std::vector<BodyIndex>& bodiesInCell = entry.second;
-    //            const size_t bodyInCellCount = bodiesInCell.size();
-    //            if (bodyInCellCount < 2) continue;
-    //
-    //            for (size_t i = 0; i < bodyInCellCount; i++)
-    //            {
-    //                const BodyIndex bodyIndexA = bodiesInCell[i];
-    //                const Real minXA = aabbMinX[bodyIndexA];
-    //                const Real minYA = aabbMinY[bodyIndexA];
-    //                const Real maxXA = aabbMaxX[bodyIndexA];
-    //                const Real maxYA = aabbMaxY[bodyIndexA];
-    //
-    //                for (size_t j = i + 1; j < bodyInCellCount; j++)
-    //                {
-    //                    const BodyIndex bodyIndexB = bodiesInCell[j];
-    //                    const uint64_t key = pairKey(bodyIndexA, bodyIndexB);
-    //                    if (!testedPairs->insert(key).second)
-    //                        continue;
-    //
-    //                    const Real minXB = aabbMinX[bodyIndexB];
-    //                    const Real minYB = aabbMinY[bodyIndexB];
-    //                    const Real maxXB = aabbMaxX[bodyIndexB];
-    //                    const Real maxYB = aabbMaxY[bodyIndexB];
-    //
-    //                    const bool doesIntersect =
-    //                        (minXA < maxXB && maxXA > minXB) &&
-    //                        (minYA < maxYB && maxYA > minYB);
-    //
-    //                    if (doesIntersect)
-    //                    {
-    //                        collidingBodyPairs.emplace_back(bodyIndexA, bodyIndexB);
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
-    //}
-
-    void BroadPhaseCollisionDetector::buildBvhTree(std::vector<BvhNode>& nodes, std::vector<BodyIndex>& indices, uint32_t bodyCount)
+    void BroadPhaseCollisionDetector::computeCentroids(uint32_t bodyCount)
     {
+        TRACY_SCOPE_N("Compute centroids");
+
         using RealSimd = Simd<Real>;
 
         const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
@@ -254,10 +107,6 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
 
-        BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
-
-        // Compute centroids.
-        // Note: Removed '*0.5' because it doesn't impact order.
         Real* CORE_RESTRICT centroidXPtr = nullptr;
         Real* CORE_RESTRICT centroidYPtr = nullptr;
         {
@@ -269,104 +118,211 @@ namespace PS_AGONY
             centroidYPtr = centroidY.data();
         }
 
+        size_t i = 0;
+        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
         {
-            size_t i = 0;
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            const RealSimd minX = RealSimd::load(aabbMinXPtr + i);
+            const RealSimd maxX = RealSimd::load(aabbMaxXPtr + i);
+            const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
+            const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
+
+            const RealSimd centroidX = (minX + maxX) * Real(0.5);
+            const RealSimd centroidY = (minY + maxY) * Real(0.5);
+
+            centroidX.store(centroidXPtr + i);
+            centroidY.store(centroidYPtr + i);
+        }
+        for (; i < bodyCount; i++)
+        {
+            centroidXPtr[i] = aabbMinXPtr[i] + aabbMaxXPtr[i];
+            centroidYPtr[i] = aabbMinYPtr[i] + aabbMaxYPtr[i];
+        }
+    }
+
+    void BroadPhaseCollisionDetector::buildBvhTree(
+        std::vector<BvhNode>& nodes,
+        std::vector<BodyIndex>& indices,
+        const uint32_t bodyCount
+    )
+    {
+        const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
+        const Real* CORE_RESTRICT aabbMinYPtr = bodiesAABB.minY;
+        const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
+
+        // Compute world AABB.
+        Real globalMinX, globalMaxX, globalMinY, globalMaxY;
+        {
+            TRACY_SCOPE_N("World AABB");
+            globalMinX =  std::numeric_limits<Real>::max();
+            globalMaxX = -std::numeric_limits<Real>::max();
+            globalMinY =  std::numeric_limits<Real>::max();
+            globalMaxY = -std::numeric_limits<Real>::max();
+
+            for (uint32_t i = 0; i < bodyCount; i++)
             {
-                const RealSimd minX = RealSimd::load(aabbMinXPtr + i);
-                const RealSimd maxX = RealSimd::load(aabbMaxXPtr + i);
-                const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
-                const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
-
-                const RealSimd centroidX = minX + maxX;
-                const RealSimd centroidY = minY + maxY;
-
-                centroidX.store(centroidXPtr + i);
-                centroidY.store(centroidYPtr + i);
+                globalMinX = std::min(globalMinX, aabbMinXPtr[i]);
+                globalMaxX = std::max(globalMaxX, aabbMaxXPtr[i]);
+                globalMinY = std::min(globalMinY, aabbMinYPtr[i]);
+                globalMaxY = std::max(globalMaxY, aabbMaxYPtr[i]);
             }
-            for (; i < bodyCount; i++)
+
+            // Prevent division by zero for degenerate scenes.
+            constexpr Real kEps = Real(1e-5);
+            globalMaxX = std::max(globalMaxX, globalMinX + kEps);
+            globalMaxY = std::max(globalMaxY, globalMinY + kEps);
+        }
+
+        // Compute centroids.
+        computeCentroids(bodyCount);
+
+        // Compute morton codes.
+        auto& mortonCodes = bvhFunctionResources.mortonCodes;
+        mortonCodes.resize(bodyCount);
+        {
+            TRACY_SCOPE_N("Morton codes");
+            const Real scaleX = Real(0xFFFFu) / (globalMaxX - globalMinX);
+            const Real scaleY = Real(0xFFFFu) / (globalMaxY - globalMinY);
+
+            const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.centroidX.data();
+            const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.centroidY.data();
+
+            for (uint32_t b = 0; b < bodyCount; b++)
             {
-                centroidXPtr[i] = aabbMinXPtr[i] + aabbMaxXPtr[i];
-                centroidYPtr[i] = aabbMinYPtr[i] + aabbMaxYPtr[i];
+                const Real cx = centroidXPtr[b];
+                const Real cy = centroidYPtr[b];
+
+                const uint32_t qx = static_cast<uint32_t>(
+                    std::clamp((cx - globalMinX) * scaleX, Real(0), Real(0xFFFFu)));
+                const uint32_t qy = static_cast<uint32_t>(
+                    std::clamp((cy - globalMinY) * scaleY, Real(0), Real(0xFFFFu)));
+
+                mortonCodes[b] = morton2D(qx, qy);
             }
         }
 
-        // Local stack.
-        struct BuildTask
+        // -------------------------------------------------------------------
+        // Step 3: Sort body indices by Morton code - single O(N log N) pass.
+        //
+        // NOTE: a 2-pass 16-bit radix sort over the 32-bit codes would reduce
+        //       this to O(N), which is worthwhile for large N.  std::sort is
+        //       used here for simplicity; swap if profiling shows it as a
+        //       bottleneck.
+        // -------------------------------------------------------------------
         {
-            uint32_t nodeIdx;
-        };
+            TRACY_SCOPE_N("Sort Morton");
+            // mortonCodes[b] is the code for body b; indices starts as 0..N-1.
+            std::sort(indices.begin(), indices.end(),
+                [mc = mortonCodes.data()](BodyIndex a, BodyIndex b)
+                {
+                    return mc[a] < mc[b];
+                });
+        }
 
-        constexpr uint64_t MAX_STACK_CAPACITY = bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
-        BuildTask stack[MAX_STACK_CAPACITY];
-        uint32_t stackSize = 0;
-
-		nodes.emplace_back(0, bodyCount);
-        stack[stackSize++] = { 0 };
-
-        while (stackSize > 0)
+        // -------------------------------------------------------------------
+        // Step 4: Top-down tree build with Morton-code binary split.
+        //
+        // For a node covering sorted range [nodeStart, nodeEnd):
+        //   • XOR the first and last Morton codes to find the highest bit
+        //     where they differ (the "split bit").
+        //   • Binary-search for the boundary between codes that have the
+        //     split bit clear (left child) and those that have it set
+        //     (right child).
+        //   • Fall back to a median split when all codes in the range are
+        //     identical (perfectly overlapping bodies).
+        //
+        // The resulting tree mirrors the Z-order hierarchy, so spatially
+        // nearby bodies land in the same subtree - improving query pruning.
+        // -------------------------------------------------------------------
         {
-            const BuildTask task = stack[--stackSize];
+            TRACY_SCOPE_N("Build tree");
+            struct BuildTask { uint32_t nodeIdx; };
 
-            BvhNode& node = nodes[task.nodeIdx];
+            // LBVH depth bound: up to 32 bit-split levels (one per Morton-code bit)
+            // plus bvhDepth() median-fallback levels for same-code body clusters.
+            // The old formula (bvhDepth only, ~29) assumed a balanced median-split
+            // tree; the LBVH can be far deeper, overflowing that stack.
+            constexpr uint64_t MAX_STACK_CAPACITY =
+                32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 2ull;
+            std::array<BuildTask, MAX_STACK_CAPACITY> stack;
+            uint32_t stackSize = 0;
 
-			const uint32_t nodeStart = node.start;
-			const uint32_t nodeEnd = node.end;
-            const uint32_t rangeSize = nodeEnd - nodeStart;
+            nodes.emplace_back(0u, bodyCount);
+            stack[stackSize++] = { 0u };
 
-            // Compute merged bounding box.
-            Real minX =  std::numeric_limits<Real>::max();
-            Real maxX = -std::numeric_limits<Real>::max();
-            Real minY =  std::numeric_limits<Real>::max();
-            Real maxY = -std::numeric_limits<Real>::max();
-            for (uint32_t i = nodeStart; i < nodeEnd; i++)
+            while (stackSize > 0)
             {
-                const BodyIndex b = indicesPtr[i];
-                minX = std::min(minX, aabbMinXPtr[b]);
-                maxX = std::max(maxX, aabbMaxXPtr[b]);
-                minY = std::min(minY, aabbMinYPtr[b]);
-                maxY = std::max(maxY, aabbMaxYPtr[b]);
+                const BuildTask task = stack[--stackSize];
+                BvhNode& node = nodes[task.nodeIdx]; // Safe: nodes is reserved in buildBVHTree.
+
+                const uint32_t nodeStart = node.start;
+                const uint32_t nodeEnd = node.end;
+                const uint32_t rangeSize = nodeEnd - nodeStart;
+
+                // Compute merged AABB for this node.
+                Real minX =  std::numeric_limits<Real>::max();
+                Real maxX = -std::numeric_limits<Real>::max();
+                Real minY =  std::numeric_limits<Real>::max();
+                Real maxY = -std::numeric_limits<Real>::max();
+
+                for (uint32_t i = nodeStart; i < nodeEnd; i++)
+                {
+                    const BodyIndex b = indices[i];
+                    minX = std::min(minX, aabbMinXPtr[b]);
+                    maxX = std::max(maxX, aabbMaxXPtr[b]);
+                    minY = std::min(minY, aabbMinYPtr[b]);
+                    maxY = std::max(maxY, aabbMaxYPtr[b]);
+                }
+                node.minX = minX; node.maxX = maxX;
+                node.minY = minY; node.maxY = maxY;
+
+                if (rangeSize <= BvhNode::KD_LEAF_SIZE)
+                    continue; // Leaf - nothing more to split.
+
+                // Find the split position.
+                const uint32_t mcFirst = mortonCodes[indices[nodeStart]];
+                const uint32_t mcLast = mortonCodes[indices[nodeEnd - 1]];
+
+                uint32_t mid;
+                if (mcFirst == mcLast)
+                {
+                    // All bodies hash to the same Morton cell; equal codes can't
+                    // be meaningfully split, so fall back to a balanced median.
+                    mid = nodeStart + rangeSize / 2;
+                }
+                else
+                {
+                    // Highest bit where the first and last codes disagree.
+                    // Because the array is sorted, all codes in [nodeStart, mid)
+                    // have this bit clear and all in [mid, nodeEnd) have it set.
+                    const uint32_t splitBit = std::bit_floor(mcFirst ^ mcLast);
+
+                    // Binary-search for the first index with splitBit set.
+                    uint32_t lo = nodeStart, hi = nodeEnd - 1;
+                    while (lo < hi)
+                    {
+                        const uint32_t m = (lo + hi) >> 1;
+                        if ((mortonCodes[indices[m]] & splitBit) == 0u)
+                            lo = m + 1;
+                        else
+                            hi = m;
+                    }
+                    // Clamp defensively to guarantee non-empty children.
+                    mid = std::clamp(lo, nodeStart + 1u, nodeEnd - 1u);
+                }
+
+                const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
+                const uint32_t rightIdx = leftIdx + 1u;
+                node.left = leftIdx;
+                node.right = rightIdx;
+
+                nodes.emplace_back(nodeStart, mid);
+                nodes.emplace_back(mid, nodeEnd);
+
+                // Push right before left so left is processed first (depth-first).
+                stack[stackSize++] = { rightIdx };
+                stack[stackSize++] = { leftIdx };
             }
-            node.minX = minX;
-            node.maxX = maxX;
-            node.minY = minY;
-            node.maxY = maxY;
-
-            // Check range.
-            if (rangeSize <= BvhNode::KD_LEAF_SIZE) // Leaf.
-                continue;
-
-            // Partition on the widest axis at the median centroid.
-            const bool splitX = (maxX - minX) >= (maxY - minY);
-            const uint32_t mid = nodeStart + rangeSize / 2; // (task.start + task.end) / 2;
-
-            if (splitX)
-            {
-                std::nth_element(indicesPtr + nodeStart, indicesPtr + mid, indicesPtr + nodeEnd,
-                    [&](BodyIndex a, BodyIndex b) {
-                    return centroidXPtr[a] < centroidXPtr[b];
-                    });
-            }
-            else
-            {
-                std::
-                    nth_element(indicesPtr + nodeStart, indicesPtr + mid, indicesPtr + nodeEnd,
-                    [&](BodyIndex a, BodyIndex b) {
-                    return centroidYPtr[a] < centroidYPtr[b];
-                    });
-            }
-
-            const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
-			const uint32_t rightIdx = leftIdx + 1;
-
-			node.left = leftIdx;
-			node.right = rightIdx;
-
-            nodes.emplace_back(nodeStart, mid);
-			nodes.emplace_back(mid, nodeEnd);
-
-            stack[stackSize++] = { rightIdx };
-            stack[stackSize++] = { leftIdx };
         }
     }
 
@@ -418,8 +374,14 @@ namespace PS_AGONY
         const Real* leafMinYPtr = bvhFunctionResources.leafMinY.data();
         const Real* leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
 
-        // Local stack.
-        constexpr uint64_t MAX_STACK_CAPACITY = 2ull * bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 1ull;
+        // Dual-node traversal stack.
+        // Self-query pushes up to 3 items per pop (net +2), so worst-case depth
+        // for a tree of depth D is 2D+1 items.  LBVH depth = 32 bit-split levels
+        // + bvhDepth median-fallback levels (~61 total), so we need ~123 entries.
+        // The old value (2*bvhDepth+1 ≈ 59) was sized for a balanced median tree
+        // only and would overflow for a deep LBVH.
+        constexpr uint64_t MAX_STACK_CAPACITY =
+            2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
         BvhNodePair stack[MAX_STACK_CAPACITY];
         uint32_t stackSize = 0;
 

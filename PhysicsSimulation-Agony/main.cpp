@@ -333,7 +333,9 @@ int main()
 {
     int result = 0;
 
-    try
+    result = gameFunc();
+
+    /*try
     {
         result = gameFunc();
     }
@@ -345,7 +347,7 @@ int main()
 
         logger.add(message);
         result = -1;
-    }
+    }*/
 
     return result;
 }

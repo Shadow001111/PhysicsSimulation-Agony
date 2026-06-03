@@ -7,6 +7,8 @@ namespace PS_AGONY
 {
 	class BroadPhaseCollisionDetector
 	{
+		using MortonCode = uint32_t;
+
 		struct BvhNode
 		{
 			static constexpr uint32_t KD_LEAF_SIZE = 8;
@@ -46,6 +48,8 @@ namespace PS_AGONY
 			SimdAlignedVector<Real> centroidX;
 			SimdAlignedVector<Real> centroidY;
 
+			std::vector<MortonCode> mortonCodes;
+
 			SimdAlignedVector<Real> leafMinX;
 			SimdAlignedVector<Real> leafMaxX;
 			SimdAlignedVector<Real> leafMinY;
@@ -74,10 +78,28 @@ namespace PS_AGONY
 	private:
 		void findCollisionsBVH(size_t bodyCount);
 
+		static inline MortonCode part1By1(uint32_t x)
+		{
+			x &= 0x0000ffffu;
+			x = (x | (x << 8)) & 0x00FF00FFu;
+			x = (x | (x << 4)) & 0x0F0F0F0Fu;
+			x = (x | (x << 2)) & 0x33333333u;
+			x = (x | (x << 1)) & 0x55555555u;
+			return x;
+		}
+
+		static inline MortonCode morton2D(uint32_t x, uint32_t y)
+		{
+			return (part1By1(y) << 1) | part1By1(x);
+		}
+
+		void computeCentroids(uint32_t bodyCount);
+
 		void buildBvhTree(
 			std::vector<BvhNode>& nodes,
 			std::vector<BodyIndex>& indices,
-			uint32_t bodyCount);
+			const uint32_t bodyCount
+		);
 
 		void reorderAABBByIndices(const std::vector<BodyIndex>& indices);
 
