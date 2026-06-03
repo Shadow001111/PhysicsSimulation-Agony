@@ -56,6 +56,7 @@ namespace PS_AGONY
 			SimdAlignedVector<Real> leafMaxY;
 
 			std::vector<BodyIndex> bodyIndexVector1;
+			std::vector<BodyIndex> bodyIndexVector2;
 		};
 
 		AABBSoAViewer bodiesAABB;

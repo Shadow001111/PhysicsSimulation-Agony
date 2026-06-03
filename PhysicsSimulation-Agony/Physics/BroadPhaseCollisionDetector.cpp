@@ -2,6 +2,7 @@
 
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
+#include "Core/Assert.h"
 
 #include <numeric>
 #include <bit>
@@ -90,14 +91,19 @@ namespace PS_AGONY
         size_t total = 0;
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodeVector);
+
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidY);
+
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
+
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinY);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxY);
+
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector1);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector2);
 
         total += PS_AGONY::getVectorMemoryUsage(broadCollisionData);
 
@@ -290,22 +296,53 @@ namespace PS_AGONY
         computeMortonCodes(bodyCount);
         const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
-        // -------------------------------------------------------------------
-        // Step 3: Sort body indices by Morton code - single O(N log N) pass.
-        //
-        // NOTE: a 2-pass 16-bit radix sort over the 32-bit codes would reduce
-        //       this to O(N), which is worthwhile for large N.  std::sort is
-        //       used here for simplicity; swap if profiling shows it as a
-        //       bottleneck.
-        // -------------------------------------------------------------------
+        // Sort indices by morton code with 8-bit radix sort.
         {
             TRACY_SCOPE_N("Sort Morton");
-            // mortonCodes[b] is the code for body b; indices starts as 0..N-1.
-            std::sort(indices.begin(), indices.end(),
-                [mortonCodePtr](BodyIndex a, BodyIndex b)
+
+            constexpr uint32_t RADIX_BITS = 8;
+            constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
+            constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
+
+            std::array<uint32_t, RADIX_SIZE> count{};
+
+            auto& temp = bvhFunctionResources.bodyIndexVector2;
+            temp.resize(bodyCount);
+
+            auto radixPass = [&](uint32_t shift, const BodyIndex* src, BodyIndex* dst)
+            {
+                count.fill(0);
+
+                // Count buckets.
+                for (uint32_t i = 0; i < bodyCount; i++)
                 {
-                    return mortonCodePtr[a] < mortonCodePtr[b];
-                });
+                    const BodyIndex idx = src[i];
+                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
+                    ++count[key];
+                }
+
+                // Exclusive prefix sum.
+                uint32_t sum = 0;
+                for (uint32_t i = 0; i < RADIX_SIZE; i++)
+                {
+                    size_t c = count[i];
+                    count[i] = sum;
+                    sum += c;
+                }
+
+                // Scatter (stable).
+                for (uint32_t i = 0; i < bodyCount; i++)
+                {
+                    const BodyIndex idx = src[i];
+                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
+                    dst[count[key]++] = idx;
+                }
+            };
+
+            radixPass(0, indices.data(), temp.data());
+            radixPass(8, temp.data(), indices.data());
+            radixPass(16, indices.data(), temp.data());
+            radixPass(24, temp.data(), indices.data());
         }
 
         // -------------------------------------------------------------------
