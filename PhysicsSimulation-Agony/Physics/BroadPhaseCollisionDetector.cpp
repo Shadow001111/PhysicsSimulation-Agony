@@ -55,8 +55,8 @@ namespace PS_AGONY
         size_t total = 0;
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodeVector);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.centroidX);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.centroidY);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidX);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidY);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxX);
@@ -96,7 +96,7 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale)
+    void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax)
     {
         using RealSimd = Simd<Real>;
 
@@ -109,8 +109,8 @@ namespace PS_AGONY
         Real* CORE_RESTRICT centroidXPtr = nullptr;
         Real* CORE_RESTRICT centroidYPtr = nullptr;
         {
-            auto& centroidX = bvhFunctionResources.centroidX;
-            auto& centroidY = bvhFunctionResources.centroidY;
+            auto& centroidX = bvhFunctionResources.transformedCentroidX;
+            auto& centroidY = bvhFunctionResources.transformedCentroidY;
             centroidX.resize(bodyCount);
             centroidY.resize(bodyCount);
             centroidXPtr = centroidX.data();
@@ -127,6 +127,8 @@ namespace PS_AGONY
         const RealSimd halfScaleXV(scale.x * Real(0.5));
         const RealSimd halfScaleYV(scale.y * Real(0.5));
 
+        const RealSimd clampMaxV(clampMax);
+
         // Compute centroids.
         size_t i = 0;
         for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
@@ -136,14 +138,18 @@ namespace PS_AGONY
             const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
             const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
 
+            // Note: Optimization here makes my deterministic simulation make different results. Rounding probably. I hope it doesn't slow down simulation.
             // t = ((min + max) * 0.5 - globalMin) * scale
             // t = (min + max) * 0.5 * scale - globalMin * scale
             // t = (min + max) * halfScale - scaledGlobalMin
             const RealSimd tx = RealSimd::mul_sub(minX + maxX, halfScaleXV, scaledGlobalMinXV);
             const RealSimd ty = RealSimd::mul_sub(minY + maxY, halfScaleYV, scaledGlobalMinYV);
 
-            tx.store(centroidXPtr + i);
-            ty.store(centroidYPtr + i);
+            const RealSimd clampedX = RealSimd::clamp(tx, RealSimd(0), clampMaxV);
+            const RealSimd clampedY = RealSimd::clamp(ty, RealSimd(0), clampMaxV);
+
+            clampedX.store(centroidXPtr + i);
+            clampedY.store(centroidYPtr + i);
         }
         for (; i < bodyCount; i++)
         {
@@ -153,8 +159,11 @@ namespace PS_AGONY
             const Real tx = (cx - globalMin.x) * scale.x;
             const Real ty = (cy - globalMin.y) * scale.y;
 
-            centroidXPtr[i] = tx;
-            centroidYPtr[i] = ty;
+            const Real clampedX = std::clamp(tx, Real(0), clampMax);
+            const Real clampedY = std::clamp(ty, Real(0), clampMax);
+
+            centroidXPtr[i] = clampedX;
+            centroidYPtr[i] = clampedY;
         }
     }
 
@@ -196,7 +205,7 @@ namespace PS_AGONY
         {
             const Real scaleX = Real(0xFFFFu) / (globalMaxX - globalMinX);
             const Real scaleY = Real(0xFFFFu) / (globalMaxY - globalMinY);
-            computeCentroidsWithTransformations(bodyCount, { globalMinX, globalMinY }, { scaleX, scaleY });
+            computeCentroidsWithTransformations(bodyCount, { globalMinX, globalMinY }, { scaleX, scaleY }, Real(0xFFFFu));
         }
 
         // Compute morton codes.
@@ -207,18 +216,13 @@ namespace PS_AGONY
 
             MortonCode* CORE_RESTRICT mortonCodePtr = mortonCodes.data();
 
-            const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.centroidX.data();
-            const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.centroidY.data();
+            const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
+            const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
 
             for (uint32_t b = 0; b < bodyCount; b++)
             {
-                const Real tx = centroidXPtr[b];
-                const Real ty = centroidYPtr[b];
-
-                const uint32_t qx = static_cast<uint32_t>(
-                    std::clamp(tx, Real(0), Real(0xFFFFu)));
-                const uint32_t qy = static_cast<uint32_t>(
-                    std::clamp(ty, Real(0), Real(0xFFFFu)));
+                const uint32_t qx = static_cast<uint32_t>(centroidXPtr[b]);
+                const uint32_t qy = static_cast<uint32_t>(centroidYPtr[b]);
 
                 mortonCodePtr[b] = morton2D(qx, qy);
             }

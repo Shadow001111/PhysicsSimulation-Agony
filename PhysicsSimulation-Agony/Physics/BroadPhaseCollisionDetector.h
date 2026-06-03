@@ -45,8 +45,8 @@ namespace PS_AGONY
 		{
 			std::vector<BvhNode> nodeVector;
 
-			SimdAlignedVector<Real> centroidX;
-			SimdAlignedVector<Real> centroidY;
+			SimdAlignedVector<Real> transformedCentroidX;
+			SimdAlignedVector<Real> transformedCentroidY;
 
 			std::vector<MortonCode> mortonCodes;
 
@@ -93,7 +93,7 @@ namespace PS_AGONY
 			return (part1By1(y) << 1) | part1By1(x);
 		}
 
-		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale);
+		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax);
 
 		void buildBvhTree(
 			std::vector<BvhNode>& nodes,
