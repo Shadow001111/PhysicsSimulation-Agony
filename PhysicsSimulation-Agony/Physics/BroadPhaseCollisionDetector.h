@@ -78,22 +78,9 @@ namespace PS_AGONY
 	private:
 		void findCollisionsBVH(size_t bodyCount);
 
-		static inline MortonCode part1By1(uint32_t x)
-		{
-			x &= 0x0000ffffu;
-			x = (x | (x << 8)) & 0x00FF00FFu;
-			x = (x | (x << 4)) & 0x0F0F0F0Fu;
-			x = (x | (x << 2)) & 0x33333333u;
-			x = (x | (x << 1)) & 0x55555555u;
-			return x;
-		}
-
-		static inline MortonCode morton2D(uint32_t x, uint32_t y)
-		{
-			return (part1By1(y) << 1) | part1By1(x);
-		}
-
 		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax);
+
+		void computeMortonCodes(uint32_t bodyCount);
 
 		void buildBvhTree(
 			std::vector<BvhNode>& nodes,

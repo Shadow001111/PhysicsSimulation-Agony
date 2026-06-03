@@ -10,11 +10,45 @@
 
 namespace PS_AGONY
 {
+    using RealSimd = Simd<Real>;
+    using I32Simd = Simd<uint32_t>;
+    using U32Simd = Simd<uint32_t>;
+
     static constexpr uint64_t bvhDepth(uint64_t n, uint64_t leafSize)
     {
         uint64_t d = 0ull;
         while (n > leafSize) { n = (n + 1ull) >> 1ull; ++d; } // Right child = ceil(n/2).
         return d;
+    }
+
+    static inline uint32_t part1By1(uint32_t x)
+    {
+        x &= 0x0000ffffu;
+        x = (x | (x << 8)) & 0x00FF00FFu;
+        x = (x | (x << 4)) & 0x0F0F0F0Fu;
+        x = (x | (x << 2)) & 0x33333333u;
+        x = (x | (x << 1)) & 0x55555555u;
+        return x;
+    }
+
+    static inline uint32_t morton2D(uint32_t x, uint32_t y)
+    {
+        return (part1By1(y) << 1) | part1By1(x);
+    }
+
+    static inline U32Simd part1By1Simd(U32Simd x)
+    {
+        x &= 0x0000ffffu;
+        x = (x | (x << 8)) & 0x00FF00FFu;
+        x = (x | (x << 4)) & 0x0F0F0F0Fu;
+        x = (x | (x << 2)) & 0x33333333u;
+        x = (x | (x << 1)) & 0x55555555u;
+        return x;
+    }
+
+    static inline U32Simd morton2DSimd(const U32Simd& x, const U32Simd& y)
+    {
+        return (part1By1Simd(y) << 1) | part1By1Simd(x);
     }
 
 
@@ -98,8 +132,6 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax)
     {
-        using RealSimd = Simd<Real>;
-
         // Get pointers.
         const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
         const Real* CORE_RESTRICT aabbMinYPtr = bodiesAABB.minY;
@@ -167,6 +199,26 @@ namespace PS_AGONY
         }
     }
 
+    void BroadPhaseCollisionDetector::computeMortonCodes(uint32_t bodyCount)
+    {
+        auto& mortonCodes = bvhFunctionResources.mortonCodes;
+        mortonCodes.resize(bodyCount);
+
+        MortonCode* CORE_RESTRICT mortonCodePtr = mortonCodes.data();
+
+        const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
+        const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
+
+        TRACY_SCOPE_N("Compute morton codes");
+
+        for (uint32_t b = 0; b < bodyCount; b++)
+        {
+            const uint32_t qx = static_cast<uint32_t>(centroidXPtr[b]);
+            const uint32_t qy = static_cast<uint32_t>(centroidYPtr[b]);
+            mortonCodePtr[b] = morton2D(qx, qy);
+        }
+    }
+
     void BroadPhaseCollisionDetector::buildBvhTree(
         std::vector<BvhNode>& nodes,
         std::vector<BodyIndex>& indices,
@@ -209,24 +261,8 @@ namespace PS_AGONY
         }
 
         // Compute morton codes.
-        auto& mortonCodes = bvhFunctionResources.mortonCodes;
-        mortonCodes.resize(bodyCount);
-        {
-            TRACY_SCOPE_N("Morton codes");
-
-            MortonCode* CORE_RESTRICT mortonCodePtr = mortonCodes.data();
-
-            const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
-            const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
-
-            for (uint32_t b = 0; b < bodyCount; b++)
-            {
-                const uint32_t qx = static_cast<uint32_t>(centroidXPtr[b]);
-                const uint32_t qy = static_cast<uint32_t>(centroidYPtr[b]);
-
-                mortonCodePtr[b] = morton2D(qx, qy);
-            }
-        }
+        computeMortonCodes(bodyCount);
+        const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
         // -------------------------------------------------------------------
         // Step 3: Sort body indices by Morton code - single O(N log N) pass.
@@ -240,9 +276,9 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Sort Morton");
             // mortonCodes[b] is the code for body b; indices starts as 0..N-1.
             std::sort(indices.begin(), indices.end(),
-                [mc = mortonCodes.data()](BodyIndex a, BodyIndex b)
+                [mortonCodePtr](BodyIndex a, BodyIndex b)
                 {
-                    return mc[a] < mc[b];
+                    return mortonCodePtr[a] < mortonCodePtr[b];
                 });
         }
 
@@ -307,8 +343,8 @@ namespace PS_AGONY
                     continue; // Leaf - nothing more to split.
 
                 // Find the split position.
-                const uint32_t mcFirst = mortonCodes[indices[nodeStart]];
-                const uint32_t mcLast = mortonCodes[indices[nodeEnd - 1]];
+                const uint32_t mcFirst = mortonCodePtr[indices[nodeStart]];
+                const uint32_t mcLast = mortonCodePtr[indices[nodeEnd - 1]];
 
                 uint32_t mid;
                 if (mcFirst == mcLast)
@@ -329,7 +365,7 @@ namespace PS_AGONY
                     while (lo < hi)
                     {
                         const uint32_t m = (lo + hi) >> 1;
-                        if ((mortonCodes[indices[m]] & splitBit) == 0u)
+                        if ((mortonCodePtr[indices[m]] & splitBit) == 0u)
                             lo = m + 1;
                         else
                             hi = m;
@@ -431,7 +467,6 @@ namespace PS_AGONY
 
             if (aLeaf && bLeaf)
             {
-                using RealSimd = Simd<Real>;
                 constexpr uint32_t LANES = RealSimd::lanes;
                 constexpr uint32_t CAP = BvhNode::KD_LEAF_SIZE;
 
