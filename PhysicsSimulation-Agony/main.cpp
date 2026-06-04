@@ -208,7 +208,7 @@ static int gameFunc()
                 simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
             }
 
-            const int bodyCount = 500;
+            const int bodyCount = 900;
             for (int i = 0; i < bodyCount; i++)
             {
                 const float x = Random::real<float>(-5.0f, 5.0f);

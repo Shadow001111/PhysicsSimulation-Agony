@@ -51,7 +51,7 @@ namespace PS_AGONY
         Real squaredDistance;
     };
 
-    static inline Vector2AndSqDistance findClosestPointOnSegment(const Vec2& start, const Vec2& end, const Vec2& point)
+    /*static inline Vector2AndSqDistance findClosestPointOnSegment(const Vec2& start, const Vec2& end, const Vec2& point)
     {
         const Vec2 startToEnd = end - start;
         const Vec2 startToPoint = point - start;
@@ -67,7 +67,7 @@ namespace PS_AGONY
         result.squaredDistance = glm::dot(deltaPosition, deltaPosition);
 
         return result;
-    }
+    }*/
 
     static __forceinline void flip_sign_if_negative(glm::vec2& v, const float& sign)
     {
@@ -248,7 +248,7 @@ namespace PS_AGONY
         };
 
         // Distance.
-        const Vec2 deltaLocal = circleLocalPosition - closestLocal;
+        const Vec2 deltaLocal = closestLocal - circleLocalPosition;
         const Real squaredDistance = glm::dot(deltaLocal, deltaLocal);
         
         if (squaredDistance >= radiusA * radiusA)
@@ -267,8 +267,9 @@ namespace PS_AGONY
         if (squaredDistance > Real(1e-8)) [[likely]]
         {
             const Real distance = std::sqrt(squaredDistance);
+            const Real invDistance = Real(1) / distance;
 
-            const Vec2 normalLocal = deltaLocal / -distance;
+            const Vec2 normalLocal = deltaLocal * invDistance;
             const Vec2 normal = toWorldRotation(normalLocal);
             
             const Real depth = radiusA - distance;
@@ -279,14 +280,14 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
-                contactOnCircle,            // Contact 1.
-                Vec2(),                     // Contact 2.
-                1                           // Single contact.
+                contactOnCircle,
+                Vec2(),         
+                1               
             );
             return;
         }
 
-        // Circle center is inside the box (or extremely close to an edge/corner)
+        // Circle center is inside the box (or extremely close to an edge/corner).
         // Choose the nearest face in local space.
         const Real dx = halfWidthB - std::abs(circleLocalPosition.x);
         const Real dy = halfHeightB - std::abs(circleLocalPosition.y);
@@ -318,9 +319,9 @@ namespace PS_AGONY
             indexA, indexB,
             normal,
             depth,
-            contactOnCircle,     // Contact 1.
-            Vec2(),              // Contact 2.
-            1                    // Single contact.
+            contactOnCircle,
+            Vec2(),         
+            1               
         );
     }
 
