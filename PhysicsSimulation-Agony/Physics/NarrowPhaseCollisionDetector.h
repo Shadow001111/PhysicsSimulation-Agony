@@ -1,6 +1,7 @@
 #pragma once
 #include "GlmTypes.h"
 #include "BodySoAViewer.h"
+#include "SymmetricMatrix.h"
 
 namespace PS_AGONY
 {
@@ -30,18 +31,21 @@ namespace PS_AGONY
 
 	class NarrowPhaseCollisionDetector
 	{
-		using CollisionFunc = void (NarrowPhaseCollisionDetector::*)(BodyIndex, BodyIndex);
+		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
-		static const CollisionFunc collisionFunctions[static_cast<size_t>(BodyType::COUNT)][static_cast<size_t>(BodyType::COUNT)];
+		SymmetricMatrix<std::vector<BodyPair>*, BODY_TYPE_COUNT> bodyPairVectorMatrix;
+		std::vector<BodyPair> circleCirclePairs;
+		std::vector<BodyPair> circleBoxPairs;
+		std::vector<BodyPair> boxBoxPairs;
 
-		std::vector<BodyCollisionData> narrowCollisionData;
+		std::vector<BodyCollisionData> allCollisionData;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 	public:
-		NarrowPhaseCollisionDetector() = default;
+		NarrowPhaseCollisionDetector();
 		~NarrowPhaseCollisionDetector() = default;
 		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = default;
 		NarrowPhaseCollisionDetector& operator=(const NarrowPhaseCollisionDetector&) = default;
@@ -57,11 +61,11 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 	private:
-		void collisionCircleCircle(BodyIndex indexA, BodyIndex indexB);
-		void collisionCircleBox(BodyIndex indexA, BodyIndex indexB);
-		void collisionCirclePolygon(BodyIndex indexA, BodyIndex indexB);
-		void collisionBoxBox(BodyIndex indexA, BodyIndex indexB);
-		void collisionBoxPolygon(BodyIndex indexA, BodyIndex indexB);
-		void collisionPolygonPolygon(BodyIndex indexA, BodyIndex indexB);
+		void collisionCircleCircle();
+		void collisionCircleBox();
+		void collisionCirclePolygon();
+		void collisionBoxBox();
+		void collisionBoxPolygon();
+		void collisionPolygonPolygon();
 	};
 }

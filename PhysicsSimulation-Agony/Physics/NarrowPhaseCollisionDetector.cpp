@@ -5,44 +5,6 @@
 
 namespace PS_AGONY
 {
-    const NarrowPhaseCollisionDetector::CollisionFunc
-        NarrowPhaseCollisionDetector::collisionFunctions[static_cast<size_t>(BodyType::COUNT)][static_cast<size_t>(BodyType::COUNT)] =
-    {
-        /* Row for Circle (0) */
-        {
-            &NarrowPhaseCollisionDetector::collisionCircleCircle,
-            &NarrowPhaseCollisionDetector::collisionCircleBox,
-            &NarrowPhaseCollisionDetector::collisionCirclePolygon
-        },
-        /* Row for Box (1) */
-        {
-            nullptr, // Box-Circle
-            &NarrowPhaseCollisionDetector::collisionBoxBox,
-            &NarrowPhaseCollisionDetector::collisionBoxPolygon
-        },
-        /* Row for Polygon (2) */
-        {
-            nullptr, // Polygon-Circle
-            nullptr, // Polygon-Box
-            &NarrowPhaseCollisionDetector::collisionPolygonPolygon
-        }
-    };
-
-    /*static inline Vec2 projectBox(
-        const Vec2& center,
-        const Vec2& right,
-        const Vec2& up,
-        const Real halfWidth,
-        const Real halfHeight,
-        const Vec2& axis)
-    {
-        const Real c = glm::dot(center, axis);
-        const Real r =
-            halfWidth  * std::abs(glm::dot(right, axis)) +
-            halfHeight * std::abs(glm::dot(up,    axis));
-        return { c - r, c + r };
-    }*/
-
     struct Vector2AndSqDistance
     {
         Vec2 vector;
@@ -84,6 +46,21 @@ namespace PS_AGONY
     }
 
 
+    NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
+    {
+        // Circle.
+        bodyPairVectorMatrix(0, 0) = &circleCirclePairs;
+        bodyPairVectorMatrix(0, 1) = &circleBoxPairs;
+        //bodyPairVectorMatrix(0, 2) = &circlePolygonPairs;
+
+        // Box.
+        bodyPairVectorMatrix(1, 1) = &boxBoxPairs;
+        //bodyPairVectorMatrix(1, 2) = &boxPolygonPairs;
+
+        // Polygon.
+        //bodyPairVectorMatrix(2, 2) = &polygonPolygonPairs;
+    }
+
     void NarrowPhaseCollisionDetector::setDataViewers(
         const BodySoAViewer& bodies,
         const CircleSoAViewer& circles,
@@ -100,107 +77,131 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Narrow phase");
 
         // Prepare.
-        narrowCollisionData.clear();
+        allCollisionData.clear();
+        circleCirclePairs.clear();
+        circleBoxPairs.clear();
+        boxBoxPairs.clear();
 
-        if (bodyPairs.empty()) return narrowCollisionData; // No pairs to check.
+        const size_t bodyPairCount = bodyPairs.size();
+        if (bodyPairCount == 0) return allCollisionData; // No pairs to check.
 
-        narrowCollisionData.reserve(bodyPairs.size());
+        // Reserve.
+        allCollisionData.reserve(bodyPairCount);
+        circleCirclePairs.reserve(bodyPairCount);
+        circleBoxPairs.reserve(bodyPairCount);
+        boxBoxPairs.reserve(bodyPairCount);
 
-        // Real search.
-        const BodyType* CORE_RESTRICT bodyTypePtr = bodies.bodyType;
-
-        for (auto [bodyIndexA, bodyIndexB] : bodyPairs)
+        // Sort body pairs by type.
         {
-            BodyType bodyTypeA = bodyTypePtr[bodyIndexA];
-            BodyType bodyTypeB = bodyTypePtr[bodyIndexB];
+            TRACY_SCOPE_N("Sort pairs");
 
-            // Ensure bodyTypeA <= bodyTypeB.
-            if (bodyTypeA > bodyTypeB)
+            const BodyType* CORE_RESTRICT bodyTypePtr = bodies.bodyType;
+
+            for (auto [bodyIndexA, bodyIndexB] : bodyPairs)
             {
-                std::swap(bodyIndexA, bodyIndexB);
-                std::swap(bodyTypeA, bodyTypeB);
-            }
+                BodyType bodyTypeA = bodyTypePtr[bodyIndexA];
+                BodyType bodyTypeB = bodyTypePtr[bodyIndexB];
 
-            // Retrieve the collision function from the matrix.
-            auto func = collisionFunctions[static_cast<size_t>(bodyTypeA)][static_cast<size_t>(bodyTypeB)];
-            
-            // Call the func.
-            (this->*func)(bodyIndexA, bodyIndexB);
+                // Ensure bodyTypeA <= bodyTypeB.
+                if (bodyTypeA > bodyTypeB)
+                {
+                    std::swap(bodyIndexA, bodyIndexB);
+                    std::swap(bodyTypeA, bodyTypeB);
+                }
+
+                bodyPairVectorMatrix(static_cast<size_t>(bodyTypeA), static_cast<size_t>(bodyTypeB))->emplace_back(bodyIndexA, bodyIndexB);
+            }
         }
 
-		return narrowCollisionData;
+        // Process each pair type separately.
+        collisionCircleCircle();
+        collisionCircleBox();
+        collisionBoxBox();
+
+		return allCollisionData;
 	}
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
         size_t total = 0;
 
-        total += PS_AGONY::getVectorMemoryUsage(narrowCollisionData);
+        total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
+
+        total += PS_AGONY::getVectorMemoryUsage(circleCirclePairs);
+        total += PS_AGONY::getVectorMemoryUsage(circleBoxPairs);
+        total += PS_AGONY::getVectorMemoryUsage(boxBoxPairs);
 
         return total;
     }
 
-    void NarrowPhaseCollisionDetector::collisionCircleCircle(BodyIndex indexA, BodyIndex indexB)
+    void NarrowPhaseCollisionDetector::collisionCircleCircle()
     {
+        TRACY_SCOPE_N("Circle-circle collision");
+
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* CORE_RESTRICT radiusPtr = circles.radius;
 
-        // Gather data.
-        const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
-        const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
-
-        const BodyIndex shapeA = shapeIndexPtr[indexA];
-        const BodyIndex shapeB = shapeIndexPtr[indexB];
-
-        const Real radiusA = radiusPtr[shapeA];
-        const Real radiusB = radiusPtr[shapeB];
-
-        // Delta position.
-        const Vec2 deltaPosition = positionB - positionA;
-
-        // Radius sum.
-        const Real radiusSum = radiusA + radiusB;
-
-        // Distance.
-        const Real squaredDistance = glm::dot(deltaPosition, deltaPosition);
-        if (squaredDistance >= radiusSum * radiusSum)
+        for (auto [indexA, indexB] : circleCirclePairs)
         {
-            return;
-        }
-        const Real distance = std::sqrt(squaredDistance);
+            // Gather data.
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
-        // Depth.
-        const Real depth = radiusSum - distance;
+            const BodyIndex shapeA = shapeIndexPtr[indexA];
+            const BodyIndex shapeB = shapeIndexPtr[indexB];
 
-        // Normal.
-        Vec2 normal;
-        if (distance == Real(0)) [[unlikely]]
-        {
-            normal.x = 1.0;
-            normal.y = 0.0;
-        }
-        else
-        {
-            const Real invDistance = Real(1.0) / distance;
-            normal = deltaPosition * invDistance;
-        }
+            const Real radiusA = radiusPtr[shapeA];
+            const Real radiusB = radiusPtr[shapeB];
 
-        // Result.
-        narrowCollisionData.emplace_back(
-            indexA, indexB,
-            normal,
-            depth,
-            positionA + normal * radiusA,   // Contact 1.
-            Vec2(),                         // Contact 2.
-            1                               // Single contact.
-        );
+            // Delta position.
+            const Vec2 deltaPosition = positionB - positionA;
+
+            // Radius sum.
+            const Real radiusSum = radiusA + radiusB;
+
+            // Distance.
+            const Real squaredDistance = glm::dot(deltaPosition, deltaPosition);
+            if (squaredDistance >= radiusSum * radiusSum)
+            {
+                continue;
+            }
+            const Real distance = std::sqrt(squaredDistance);
+
+            // Depth.
+            const Real depth = radiusSum - distance;
+
+            // Normal.
+            Vec2 normal;
+            if (distance == Real(0)) [[unlikely]]
+            {
+                normal.x = 1.0;
+                normal.y = 0.0;
+            }
+            else
+            {
+                const Real invDistance = Real(1.0) / distance;
+                normal = deltaPosition * invDistance;
+            }
+
+            // Result.
+            allCollisionData.emplace_back(
+                indexA, indexB,
+                normal,
+                depth,
+                positionA + normal * radiusA,
+                Vec2(),
+                1
+            );
+        }
     }
 
-    void NarrowPhaseCollisionDetector::collisionCircleBox(BodyIndex indexA, BodyIndex indexB)
+    void NarrowPhaseCollisionDetector::collisionCircleBox()
     {
+        TRACY_SCOPE_N("Circle-box collision");
+
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
@@ -212,123 +213,128 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        // Gather data.
-        const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
-        const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
-
-        const Real cosB = rotationCosPtr[indexB];
-        const Real sinB = rotationSinPtr[indexB];
-
-        const BodyIndex shapeA = shapeIndexPtr[indexA];
-        const BodyIndex shapeB = shapeIndexPtr[indexB];
-
-        const Real radiusA = radiusPtr[shapeA];
-
-        const Real halfWidthB = halfWidthPtr[shapeB];
-        const Real halfHeightB = halfHeightPtr[shapeB];
-
-
-        // Get axes.
-        const Vec2 right = {  cosB, sinB };
-        const Vec2 up    = { -sinB, cosB };
-
-        // Circle center in box local space.
-        const Vec2 d = positionA - positionB;
-        const Vec2 circleLocalPosition = {
-            glm::dot(d, right),
-            glm::dot(d, up)
-        };
-
-        // Closest point on box to the circle, in local space.
-        const Vec2 closestLocal = {
-            glm::clamp(circleLocalPosition.x, -halfWidthB,  halfWidthB),
-            glm::clamp(circleLocalPosition.y, -halfHeightB, halfHeightB)
-        };
-
-        // Distance.
-        const Vec2 deltaLocal = closestLocal - circleLocalPosition;
-        const Real squaredDistance = glm::dot(deltaLocal, deltaLocal);
-        
-        if (squaredDistance >= radiusA * radiusA)
+        for (auto [indexA, indexB] : circleBoxPairs)
         {
-            return;
-        }
+            // Gather data.
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
-        //
-        auto toWorldRotation = [&](const Vec2& pLocal) -> Vec2 {
-            return {
-                cosB * pLocal.x - sinB * pLocal.y,
-                sinB * pLocal.x + cosB * pLocal.y
-            };
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const BodyIndex shapeA = shapeIndexPtr[indexA];
+            const BodyIndex shapeB = shapeIndexPtr[indexB];
+
+            const Real radiusA = radiusPtr[shapeA];
+
+            const Real halfWidthB = halfWidthPtr[shapeB];
+            const Real halfHeightB = halfHeightPtr[shapeB];
+
+
+            // Get axes.
+            const Vec2 right = { cosB, sinB };
+            const Vec2 up = { -sinB, cosB };
+
+            // Circle center in box local space.
+            const Vec2 d = positionA - positionB;
+            const Vec2 circleLocalPosition = {
+                glm::dot(d, right),
+                glm::dot(d, up)
             };
 
-        if (squaredDistance > Real(1e-8)) [[likely]]
-        {
-            const Real distance = std::sqrt(squaredDistance);
-            const Real invDistance = Real(1) / distance;
+            // Closest point on box to the circle, in local space.
+            const Vec2 closestLocal = {
+                glm::clamp(circleLocalPosition.x, -halfWidthB,  halfWidthB),
+                glm::clamp(circleLocalPosition.y, -halfHeightB, halfHeightB)
+            };
 
-            const Vec2 normalLocal = deltaLocal * invDistance;
+            // Distance.
+            const Vec2 deltaLocal = closestLocal - circleLocalPosition;
+            const Real squaredDistance = glm::dot(deltaLocal, deltaLocal);
+
+            if (squaredDistance >= radiusA * radiusA)
+            {
+                continue;
+            }
+
+            //
+            auto toWorldRotation = [&](const Vec2& pLocal) -> Vec2 {
+                return {
+                    cosB * pLocal.x - sinB * pLocal.y,
+                    sinB * pLocal.x + cosB * pLocal.y
+                };
+                };
+
+            if (squaredDistance > Real(1e-8)) [[likely]]
+            {
+                const Real distance = std::sqrt(squaredDistance);
+                const Real invDistance = Real(1) / distance;
+
+                const Vec2 normalLocal = deltaLocal * invDistance;
+                const Vec2 normal = toWorldRotation(normalLocal);
+
+                const Real depth = radiusA - distance;
+
+                const Vec2 contactOnCircle = positionA + normal * radiusA;
+
+                allCollisionData.emplace_back(
+                    indexA, indexB,
+                    normal,
+                    depth,
+                    contactOnCircle,
+                    Vec2(),
+                    1
+                );
+                continue;
+            }
+
+            // Circle center is inside the box (or extremely close to an edge/corner).
+            // Choose the nearest face in local space.
+            const Real dx = halfWidthB - std::abs(circleLocalPosition.x);
+            const Real dy = halfHeightB - std::abs(circleLocalPosition.y);
+            const bool useX = dx < dy;
+            const Real minPen = useX ? dx : dy;
+
+            const Real sx = std::copysign(Real(1), circleLocalPosition.x);
+            const Real sy = std::copysign(Real(1), circleLocalPosition.y);
+
+            Vec2 normalLocal;
+            Vec2 pointLocal;
+            if (useX)
+            {
+                normalLocal = Vec2(sx, Real(0));
+                pointLocal = Vec2(sx * halfWidthB, circleLocalPosition.y);
+            }
+            else
+            {
+                normalLocal = Vec2(Real(0), sy);
+                pointLocal = Vec2(circleLocalPosition.x, sy * halfHeightB);
+            }
+
             const Vec2 normal = toWorldRotation(normalLocal);
-            
-            const Real depth = radiusA - distance;
+            const Real depth = radiusA + minPen;
 
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-            narrowCollisionData.emplace_back(
+            allCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
                 contactOnCircle,
-                Vec2(),         
-                1               
+                Vec2(),
+                1
             );
-            return;
         }
-
-        // Circle center is inside the box (or extremely close to an edge/corner).
-        // Choose the nearest face in local space.
-        const Real dx = halfWidthB - std::abs(circleLocalPosition.x);
-        const Real dy = halfHeightB - std::abs(circleLocalPosition.y);
-        const bool useX = dx < dy;
-        const Real minPen = useX ? dx : dy;
-
-        const Real sx = std::copysign(Real(1), circleLocalPosition.x);
-        const Real sy = std::copysign(Real(1), circleLocalPosition.y);
-
-        Vec2 normalLocal;
-        Vec2 pointLocal;
-        if (useX)
-        {
-            normalLocal = Vec2(sx, Real(0));
-            pointLocal  = Vec2(sx * halfWidthB, circleLocalPosition.y);
-        }
-        else
-        {
-            normalLocal = Vec2(Real(0), sy);
-            pointLocal  = Vec2(circleLocalPosition.x, sy * halfHeightB);
-        }
-
-        const Vec2 normal = toWorldRotation(normalLocal);
-        const Real depth = radiusA + minPen;
-
-        const Vec2 contactOnCircle = positionA + normal * radiusA;
-
-        narrowCollisionData.emplace_back(
-            indexA, indexB,
-            normal,
-            depth,
-            contactOnCircle,
-            Vec2(),         
-            1               
-        );
     }
 
-    void NarrowPhaseCollisionDetector::collisionCirclePolygon(BodyIndex indexA, BodyIndex indexB)
+    void NarrowPhaseCollisionDetector::collisionCirclePolygon()
     {
     }
 
-    void NarrowPhaseCollisionDetector::collisionBoxBox(BodyIndex indexA, BodyIndex indexB)
+    void NarrowPhaseCollisionDetector::collisionBoxBox()
     {
+        TRACY_SCOPE_N("Box-box collision");
+
         constexpr Real secondContactThreshold = Real(1e-4);
 
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
@@ -340,160 +346,163 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        // Gather data.
-        const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
-        const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
-
-        const Real cosA = rotationCosPtr[indexA];
-        const Real sinA = rotationSinPtr[indexA];
-        const Real cosB = rotationCosPtr[indexB];
-        const Real sinB = rotationSinPtr[indexB];
-
-        const BodyIndex shapeA = shapeIndexPtr[indexA];
-        const BodyIndex shapeB = shapeIndexPtr[indexB];
-
-        const Real halfWidthA  = halfWidthPtr [shapeA];
-        const Real halfHeightA = halfHeightPtr[shapeA];
-        const Real halfWidthB  = halfWidthPtr [shapeB];
-        const Real halfHeightB = halfHeightPtr[shapeB];
-
-        // Get axes.
-        const Vec2 rightA = { cosA, sinA };
-        const Vec2 upA = { -sinA, cosA };
-
-        const Vec2 rightB = { cosB, sinB };
-        const Vec2 upB = { -sinB, cosB };
-
-        // Relative rotation.
-        const Real absRelativeCos = std::abs(cosA * cosB + sinA * sinB);
-        const Real absRelativeSin = std::abs(cosA * sinB - sinA * cosB);
-
-        // Center delta.
-        const Vec2 centerDelta = positionB - positionA;
-        const Real centerDeltaOnRightA = glm::dot(centerDelta, rightA);
-        const Real centerDeltaOnUpA    = glm::dot(centerDelta, upA);
-        const Real centerDeltaOnRightB = glm::dot(centerDelta, rightB);
-        const Real centerDeltaOnUpB    = glm::dot(centerDelta, upB);
-
-        // Projection.
-        const Real projectedRadiusBOnRightA = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
-        const Real projectedRadiusBOnUpA    = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
-        const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
-        const Real projectedRadiusAOnUpB    = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
-
-        // SAT.
-        Vec2 normal = {};
-        Real depth = FLT_MAX;
-
-        auto sat = [&](Real radiusA, Real radiusB, Real centerDeltaOnAxis, Vec2 axis) -> bool
-            {
-                const Real overlap = radiusA + radiusB - std::fabsf(centerDeltaOnAxis);
-                if (overlap < Real(0)) return false;
-                if (overlap < depth)
-                {
-                    depth = overlap;
-
-                    normal = axis;
-                    flip_sign_if_negative(normal, centerDeltaOnAxis);
-
-                }
-                return true;
-            };
-
-        if (!sat(halfWidthA,  projectedRadiusBOnRightA, centerDeltaOnRightA, rightA)) return;
-        if (!sat(halfHeightA, projectedRadiusBOnUpA, centerDeltaOnUpA, upA)) return;
-        if (!sat(projectedRadiusAOnRightB, halfWidthB,  centerDeltaOnRightB, rightB)) return;
-        if (!sat(projectedRadiusAOnUpB, halfHeightB, centerDeltaOnUpB, upB)) return;
-
-        // Compute 4 vertices.
-        Vec2 vertsA[4], vertsB[4];
+        for (auto [indexA, indexB] : boxBoxPairs)
         {
-            const Vec2 a1 = rightA * halfWidthA;
-            const Vec2 a2 = upA * halfHeightA;
-            const Vec2 b1 = rightB * halfWidthB;
-            const Vec2 b2 = upB * halfHeightB;
+            // Gather data.
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
-            vertsA[0] = positionA + a1 + a2;
-            vertsA[1] = positionA - a1 + a2;
-            vertsA[2] = positionA - a1 - a2;
-            vertsA[3] = positionA + a1 - a2;
+            const Real cosA = rotationCosPtr[indexA];
+            const Real sinA = rotationSinPtr[indexA];
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
 
-            vertsB[0] = positionB + b1 + b2;
-            vertsB[1] = positionB - b1 + b2;
-            vertsB[2] = positionB - b1 - b2;
-            vertsB[3] = positionB + b1 - b2;
-        }
+            const BodyIndex shapeA = shapeIndexPtr[indexA];
+            const BodyIndex shapeB = shapeIndexPtr[indexB];
 
-        // Find up to 2 contact points: closest points from each box's vertices onto the other box's edges.
-        Vec2 contact1, contact2;
-        uint32_t contactCount = 1;
-        Real minDistanceSquared = FLT_MAX;
-        Real maxDistanceSquaredBetweenContacts = 0;
+            const Real halfWidthA = halfWidthPtr[shapeA];
+            const Real halfHeightA = halfHeightPtr[shapeA];
+            const Real halfWidthB = halfWidthPtr[shapeB];
+            const Real halfHeightB = halfHeightPtr[shapeB];
 
-        auto testEdgeAgainstVertices = [&](const Vec2 edgeA, const Vec2 edgeB, const Vec2* vertices)
-            {
-                const Vec2 startToEnd = edgeB - edgeA;
-                const Real startToEndSqDistance = glm::dot(startToEnd, startToEnd);
-                //if (startToEndSqDistance < Real(1e-16)) [[unlikely]] return;
+            // Get axes.
+            const Vec2 rightA = { cosA, sinA };
+            const Vec2 upA = { -sinA, cosA };
 
-                const Real startToEndInvSqDistance = Real(1) / startToEndSqDistance;
+            const Vec2 rightB = { cosB, sinB };
+            const Vec2 upB = { -sinB, cosB };
 
-                for (size_t i = 0; i < 4; i++)
+            // Relative rotation.
+            const Real absRelativeCos = std::abs(cosA * cosB + sinA * sinB);
+            const Real absRelativeSin = std::abs(cosA * sinB - sinA * cosB);
+
+            // Center delta.
+            const Vec2 centerDelta = positionB - positionA;
+            const Real centerDeltaOnRightA = glm::dot(centerDelta, rightA);
+            const Real centerDeltaOnUpA = glm::dot(centerDelta, upA);
+            const Real centerDeltaOnRightB = glm::dot(centerDelta, rightB);
+            const Real centerDeltaOnUpB = glm::dot(centerDelta, upB);
+
+            // Projection.
+            const Real projectedRadiusBOnRightA = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
+            const Real projectedRadiusBOnUpA = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
+            const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
+            const Real projectedRadiusAOnUpB = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
+
+            // SAT.
+            Vec2 normal = {};
+            Real depth = FLT_MAX;
+
+            auto sat = [&](Real radiusA, Real radiusB, Real centerDeltaOnAxis, Vec2 axis) -> bool
                 {
-                    const Vec2 vertex = vertices[i];
-
-                    const Vec2 startToPoint = vertex - edgeA;
-                    const Real d = glm::dot(startToEnd, startToPoint) * startToEndInvSqDistance;
-                    const Vec2 closest = edgeA + startToEnd * std::clamp(d, Real(0), Real(1));
-                    const Vec2 deltaPosition = closest - vertex;
-                    const Real pointToClosestSqDistance = glm::dot(deltaPosition, deltaPosition);
-
-                    if (std::fabsf(pointToClosestSqDistance - minDistanceSquared) < secondContactThreshold)
+                    const Real overlap = radiusA + radiusB - std::fabsf(centerDeltaOnAxis);
+                    if (overlap < Real(0)) return false;
+                    if (overlap < depth)
                     {
-                        // Value contact2 that's furthest away from contact1.
-                        const Vec2 diff = closest - contact1;
-                        const Real squaredDistance = glm::dot(diff, diff);
-                        if (squaredDistance > maxDistanceSquaredBetweenContacts)
+                        depth = overlap;
+
+                        normal = axis;
+                        flip_sign_if_negative(normal, centerDeltaOnAxis);
+
+                    }
+                    return true;
+                };
+
+            if (!sat(halfWidthA, projectedRadiusBOnRightA, centerDeltaOnRightA, rightA)) continue;
+            if (!sat(halfHeightA, projectedRadiusBOnUpA, centerDeltaOnUpA, upA)) continue;
+            if (!sat(projectedRadiusAOnRightB, halfWidthB, centerDeltaOnRightB, rightB)) continue;
+            if (!sat(projectedRadiusAOnUpB, halfHeightB, centerDeltaOnUpB, upB)) continue;
+
+            // Compute 4 vertices.
+            Vec2 vertsA[4], vertsB[4];
+            {
+                const Vec2 a1 = rightA * halfWidthA;
+                const Vec2 a2 = upA * halfHeightA;
+                const Vec2 b1 = rightB * halfWidthB;
+                const Vec2 b2 = upB * halfHeightB;
+
+                vertsA[0] = positionA + a1 + a2;
+                vertsA[1] = positionA - a1 + a2;
+                vertsA[2] = positionA - a1 - a2;
+                vertsA[3] = positionA + a1 - a2;
+
+                vertsB[0] = positionB + b1 + b2;
+                vertsB[1] = positionB - b1 + b2;
+                vertsB[2] = positionB - b1 - b2;
+                vertsB[3] = positionB + b1 - b2;
+            }
+
+            // Find up to 2 contact points: closest points from each box's vertices onto the other box's edges.
+            Vec2 contact1, contact2;
+            uint32_t contactCount = 1;
+            Real minDistanceSquared = FLT_MAX;
+            Real maxDistanceSquaredBetweenContacts = 0;
+
+            auto testEdgeAgainstVertices = [&](const Vec2 edgeA, const Vec2 edgeB, const Vec2* vertices)
+                {
+                    const Vec2 startToEnd = edgeB - edgeA;
+                    const Real startToEndSqDistance = glm::dot(startToEnd, startToEnd);
+                    //if (startToEndSqDistance < Real(1e-16)) [[unlikely]] return;
+
+                    const Real startToEndInvSqDistance = Real(1) / startToEndSqDistance;
+
+                    for (size_t i = 0; i < 4; i++)
+                    {
+                        const Vec2 vertex = vertices[i];
+
+                        const Vec2 startToPoint = vertex - edgeA;
+                        const Real d = glm::dot(startToEnd, startToPoint) * startToEndInvSqDistance;
+                        const Vec2 closest = edgeA + startToEnd * std::clamp(d, Real(0), Real(1));
+                        const Vec2 deltaPosition = closest - vertex;
+                        const Real pointToClosestSqDistance = glm::dot(deltaPosition, deltaPosition);
+
+                        if (std::fabsf(pointToClosestSqDistance - minDistanceSquared) < secondContactThreshold)
                         {
-                            maxDistanceSquaredBetweenContacts = squaredDistance;
-                            contact2 = closest;
-                            contactCount = 2;
+                            // Value contact2 that's furthest away from contact1.
+                            const Vec2 diff = closest - contact1;
+                            const Real squaredDistance = glm::dot(diff, diff);
+                            if (squaredDistance > maxDistanceSquaredBetweenContacts)
+                            {
+                                maxDistanceSquaredBetweenContacts = squaredDistance;
+                                contact2 = closest;
+                                contactCount = 2;
+                            }
+                        }
+                        else if (pointToClosestSqDistance < minDistanceSquared)
+                        {
+                            minDistanceSquared = pointToClosestSqDistance;
+                            maxDistanceSquaredBetweenContacts = 0;
+                            contact1 = closest;
+                            contactCount = 1;
                         }
                     }
-                    else if (pointToClosestSqDistance < minDistanceSquared)
-                    {
-                        minDistanceSquared = pointToClosestSqDistance;
-                        maxDistanceSquaredBetweenContacts = 0;
-                        contact1 = closest;
-                        contactCount = 1;
-                    }
-                }
-            };
-        for (size_t i = 0; i < 4; i++)
-        {
-            testEdgeAgainstVertices(vertsA[i], vertsA[(i + 1) & 3], vertsB);
-        }
-        for (size_t i = 0; i < 4; i++)
-        {
-            testEdgeAgainstVertices(vertsB[i], vertsB[(i + 1) & 3], vertsA);
-        }
+                };
+            for (size_t i = 0; i < 4; i++)
+            {
+                testEdgeAgainstVertices(vertsA[i], vertsA[(i + 1) & 3], vertsB);
+            }
+            for (size_t i = 0; i < 4; i++)
+            {
+                testEdgeAgainstVertices(vertsB[i], vertsB[(i + 1) & 3], vertsA);
+            }
 
-        // Result.
-        narrowCollisionData.emplace_back(
-            indexA, indexB,
-            normal,
-            depth,
-            contact1,
-            contact2,
-            contactCount
-        );
+            // Result.
+            allCollisionData.emplace_back(
+                indexA, indexB,
+                normal,
+                depth,
+                contact1,
+                contact2,
+                contactCount
+            );
+        }
     }
 
-    void NarrowPhaseCollisionDetector::collisionBoxPolygon(BodyIndex indexA, BodyIndex indexB)
+    void NarrowPhaseCollisionDetector::collisionBoxPolygon()
     {
     }
 
-    void NarrowPhaseCollisionDetector::collisionPolygonPolygon(BodyIndex indexA, BodyIndex indexB)
+    void NarrowPhaseCollisionDetector::collisionPolygonPolygon()
     {
     }
 }
