@@ -62,7 +62,7 @@ namespace PS_AGONY
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;
 
-		std::vector<BodyPair> broadCollisionData;
+		std::vector<BodyPair> collisionData;
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;

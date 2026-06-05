@@ -252,8 +252,7 @@
     <ClCompile Include="Core\FileStream.cpp" />
     <ClCompile Include="Core\Hashes\ivec2Hasher.cpp" />
     <ClCompile Include="Core\Hashes\ivec3Hasher.cpp" />
-    <ClCompile Include="Core\Multithreading\ProcessingFence.cpp" />
-    <ClCompile Include="Core\Multithreading\ThreadPool.cpp" />
+    <ClCompile Include="Core\Threading\ThreadPool.cpp" />
     <ClCompile Include="Core\Random.cpp" />
     <ClCompile Include="Core\StringIndexer.cpp" />
     <ClCompile Include="Core\TimeMeasurer.cpp" />
@@ -306,6 +305,8 @@
     <ClInclude Include="AudioEngine\SoundSample.h" />
     <ClInclude Include="Core\MemoryAllocation\AlignedAllocator.h" />
     <ClInclude Include="Core\RadixSort.h" />
+    <ClInclude Include="Core\Threading\ChaseLevQueue.h" />
+    <ClInclude Include="Core\Threading\Task.h" />
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BodySoAViewer.h" />
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
@@ -330,9 +331,8 @@
     <ClInclude Include="Core\MemoryAllocation\AlignedStorage.h" />
     <ClInclude Include="Core\MemoryAllocation\FixedArenaAllocator.h" />
     <ClInclude Include="Core\MemoryAllocation\FixedArenaObjectPool.h" />
-    <ClInclude Include="Core\Multithreading\move_only_function.h" />
-    <ClInclude Include="Core\Multithreading\ProcessingFence.h" />
-    <ClInclude Include="Core\Multithreading\ThreadPool.h" />
+    <ClInclude Include="Core\Threading\move_only_function.h" />
+    <ClInclude Include="Core\Threading\ThreadPool.h" />
     <ClInclude Include="Core\Random.h" />
     <ClInclude Include="Core\Resource.h" />
     <ClInclude Include="Core\Shapes\Box.h" />
@@ -361,6 +361,7 @@
     <ClInclude Include="Physics\Material.h" />
     <ClInclude Include="Core\Portablity.h" />
     <ClInclude Include="Physics\Simulation.h" />
+    <ClInclude Include="Physics\Threading.h" />
     <ClInclude Include="Physics\Types.h" />
     <ClInclude Include="Physics\SimulationRenderer.h" />
     <ClInclude Include="WindowManager.h" />

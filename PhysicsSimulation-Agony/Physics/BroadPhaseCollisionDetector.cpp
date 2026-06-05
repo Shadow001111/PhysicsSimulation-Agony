@@ -92,16 +92,16 @@ namespace PS_AGONY
 
         bodiesAABB = bodiesAABBViewer;
 
-        broadCollisionData.clear();
+        collisionData.clear();
 
         const size_t bodyCount = bodiesAABB.getCount();
-        if (bodyCount < 2) return broadCollisionData; // No pairs to check.
+        if (bodyCount < 2) return collisionData; // No pairs to check.
 
-        broadCollisionData.reserve(bodyCount);
+        collisionData.reserve(bodyCount);
 
         findCollisionsBVH(bodyCount);
 
-        return broadCollisionData;
+        return collisionData;
     }
 
     void BroadPhaseCollisionDetector::fetchAABBs(std::vector<AABB>& outAABBs) const
@@ -137,7 +137,7 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector1);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector2);
 
-        total += PS_AGONY::getVectorMemoryUsage(broadCollisionData);
+        total += PS_AGONY::getVectorMemoryUsage(collisionData);
 
         return total;
     }
@@ -618,7 +618,7 @@ namespace PS_AGONY
                             {
                                 const uint32_t lane = std::countr_zero(mask);
                                 mask &= mask - 1; // Clear lowest set bit.
-                                broadCollisionData.emplace_back(
+                                collisionData.emplace_back(
                                     indices[nodeA.start + i],
                                     indices[nodeA.start + j + lane]);
                             }
@@ -654,7 +654,7 @@ namespace PS_AGONY
                             {
                                 const uint32_t lane = std::countr_zero(mask);
                                 mask &= mask - 1;
-                                broadCollisionData.emplace_back(
+                                collisionData.emplace_back(
                                     indices[nodeA.start + i],
                                     indices[nodeB.start + j + lane]);
                             }

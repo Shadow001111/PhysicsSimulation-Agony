@@ -3,8 +3,6 @@
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
 
-#include <iostream>
-
 namespace PS_AGONY
 {
     const NarrowPhaseCollisionDetector::CollisionFunc

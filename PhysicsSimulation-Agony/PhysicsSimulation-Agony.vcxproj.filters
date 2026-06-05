@@ -75,10 +75,7 @@
     <ClCompile Include="Core\Hashes\ivec3Hasher.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Core\Multithreading\ProcessingFence.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Core\Multithreading\ThreadPool.cpp">
+    <ClCompile Include="Core\Threading\ThreadPool.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Core\FileLogger.cpp">
@@ -266,13 +263,10 @@
     <ClInclude Include="Core\MemoryAllocation\FixedArenaObjectPool.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Multithreading\move_only_function.h">
+    <ClInclude Include="Core\Threading\move_only_function.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Multithreading\ProcessingFence.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Core\Multithreading\ThreadPool.h">
+    <ClInclude Include="Core\Threading\ThreadPool.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Core\Shapes\Box.h">
@@ -411,6 +405,18 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Core\MemoryAllocation\AlignedAllocator.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\RadixSort.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Threading.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Threading\ChaseLevQueue.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Threading\Task.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
