@@ -252,26 +252,19 @@ namespace PS_AGONY
             const Vec2 deltaLocal = closestLocal - circleLocalPosition;
             const Real squaredDistance = glm::dot(deltaLocal, deltaLocal);
 
-            if (squaredDistance >= radiusA * radiusA)
-            {
-                continue;
-            }
+            if (squaredDistance >= radiusA * radiusA) continue;
 
             //
-            auto toWorldRotation = [&](const Vec2& pLocal) -> Vec2 {
-                return {
-                    cosB * pLocal.x - sinB * pLocal.y,
-                    sinB * pLocal.x + cosB * pLocal.y
-                };
-                };
-
-            if (squaredDistance > Real(1e-8)) [[likely]]
+            if (squaredDistance > Real(1e-8))
             {
                 const Real distance = std::sqrt(squaredDistance);
                 const Real invDistance = Real(1) / distance;
 
-                const Vec2 normalLocal = deltaLocal * invDistance;
-                const Vec2 normal = toWorldRotation(normalLocal);
+                const Vec2 worldDelta = {
+                    cosB * deltaLocal.x - sinB * deltaLocal.y,
+                    sinB * deltaLocal.x + cosB * deltaLocal.y
+                };
+                const Vec2 normal = worldDelta * invDistance;
 
                 const Real depth = radiusA - distance;
 
@@ -299,19 +292,19 @@ namespace PS_AGONY
             const Real sy = std::copysign(Real(1), circleLocalPosition.y);
 
             Vec2 normalLocal;
-            Vec2 pointLocal;
             if (useX)
             {
                 normalLocal = Vec2(sx, Real(0));
-                pointLocal = Vec2(sx * halfWidthB, circleLocalPosition.y);
             }
             else
             {
                 normalLocal = Vec2(Real(0), sy);
-                pointLocal = Vec2(circleLocalPosition.x, sy * halfHeightB);
             }
 
-            const Vec2 normal = toWorldRotation(normalLocal);
+            const Vec2 normal = {
+                cosB * normalLocal.x - sinB * normalLocal.y,
+                sinB * normalLocal.x + cosB * normalLocal.y
+            };
             const Real depth = radiusA + minPen;
 
             const Vec2 contactOnCircle = positionA + normal * radiusA;
@@ -335,7 +328,13 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Box-box collision");
 
-        constexpr Real secondContactThreshold = Real(1e-4);
+        enum class SATAxis : uint32_t
+        {
+            A_RIGHT,
+            A_UP,
+            B_RIGHT,
+            B_UP
+        };
 
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
@@ -366,11 +365,11 @@ namespace PS_AGONY
             const Real halfHeightB = halfHeightPtr[shapeB];
 
             // Get axes.
-            const Vec2 rightA = { cosA, sinA };
-            const Vec2 upA = { -sinA, cosA };
+            const Vec2 rightA = { cosA,  sinA };
+            const Vec2 upA =    { -sinA, cosA };
 
-            const Vec2 rightB = { cosB, sinB };
-            const Vec2 upB = { -sinB, cosB };
+            const Vec2 rightB = { cosB,  sinB };
+            const Vec2 upB =    { -sinB, cosB };
 
             // Relative rotation.
             const Real absRelativeCos = std::abs(cosA * cosB + sinA * sinB);
@@ -389,110 +388,201 @@ namespace PS_AGONY
             const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
             const Real projectedRadiusAOnUpB = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
 
-            // SAT.
-            Vec2 normal = {};
+            // SAT: find axis of minimum penetration.
+            Vec2 normal;
             Real depth = FLT_MAX;
+            SATAxis bestAxis;
 
-            auto sat = [&](Real radiusA, Real radiusB, Real centerDeltaOnAxis, Vec2 axis) -> bool
+            auto sat = [&](Real radiusSum, Real centerDeltaOnAxis, Vec2 axis, SATAxis axisType) -> bool
                 {
-                    const Real overlap = radiusA + radiusB - std::fabsf(centerDeltaOnAxis);
+                    // radiusSum = radiusA + radiusB.
+                    const Real overlap = radiusSum - std::fabsf(centerDeltaOnAxis);
                     if (overlap < Real(0)) return false;
                     if (overlap < depth)
                     {
                         depth = overlap;
-
                         normal = axis;
                         flip_sign_if_negative(normal, centerDeltaOnAxis);
-
+                        bestAxis = axisType;
                     }
                     return true;
                 };
 
-            if (!sat(halfWidthA, projectedRadiusBOnRightA, centerDeltaOnRightA, rightA)) continue;
-            if (!sat(halfHeightA, projectedRadiusBOnUpA, centerDeltaOnUpA, upA)) continue;
-            if (!sat(projectedRadiusAOnRightB, halfWidthB, centerDeltaOnRightB, rightB)) continue;
-            if (!sat(projectedRadiusAOnUpB, halfHeightB, centerDeltaOnUpB, upB)) continue;
+            if (!sat(projectedRadiusBOnRightA + halfWidthA,  centerDeltaOnRightA, rightA, SATAxis::A_RIGHT)) continue;
+            if (!sat(projectedRadiusBOnUpA    + halfHeightA, centerDeltaOnUpA,    upA,    SATAxis::A_UP))    continue;
+            if (!sat(projectedRadiusAOnRightB + halfWidthB,  centerDeltaOnRightB, rightB, SATAxis::B_RIGHT)) continue;
+            if (!sat(projectedRadiusAOnUpB    + halfHeightB, centerDeltaOnUpB,    upB,    SATAxis::B_UP))    continue;
 
-            // Compute 4 vertices.
-            Vec2 vertsA[4], vertsB[4];
+            // Identify reference and incident boxes.
+            const bool refIsA = bestAxis < SATAxis::B_RIGHT;
+
+            Vec2 positionRef;
+            Real halfWidthRef, halfHeightRef;
+            Vec2 rightRef, upRef;
+
+            Vec2 positionInc;
+            Real halfWidthInc, halfHeightInc;
+            Vec2 rightInc, upInc;
+
+            Vec2 refNormal;
+
+            if (refIsA)
             {
-                const Vec2 a1 = rightA * halfWidthA;
-                const Vec2 a2 = upA * halfHeightA;
-                const Vec2 b1 = rightB * halfWidthB;
-                const Vec2 b2 = upB * halfHeightB;
+                positionRef = positionA;
+                halfWidthRef = halfWidthA;
+                halfHeightRef = halfHeightA;
+                rightRef = rightA;
+                upRef = upA;
 
-                vertsA[0] = positionA + a1 + a2;
-                vertsA[1] = positionA - a1 + a2;
-                vertsA[2] = positionA - a1 - a2;
-                vertsA[3] = positionA + a1 - a2;
+                positionInc = positionB;
+                halfWidthInc = halfWidthB;
+                halfHeightInc = halfHeightB;
+                rightInc = rightB;
+                upInc = upB;
 
-                vertsB[0] = positionB + b1 + b2;
-                vertsB[1] = positionB - b1 + b2;
-                vertsB[2] = positionB - b1 - b2;
-                vertsB[3] = positionB + b1 - b2;
+                refNormal = normal;
+            }
+            else
+            {
+                positionRef = positionB;
+                halfWidthRef = halfWidthB;
+                halfHeightRef = halfHeightB;
+                rightRef = rightB;
+                upRef = upB;
+
+                positionInc = positionA;
+                halfWidthInc = halfWidthA;
+                halfHeightInc = halfHeightA;
+                rightInc = rightA;
+                upInc = upA;
+
+                refNormal = -normal;
             }
 
-            // Find up to 2 contact points: closest points from each box's vertices onto the other box's edges.
-            Vec2 contact1, contact2;
-            uint32_t contactCount = 1;
-            Real minDistanceSquared = FLT_MAX;
-            Real maxDistanceSquaredBetweenContacts = 0;
+            //
+            Vec2 refEdgeStart, refEdgeEnd, refFaceCenter;
+            Vec2 sideDir;
+            {
+                // Project reference normal on reference's local axes.
+                const Real dotX = glm::dot(refNormal, rightRef);
+                const Real dotY = glm::dot(refNormal, upRef);
 
-            auto testEdgeAgainstVertices = [&](const Vec2 edgeA, const Vec2 edgeB, const Vec2* vertices)
+                // Choose the face with outward normal matching the collision direction.
+                const bool useX = std::abs(dotX) > std::abs(dotY);
+
+                const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
+
+                // Reference face edge endpoints (world).
+                Vec2 edgeOffset;
+                if (useX)
                 {
-                    const Vec2 startToEnd = edgeB - edgeA;
-                    const Real startToEndSqDistance = glm::dot(startToEnd, startToEnd);
-                    //if (startToEndSqDistance < Real(1e-16)) [[unlikely]] return;
+                    refFaceCenter = positionRef + rightRef * (sign * halfWidthRef);
+                    edgeOffset = upRef * halfHeightRef;
+                    sideDir = upRef;
+                }
+                else
+                {
+                    refFaceCenter = positionRef + upRef * (sign * halfHeightRef);
+                    edgeOffset = rightRef * halfWidthRef;
+                    sideDir = rightRef;
+                }
+                refEdgeStart = refFaceCenter + edgeOffset;
+                refEdgeEnd = refFaceCenter - edgeOffset;
+            }
+            Vec2 incEdgeStart, incEdgeEnd;
+            {
+                // Project reference normal on incidental's local axes.
+                const Real dotX = glm::dot(refNormal, rightInc);
+                const Real dotY = glm::dot(refNormal, upInc);
 
-                    const Real startToEndInvSqDistance = Real(1) / startToEndSqDistance;
+                // Choose the face with outward normal matching the collision direction.
+                const bool useX = std::abs(dotX) > std::abs(dotY);
 
-                    for (size_t i = 0; i < 4; i++)
+                const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
+
+                // Reference face edge endpoints (world).
+                Vec2 faceCenter;
+                Vec2 edgeOffset;
+                if (useX)
+                {
+                    faceCenter = positionInc + rightInc * (sign * halfWidthInc);
+                    edgeOffset = upInc * halfHeightInc;
+                }
+                else
+                {
+                    faceCenter = positionInc + upInc * (sign * halfHeightInc);
+                    edgeOffset = rightInc * halfWidthInc;
+                }
+                incEdgeStart = faceCenter + edgeOffset;
+                incEdgeEnd = faceCenter - edgeOffset;
+            }
+
+            // Clip incident edge against reference side planes.
+            // Note: Function return either 0 or 2, so I made it use bool. Returns bool on fail.
+            auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
+                {
+                    const Real d1 = glm::dot(p1 - planePoint, planeNormal);
+                    const Real d2 = glm::dot(p2 - planePoint, planeNormal);
+
+                    if (d1 >= 0 && d2 >= 0)
                     {
-                        const Vec2 vertex = vertices[i];
-
-                        const Vec2 startToPoint = vertex - edgeA;
-                        const Real d = glm::dot(startToEnd, startToPoint) * startToEndInvSqDistance;
-                        const Vec2 closest = edgeA + startToEnd * std::clamp(d, Real(0), Real(1));
-                        const Vec2 deltaPosition = closest - vertex;
-                        const Real pointToClosestSqDistance = glm::dot(deltaPosition, deltaPosition);
-
-                        if (std::fabsf(pointToClosestSqDistance - minDistanceSquared) < secondContactThreshold)
-                        {
-                            // Value contact2 that's furthest away from contact1.
-                            const Vec2 diff = closest - contact1;
-                            const Real squaredDistance = glm::dot(diff, diff);
-                            if (squaredDistance > maxDistanceSquaredBetweenContacts)
-                            {
-                                maxDistanceSquaredBetweenContacts = squaredDistance;
-                                contact2 = closest;
-                                contactCount = 2;
-                            }
-                        }
-                        else if (pointToClosestSqDistance < minDistanceSquared)
-                        {
-                            minDistanceSquared = pointToClosestSqDistance;
-                            maxDistanceSquaredBetweenContacts = 0;
-                            contact1 = closest;
-                            contactCount = 1;
-                        }
+                        // out1 = p1; out2 = p2; 
+                        return false; // 2
                     }
+                    if (d1 < 0 && d2 < 0) return true; // 0
+
+                    // One point inside, one outside -> compute intersection.
+                    const Vec2 dir = p2 - p1;
+                    const Real t = d1 / (d1 - d2); // d1 - d2 != 0
+                    const Vec2 intersect = p1 + dir * t;
+
+                    if (d1 >= 0)
+                    {
+                        //out1 = p1;
+                        p2 = intersect;
+                    }
+                    else
+                    {
+                        p1 = intersect;
+                        //out2 = p2;
+                    }
+                    return false; // 2
                 };
-            for (size_t i = 0; i < 4; i++)
+
+            // Note: Can put 'clipped' instead of inc edge variables to set to array directly above. I tried, but it didn't give any results.
+            Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
+
+            // Clip against first side plane.
+            bool clipFail = clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir);
+            if (clipFail) continue;
+
+            // Clip against second side plane.
+            clipFail = clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir);
+            if (clipFail) continue;
+
+            // Keep points that lie behind the reference face plane.
+            Vec2 contacts[2];
+            uint32_t contactCount = 0;
+            const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
+
+            for (uint32_t i = 0; i < 2; i++)
             {
-                testEdgeAgainstVertices(vertsA[i], vertsA[(i + 1) & 3], vertsB);
-            }
-            for (size_t i = 0; i < 4; i++)
-            {
-                testEdgeAgainstVertices(vertsB[i], vertsB[(i + 1) & 3], vertsA);
+                const Real pointDist = glm::dot(clipped[i], refNormal);
+                if (pointDist <= refPlaneDist + Real(1e-5))
+                {
+                    contacts[contactCount++] = clipped[i];
+                }
             }
 
-            // Result.
+            if (contactCount == 0) continue;
+
+            // Store final collision data.
             allCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
-                contact1,
-                contact2,
+                contacts[0],
+                contacts[1],
                 contactCount
             );
         }

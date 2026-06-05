@@ -419,7 +419,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Resolve collisions");
 
-		constexpr Real frictionEpsilon = Real(0.0001);
+		constexpr Real frictionEpsilon = Real(1e-4);
 
         // Get pointers.
         Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
@@ -438,7 +438,7 @@ namespace PS_AGONY
         const Material* CORE_RESTRICT materialPtr = materials.data();
 
         // Lambdas.
-        auto getLinearVelocity = [&](BodyIndex bodyIndex) -> Vec2
+        auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
         {
             const Real velocityX = velocityXPtr[bodyIndex];
             const Real velocityY = velocityYPtr[bodyIndex];
