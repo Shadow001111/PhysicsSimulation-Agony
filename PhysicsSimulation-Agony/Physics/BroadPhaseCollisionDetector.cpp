@@ -14,7 +14,7 @@ namespace PS_AGONY
 {
     using RealSimd = Simd<Real>;
     using I32Simd = Simd<uint32_t>;
-    using U32Simd = Simd<uint32_t>;
+    using MortonU32Simd = Simd<uint32_t>;
 
     static constexpr uint64_t integralLog2(uint64_t n)
     {
@@ -45,7 +45,7 @@ namespace PS_AGONY
         return (part1By1(y) << 1) | part1By1(x);
     }
 
-    static inline U32Simd part1By1Simd(U32Simd x)
+    static inline MortonU32Simd part1By1Simd(MortonU32Simd x)
     {
         x &= 0x0000ffffu;
         x = (x | (x << 8)) & 0x00FF00FFu;
@@ -55,7 +55,7 @@ namespace PS_AGONY
         return x;
     }
 
-    static inline U32Simd morton2DSimd(const U32Simd& x, const U32Simd& y)
+    static inline MortonU32Simd morton2DSimd(const MortonU32Simd& x, const MortonU32Simd& y)
     {
         return (part1By1Simd(y) << 1) | part1By1Simd(x);
     }
@@ -238,50 +238,46 @@ namespace PS_AGONY
         }
     }
 
+    template<std::floating_point TReal>
     void BroadPhaseCollisionDetector::computeMortonCodes(uint32_t bodyCount)
     {
+        using TRealSimd = Simd<TReal>;
+
         auto& mortonCodes = bvhFunctionResources.mortonCodes;
         mortonCodes.resize(bodyCount);
 
         MortonCode* CORE_RESTRICT mortonCodePtr = mortonCodes.data();
 
-        const Real* CORE_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
-        const Real* CORE_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
+        const TReal* CORE_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
+        const TReal* CORE_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
 
         TRACY_SCOPE_N("Compute morton codes");
 
-        if constexpr (RealSimd::lanes == U32Simd::lanes)
-        {
-            size_t i = 0;
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+        size_t i = 0;
+        if constexpr (TRealSimd::lanes == MortonU32Simd::lanes)
+        {   // SIMD PATH.
+            for (; i + RealSimd::lanes <= bodyCount; i += TRealSimd::lanes)
             {
-                const RealSimd cx = RealSimd::load(centroidXPtr + i);
-                const RealSimd cy = RealSimd::load(centroidYPtr + i);
+                const TRealSimd cx = TRealSimd::load(centroidXPtr + i);
+                const TRealSimd cy = TRealSimd::load(centroidYPtr + i);
 
-                const U32Simd qx = cx.to_uint32();
-                const U32Simd qy = cy.to_uint32();
+                const MortonU32Simd qx = cx.to_uint32();
+                const MortonU32Simd qy = cy.to_uint32();
 
-                const U32Simd code = morton2DSimd(qx, qy);
+                const MortonU32Simd code = morton2DSimd(qx, qy);
 
                 code.store(mortonCodePtr + i);
             }
-            for (; i < bodyCount; i++)
-            {
-                const uint32_t qx = static_cast<uint32_t>(centroidXPtr[i]);
-                const uint32_t qy = static_cast<uint32_t>(centroidYPtr[i]);
-                mortonCodePtr[i] = morton2D(qx, qy);
-            }
         }
-        else
+        for (; i < bodyCount; i++)
         {
-            for (uint32_t i = 0; i < bodyCount; i++)
-            {
-                const uint32_t qx = static_cast<uint32_t>(centroidXPtr[i]);
-                const uint32_t qy = static_cast<uint32_t>(centroidYPtr[i]);
-                mortonCodePtr[i] = morton2D(qx, qy);
-            }
+            const uint32_t qx = static_cast<uint32_t>(centroidXPtr[i]);
+            const uint32_t qy = static_cast<uint32_t>(centroidYPtr[i]);
+            mortonCodePtr[i] = morton2D(qx, qy);
         }
     }
+
+    template void BroadPhaseCollisionDetector::computeMortonCodes<Real>(uint32_t);
 
     void BroadPhaseCollisionDetector::sortBodyIndicesByMortonCodes(uint32_t bodyCount)
     {
@@ -380,7 +376,7 @@ namespace PS_AGONY
         }
 
         // Compute morton codes.
-        computeMortonCodes(bodyCount);
+        computeMortonCodes<Real>(bodyCount);
 
         // Sort indices by morton code.
         sortBodyIndicesByMortonCodes(bodyCount);

@@ -28,7 +28,7 @@ namespace PS_AGONY
         }
     };
 
-    static inline Vec2 projectBox(
+    /*static inline Vec2 projectBox(
         const Vec2& center,
         const Vec2& right,
         const Vec2& up,
@@ -41,7 +41,7 @@ namespace PS_AGONY
             halfWidth  * std::abs(glm::dot(right, axis)) +
             halfHeight * std::abs(glm::dot(up,    axis));
         return { c - r, c + r };
-    }
+    }*/
 
     struct Vector2AndSqDistance
     {

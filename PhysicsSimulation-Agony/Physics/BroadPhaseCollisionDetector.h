@@ -81,6 +81,7 @@ namespace PS_AGONY
 
 		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax);
 
+		template<std::floating_point TReal>
 		void computeMortonCodes(uint32_t bodyCount);
 
 		void sortBodyIndicesByMortonCodes(uint32_t bodyCount);
