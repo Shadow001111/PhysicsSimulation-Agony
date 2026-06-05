@@ -11,4 +11,12 @@ namespace PS_AGONY
 	{
 		BodyIndex a, b;
 	};
+
+	enum class BodyType : uint8_t
+	{
+		Circle,
+		Box,
+		Polygon,
+		COUNT
+	};
 }

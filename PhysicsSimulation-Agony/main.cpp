@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <memory>
 
 
 static std::string formatSize(size_t value)
@@ -182,22 +183,31 @@ static int gameFunc()
     // Simulation
     PS_AGONY::Simulation simulation{};
 
+    auto& mainBodyHolder = simulation.getMainBodyHolder();
+
     {
         PS_AGONY::Material material0 = {
             .elasticity = 0.9,
-            .staticFriction = 0.2,
-            .dynamicFriction = 0.2
+            .staticFriction = 1.0,
+            .dynamicFriction = 1.0
+        };
+
+        PS_AGONY::Material material1 = {
+            .elasticity = 0.0,
+            .staticFriction = 1.0,
+            .dynamicFriction = 1.0
         };
 
         PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
+        PS_AGONY::MaterialIndex material1Index = simulation.createMaterial(material1);
 
         Random::setSeed(0);
 
         if constexpr (true)
         {
+            constexpr float boundary = 12.0f;
+            constexpr float thickness = 20.0f;
             {
-                constexpr float boundary = 9.0f;
-                constexpr float thickness = 20.0f;
 
                 constexpr float halfThickness = thickness * 0.5f;
                 constexpr float length = boundary * 2.0f + 2.0f;
@@ -205,11 +215,14 @@ static int gameFunc()
                 simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
                 simulation.createBox({ (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
                 simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
-                simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
+                //simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
             }
 
-            const int bodyCount = 900;
-            for (int i = 0; i < bodyCount; i++)
+            simulation.createBox({ 0.0,  0.0 }, { 0.0, 0.0 }, 3.14 / 6, 0.0, 0.0, material0Index, { boundary * 2.0f, 1.0f });
+
+            const int circleCount = 50;
+            const int boxCount = 50;
+            for (int i = 0; i < circleCount; i++)
             {
                 const float x = Random::real<float>(-5.0f, 5.0f);
                 const float y = Random::real<float>(-5.0f, 5.0f);
@@ -220,7 +233,7 @@ static int gameFunc()
 
                 simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, material0Index, r);
             }
-            for (int i = 0; i < bodyCount; i++)
+            for (int i = 0; i < boxCount; i++)
             {
                 const float x = Random::real<float>(-5.0f, 5.0f);
                 const float y = Random::real<float>(-5.0f, 5.0f);
@@ -232,6 +245,13 @@ static int gameFunc()
                 const float mass = width * height;
 
                 simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, material0Index, { width, height });
+            }
+
+            {
+                constexpr float radius = 4.0f;
+                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 1.0f, material1Index, radius);
+
+                simulation.createCircle({ 0.0f, -1000.0f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, 1000.0f);
             }
         }
         else
@@ -303,6 +323,39 @@ static int gameFunc()
                 camera.setViewRangeH(camera.viewRange * (1.0 + zoomSpeed), wnd.getAspectRatio());
             if (wnd.isKeyPressed(GLFW_KEY_E))
 				camera.setViewRangeH(camera.viewRange / (1.0 + zoomSpeed), wnd.getAspectRatio());
+        }
+        {
+            PS_AGONY::Vec2 mouseWorldPosition;
+            PS_AGONY::Vec2 mouseWorldVelocity;
+            {
+                const glm::dvec2 mousePosition = windowInputManager.getMousePosition();
+                const glm::dvec2 mouseNextPosition = mousePosition + windowInputManager.getMouseDelta();
+
+                const glm::dvec2 wndSize = { wnd.getWidth(), wnd.getHeight() };
+
+                glm::dvec2 positionNDC = (mousePosition / wndSize) * 2.0 - 1.0;
+                positionNDC.y = -positionNDC.y;
+
+                glm::dvec2 nextPositionNDC = (mouseNextPosition / wndSize) * 2.0 - 1.0;
+                nextPositionNDC.y = -nextPositionNDC.y;
+
+                mouseWorldPosition = camera.screenToWorldSpace(positionNDC);
+                PS_AGONY::Vec2 mouseWorldNextPosition = camera.screenToWorldSpace(nextPositionNDC);
+
+                mouseWorldVelocity = mouseWorldNextPosition - mouseWorldPosition;
+            }
+
+            mainBodyHolder.holderPosition = mouseWorldPosition;
+            mainBodyHolder.holderVelocity = mouseWorldVelocity / PS_AGONY::Real(deltaTime);
+
+            if (windowInputManager.isMouseButtonJustReleased(0))
+            {
+                simulation.mainBodyHolderRelease();
+            }
+            else if (windowInputManager.isMouseButtonJustPressed(0))
+            {
+                simulation.mainBodyHolderGrabAt(mouseWorldPosition);
+            }
         }
 
         // Simulation.

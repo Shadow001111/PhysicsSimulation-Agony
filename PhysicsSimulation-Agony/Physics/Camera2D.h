@@ -10,6 +10,11 @@ namespace PS_AGONY
 		Real aspectRatio{ 1.0} ;
 		Real viewRange{ 1.0 }; // Inverse zoom.
 
+		// Transformation.
+
+		// NDC space.
+		Vec2 screenToWorldSpace(const Vec2& screenPoint) noexcept;
+
 		// Setters
 		void setViewRangeW(Real w, Real ratio);
 		void setViewRangeH(Real h, Real ratio);

@@ -15,7 +15,10 @@ vec2 rotate2D(vec2 v, float angle)
 {
     float s = sin(angle);
     float c = cos(angle);
-    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+    return vec2(
+        v.x *  c + v.y * s,
+        v.x * -s + v.y * c
+        );
 }
 
 void main()

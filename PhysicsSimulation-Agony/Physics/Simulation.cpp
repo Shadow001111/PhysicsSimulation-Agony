@@ -148,6 +148,55 @@ namespace PS_AGONY
         return materialIndex;
     }
 
+    void Simulation::mainBodyHolderGrabAt(Vec2 grabPosition)
+    {
+        if (mainBodyHolder.heldBody.has_value()) return;
+
+        constexpr Real MAX_GRAB_DISTANCE = 2.0;
+        constexpr Real MAX_GRAB_DISTANCE_SQ = MAX_GRAB_DISTANCE * MAX_GRAB_DISTANCE;
+
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT massPtr = bodies.mass.data();
+
+        const uint32_t bodyCount = bodies.getCount();
+        for (uint32_t i = 0; i < bodyCount; i++)
+        {
+            if (massPtr[i] == 0) continue;
+
+            const Vec2 bodyPosition = { positionXPtr[i], positionYPtr[i] };
+
+            const Vec2 delta = bodyPosition - grabPosition;
+
+            const Real sqDistance = glm::dot(delta, delta);
+
+            if (sqDistance > MAX_GRAB_DISTANCE_SQ) continue;
+
+            // Grab.
+            mainBodyHolder.heldBody = i;
+            mainBodyHolder.bodyOffset = delta;
+            return;
+        }
+    }
+
+    void Simulation::mainBodyHolderRelease()
+    {
+        if (!mainBodyHolder.heldBody.has_value()) return;
+
+        const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
+        if (bodyIndex >= bodies.getCount()) return;
+
+        const Vec2 newBodyVelocity = mainBodyHolder.holderVelocity;
+
+        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+
+        velocityXPtr[bodyIndex] = newBodyVelocity.x;
+        velocityYPtr[bodyIndex] = newBodyVelocity.y;
+
+        mainBodyHolder.heldBody = std::nullopt;
+    }
+
     void Simulation::fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
     {
 		broadPhaseCollisionDetector.fetchAABBs(outAABBs);
@@ -169,6 +218,7 @@ namespace PS_AGONY
         applyExternalForces(bodyCount, deltaTime);
         integrate(bodyCount, deltaTime);
         iterativeCollisionSolving();
+        applyConstraints();
     }
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
@@ -340,6 +390,7 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
+
             const BodyIndex bodyIndex = bodyIndexPtr[i];
             const Real radius = radiusPtr[i];
 
@@ -419,7 +470,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Resolve collisions");
 
-		constexpr Real frictionEpsilon = Real(1e-4);
+        constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
         // Get pointers.
         Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
@@ -492,8 +543,8 @@ namespace PS_AGONY
             const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
             
             // TODO: Maybe put this after applying collision impulses.
-            const Real staticFriction = std::sqrt(materialA->staticFriction * materialB->staticFriction);
-            const Real dynamicFriction = std::sqrt(materialA->dynamicFriction * materialB->dynamicFriction);
+            const Real staticFriction = std::sqrt(std::max(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real dynamicFriction = std::sqrt(std::max(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
 			// Compute world centers of mass.
 			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
@@ -507,7 +558,7 @@ namespace PS_AGONY
             const Real depth = data.depth;
 
             // Calculate collision impulses.
-            Vec2 impulses[2];
+            Vec2 impulseArray[2];
             Vec2 rAPerpArray[2];
             Vec2 rBPerpArray[2];
             Real jnArray[2];
@@ -533,7 +584,9 @@ namespace PS_AGONY
                     const Vec2 angularLinearVelA = rAPerp * angularVelA;
                     const Vec2 angularLinearVelB = rBPerp * angularVelB;
 
-                    const Vec2 relativeVelocity = (linearVelocityB + angularLinearVelB) - (linearVelocityA + angularLinearVelA);
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
 
                     const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
                     if (velocityAlongNormal > Real(0))
@@ -550,10 +603,10 @@ namespace PS_AGONY
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
                     const Real jn = -elasticityPlusOne * velocityAlongNormal / denom;
 
-                    impulses[validContactCount] = jn * normal;
+                    impulseArray[validContactCount] = normal; // Will multiply by 'jn' in next loop.
                     rAPerpArray[validContactCount] = rAPerp;
                     rBPerpArray[validContactCount] = rBPerp;
-                    jnArray[validContactCount] = jn;
+                    jnArray[validContactCount] = jn; // Will weaken later of 'validContactCount' is > 1.
 
                     validContactCount++;
                 }
@@ -562,16 +615,29 @@ namespace PS_AGONY
 			// Check if there is at least one valid contact.
             if (validContactCount == 0) continue;
 
+            // Turn normals to impulses.
+            if (validContactCount == 1)
+            {
+                impulseArray[0] *= jnArray[0];
+            }
+            else
+            {
+                constexpr Real impulseScale = Real(1.0 / 2.0);
+
+                jnArray[0] *= impulseScale;
+                jnArray[1] *= impulseScale;
+
+                impulseArray[0] *= jnArray[0];
+                impulseArray[1] *= jnArray[1];
+            }
+
             // Apply collision impulses.
             {
-				const Real impulseScale = Real(1) / static_cast<Real>(validContactCount);
                 for (uint32_t i = 0; i < validContactCount; i++)
                 {
-                    const Vec2 impulse = impulses[i] * impulseScale;
+                    const Vec2 impulse = impulseArray[i];
                     applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
 					applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
-
-					jnArray[i] *= impulseScale; // Scale the normal impulse for later use in friction calculation.
                 }
             }
 
@@ -581,6 +647,7 @@ namespace PS_AGONY
                 const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
                 const Real angularVelA = angularVelocityPtr[bodyIndexA];
                 const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                const Real impulseScale = Real(1) / static_cast<Real>(validContactCount);
                 for (uint32_t i = 0; i < validContactCount; i++)
                 {
                     const Vec2 rAPerp = rAPerpArray[i];
@@ -589,13 +656,15 @@ namespace PS_AGONY
                     const Vec2 angularLinearVelA = rAPerp * angularVelA;
                     const Vec2 angularLinearVelB = rBPerp * angularVelB;
 
-                    const Vec2 relativeVelocity = (linearVelocityB + angularLinearVelB) - (linearVelocityA + angularLinearVelA);
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
 
 					Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
 					const Real tangentLengthSq = glm::dot(tangent, tangent);
-                    if (tangentLengthSq < frictionEpsilon)
+                    if (tangentLengthSq < frictionEpsilonSq)
                     {
-						impulses[i] = Vec2(0.0, 0.0);
+						impulseArray[i] = Vec2(0.0, 0.0);
                         continue;
                     }
 
@@ -608,16 +677,18 @@ namespace PS_AGONY
 					const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
 
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-					const Real jt = -glm::dot(relativeVelocity, tangent) / denom;
+					const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
 
 					const Real jn = jnArray[i];
                     if (std::abs(jt) <= jn * staticFriction)
                     {
-                        impulses[i] = jt * tangent; // Static friction.
+                        impulseArray[i] = -jt * tangent; // Static friction.
                     }
                     else
                     {
-                        impulses[i] = -jn * dynamicFriction * tangent; // Dynamic friction.
+                        //const Real maxDynamic = jn * dynamicFriction;
+                        //const Real f = std::clamp(jt, -maxDynamic, maxDynamic);
+                        impulseArray[i] = -jn * tangent; // Dynamic friction.
 					}
                 }
             }
@@ -626,9 +697,9 @@ namespace PS_AGONY
             {
                 for (uint32_t i = 0; i < validContactCount; i++)
                 {
-                    const Vec2 impulse = impulses[i];
+                    const Vec2 impulse = impulseArray[i];
                     applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
-                    applyImpulse(bodyIndexB, impulse, rBPerpArray[i], invMassB, invInertiaB);
+                    applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
                 }
             }
 
@@ -639,18 +710,38 @@ namespace PS_AGONY
                 continue;
             }
 
-            const Vec2 correctionVec2 = normal * correction;
-
 			const Real invTotalInvMass = Real(1) / totalInvMass;
-            const Real ratioA = invMassA * invTotalInvMass;
-            const Real ratioB = invMassB * invTotalInvMass;
+            const Real correctionA = invMassA * invTotalInvMass * correction;
+            const Real correctionB = invMassB * invTotalInvMass * correction;
 
-            positionXPtr[bodyIndexA] -= correctionVec2.x * ratioA;
-            positionYPtr[bodyIndexA] -= correctionVec2.y * ratioA;
+            positionXPtr[bodyIndexA] -= normal.x * correctionA;
+            positionYPtr[bodyIndexA] -= normal.y * correctionA;
 
-            positionXPtr[bodyIndexB] += correctionVec2.x * ratioB;
-            positionYPtr[bodyIndexB] += correctionVec2.y * ratioB;
+            positionXPtr[bodyIndexB] += normal.x * correctionB;
+            positionYPtr[bodyIndexB] += normal.y * correctionB;
         }
+    }
+
+    void Simulation::applyConstraints()
+    {
+        if (!mainBodyHolder.heldBody.has_value()) return;
+
+        const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
+        if (bodyIndex >= bodies.getCount()) return;
+
+        const Vec2 newBodyPosition = mainBodyHolder.holderPosition + mainBodyHolder.bodyOffset;
+        const Vec2 newBodyVelocity = mainBodyHolder.holderVelocity;
+
+        Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+
+        positionXPtr[bodyIndex] = newBodyPosition.x;
+        positionYPtr[bodyIndex] = newBodyPosition.y;
+
+        velocityXPtr[bodyIndex] = newBodyVelocity.x;
+        velocityYPtr[bodyIndex] = newBodyVelocity.y;
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const

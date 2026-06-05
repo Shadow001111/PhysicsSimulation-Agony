@@ -307,6 +307,7 @@
     <ClInclude Include="Core\RadixSort.h" />
     <ClInclude Include="Core\Threading\ChaseLevQueue.h" />
     <ClInclude Include="Core\Threading\Task.h" />
+    <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BodySoAViewer.h" />
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />

@@ -6,7 +6,10 @@
 #include "BroadPhaseCollisionDetector.h"
 #include "NarrowPhaseCollisionDetector.h"
 
+#include "Interactivity/BodyHolder.h"
+
 #include <vector>
+#include <optional>
 
 namespace PS_AGONY
 {
@@ -58,13 +61,16 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
 
-		// Other.
+		// Timers.
 		Real updateTimeAccumulator = 0.0;
 
 		// Debug data.
 		Real debugDataResetTimeAccumulator = 0.0;
 		mutable DebugData runtimeDebugData;
 		mutable DebugData debugDataSnaphot;
+
+		// Interactivity.
+		Interactivity::BodyHolder mainBodyHolder;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -80,12 +86,17 @@ namespace PS_AGONY
 
 		MaterialIndex createMaterial(const Material& material);
 
+		void mainBodyHolderGrabAt(Vec2 grabPosition);
+		void mainBodyHolderRelease();
+
 		void fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
 
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
 		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(boxes); }
+
+		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 	private:
 		void physicsStep(Real deltaTime);
 
@@ -102,6 +113,8 @@ namespace PS_AGONY
 		void computeRotationCosSin();
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+
+		void applyConstraints();
 
 		void collectMemoryUsage(DebugData& data) const;
 	};

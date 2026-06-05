@@ -17,14 +17,6 @@ namespace PS_AGONY
 	template<typename T>
 	using SimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<T>::bytes>>;
 
-	enum class BodyType : uint8_t
-	{
-		Circle,
-		Box,
-		Polygon,
-		COUNT
-	};
-
 	struct AABB
 	{
 		Real minX, minY;

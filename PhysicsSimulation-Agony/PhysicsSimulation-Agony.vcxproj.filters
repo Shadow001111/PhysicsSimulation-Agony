@@ -422,5 +422,8 @@
     <ClInclude Include="Physics\SymmetricMatrix.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\Interactivity\BodyHolder.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
