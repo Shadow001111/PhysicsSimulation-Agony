@@ -88,6 +88,7 @@ namespace PS_AGONY
 
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();
+		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
 
 		void fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
 

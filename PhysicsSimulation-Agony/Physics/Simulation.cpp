@@ -200,13 +200,20 @@ namespace PS_AGONY
 
         const Vec2 newBodyVelocity = mainBodyHolder.holderVelocity;
 
-        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
-
-        velocityXPtr[bodyIndex] = newBodyVelocity.x;
-        velocityYPtr[bodyIndex] = newBodyVelocity.y;
+        bodies.velocityX[bodyIndex] = newBodyVelocity.x;
+        bodies.velocityY[bodyIndex] = newBodyVelocity.y;
 
         mainBodyHolder.heldBody = std::nullopt;
+    }
+
+    void Simulation::mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp)
+    {
+        if (!mainBodyHolder.heldBody.has_value()) return;
+
+        const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
+        if (bodyIndex >= bodies.getCount()) return;
+
+        bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
     }
 
     void Simulation::fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const

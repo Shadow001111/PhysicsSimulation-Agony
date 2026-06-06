@@ -194,7 +194,7 @@ static int gameFunc()
 
         PS_AGONY::Material material1 = {
             .elasticity = 0.0,
-            .staticFriction = 0.0,
+            .staticFriction = 1.0,
             .dynamicFriction = 1.0
         };
 
@@ -221,8 +221,8 @@ static int gameFunc()
                 simulation.createBox({ 0.0, 0.0 }, { 0.0, 0.0 }, 3.14 * 0.25, 0.0, 0.0, material0Index, { centerBoxSize, centerBoxSize });
             }
 
-            const int circleCount = 0;
-            const int boxCount = 0;
+            const int circleCount = 500;
+            const int boxCount = 500;
             for (int i = 0; i < circleCount; i++)
             {
                 const float x = Random::real<float>(-5.0f, 5.0f);
@@ -358,6 +358,14 @@ static int gameFunc()
             else if (windowInputManager.isMouseButtonJustPressed(0))
             {
                 simulation.mainBodyHolderGrabAt(mouseWorldPosition);
+            }
+
+            if (mainBodyHolder.heldBody.has_value())
+            {
+                if (windowInputManager.isMouseButtonPressed(1))
+                {
+                    simulation.mainBodyHolderIncreaseAngularVelocity(-30.0 * deltaTime);
+                }
             }
         }
 
