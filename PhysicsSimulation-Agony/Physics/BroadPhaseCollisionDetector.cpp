@@ -533,10 +533,10 @@ namespace PS_AGONY
         constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, CAP / LANES>();
         
         // Get pointers.
-        const Real* leafMinXPtr = bvhFunctionResources.leafMinX.data();
-        const Real* leafMaxXPtr = bvhFunctionResources.leafMaxX.data();
-        const Real* leafMinYPtr = bvhFunctionResources.leafMinY.data();
-        const Real* leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
+        const Real* CORE_RESTRICT leafMinXPtr = bvhFunctionResources.leafMinX.data();
+        const Real* CORE_RESTRICT leafMaxXPtr = bvhFunctionResources.leafMaxX.data();
+        const Real* CORE_RESTRICT leafMinYPtr = bvhFunctionResources.leafMinY.data();
+        const Real* CORE_RESTRICT leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
 
         // Dual-node traversal stack.
         // Self-query pushes up to 3 items per pop (net +2), so worst-case depth
@@ -570,17 +570,19 @@ namespace PS_AGONY
                 {
                     const uint32_t count = nodeEnd - nodeStart;
 
-                    for (uint32_t k = 0; k < count; k++)
+                    uint32_t index = nodeStart;
+                    for (uint32_t i = 0; i < count; i++)
                     {
-                        out.minX[k] = leafMinXPtr[nodeStart + k];
-                        out.maxX[k] = leafMaxXPtr[nodeStart + k];
-                        out.minY[k] = leafMinYPtr[nodeStart + k];
-                        out.maxY[k] = leafMaxYPtr[nodeStart + k];
+                        out.minX[i] = leafMinXPtr[index];
+                        out.maxX[i] = leafMaxXPtr[index];
+                        out.minY[i] = leafMinYPtr[index];
+                        out.maxY[i] = leafMaxYPtr[index];
+                        index++;
                     }
 
                     constexpr Real DEAD = -std::numeric_limits<Real>::max();
-                    for (uint32_t k = count; k < CAP; k++)
-                        out.minX[k] = out.maxX[k] = out.minY[k] = out.maxY[k] = DEAD;
+                    for (uint32_t i = count; i < CAP; i++)
+                        out.minX[i] = out.maxX[i] = out.minY[i] = out.maxY[i] = DEAD;
 					return count;
                 };
 
@@ -598,6 +600,7 @@ namespace PS_AGONY
                         const RealSimd vMinYi(leafA.minY[i]);
                         const RealSimd vMaxYi(leafA.maxY[i]);
 
+                        auto maskRow = maskArray[i];
                         for (uint32_t j = 0; j < CAP; j += LANES)
                         {
                             const RealSimd vMinXj = RealSimd::load(leafA.minX + j);
@@ -609,7 +612,7 @@ namespace PS_AGONY
                                 (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
                                 (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
 
-                            uint32_t mask = overlap.movemask() & maskArray[i][j >> LANES_LOG2];
+                            uint32_t mask = overlap.movemask() & maskRow[j >> LANES_LOG2];
                             while (mask)
                             {
                                 const uint32_t lane = std::countr_zero(mask);
@@ -668,7 +671,7 @@ namespace PS_AGONY
             }
             else if (aLeaf || (!bLeaf && (nodeA.end - nodeA.start) < (nodeB.end - nodeB.start)))
             {
-                // Split the larger node B.
+                // Split node B.
                 stack[stackSize++] = { nodePair.a, nodeB.right };
                 stack[stackSize++] = { nodePair.a, nodeB.left  };
             }
