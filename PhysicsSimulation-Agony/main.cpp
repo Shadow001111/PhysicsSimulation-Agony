@@ -207,6 +207,7 @@ static int gameFunc()
         {
             constexpr float boundary = 12.0f;
             constexpr float thickness = 20.0f;
+            constexpr float centerBoxSize = boundary * 0.5f;
             {
 
                 constexpr float halfThickness = thickness * 0.5f;
@@ -216,10 +217,12 @@ static int gameFunc()
                 simulation.createBox({ (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
                 simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
                 //simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
+
+                simulation.createBox({ 0.0, 0.0 }, { 0.0, 0.0 }, 3.14 * 0.25, 0.0, 0.0, material0Index, { centerBoxSize, centerBoxSize });
             }
 
-            const int circleCount = 500;
-            const int boxCount = 500;
+            const int circleCount = 0;
+            const int boxCount = 0;
             for (int i = 0; i < circleCount; i++)
             {
                 const float x = Random::real<float>(-5.0f, 5.0f);
@@ -247,7 +250,7 @@ static int gameFunc()
 
             {
                 constexpr float radius = 4.0f;
-                //simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
+                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
             }
         }
         else

@@ -228,9 +228,9 @@ namespace PS_AGONY
         }
 
         applyExternalForces(bodyCount, deltaTime);
+        applyConstraints();
         integrate(bodyCount, deltaTime);
         iterativeCollisionSolving();
-        applyConstraints();
     }
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
@@ -564,10 +564,10 @@ namespace PS_AGONY
             const Real depth = data.depth;
 
             // Calculate collision impulses.
-            Vec2 impulseArray[2] = { Vec2(), Vec2() };
-            Vec2 rAPerpArray[2] = { Vec2(), Vec2() };;
-            Vec2 rBPerpArray[2] = { Vec2(), Vec2() };;
-            Real jnArray[2] = { Real(0), Real(0) };
+            Vec2 impulseArray[2] = { Vec2(),  Vec2()  };
+            Vec2 rAPerpArray[2] =  { Vec2(),  Vec2()  };
+            Vec2 rBPerpArray[2] =  { Vec2(),  Vec2()  };
+            Real jnArray[2] =      { Real(0), Real(0) };
             const uint32_t contactCount = std::min(data.contactCount, 2u);
 
             const Real impulseScale = Real(1.0) / Real(data.contactCount);

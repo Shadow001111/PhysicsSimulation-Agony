@@ -301,7 +301,7 @@ namespace PS_AGONY
                 normalLocal = Vec2(Real(0), sy);
             }
 
-            const Vec2 normal = {
+            const Vec2 normal = -Vec2{
                 cosB * normalLocal.x - sinB * normalLocal.y,
                 sinB * normalLocal.x + cosB * normalLocal.y
             };
