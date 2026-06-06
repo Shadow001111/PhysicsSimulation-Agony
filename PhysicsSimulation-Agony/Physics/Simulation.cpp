@@ -509,13 +509,6 @@ namespace PS_AGONY
             return { centerOfMassX, centerOfMassY };
 			};
 
-        auto applyImpulse = [&](BodyIndex bodyIndex, Vec2 impulse, Vec2 rPerp, Real invMass, Real invInertia)
-        {
-            velocityXPtr[bodyIndex] += impulse.x * invMass;
-            velocityYPtr[bodyIndex] += impulse.y * invMass;
-			angularVelocityPtr[bodyIndex] += glm::dot(rPerp, impulse) * invInertia;
-		};
-
         // Main loop.
         // Note: Storing velocities on stack, updating them, then storing back with pointers was slower than how its right now. Why?!
         for (const auto& data : narrowPhaseCollisions)
@@ -620,8 +613,14 @@ namespace PS_AGONY
             for (uint32_t i = 0; i < contactCount; i++)
             {
                 const Vec2 impulse = impulseArray[i];
-                applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
-				applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
+
+                velocityXPtr[bodyIndexA] -= impulse.x * invMassA;
+                velocityYPtr[bodyIndexA] -= impulse.y * invMassA;
+                angularVelocityPtr[bodyIndexA] -= glm::dot(rAPerpArray[i], impulse) * invInertiaA;
+
+                velocityXPtr[bodyIndexB] += impulse.x * invMassB;
+                velocityYPtr[bodyIndexB] += impulse.y * invMassB;
+                angularVelocityPtr[bodyIndexB] += glm::dot(rBPerpArray[i], impulse) * invInertiaB;
             }
 
 			// Calculate friction impulses.
@@ -679,8 +678,14 @@ namespace PS_AGONY
             for (uint32_t i = 0; i < contactCount; i++)
             {
                 const Vec2 impulse = impulseArray[i];
-                applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
-                applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
+
+                velocityXPtr[bodyIndexA] -= impulse.x * invMassA;
+                velocityYPtr[bodyIndexA] -= impulse.y * invMassA;
+                angularVelocityPtr[bodyIndexA] -= glm::dot(rAPerpArray[i], impulse) * invInertiaA;
+
+                velocityXPtr[bodyIndexB] += impulse.x * invMassB;
+                velocityYPtr[bodyIndexB] += impulse.y * invMassB;
+                angularVelocityPtr[bodyIndexB] += glm::dot(rBPerpArray[i], impulse) * invInertiaB;
             }
 
             // Position resolution.
