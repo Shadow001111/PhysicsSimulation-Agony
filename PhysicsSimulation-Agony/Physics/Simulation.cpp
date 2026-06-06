@@ -159,6 +159,10 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
         const Real* CORE_RESTRICT massPtr = bodies.mass.data();
 
+        Real minSqDistance = FLT_MAX;
+        BodyIndex closestBody;
+        Vec2 closestBodyDelta;
+
         const uint32_t bodyCount = bodies.getCount();
         for (uint32_t i = 0; i < bodyCount; i++)
         {
@@ -171,11 +175,19 @@ namespace PS_AGONY
             const Real sqDistance = glm::dot(delta, delta);
 
             if (sqDistance > MAX_GRAB_DISTANCE_SQ) continue;
+            else if (sqDistance < minSqDistance)
+            {
+                minSqDistance = sqDistance;
+                closestBody = i;
+                closestBodyDelta = delta;
+            }
+        }
 
-            // Grab.
-            mainBodyHolder.heldBody = i;
-            mainBodyHolder.bodyOffset = delta;
-            return;
+        // Grab.
+        if (minSqDistance < FLT_MAX)
+        {
+            mainBodyHolder.heldBody = closestBody;
+            mainBodyHolder.bodyOffset = closestBodyDelta;
         }
     }
 
