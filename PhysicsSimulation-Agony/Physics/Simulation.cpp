@@ -617,13 +617,11 @@ namespace PS_AGONY
             }
 
             // Apply collision impulses.
+            for (uint32_t i = 0; i < contactCount; i++)
             {
-                for (uint32_t i = 0; i < contactCount; i++)
-                {
-                    const Vec2 impulse = impulseArray[i];
-                    applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
-					applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
-                }
+                const Vec2 impulse = impulseArray[i];
+                applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
+				applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
             }
 
 			// Calculate friction impulses.
@@ -678,13 +676,11 @@ namespace PS_AGONY
             }
 
 			// Apply friction impulses.
+            for (uint32_t i = 0; i < contactCount; i++)
             {
-                for (uint32_t i = 0; i < contactCount; i++)
-                {
-                    const Vec2 impulse = impulseArray[i];
-                    applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
-                    applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
-                }
+                const Vec2 impulse = impulseArray[i];
+                applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
+                applyImpulse(bodyIndexB,  impulse, rBPerpArray[i], invMassB, invInertiaB);
             }
 
             // Position resolution.

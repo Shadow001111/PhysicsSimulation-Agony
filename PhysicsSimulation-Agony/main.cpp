@@ -203,7 +203,7 @@ static int gameFunc()
 
         Random::setSeed(0);
 
-        if constexpr (true)
+        if constexpr (false)
         {
             constexpr float boundary = 12.0f;
             constexpr float thickness = 20.0f;
@@ -252,21 +252,25 @@ static int gameFunc()
         }
         else
         {
-            constexpr int boxCount = 500;
+            constexpr int objectCount = 500;
             constexpr float boxSize = 0.1f;
             constexpr float boxPadding = 0.03f;
 
+            constexpr float paddingY = 5.0f;
+
             constexpr float floorThickness = 1.0f;
-            constexpr float floorWidth = boxCount * (boxSize + boxPadding);
+            constexpr float floorWidth = objectCount * (boxSize + boxPadding);
 
             simulation.createBox({ 0.0f,  -floorThickness * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, { floorWidth, floorThickness });
+            simulation.createBox({ 0.0f,  -floorThickness * 0.5f + paddingY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, { floorWidth, floorThickness });
 
             constexpr float dx = boxSize + boxPadding;
-            for (int i = 0; i < boxCount; i++)
+            for (int i = 0; i < objectCount; i++)
             {
                 const float x = (-floorWidth + boxSize + boxPadding) * 0.5f + i * dx;
 
                 simulation.createBox({ x, boxSize * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, material0Index, { boxSize, boxSize });
+                simulation.createCircle({ x, boxSize * 0.5f + paddingY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, material0Index, boxSize * 0.5f);
             }
         }
     }
