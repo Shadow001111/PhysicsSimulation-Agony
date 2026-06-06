@@ -341,7 +341,7 @@ static int gameFunc()
 
         Random::setSeed(0);
 
-        if constexpr (false)
+        if constexpr (true)
         {
             constexpr float boundary = 12.0f;
             constexpr float thickness = 20.0f;
@@ -356,7 +356,7 @@ static int gameFunc()
                 simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
                 //simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
 
-                simulation.createBox({ 0.0, 0.0 }, { 0.0, 0.0 }, 3.14 * 0.25, 0.0, 0.0, material0Index, { centerBoxSize, centerBoxSize });
+                //simulation.createBox({ 0.0, 0.0 }, { 0.0, 0.0 }, 3.14 * 0.25, 0.0, 0.0, material0Index, { centerBoxSize, centerBoxSize });
             }
 
             const int circleCount = 500;
@@ -388,7 +388,7 @@ static int gameFunc()
 
             {
                 constexpr float radius = 4.0f;
-                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
+                //simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
             }
         }
         else if constexpr (false)

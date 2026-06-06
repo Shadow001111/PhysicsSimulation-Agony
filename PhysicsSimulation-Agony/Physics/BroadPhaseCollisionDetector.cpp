@@ -537,6 +537,7 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT leafMaxXPtr = bvhFunctionResources.leafMaxX.data();
         const Real* CORE_RESTRICT leafMinYPtr = bvhFunctionResources.leafMinY.data();
         const Real* CORE_RESTRICT leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
+        const BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
 
         const auto gatherLeaf = [&leafMinXPtr, &leafMaxXPtr, &leafMinYPtr, &leafMaxYPtr](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
             {
@@ -667,17 +668,27 @@ namespace PS_AGONY
                 stack[stackSize++] = { L, R };
                 stack[stackSize++] = { L, L };
             }
-            else if (aLeaf || (!bLeaf && (nodeA.end - nodeA.start) < (nodeB.end - nodeB.start)))
-            {
-                // Split node B.
-                stack[stackSize++] = { nodePair.a, nodeB.right };
-                stack[stackSize++] = { nodePair.a, nodeB.left  };
-            }
             else
             {
-                // Split node A.
-                stack[stackSize++] = { nodeA.right, nodePair.b };
-                stack[stackSize++] = { nodeA.left,  nodePair.b };
+                const uint32_t areaA = nodeA.end - nodeA.start;
+                const uint32_t areaB = nodeA.end - nodeA.start;
+
+                //const Real areaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
+                //const Real areaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
+
+                const bool splitB = aLeaf || (!bLeaf && (areaB > areaA));
+                if (splitB)
+                {
+                    // Split node B.
+                    stack[stackSize++] = { nodePair.a, nodeB.right };
+                    stack[stackSize++] = { nodePair.a, nodeB.left };
+                }
+                else
+                {
+                    // Split node A.
+                    stack[stackSize++] = { nodeA.right, nodePair.b };
+                    stack[stackSize++] = { nodeA.left,  nodePair.b };
+                }
             }
         }
     }
