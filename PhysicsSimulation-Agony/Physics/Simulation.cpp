@@ -517,6 +517,7 @@ namespace PS_AGONY
 		};
 
         // Main loop.
+        // Note: Storing velocities on stack, updating them, then storing back with pointers was slower than how its right now. Why?!
         for (const auto& data : narrowPhaseCollisions)
         {
 			// Get body indices.
@@ -558,18 +559,20 @@ namespace PS_AGONY
             const Real depth = data.depth;
 
             // Calculate collision impulses.
-            Vec2 impulseArray[2];
-            Vec2 rAPerpArray[2];
-            Vec2 rBPerpArray[2];
-            Real jnArray[2];
-            uint32_t validContactCount = 0;
+            Vec2 impulseArray[2] = { Vec2(), Vec2() };
+            Vec2 rAPerpArray[2] = { Vec2(), Vec2() };;
+            Vec2 rBPerpArray[2] = { Vec2(), Vec2() };;
+            Real jnArray[2] = { Real(0), Real(0) };
+            const uint32_t contactCount = std::min(data.contactCount, 2u);
+
+            const Real impulseScale = Real(1.0) / Real(data.contactCount);
             {
                 const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
                 const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
                 const Real angularVelA = angularVelocityPtr[bodyIndexA];
                 const Real angularVelB = angularVelocityPtr[bodyIndexB];
 
-				const uint32_t contactCount = std::min(data.contactCount, 2u);
+                bool noContacts = true;
 
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
@@ -589,10 +592,8 @@ namespace PS_AGONY
                         (linearVelocityA + angularLinearVelA);
 
                     const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
-                    if (velocityAlongNormal > Real(0))
-                    {
-                        continue;
-                    }
+
+                    if (velocityAlongNormal > Real(0)) continue;
 
                     const Real rAPerpDotN = glm::dot(rAPerp, normal);
                     const Real rBPerpDotN = glm::dot(rBPerp, normal);
@@ -601,39 +602,23 @@ namespace PS_AGONY
                     const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
 
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
 
-                    impulseArray[validContactCount] = normal; // Will multiply by 'jn' in next loop.
-                    rAPerpArray[validContactCount] = rAPerp;
-                    rBPerpArray[validContactCount] = rBPerp;
-                    jnArray[validContactCount] = jn; // Will weaken later of 'validContactCount' is > 1.
+                    impulseArray[i] = jn * normal;
+                    rAPerpArray[i] = rAPerp;
+                    rBPerpArray[i] = rBPerp;
+                    jnArray[i] = jn;
 
-                    validContactCount++;
+                    noContacts = false;
                 }
-            }
 
-			// Check if there is at least one valid contact.
-            if (validContactCount == 0) continue;
-
-            // Turn normals to impulses.
-            if (validContactCount == 1)
-            {
-                impulseArray[0] *= jnArray[0];
-            }
-            else
-            {
-                constexpr Real impulseScale = Real(1.0 / 2.0);
-
-                jnArray[0] *= impulseScale;
-                jnArray[1] *= impulseScale;
-
-                impulseArray[0] *= jnArray[0];
-                impulseArray[1] *= jnArray[1];
+                // Check if there is at least one valid contact.
+                if (noContacts) continue;
             }
 
             // Apply collision impulses.
             {
-                for (uint32_t i = 0; i < validContactCount; i++)
+                for (uint32_t i = 0; i < contactCount; i++)
                 {
                     const Vec2 impulse = impulseArray[i];
                     applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
@@ -647,8 +632,7 @@ namespace PS_AGONY
                 const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
                 const Real angularVelA = angularVelocityPtr[bodyIndexA];
                 const Real angularVelB = angularVelocityPtr[bodyIndexB];
-                const Real impulseScale = Real(1) / static_cast<Real>(validContactCount);
-                for (uint32_t i = 0; i < validContactCount; i++)
+                for (uint32_t i = 0; i < contactCount; i++)
                 {
                     const Vec2 rAPerp = rAPerpArray[i];
                     const Vec2 rBPerp = rBPerpArray[i];
@@ -695,7 +679,7 @@ namespace PS_AGONY
 
 			// Apply friction impulses.
             {
-                for (uint32_t i = 0; i < validContactCount; i++)
+                for (uint32_t i = 0; i < contactCount; i++)
                 {
                     const Vec2 impulse = impulseArray[i];
                     applyImpulse(bodyIndexA, -impulse, rAPerpArray[i], invMassA, invInertiaA);
