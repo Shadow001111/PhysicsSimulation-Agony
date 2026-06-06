@@ -686,9 +686,9 @@ namespace PS_AGONY
                     }
                     else
                     {
-                        //const Real maxDynamic = jn * dynamicFriction;
-                        //const Real f = std::clamp(jt, -maxDynamic, maxDynamic);
-                        impulseArray[i] = -jn * tangent; // Dynamic friction.
+                        const Real maxDynamic = jn * dynamicFriction;
+                        const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
+                        impulseArray[i] = f * tangent; // Dynamic friction.
 					}
                 }
             }

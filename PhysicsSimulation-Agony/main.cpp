@@ -194,7 +194,7 @@ static int gameFunc()
 
         PS_AGONY::Material material1 = {
             .elasticity = 0.0,
-            .staticFriction = 1.0,
+            .staticFriction = 0.0,
             .dynamicFriction = 1.0
         };
 
@@ -217,8 +217,6 @@ static int gameFunc()
                 simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
                 //simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
             }
-
-            simulation.createBox({ 0.0,  0.0 }, { 0.0, 0.0 }, 3.14 / 6, 0.0, 0.0, material0Index, { boundary * 2.0f, 1.0f });
 
             const int circleCount = 50;
             const int boxCount = 50;
@@ -249,9 +247,7 @@ static int gameFunc()
 
             {
                 constexpr float radius = 4.0f;
-                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 1.0f, material1Index, radius);
-
-                simulation.createCircle({ 0.0f, -1000.0f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, 1000.0f);
+                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
             }
         }
         else
