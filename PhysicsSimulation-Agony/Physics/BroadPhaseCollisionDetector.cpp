@@ -538,12 +538,29 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT leafMinYPtr = bvhFunctionResources.leafMinY.data();
         const Real* CORE_RESTRICT leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
 
+        const auto gatherLeaf = [&leafMinXPtr, &leafMaxXPtr, &leafMinYPtr, &leafMaxYPtr](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
+            {
+                constexpr Real DEAD = -std::numeric_limits<Real>::max();
+
+                const uint32_t count = nodeEnd - nodeStart;
+
+                uint32_t index = nodeStart;
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    out.minX[i] = leafMinXPtr[index];
+                    out.maxX[i] = leafMaxXPtr[index];
+                    out.minY[i] = leafMinYPtr[index];
+                    out.maxY[i] = leafMaxYPtr[index];
+                    index++;
+                }
+                for (uint32_t i = count; i < CAP; i++)
+                {
+                    out.minX[i] = out.maxX[i] = out.minY[i] = out.maxY[i] = DEAD;
+                }
+            };
+
         // Dual-node traversal stack.
-        // Self-query pushes up to 3 items per pop (net +2), so worst-case depth
-        // for a tree of depth D is 2D+1 items.  LBVH depth = 32 bit-split levels
-        // + bvhDepth median-fallback levels (~61 total), so we need ~123 entries.
-        constexpr uint64_t MAX_STACK_CAPACITY =
-            2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+        constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
         BvhNodePair stack[MAX_STACK_CAPACITY];
         uint32_t stackSize = 0;
 
@@ -566,29 +583,10 @@ namespace PS_AGONY
 
             if (aLeaf && bLeaf)
             {
-                const auto gatherLeaf = [&](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
-                {
-                    const uint32_t count = nodeEnd - nodeStart;
-
-                    uint32_t index = nodeStart;
-                    for (uint32_t i = 0; i < count; i++)
-                    {
-                        out.minX[i] = leafMinXPtr[index];
-                        out.maxX[i] = leafMaxXPtr[index];
-                        out.minY[i] = leafMinYPtr[index];
-                        out.maxY[i] = leafMaxYPtr[index];
-                        index++;
-                    }
-
-                    constexpr Real DEAD = -std::numeric_limits<Real>::max();
-                    for (uint32_t i = count; i < CAP; i++)
-                        out.minX[i] = out.maxX[i] = out.minY[i] = out.maxY[i] = DEAD;
-					return count;
-                };
-
                 // Gather leaf A, it is needed in both paths.
                 LeafAABB leafA;
-                const uint32_t countA = gatherLeaf(leafA, nodeA.start, nodeA.end);
+                gatherLeaf(leafA, nodeA.start, nodeA.end);
+                const uint32_t countA = nodeA.end - nodeA.start;
 
                 if (nodePair.a == nodePair.b)
                 {
