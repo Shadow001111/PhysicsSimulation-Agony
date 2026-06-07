@@ -11,7 +11,10 @@ namespace PS_AGONY
 
 		struct BvhNode
 		{
-			static constexpr uint32_t KD_LEAF_SIZE = 16; // Max size is 32. Larger size will fuck up bitwise mask.
+			// Max KD_LEAF_SIZE is 32. Larger size will fuck up bitwise mask.
+			// (We can change mask to me uint64_t to allow max KD_LEAF_SIZE to be 64, but increasing KD_LEAF_SIZE leads to perfomance decrease in narrow phase.)
+			static constexpr uint32_t KD_LEAF_SIZE = 16;
+
 			static constexpr uint32_t INVALID_INDEX = -1;
 
 			Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
@@ -85,6 +88,8 @@ namespace PS_AGONY
 		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
+
+		std::vector<BodyIndex> fetchBodiesWithinRange(const AABB& searchAABB);
 
 		size_t getMemoryUsage() const;
 	private:
