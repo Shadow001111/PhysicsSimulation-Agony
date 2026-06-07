@@ -617,8 +617,8 @@ namespace PS_AGONY
                                 const uint32_t lane = std::countr_zero(mask);
                                 mask &= mask - 1; // Clear lowest set bit.
                                 collisionData.emplace_back(
-                                    indices[nodeA.start + i],
-                                    indices[nodeA.start + j + lane]);
+                                    indicesPtr[nodeA.start + i],
+                                    indicesPtr[nodeA.start + j + lane]);
                             }
                         }
                     }
@@ -653,8 +653,8 @@ namespace PS_AGONY
                                 const uint32_t lane = std::countr_zero(mask);
                                 mask &= mask - 1;
                                 collisionData.emplace_back(
-                                    indices[nodeA.start + i],
-                                    indices[nodeB.start + j + lane]);
+                                    indicesPtr[nodeA.start + i],
+                                    indicesPtr[nodeB.start + j + lane]);
                             }
                         }
                     }
