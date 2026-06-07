@@ -107,7 +107,7 @@ namespace PS_AGONY
 
 		void iterativeCollisionSolving();
 
-		void buildAABBs();
+		void buildBodyAABBs();
 		void buildCircleAABBs();
 		void buildBoxAABBs();
 

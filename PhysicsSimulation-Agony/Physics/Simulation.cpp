@@ -350,7 +350,7 @@ namespace PS_AGONY
         const size_t bodyCount = bodies.getCount();
 
         // Rebuild AABBs.
-        buildAABBs();
+        buildBodyAABBs();
 
 		// Compute rotation cos/sin for all bodies, which is used in collision resolution.
 		computeRotationCosSin();
@@ -378,13 +378,13 @@ namespace PS_AGONY
             resolveCollisions(narrowCollisionData);
 
 			// Rebuild AABBs.
-            buildAABBs();
+            buildBodyAABBs();
         }
     }
 
-    void Simulation::buildAABBs()
+    void Simulation::buildBodyAABBs()
     {
-        TRACY_SCOPE_N("Build AABBs");
+        TRACY_SCOPE_N("Build body AABBs");
         buildCircleAABBs();
         buildBoxAABBs();
     }

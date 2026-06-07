@@ -421,23 +421,6 @@ namespace PS_AGONY
                 const uint32_t nodeEnd = node.end;
                 const uint32_t rangeSize = nodeEnd - nodeStart;
 
-                // Compute merged AABB for this node.
-                Real minX =  std::numeric_limits<Real>::max();
-                Real maxX = -std::numeric_limits<Real>::max();
-                Real minY =  std::numeric_limits<Real>::max();
-                Real maxY = -std::numeric_limits<Real>::max();
-
-                for (uint32_t i = nodeStart; i < nodeEnd; i++)
-                {
-                    const BodyIndex b = indices[i];
-                    minX = std::min(minX, aabbMinXPtr[b]);
-                    maxX = std::max(maxX, aabbMaxXPtr[b]);
-                    minY = std::min(minY, aabbMinYPtr[b]);
-                    maxY = std::max(maxY, aabbMaxYPtr[b]);
-                }
-                node.minX = minX; node.maxX = maxX;
-                node.minY = minY; node.maxY = maxY;
-
                 if (rangeSize <= BvhNode::KD_LEAF_SIZE)
                 {
                     // Leaf - nothing more to split.
@@ -487,6 +470,44 @@ namespace PS_AGONY
 
                 nodes.emplace_back(nodeStart, mid);
                 nodes.emplace_back(mid, nodeEnd);
+            }
+        }
+        {
+            TRACY_SCOPE_N("Compute bvh node AABBs");
+
+            const size_t nodeCount = nodes.size();
+            for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
+            {
+                BvhNode& node = nodes[idx];
+                if (node.leftChildIndex == BvhNode::INVALID_INDEX)
+                {
+                    // Leaf: compute AABB from its bodies.
+                    Real minX =  std::numeric_limits<Real>::max();
+                    Real maxX = -std::numeric_limits<Real>::max();
+                    Real minY =  std::numeric_limits<Real>::max();
+                    Real maxY = -std::numeric_limits<Real>::max();
+
+                    for (uint32_t i = node.start; i < node.end; ++i)
+                    {
+                        const BodyIndex b = indices[i];
+                        minX = std::min(minX, aabbMinXPtr[b]);
+                        maxX = std::max(maxX, aabbMaxXPtr[b]);
+                        minY = std::min(minY, aabbMinYPtr[b]);
+                        maxY = std::max(maxY, aabbMaxYPtr[b]);
+                    }
+                    node.minX = minX; node.maxX = maxX;
+                    node.minY = minY; node.maxY = maxY;
+                }
+                else
+                {
+                    // Not leaf: compute AABB from its children.
+                    const BvhNode& left  = nodes[node.leftChildIndex    ];
+                    const BvhNode& right = nodes[node.leftChildIndex + 1];
+                    node.minX = std::min(left.minX, right.minX);
+                    node.maxX = std::max(left.maxX, right.maxX);
+                    node.minY = std::min(left.minY, right.minY);
+                    node.maxY = std::max(left.maxY, right.maxY);
+                }
             }
         }
     }

@@ -341,7 +341,7 @@ static int gameFunc()
 
         Random::setSeed(0);
 
-        if constexpr (false)
+        if constexpr (true)
         {
             constexpr float boundary = 12.0f;
             constexpr float thickness = 20.0f;
