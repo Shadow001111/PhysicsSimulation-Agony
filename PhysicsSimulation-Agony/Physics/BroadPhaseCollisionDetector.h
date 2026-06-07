@@ -15,16 +15,18 @@ namespace PS_AGONY
 			static constexpr uint32_t INVALID_INDEX = -1;
 
 			Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
-			uint32_t left, right; // Child node indices; INVALID_INDEX for leaves.
+			uint32_t leftChildIndex; // INVALID_INDEX for leaves.
+			// rightChildIndex = leftChildIndex + 1.
 			uint32_t start, end; // Range in kdIndices: [start, end).
+			//uint32_t leafIndex; // If node is a leaf, it's its index.
 		
 			BvhNode() :
-				left(INVALID_INDEX), right(INVALID_INDEX),
+				leftChildIndex(INVALID_INDEX),
 				start(0), end(0)
 			{}
 
 			BvhNode(uint32_t start, uint32_t end) :
-				left(INVALID_INDEX), right(INVALID_INDEX),
+				leftChildIndex(INVALID_INDEX),
 				start(start), end(end)
 			{}
 		};

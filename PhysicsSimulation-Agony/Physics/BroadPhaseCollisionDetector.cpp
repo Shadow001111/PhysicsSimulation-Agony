@@ -111,7 +111,7 @@ namespace PS_AGONY
 		outAABBs.reserve(outAABBs.size() + nodes.size());
         for (const auto& node : nodes)
         {
-            if (node.left == BvhNode::INVALID_INDEX && node.right == BvhNode::INVALID_INDEX) // Leaf check.
+            if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf check.
             {
                 outAABBs.push_back({ node.minX, node.minY, node.maxX, node.maxY });
             }
@@ -468,15 +468,13 @@ namespace PS_AGONY
                 }
 
                 const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
-                const uint32_t rightIdx = leftIdx + 1u;
-                node.left = leftIdx;
-                node.right = rightIdx;
+                node.leftChildIndex = static_cast<uint32_t>(nodes.size());
 
                 nodes.emplace_back(nodeStart, mid);
                 nodes.emplace_back(mid, nodeEnd);
 
                 // Push right before left so left is processed first (depth-first).
-                stack[stackSize++] = { rightIdx };
+                stack[stackSize++] = { leftIdx + 1 };
                 stack[stackSize++] = { leftIdx };
             }
         }
@@ -579,8 +577,8 @@ namespace PS_AGONY
                 nodeA.minY >= nodeB.maxY || nodeA.maxY <= nodeB.minY)
                 continue;
 
-            const bool aLeaf = (nodeA.left == BvhNode::INVALID_INDEX);
-            const bool bLeaf = (nodeB.left == BvhNode::INVALID_INDEX);
+            const bool aLeaf = (nodeA.leftChildIndex == BvhNode::INVALID_INDEX);
+            const bool bLeaf = (nodeB.leftChildIndex == BvhNode::INVALID_INDEX);
 
             if (aLeaf && bLeaf)
             {
@@ -663,7 +661,8 @@ namespace PS_AGONY
             else if (nodePair.a == nodePair.b)
             {
                 // Self-query internal node.
-                const uint32_t L = nodeA.left, R = nodeA.right;
+                const uint32_t L = nodeA.leftChildIndex;
+                const uint32_t R = L + 1;
                 stack[stackSize++] = { R, R };
                 stack[stackSize++] = { L, R };
                 stack[stackSize++] = { L, L };
@@ -680,14 +679,14 @@ namespace PS_AGONY
                 if (splitB)
                 {
                     // Split node B.
-                    stack[stackSize++] = { nodePair.a, nodeB.right };
-                    stack[stackSize++] = { nodePair.a, nodeB.left };
+                    stack[stackSize++] = { nodePair.a, nodeB.leftChildIndex + 1 };
+                    stack[stackSize++] = { nodePair.a, nodeB.leftChildIndex };
                 }
                 else
                 {
                     // Split node A.
-                    stack[stackSize++] = { nodeA.right, nodePair.b };
-                    stack[stackSize++] = { nodeA.left,  nodePair.b };
+                    stack[stackSize++] = { nodeA.leftChildIndex + 1, nodePair.b };
+                    stack[stackSize++] = { nodeA.leftChildIndex,  nodePair.b };
                 }
             }
         }
