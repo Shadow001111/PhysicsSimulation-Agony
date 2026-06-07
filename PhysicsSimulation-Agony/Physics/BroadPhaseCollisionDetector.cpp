@@ -553,6 +553,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
         const BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
 
+        // Note: I tried to get rid of 'gatherLeaf' lambda and copy data directly instead doing it two times, but it was slower. Why? :C
+        // I guess we are trading small copy overhead for cache efficiency.
         const auto gatherLeaf = [&leafMinXPtr, &leafMaxXPtr, &leafMinYPtr, &leafMaxYPtr](LeafBodyAABBs& out, uint32_t nodeLeafIndex)
             {
                 constexpr size_t COPY_SIZE = sizeof(LeafBodyAABBSoA::LeafData);
@@ -583,8 +585,8 @@ namespace PS_AGONY
                 nodeA.minY >= nodeB.maxY || nodeA.maxY <= nodeB.minY)
                 continue;
 
-            const bool aLeaf = (nodeA.leftChildIndex == BvhNode::INVALID_INDEX);
-            const bool bLeaf = (nodeB.leftChildIndex == BvhNode::INVALID_INDEX);
+            const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
+            const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
 
             if (aLeaf && bLeaf)
             {
