@@ -11,7 +11,7 @@ namespace PS_AGONY
 
 		struct BvhNode
 		{
-			static constexpr uint32_t KD_LEAF_SIZE = 16;
+			static constexpr uint32_t KD_LEAF_SIZE = 16; // Max size is 32. Larger size will fuck up bitwise mask.
 			static constexpr uint32_t INVALID_INDEX = -1;
 
 			Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.

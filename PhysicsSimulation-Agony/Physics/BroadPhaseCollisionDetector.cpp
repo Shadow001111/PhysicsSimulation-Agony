@@ -606,6 +606,7 @@ namespace PS_AGONY
                         const RealSimd vMaxYi(leafA.maxY[i]);
 
                         auto maskRow = maskArray[i];
+                        uint32_t mask = 0;
                         for (uint32_t j = 0; j < CAP; j += LANES)
                         {
                             const RealSimd vMinXj = RealSimd::load(leafA.minX + j);
@@ -617,15 +618,16 @@ namespace PS_AGONY
                                 (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
                                 (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
 
-                            uint32_t mask = overlap.movemask() & maskRow[j >> LANES_LOG2];
-                            while (mask)
-                            {
-                                const uint32_t lane = std::countr_zero(mask);
-                                mask &= mask - 1; // Clear lowest set bit.
-                                collisionData.emplace_back(
-                                    indicesPtr[nodeA.start + i],
-                                    indicesPtr[nodeA.start + j + lane]);
-                            }
+                            const uint32_t localMask = overlap.movemask() & maskRow[j >> LANES_LOG2];
+                            mask |= localMask << j;
+                        }
+                        while (mask)
+                        {
+                            const uint32_t lane = std::countr_zero(mask);
+                            mask &= mask - 1; // Clear lowest set bit.
+                            collisionData.emplace_back(
+                                indicesPtr[nodeA.start + i],
+                                indicesPtr[nodeA.start + lane]);
                         }
                     }
                 }
@@ -642,6 +644,7 @@ namespace PS_AGONY
                         const RealSimd vMinYi(leafA.minY[i]);
                         const RealSimd vMaxYi(leafA.maxY[i]);
 
+                        uint32_t mask = 0;
                         for (uint32_t j = 0; j < CAP; j += LANES)
                         {
                             const RealSimd vMinXj = RealSimd::load(leafB.minX + j);
@@ -653,15 +656,15 @@ namespace PS_AGONY
                                 (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
                                 (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
 
-                            uint32_t mask = overlap.movemask();
-                            while (mask)
-                            {
-                                const uint32_t lane = std::countr_zero(mask);
-                                mask &= mask - 1;
-                                collisionData.emplace_back(
-                                    indicesPtr[nodeA.start + i],
-                                    indicesPtr[nodeB.start + j + lane]);
-                            }
+                            mask |= overlap.movemask() << j;
+                        }
+                        while (mask)
+                        {
+                            const uint32_t lane = std::countr_zero(mask);
+                            mask &= mask - 1;
+                            collisionData.emplace_back(
+                                indicesPtr[nodeA.start + i],
+                                indicesPtr[nodeB.start + lane]);
                         }
                     }
                 }
