@@ -515,6 +515,7 @@ namespace PS_AGONY
             return { velocityX, velocityY };
 			};
 
+        // Note: Pre-computing and updating world COMs is slower than recomputing.
         auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
         {
 			const Real positionX = positionXPtr[bodyIndex];
