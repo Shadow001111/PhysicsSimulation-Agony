@@ -341,7 +341,7 @@ static int gameFunc()
 
         Random::setSeed(0);
 
-        if constexpr (true)
+        if constexpr (false)
         {
             constexpr float boundary = 12.0f;
             constexpr float thickness = 20.0f;
@@ -391,7 +391,7 @@ static int gameFunc()
                 //simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
             }
         }
-        else if constexpr (false)
+        else if constexpr (true)
         {
             constexpr int objectCount = 500;
             constexpr float boxSize = 0.1f;

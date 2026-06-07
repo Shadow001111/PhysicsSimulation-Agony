@@ -629,17 +629,31 @@ namespace PS_AGONY
             }
 
             // Apply collision impulses.
-            for (uint32_t i = 0; i < contactCount; i++)
             {
-                const Vec2 impulse = impulseArray[i];
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
 
-                velocityXPtr[bodyIndexA] -= impulse.x * invMassA;
-                velocityYPtr[bodyIndexA] -= impulse.y * invMassA;
-                angularVelocityPtr[bodyIndexA] -= glm::dot(rAPerpArray[i], impulse) * invInertiaA;
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
 
-                velocityXPtr[bodyIndexB] += impulse.x * invMassB;
-                velocityYPtr[bodyIndexB] += impulse.y * invMassB;
-                angularVelocityPtr[bodyIndexB] += glm::dot(rBPerpArray[i], impulse) * invInertiaB;
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
             }
 
 			// Calculate friction impulses.
@@ -694,17 +708,31 @@ namespace PS_AGONY
             }
 
 			// Apply friction impulses.
-            for (uint32_t i = 0; i < contactCount; i++)
             {
-                const Vec2 impulse = impulseArray[i];
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
 
-                velocityXPtr[bodyIndexA] -= impulse.x * invMassA;
-                velocityYPtr[bodyIndexA] -= impulse.y * invMassA;
-                angularVelocityPtr[bodyIndexA] -= glm::dot(rAPerpArray[i], impulse) * invInertiaA;
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
 
-                velocityXPtr[bodyIndexB] += impulse.x * invMassB;
-                velocityYPtr[bodyIndexB] += impulse.y * invMassB;
-                angularVelocityPtr[bodyIndexB] += glm::dot(rBPerpArray[i], impulse) * invInertiaB;
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
             }
 
             // Position resolution.
