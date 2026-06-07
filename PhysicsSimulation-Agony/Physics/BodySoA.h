@@ -17,6 +17,9 @@ namespace PS_AGONY
 	template<typename T>
 	using SimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<T>::bytes>>;
 
+	template<typename T>
+	using RealSimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<Real>::bytes>>;
+
 	struct AABB
 	{
 		Real minX, minY;

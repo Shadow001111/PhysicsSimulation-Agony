@@ -15,25 +15,23 @@ namespace PS_AGONY
 			static constexpr uint32_t INVALID_INDEX = -1;
 
 			Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
-			uint32_t leftChildIndex; // INVALID_INDEX for leaves.
+			uint32_t leftChildIndex = INVALID_INDEX; // INVALID_INDEX for leaves.
 			// rightChildIndex = leftChildIndex + 1.
 			uint32_t start, end; // Range in kdIndices: [start, end).
-			//uint32_t leafIndex; // If node is a leaf, it's its index.
+			uint32_t leafIndex; // If node is a leaf, it's its index.
 		
 			BvhNode() :
-				leftChildIndex(INVALID_INDEX),
 				start(0), end(0)
 			{}
 
 			BvhNode(uint32_t start, uint32_t end) :
-				leftChildIndex(INVALID_INDEX),
 				start(start), end(end)
 			{}
 		};
 
 		struct BvhNodePair { uint32_t a, b; };
 
-		struct alignas(Simd<Real>::bytes) LeafAABB
+		struct alignas(Simd<Real>::bytes) LeafBodyAABBs
 		{
 			static_assert(BvhNode::KD_LEAF_SIZE % Simd<Real>::lanes == 0, "KD_LEAF_SIZE must be a multiple of SIMD lanes.");
 
@@ -52,17 +50,28 @@ namespace PS_AGONY
 
 			SimdAlignedVector<MortonCode> mortonCodes;
 
-			SimdAlignedVector<Real> leafMinX;
-			SimdAlignedVector<Real> leafMaxX;
-			SimdAlignedVector<Real> leafMinY;
-			SimdAlignedVector<Real> leafMaxY;
-
 			std::vector<BodyIndex> bodyIndexVector1;
 			std::vector<BodyIndex> bodyIndexVector2;
 		};
 
+		struct LeafBodyAABBSoA
+		{
+			struct LeafData
+			{
+				Real data[BvhNode::KD_LEAF_SIZE];
+			};
+
+			RealSimdAlignedVector<LeafData> minX;
+			RealSimdAlignedVector<LeafData> maxX;
+			RealSimdAlignedVector<LeafData> minY;
+			RealSimdAlignedVector<LeafData> maxY;
+		};
+
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;
+
+		std::vector<uint32_t> bvhNodeLeafIndices;
+		LeafBodyAABBSoA leafBodyAABBs;
 
 		std::vector<BodyPair> collisionData;
 	public:
@@ -94,7 +103,7 @@ namespace PS_AGONY
 			const uint32_t bodyCount
 		);
 
-		void reorderAABBByIndices(const std::vector<BodyIndex>& indices);
+		void collectLeavesAABBs(const std::vector<BodyIndex>& indices);
 
 		void queryBvhPairs(
 			const std::vector<BvhNode>& nodes,

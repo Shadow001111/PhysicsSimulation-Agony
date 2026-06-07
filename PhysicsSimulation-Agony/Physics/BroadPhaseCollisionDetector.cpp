@@ -129,13 +129,15 @@ namespace PS_AGONY
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinX);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxX);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMinY);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafMaxY);
-
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector1);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector2);
+
+        total += PS_AGONY::getVectorMemoryUsage(bvhNodeLeafIndices);
+
+        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
+        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
+        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minY);
+        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxY);
 
         total += PS_AGONY::getVectorMemoryUsage(collisionData);
 
@@ -156,12 +158,12 @@ namespace PS_AGONY
         std::iota(indices.begin(), indices.end(), 0);
 
         {
-            TRACY_SCOPE_N("Build nodes");
+            TRACY_SCOPE_N("Build tree");
             buildBvhTree(nodes, indices, bodyCount);
         }
         {
-            TRACY_SCOPE_N("Reorder AABB by indices");
-            reorderAABBByIndices(indices);
+            TRACY_SCOPE_N("Collect leaves AABBs");
+            collectLeavesAABBs(indices);
         }
         {
             TRACY_SCOPE_N("Query pairs");
@@ -345,6 +347,9 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
         const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
 
+        //
+        bvhNodeLeafIndices.clear();
+
         // Compute world AABB.
         Real globalMinX, globalMaxX, globalMinY, globalMaxY;
         {
@@ -392,7 +397,7 @@ namespace PS_AGONY
         //   • Fall back to a median split when all codes in the range are
         //     identical (perfectly overlapping bodies).
         {
-            TRACY_SCOPE_N("Build tree");
+            TRACY_SCOPE_N("Stack loop");
             struct BuildTask { uint32_t nodeIdx; };
 
             // LBVH depth bound: up to 32 bit-split levels (one per Morton-code bit)
@@ -432,7 +437,12 @@ namespace PS_AGONY
                 node.minY = minY; node.maxY = maxY;
 
                 if (rangeSize <= BvhNode::KD_LEAF_SIZE)
-                    continue; // Leaf - nothing more to split.
+                {
+                    // Leaf - nothing more to split.
+                    node.leafIndex = bvhNodeLeafIndices.size();
+                    bvhNodeLeafIndices.push_back(task.nodeIdx);
+                    continue;
+                }
 
                 // Find the split position.
                 const uint32_t mcFirst = mortonCodePtr[indices[nodeStart]];
@@ -468,56 +478,62 @@ namespace PS_AGONY
                 }
 
                 const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
-                node.leftChildIndex = static_cast<uint32_t>(nodes.size());
+                node.leftChildIndex = leftIdx;
+
+                stack[stackSize++] = { leftIdx + 1 };
+                stack[stackSize++] = { leftIdx };
 
                 nodes.emplace_back(nodeStart, mid);
                 nodes.emplace_back(mid, nodeEnd);
-
-                // Push right before left so left is processed first (depth-first).
-                stack[stackSize++] = { leftIdx + 1 };
-                stack[stackSize++] = { leftIdx };
             }
         }
     }
 
-    void BroadPhaseCollisionDetector::reorderAABBByIndices(const std::vector<BodyIndex>& indices)
+    void BroadPhaseCollisionDetector::collectLeavesAABBs(const std::vector<BodyIndex>& indices)
     {
-        const size_t bodyCount = indices.size();
+        constexpr Real DEAD = -std::numeric_limits<Real>::max();
 
-		Real* CORE_RESTRICT leafMinXPtr = nullptr;
-		Real* CORE_RESTRICT leafMaxXPtr = nullptr;
-		Real* CORE_RESTRICT leafMinYPtr = nullptr;
-		Real* CORE_RESTRICT leafMaxYPtr = nullptr;
+        const size_t leafCount = bvhNodeLeafIndices.size();
 
+        leafBodyAABBs.minX.resize(leafCount);
+        leafBodyAABBs.maxX.resize(leafCount);
+        leafBodyAABBs.minY.resize(leafCount);
+        leafBodyAABBs.maxY.resize(leafCount);
+
+        const Real* CORE_RESTRICT bodyMinXPtr = bodiesAABB.minX;
+        const Real* CORE_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT bodyMinYPtr = bodiesAABB.minY;
+        const Real* CORE_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
+
+        for (size_t leafIndex = 0; leafIndex < leafCount; leafIndex++)
         {
-            auto& leafMinX = bvhFunctionResources.leafMinX;
-            auto& leafMaxX = bvhFunctionResources.leafMaxX;
-            auto& leafMinY = bvhFunctionResources.leafMinY;
-            auto& leafMaxY = bvhFunctionResources.leafMaxY;
+            const uint32_t nodeIndex = bvhNodeLeafIndices[leafIndex];
+            const BvhNode& node = bvhFunctionResources.nodeVector[nodeIndex];
 
-            leafMinX.resize(bodyCount);
-            leafMaxX.resize(bodyCount);
-            leafMinY.resize(bodyCount);
-            leafMaxY.resize(bodyCount);
+            const uint32_t nodeStart = node.start;
+            const uint32_t nodeRange = node.end - nodeStart;
 
-			leafMinXPtr = leafMinX.data();
-			leafMaxXPtr = leafMaxX.data();
-            leafMinYPtr = leafMinY.data();
-			leafMaxYPtr = leafMaxY.data();
-        }
+            Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
+            Real* CORE_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data() + leafIndex);
+            Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data() + leafIndex);
+            Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data() + leafIndex);
 
-        const Real* CORE_RESTRICT srcMinXPtr = bodiesAABB.minX;
-        const Real* CORE_RESTRICT srcMaxXPtr = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT srcMinYPtr = bodiesAABB.minY;
-        const Real* CORE_RESTRICT srcMaxYPtr = bodiesAABB.maxY;
+            for (uint32_t leafBodyIndex = 0; leafBodyIndex < nodeRange; leafBodyIndex++)
+            {
+                const BodyIndex bodyIndex = indices[nodeStart + leafBodyIndex];
 
-        for (size_t i = 0; i < bodyCount; i++)
-        {
-            const BodyIndex b = indices[i];
-            leafMinXPtr[i] = srcMinXPtr[b];
-            leafMaxXPtr[i] = srcMaxXPtr[b];
-            leafMinYPtr[i] = srcMinYPtr[b];
-            leafMaxYPtr[i] = srcMaxYPtr[b];
+                leafMinXPtr[leafBodyIndex] = bodyMinXPtr[bodyIndex];
+                leafMaxXPtr[leafBodyIndex] = bodyMaxXPtr[bodyIndex];
+                leafMinYPtr[leafBodyIndex] = bodyMinYPtr[bodyIndex];
+                leafMaxYPtr[leafBodyIndex] = bodyMaxYPtr[bodyIndex];
+            }
+            for (uint32_t leafBodyIndex = nodeRange; leafBodyIndex < BvhNode::KD_LEAF_SIZE; leafBodyIndex++)
+            {
+                leafMinXPtr[leafBodyIndex] = DEAD;
+                leafMaxXPtr[leafBodyIndex] = DEAD;
+                leafMinYPtr[leafBodyIndex] = DEAD;
+                leafMaxYPtr[leafBodyIndex] = DEAD;
+            }
         }
     }
 
@@ -531,31 +547,21 @@ namespace PS_AGONY
         constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, CAP / LANES>();
         
         // Get pointers.
-        const Real* CORE_RESTRICT leafMinXPtr = bvhFunctionResources.leafMinX.data();
-        const Real* CORE_RESTRICT leafMaxXPtr = bvhFunctionResources.leafMaxX.data();
-        const Real* CORE_RESTRICT leafMinYPtr = bvhFunctionResources.leafMinY.data();
-        const Real* CORE_RESTRICT leafMaxYPtr = bvhFunctionResources.leafMaxY.data();
+        const Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
+        const Real* CORE_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
+        const Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
+        const Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
         const BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
 
-        const auto gatherLeaf = [&leafMinXPtr, &leafMaxXPtr, &leafMinYPtr, &leafMaxYPtr](LeafAABB& out, uint32_t nodeStart, uint32_t nodeEnd)
+        const auto gatherLeaf = [&leafMinXPtr, &leafMaxXPtr, &leafMinYPtr, &leafMaxYPtr](LeafBodyAABBs& out, uint32_t nodeLeafIndex)
             {
-                constexpr Real DEAD = -std::numeric_limits<Real>::max();
+                constexpr size_t COPY_SIZE = sizeof(LeafBodyAABBSoA::LeafData);
 
-                const uint32_t count = nodeEnd - nodeStart;
-
-                uint32_t index = nodeStart;
-                for (uint32_t i = 0; i < count; i++)
-                {
-                    out.minX[i] = leafMinXPtr[index];
-                    out.maxX[i] = leafMaxXPtr[index];
-                    out.minY[i] = leafMinYPtr[index];
-                    out.maxY[i] = leafMaxYPtr[index];
-                    index++;
-                }
-                for (uint32_t i = count; i < CAP; i++)
-                {
-                    out.minX[i] = out.maxX[i] = out.minY[i] = out.maxY[i] = DEAD;
-                }
+                const size_t srcIndex = nodeLeafIndex * BvhNode::KD_LEAF_SIZE;
+                std::memcpy(out.minX, leafMinXPtr + srcIndex, COPY_SIZE);
+                std::memcpy(out.maxX, leafMaxXPtr + srcIndex, COPY_SIZE);
+                std::memcpy(out.minY, leafMinYPtr + srcIndex, COPY_SIZE);
+                std::memcpy(out.maxY, leafMaxYPtr + srcIndex, COPY_SIZE);
             };
 
         // Dual-node traversal stack.
@@ -583,8 +589,8 @@ namespace PS_AGONY
             if (aLeaf && bLeaf)
             {
                 // Gather leaf A, it is needed in both paths.
-                LeafAABB leafA;
-                gatherLeaf(leafA, nodeA.start, nodeA.end);
+                LeafBodyAABBs leafA;
+                gatherLeaf(leafA, nodeA.leafIndex);
                 const uint32_t countA = nodeA.end - nodeA.start;
 
                 if (nodePair.a == nodePair.b)
@@ -624,8 +630,8 @@ namespace PS_AGONY
                 else
                 {
                     // Cross-query: all pairs between two distinct leaves.
-                    LeafAABB leafB;
-                    gatherLeaf(leafB, nodeB.start, nodeB.end);
+                    LeafBodyAABBs leafB;
+                    gatherLeaf(leafB, nodeB.leafIndex);
 
                     for (uint32_t i = 0; i < countA; i++)
                     {
