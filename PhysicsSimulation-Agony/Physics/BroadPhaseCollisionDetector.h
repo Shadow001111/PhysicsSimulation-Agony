@@ -73,7 +73,6 @@ namespace PS_AGONY
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;
 
-		std::vector<uint32_t> bvhNodeLeafIndices;
 		LeafBodyAABBSoA leafBodyAABBs;
 
 		std::vector<BodyPair> collisionData;
@@ -88,8 +87,6 @@ namespace PS_AGONY
 		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
-
-		std::vector<BodyIndex> fetchBodiesWithinRange(const AABB& searchAABB);
 
 		size_t getMemoryUsage() const;
 	private:
@@ -107,8 +104,6 @@ namespace PS_AGONY
 			std::vector<BodyIndex>& indices,
 			const uint32_t bodyCount
 		);
-
-		void collectLeavesAABBs(const std::vector<BodyIndex>& indices);
 
 		void queryBvhPairs(
 			const std::vector<BvhNode>& nodes,
