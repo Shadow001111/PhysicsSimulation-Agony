@@ -291,9 +291,9 @@ namespace PS_AGONY
 
         const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
-        std::array<uint32_t, RADIX_SIZE> count{};
+        std::array<uint32_t, RADIX_SIZE> count;
 
-        auto radixPass = [&](uint32_t shift, const BodyIndex* src, BodyIndex* dst)
+        auto radixPass = [&](uint32_t shift, const BodyIndex* CORE_RESTRICT src, BodyIndex* CORE_RESTRICT dst)
             {
                 count.fill(0);
 
@@ -302,14 +302,14 @@ namespace PS_AGONY
                 {
                     const BodyIndex idx = src[i];
                     const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
-                    ++count[key];
+                    count[key]++;
                 }
 
                 // Exclusive prefix sum.
                 uint32_t sum = 0;
                 for (uint32_t i = 0; i < RADIX_SIZE; i++)
                 {
-                    size_t c = count[i];
+                    const uint32_t c = count[i];
                     count[i] = sum;
                     sum += c;
                 }
@@ -327,13 +327,15 @@ namespace PS_AGONY
         auto& temp = bvhFunctionResources.bodyIndexVector2;
         temp.resize(bodyCount);
 
-        BodyIndex* CORE_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
-        BodyIndex* CORE_RESTRICT indexTempPtr = temp.data();
+        {
+            BodyIndex* CORE_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
+            BodyIndex* CORE_RESTRICT indexTempPtr = temp.data();
 
-        radixPass(0, indexPtr, indexTempPtr);
-        radixPass(8, indexTempPtr, indexPtr);
-        radixPass(16, indexPtr, indexTempPtr);
-        radixPass(24, indexTempPtr, indexPtr);
+            radixPass(0, indexPtr, indexTempPtr);
+            radixPass(8, indexTempPtr, indexPtr);
+            radixPass(16, indexPtr, indexTempPtr);
+            radixPass(24, indexTempPtr, indexPtr);
+        }
     }
 
     void BroadPhaseCollisionDetector::buildBvhTree(
