@@ -388,7 +388,7 @@ static int gameFunc()
 
             {
                 constexpr float radius = 4.0f;
-                //simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius);
+                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius, 1);
             }
         }
         else if constexpr (true)

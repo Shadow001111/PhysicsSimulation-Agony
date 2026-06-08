@@ -81,8 +81,8 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius);
-		BodyIndex createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size);
+		BodyIndex createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius, BodyTextureId textureId = 0);
+		BodyIndex createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size, BodyTextureId textureId = 0);
 
 		MaterialIndex createMaterial(const Material& material);
 

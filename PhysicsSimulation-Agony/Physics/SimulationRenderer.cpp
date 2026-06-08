@@ -4,6 +4,8 @@
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
 
+#include "Graphics/TextureLoader.h"
+
 namespace PS_AGONY
 {
     void SimulationRenderer::init()
@@ -12,6 +14,17 @@ namespace PS_AGONY
 
         initShaders();
         initBuffers();
+
+        {
+            TextureLoader::TextureLoadParams params
+            {
+                .desiredChannels = 4,
+                .createMipmaps = true,
+                .compression = TextureCompression::Format::NONE,
+                .isHDR = false
+            };
+            TextureLoader::createTexture2DFromImage(hardcodedTexture, "res/Textures/spiiner.png", params);
+        }
     }
 
     void SimulationRenderer::render(const Simulation& simulation)
@@ -31,7 +44,7 @@ namespace PS_AGONY
         // Render.
         renderBodies(viewProjectionMatrix);
 		//renderBodyAABBs(viewProjectionMatrix);
-		renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
@@ -39,8 +52,8 @@ namespace PS_AGONY
         // Circle.
         {
             std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/circle.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/circle.frag" }
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/Circle/circle_textured.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/Circle/circle_textured.frag" }
             };
             
             circleResources.shader.create(sources);
@@ -49,8 +62,8 @@ namespace PS_AGONY
         // Box.
         {
             std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/box.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/box.frag" }
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/Box/box.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/Box/box.frag" }
             };
 
             boxResources.shader.create(sources);
@@ -203,6 +216,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
+        const BodyTextureId* CORE_RESTRICT bodyTextureIdPtr = bodies.textureId;
+
         const Real* CORE_RESTRICT radiusPtr = circles.radius;
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices;
 
@@ -217,6 +232,7 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = rotationPtr[bodyIndex];
             renderDataPtr[i].radius = radiusPtr[i];
 			renderDataPtr[i].color = 0xFFFFFF;
+            renderDataPtr[i].textureId = bodyTextureIdPtr[bodyIndex];
         }
 
         // Render.
@@ -235,6 +251,8 @@ namespace PS_AGONY
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
+        const BodyTextureId* CORE_RESTRICT bodyTextureIdPtr = bodies.textureId;
+
         const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices;
@@ -251,6 +269,7 @@ namespace PS_AGONY
             renderDataPtr[i].halfWidth = halfWidthPtr[i];
             renderDataPtr[i].halfHeight = halfHeightPtr[i];
             renderDataPtr[i].color = 0xFFFFFF;
+            renderDataPtr[i].textureId = bodyTextureIdPtr[bodyIndex];
         }
 
         // Render.
@@ -311,6 +330,9 @@ namespace PS_AGONY
         circleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
         circleResources.vao.bind();
+
+        hardcodedTexture.bindUnit(0);
+        circleResources.shader.setInt("uHardCodedTexture", 0);
 
         // Draw.
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
@@ -393,6 +415,10 @@ namespace PS_AGONY
 		vao.enableAttribute(4);
         vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
 		vao.setAttributeDivisor(4, 1);
+
+        vao.enableAttribute(5);
+        vao.setIntAttribute(5, 1, sizeof(float) * 5, 1);
+        vao.setAttributeDivisor(5, 1);
     }
 
     void SimulationRenderer::ensureBoxInstanceVboCapacity(size_t count)
@@ -429,6 +455,10 @@ namespace PS_AGONY
         vao.enableAttribute(4);
         vao.setIntAttribute(4, 1, sizeof(float) * 5, 1);
         vao.setAttributeDivisor(4, 1);
+
+        vao.enableAttribute(5);
+        vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
+        vao.setAttributeDivisor(5, 1);
     }
 
     void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)

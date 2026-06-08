@@ -67,6 +67,8 @@ namespace PS_AGONY
 		std::vector<BodyType> bodyType;
 		std::vector<BodyIndex> shapeIndex;
 
+		std::vector<BodyTextureId> textureId;
+
 		void append(
 			Vec2 pos,
 			Vec2 vel,
@@ -77,7 +79,8 @@ namespace PS_AGONY
 			Vec2 localCenterOfMass,
 			MaterialIndex materialIndex,
 			BodyType bodyType,
-			BodyIndex shapeIndex
+			BodyIndex shapeIndex,
+			BodyTextureId textureId
 		)
 		{
 			this->positionX.push_back(pos.x);
@@ -101,6 +104,7 @@ namespace PS_AGONY
 			this->aabb.maxY.push_back(0);
 			this->bodyType.push_back(bodyType);
 			this->shapeIndex.push_back(shapeIndex);
+			this->textureId.push_back(textureId);
 		}
 
 		size_t getCount() const noexcept { return positionX.size(); }
@@ -125,7 +129,8 @@ namespace PS_AGONY
 				PS_AGONY::getVectorMemoryUsage(materialIndex) +
 				aabb.getMemoryUsage() +
 				PS_AGONY::getVectorMemoryUsage(bodyType) +
-				PS_AGONY::getVectorMemoryUsage(shapeIndex);
+				PS_AGONY::getVectorMemoryUsage(shapeIndex) +
+				PS_AGONY::getVectorMemoryUsage(textureId);
 		}
 	};
 

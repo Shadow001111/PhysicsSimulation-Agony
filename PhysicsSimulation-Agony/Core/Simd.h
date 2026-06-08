@@ -1006,6 +1006,91 @@ struct Simd
         return s;
     }
 
+    [[nodiscard]] static T horizontal_min(const Simd& a) noexcept
+        requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+    {
+        if constexpr (Bits == 128)
+        {
+            if constexpr (std::is_same_v<T, float>)
+            {
+                __m128 v = a.reg;
+                v = _mm_min_ps(v, _mm_shuffle_ps(v, v, 0x4E));
+                v = _mm_min_ps(v, _mm_shuffle_ps(v, v, 0xB1));
+                return _mm_cvtss_f32(v);
+            }
+            else
+            { // double
+                __m128d v = a.reg;
+                v = _mm_min_pd(v, _mm_shuffle_pd(v, v, 1));
+                return _mm_cvtsd_f64(v);
+            }
+        }
+        else if constexpr (Bits == 256)
+        {
+            if constexpr (std::is_same_v<T, float>)
+            {
+                __m256 v = a.reg;
+                __m128 lo = _mm256_castps256_ps128(v);
+                __m128 hi = _mm256_extractf128_ps(v, 1);
+                __m128 min128 = _mm_min_ps(lo, hi);
+                min128 = _mm_min_ps(min128, _mm_shuffle_ps(min128, min128, 0x4E));
+                min128 = _mm_min_ps(min128, _mm_shuffle_ps(min128, min128, 0xB1));
+                return _mm_cvtss_f32(min128);
+            }
+            else
+            { // double
+                __m256d v = a.reg;
+                __m128d lo = _mm256_castpd256_pd128(v);
+                __m128d hi = _mm256_extractf128_pd(v, 1);
+                __m128d min128 = _mm_min_pd(lo, hi);
+                min128 = _mm_min_pd(min128, _mm_shuffle_pd(min128, min128, 1));
+                return _mm_cvtsd_f64(min128);
+            }
+        }
+    }
+
+    [[nodiscard]] static T horizontal_max(const Simd& a) noexcept
+        requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+    {
+        if constexpr (Bits == 128)
+        {
+            if constexpr (std::is_same_v<T, float>)
+            {
+                __m128 v = a.reg;
+                v = _mm_max_ps(v, _mm_shuffle_ps(v, v, 0x4E));
+                v = _mm_max_ps(v, _mm_shuffle_ps(v, v, 0xB1));
+                return _mm_cvtss_f32(v);
+            }
+            else { // double
+                __m128d v = a.reg;
+                v = _mm_max_pd(v, _mm_shuffle_pd(v, v, 1));
+                return _mm_cvtsd_f64(v);
+            }
+        }
+        else if constexpr (Bits == 256)
+        {
+            if constexpr (std::is_same_v<T, float>)
+            {
+                __m256 v = a.reg;
+                __m128 lo = _mm256_castps256_ps128(v);
+                __m128 hi = _mm256_extractf128_ps(v, 1);
+                __m128 max128 = _mm_max_ps(lo, hi);
+                max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, 0x4E));
+                max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, 0xB1));
+                return _mm_cvtss_f32(max128);
+            }
+            else
+            { // double
+                __m256d v = a.reg;
+                __m128d lo = _mm256_castpd256_pd128(v);
+                __m128d hi = _mm256_extractf128_pd(v, 1);
+                __m128d max128 = _mm_max_pd(lo, hi);
+                max128 = _mm_max_pd(max128, _mm_shuffle_pd(max128, max128, 1));
+                return _mm_cvtsd_f64(max128);
+            }
+        }
+    }
+
     [[nodiscard]] static Simd clamp(const Simd& value, const Simd& minBoundary, const Simd& maxBoundary)
     {
         return min(maxBoundary, max(minBoundary, value));

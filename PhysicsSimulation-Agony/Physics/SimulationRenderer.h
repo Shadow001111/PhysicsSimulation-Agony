@@ -4,6 +4,7 @@
 #include "OpenGLWrappers/Shader.h"
 #include "OpenGLWrappers/ImmutableBuffer.h"
 #include "OpenGLWrappers/VertexArray.h"
+#include "OpenGLWrappers/Texture.h"
 
 #include "BodySoAViewer.h"
 
@@ -16,13 +17,15 @@ namespace PS_AGONY
 		struct CircleInstanceData
 		{
 			float x, y, rotation, radius;
-			int color; // 3 bytes used.
+			uint32_t color; // 3 bytes used.
+			uint32_t textureId;
 		};
 
 		struct BoxInstanceData
 		{
 			float x, y, rotation, halfWidth, halfHeight;
-			int color; // 3 bytes used.
+			uint32_t color; // 3 bytes used.
+			uint32_t textureId;
 		};
 
 		struct CircleRenderResources
@@ -64,6 +67,9 @@ namespace PS_AGONY
 		BodySoAViewer bodies;
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
+
+		// Delete.
+		Texture hardcodedTexture;
 	public:
 		SimulationRenderer() = default;
 		~SimulationRenderer() = default;

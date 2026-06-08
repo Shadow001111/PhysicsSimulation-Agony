@@ -5,6 +5,7 @@ layout (location = 1) in vec2 instancePosition;
 layout (location = 2) in float instanceRotation;
 layout (location = 3) in vec2 instanceHalfSize;
 layout (location = 4) in int instanceColor;
+layout (location = 5) in uint instanceTextureId;
 
 out vec2 uv;
 out flat vec3 color;

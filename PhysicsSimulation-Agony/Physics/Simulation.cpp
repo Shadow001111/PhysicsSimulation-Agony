@@ -4,6 +4,7 @@
 #include "Core/Portablity.h"
 
 #include <iostream>
+#include <algorithm>
 
 namespace PS_AGONY
 {
@@ -74,7 +75,7 @@ namespace PS_AGONY
         }
     }
 
-    BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius)
+    BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius, BodyTextureId textureId)
     {
         mass = std::max(Real(0.0), mass);
         radius = std::max(Real(0.0), radius);
@@ -94,7 +95,8 @@ namespace PS_AGONY
 			Vec2(0.0, 0.0),
             materialIndex < materials.size() ? materialIndex : 0,
             BodyType::Circle,
-            newShapeIndex
+            newShapeIndex,
+            textureId
 		);
 
         circles.append(
@@ -105,7 +107,7 @@ namespace PS_AGONY
         return newBodyIndex;
     }
 
-    BodyIndex Simulation::createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size)
+    BodyIndex Simulation::createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size, BodyTextureId textureId)
     {
         mass = std::max(Real(0.0), mass);
         const Real width = std::max(Real(0.0), size.x);
@@ -126,7 +128,8 @@ namespace PS_AGONY
             Vec2(0.0, 0.0),
             materialIndex < materials.size() ? materialIndex : 0,
             BodyType::Box,
-            newShapeIndex
+            newShapeIndex,
+            textureId
         );
 
         const Real halfWidth = width * Real(0.5);

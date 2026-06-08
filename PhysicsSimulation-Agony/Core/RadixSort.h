@@ -26,7 +26,7 @@ void radixSort(
     constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
 
     // Count array for digit frequencies (zero-initialized).
-    std::array<SizeType, RADIX_SIZE> counts{};
+    std::array<SizeType, RADIX_SIZE> counts;
 
     // Use unsigned type for shift/key extraction (avoids sign extension).
     using U = std::make_unsigned_t<T>;
@@ -40,8 +40,8 @@ void radixSort(
         // Count occurrences of each digit.
         for (SizeType i = 0; i < count; i++)
         {
-            U val = static_cast<U>(src[i]);
-            uint32_t key = (val >> shift) & RADIX_MASK;
+            const U val = static_cast<U>(src[i]);
+            const uint32_t key = (val >> shift) & RADIX_MASK;
             ++counts[key];
         }
 
@@ -49,7 +49,7 @@ void radixSort(
         SizeType sum = 0;
         for (uint32_t i = 0; i < RADIX_SIZE; i++)
         {
-            SizeType c = counts[i];
+            const SizeType c = counts[i];
             counts[i] = sum;
             sum += c;
         }
@@ -57,8 +57,8 @@ void radixSort(
         // Scatter elements into destination (stable).
         for (SizeType i = 0; i < count; i++)
         {
-            U val = static_cast<U>(src[i]);
-            uint32_t key = (val >> shift) & RADIX_MASK;
+            const U val = static_cast<U>(src[i]);
+            const uint32_t key = (val >> shift) & RADIX_MASK;
             dst[counts[key]++] = src[i];
         }
     };
@@ -73,7 +73,7 @@ void radixSort(
     }
 
     // If final sorted array resides in temp, copy it back.
-    if (src != arrayToBeSorted) [[unlikely]]
+    if (src != arrayToBeSorted)
     {
         std::memcpy(arrayToBeSorted, src, count * sizeof(T));
     }
@@ -101,7 +101,7 @@ void radixSortIndices(
     constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
     constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
 
-    std::array<SizeType, RADIX_SIZE> counts{};
+    std::array<SizeType, RADIX_SIZE> counts;
 
     using UKey = std::make_unsigned_t<KeyType>;
 
@@ -112,9 +112,9 @@ void radixSortIndices(
         // Count occurrences of each digit using the key values.
         for (SizeType i = 0; i < count; i++)
         {
-            IndexType idx = srcIdx[i];
-            UKey val = static_cast<UKey>(keyArray[idx]);   // get key for this index
-            uint32_t key = (val >> shift) & RADIX_MASK;
+            const IndexType idx = srcIdx[i];
+            const UKey val = static_cast<UKey>(keyArray[idx]);   // get key for this index
+            const uint32_t key = (val >> shift) & RADIX_MASK;
             ++counts[key];
         }
 
@@ -122,7 +122,7 @@ void radixSortIndices(
         SizeType sum = 0;
         for (uint32_t i = 0; i < RADIX_SIZE; i++)
         {
-            SizeType c = counts[i];
+            const SizeType c = counts[i];
             counts[i] = sum;
             sum += c;
         }
@@ -130,9 +130,9 @@ void radixSortIndices(
         // Scatter indices into destination (stable).
         for (SizeType i = 0; i < count; i++)
         {
-            IndexType idx = srcIdx[i];
-            UKey val = static_cast<UKey>(keyArray[idx]);
-            uint32_t key = (val >> shift) & RADIX_MASK;
+            const IndexType idx = srcIdx[i];
+            const UKey val = static_cast<UKey>(keyArray[idx]);
+            const uint32_t key = (val >> shift) & RADIX_MASK;
             dstIdx[counts[key]++] = idx;
         }
     };
@@ -146,7 +146,7 @@ void radixSortIndices(
     }
 
     // If final sorted indices reside in the temporary buffer, copy them back.
-    if (src != indexArrayToBeSorted) [[unlikely]]
+    if (src != indexArrayToBeSorted)
     {
         std::memcpy(indexArrayToBeSorted, src, count * sizeof(IndexType));
     }
