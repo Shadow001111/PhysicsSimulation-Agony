@@ -272,6 +272,7 @@
     <ClCompile Include="OpenGLWrappers\VertexArray.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\SimulationRenderer.cpp" />
+    <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -366,6 +367,7 @@
     <ClInclude Include="Physics\Threading.h" />
     <ClInclude Include="Physics\Types.h" />
     <ClInclude Include="Physics\SimulationRenderer.h" />
+    <ClInclude Include="Scenes.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
