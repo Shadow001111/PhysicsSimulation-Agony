@@ -34,9 +34,9 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
         constexpr float halfThickness = thickness * 0.5f;
         constexpr float length = boundary * 2.0f + 2.0f;
 
-        simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
-        simulation.createBox({ (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { thickness, length });
-        simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, material0Index, { length, thickness });
+        simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
+        simulation.createBox({ (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
+        simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
     }
     for (int i = 0; i < circleCount; i++)
     {
@@ -47,7 +47,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
         const float r = Random::real<float>(0.1f, 0.2f);
         const float mass = 3.14f * r * r;
 
-        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, material0Index, r);
+        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
     }
     for (int i = 0; i < boxCount; i++)
     {
@@ -60,12 +60,12 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
         const float height = Random::real<float>(0.2f, 0.4f);
         const float mass = width * height;
 
-        simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, material0Index, { width, height });
+        simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, { 0.0f, 0.0f }, material0Index, { width, height });
     }
 
     {
         constexpr float radius = 4.0f;
-        simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, 4.0f, 1);
+        simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
     }
 }
 
@@ -89,16 +89,16 @@ void load_CleanPerfomanceOfContactsTest(PS_AGONY::Simulation& simulation)
 
     PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
 
-    simulation.createBox({ 0.0f,  -floorThickness * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, { floorWidth, floorThickness });
-    simulation.createBox({ 0.0f,  -floorThickness * 0.5f + paddingY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, { floorWidth, floorThickness });
+    simulation.createBox({ 0.0f,  -floorThickness * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, { 0.0f, 0.0f }, material0Index, { floorWidth, floorThickness });
+    simulation.createBox({ 0.0f,  -floorThickness * 0.5f + paddingY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, { 0.0f, 0.0f }, material0Index, { floorWidth, floorThickness });
 
     constexpr float dx = boxSize + boxPadding;
     for (int i = 0; i < objectCount; i++)
     {
         const float x = (-floorWidth + boxSize + boxPadding) * 0.5f + i * dx;
 
-        simulation.createBox({ x, boxSize * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, material0Index, { boxSize, boxSize });
-        simulation.createCircle({ x, boxSize * 0.5f + paddingY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, material0Index, boxSize * 0.5f);
+        simulation.createBox({ x, boxSize * 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, { 0.0f, 0.0f }, material0Index, { boxSize, boxSize });
+        simulation.createCircle({ x, boxSize * 0.5f + paddingY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, { 0.0f, 0.0f }, material0Index, boxSize * 0.5f);
     }
 }
 
@@ -149,7 +149,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
         {
             const float pegX = -pegXBoundary + pegRadius + pegSpacing * x + offset;
 
-            simulation.createCircle({ pegX, pegY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, pegRadius);
+            simulation.createCircle({ pegX, pegY }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, { 0.0f, 0.0f }, material0Index, pegRadius);
         }
     }
 
@@ -161,21 +161,21 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
         simulation.createBox(
             { 0.0f, wallInnerBottomY - wallThickness * 0.5f },
             { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f,
-            material0Index,
+            { 0.0f, 0.0f }, material0Index,
             { wallInnerBoundaryX * 2.0f, wallThickness }
         );
 
         simulation.createBox(
             { -(wallInnerBoundaryX + wallThickness * 0.5f), wallInnerBottomY + wallHeight * 0.5f },
             { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f,
-            material0Index,
+            { 0.0f, 0.0f }, material0Index,
             { wallThickness, wallHeight }
         );
 
         simulation.createBox(
             { (wallInnerBoundaryX + wallThickness * 0.5f), wallInnerBottomY + wallHeight * 0.5f },
             { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f,
-            material0Index,
+            { 0.0f, 0.0f }, material0Index,
             { wallThickness, wallHeight }
         );
     }
@@ -189,7 +189,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
             simulation.createBox(
                 { binX, pegBottomY - binHeight * 0.5f },
                 { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f,
-                material0Index,
+                { 0.0f, 0.0f }, material0Index,
                 { binWidth, binHeight }
             );
         }
@@ -203,14 +203,14 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
         simulation.createBox(
             { -funnelX, funnelY },
             { 0.0f, 0.0f }, funnelRotation, 0.0f, 0.0f,
-            material0Index,
+            { 0.0f, 0.0f }, material0Index,
             { funnelWidth, funnelLength }
         );
 
         simulation.createBox(
             { funnelX, funnelY },
             { 0.0f, 0.0f }, -funnelRotation, 0.0f, 0.0f,
-            material0Index,
+            { 0.0f, 0.0f }, material0Index,
             { funnelWidth, funnelLength }
         );
     }
@@ -235,7 +235,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
 
             const float x = Random::real<float>(-xBorder, xBorder);
             const float y = spawnBottom + rnd;
-            simulation.createCircle({ x, y }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, material0Index, ballRadius);
+            simulation.createCircle({ x, y }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, { 0.0f, 0.0f }, material0Index, ballRadius);
         }
     }
 }
@@ -261,7 +261,7 @@ void load_Planet(PS_AGONY::Simulation& simulation)
     PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
     PS_AGONY::MaterialIndex material1Index = simulation.createMaterial(material1);
 
-    simulation.createCircle({ 0.0f, 0.0f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, material0Index, planetRadius);
+    simulation.createCircle({ 0.0f, 0.0f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f, { 0.0f, 0.0f }, material0Index, planetRadius);
 
     for (int i = 0; i < circleCount; i++)
     {
@@ -273,12 +273,12 @@ void load_Planet(PS_AGONY::Simulation& simulation)
         const float x = std::cos(angle) * dist;
         const float y = std::sin(angle) * dist;
 
-        simulation.createCircle({ x, y }, { 0.0f, 0.0f }, 0.0f, 0.0f, mass, material0Index, r);
+        simulation.createCircle({ x, y }, { 0.0f, 0.0f }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
     }
 
     {
         constexpr float radius = 4.0f;
-        simulation.createCircle({ 0.0f, planetRadius + radius }, { 0.0f, 0.0f }, 0.0f, 0.0f, 20000.0f, material1Index, radius, 1);
+        simulation.createCircle({ 0.0f, planetRadius + radius }, { 0.0f, 0.0f }, 0.0f, 0.0f, 20000.0f, { 0.0f, 0.0f }, material1Index, radius, 1);
     }
 }
 

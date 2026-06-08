@@ -154,7 +154,7 @@ namespace PS_AGONY
         renderCircleBodies(viewProjectionMatrix);
         renderBoxBodies(viewProjectionMatrix);
 
-		//renderBodyCentersOfMass(viewProjectionMatrix);
+		renderBodyCentersOfMass(viewProjectionMatrix);
 		//renderBodyAABBs(viewProjectionMatrix);
     }
 

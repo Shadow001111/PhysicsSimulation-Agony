@@ -8,15 +8,18 @@
 
 namespace PS_AGONY
 {
-    static Real calculateCircleInertia(Real mass, Real radius)
+    static Real calculateCircleInertia(Real mass, Real radius, Vec2 centerOfMass)
     {
-        return Real(0.5) * radius * radius * mass;
+        const Real radiusSquared = radius * radius;
+        const Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
+        return (Real(0.5) * radiusSquared + deltaSquared) * mass;
     }
 
-    static Real calculateBoxInertia(Real mass, Real width, Real height)
+    static Real calculateBoxInertia(Real mass, Real width, Real height, Vec2 centerOfMass)
     {
         constexpr Real div = 1.0 / 12.0;
-        return div * mass * (width * width + height * height);
+        const Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
+        return mass * (div * (width * width + height * height) + deltaSquared);
     }
 
 
@@ -78,7 +81,17 @@ namespace PS_AGONY
         }
     }
 
-    BodyIndex Simulation::createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Real radius, BodyTextureId textureId)
+    BodyIndex Simulation::createCircle(
+        Vec2 position,
+        Vec2 velocity,
+        Real rotation,
+        Real angularVelocity,
+        Real mass,
+        Vec2 centerOfMass,
+        MaterialIndex materialIndex,
+        Real radius,
+        BodyTextureId textureId
+    )
     {
         mass = std::max(Real(0.0), mass);
         radius = std::max(Real(0.0), radius);
@@ -86,7 +99,7 @@ namespace PS_AGONY
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = circles.getCount();
 
-        const Real inertia = calculateCircleInertia(mass, radius);
+        const Real inertia = calculateCircleInertia(mass, radius, centerOfMass);
 
         bodies.append(
             position,
@@ -95,7 +108,7 @@ namespace PS_AGONY
             angularVelocity,
             mass, mass == 0.0 ? 0.0 : 1.0 / mass,
             inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
-			Vec2(0.0, 0.0),
+			centerOfMass,
             materialIndex < materials.size() ? materialIndex : 0,
             BodyType::Circle,
             newShapeIndex,
@@ -110,7 +123,17 @@ namespace PS_AGONY
         return newBodyIndex;
     }
 
-    BodyIndex Simulation::createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, MaterialIndex materialIndex, Vec2 size, BodyTextureId textureId)
+    BodyIndex Simulation::createBox(
+        Vec2 position,
+        Vec2 velocity,
+        Real rotation,
+        Real angularVelocity,
+        Real mass,
+        Vec2 centerOfMass,
+        MaterialIndex materialIndex,
+        Vec2 size,
+        BodyTextureId textureId
+    )
     {
         mass = std::max(Real(0.0), mass);
         const Real width = std::max(Real(0.0), size.x);
@@ -119,7 +142,7 @@ namespace PS_AGONY
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = boxes.getCount();
 
-        const Real inertia = calculateBoxInertia(mass, width, height);
+        const Real inertia = calculateBoxInertia(mass, width, height, centerOfMass);
 
         bodies.append(
             position,
@@ -128,7 +151,7 @@ namespace PS_AGONY
             angularVelocity,
             mass, mass == 0.0 ? 0.0 : 1.0 / mass,
             inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
-            Vec2(0.0, 0.0),
+            centerOfMass,
             materialIndex < materials.size() ? materialIndex : 0,
             BodyType::Box,
             newShapeIndex,
