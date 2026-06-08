@@ -16,14 +16,20 @@ namespace PS_AGONY
 	{
 		struct CircleInstanceData
 		{
-			float x, y, rotation, radius;
+			float positionX, positionY;
+			float localCOMX, localCOMY;
+			float rotation;
+			float radius;
 			uint32_t color; // 3 bytes used.
 			uint32_t textureId;
 		};
 
 		struct BoxInstanceData
 		{
-			float x, y, rotation, halfWidth, halfHeight;
+			float positionX, positionY;
+			float localCOMX, localCOMY;
+			float rotation;
+			float halfWidth, halfHeight;
 			uint32_t color; // 3 bytes used.
 			uint32_t textureId;
 		};

@@ -171,8 +171,6 @@ namespace PS_AGONY
 		const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
         const Real* CORE_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* CORE_RESTRICT centerYPtr = bodies.localCenterOfMassY;
-		const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
-		const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
 
         CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
@@ -180,21 +178,15 @@ namespace PS_AGONY
         {
 			const glm::vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
 
-			const float cosRot = static_cast<float>(rotationCosPtr[i]);
-			const float sinRot = static_cast<float>(rotationSinPtr[i]);
-
-            const glm::vec2 rotatedLocalCenterOfMass = {
-                localCenterOfMass.x * cosRot - localCenterOfMass.y * sinRot,
-                localCenterOfMass.x * sinRot + localCenterOfMass.y * cosRot
-			};
-
             const glm::vec2 worldCenterOfMass = {
-                positionXPtr[i] + rotatedLocalCenterOfMass.x,
-                positionYPtr[i] + rotatedLocalCenterOfMass.y
+                positionXPtr[i] + localCenterOfMass.x,
+                positionYPtr[i] + localCenterOfMass.y
 			};
 
-            renderDataPtr[i].x = worldCenterOfMass.x;
-            renderDataPtr[i].y = worldCenterOfMass.y;
+            renderDataPtr[i].positionX = worldCenterOfMass.x;
+            renderDataPtr[i].positionY = worldCenterOfMass.y;
+            renderDataPtr[i].localCOMX = 0.0f;
+            renderDataPtr[i].localCOMY = 0.0f;
             renderDataPtr[i].rotation = 0.785f;
             renderDataPtr[i].radius = 0.03f;
 			renderDataPtr[i].color = 0xFF0000;
@@ -215,6 +207,8 @@ namespace PS_AGONY
         // Prepare instance data.
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* CORE_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
         const BodyTextureId* CORE_RESTRICT bodyTextureIdPtr = bodies.textureId;
 
@@ -227,8 +221,10 @@ namespace PS_AGONY
         {
             const BodyIndex bodyIndex = bodyIndexPtr[i];
 
-            renderDataPtr[i].x = positionXPtr[bodyIndex];
-            renderDataPtr[i].y = positionYPtr[bodyIndex];
+            renderDataPtr[i].positionX = positionXPtr[bodyIndex];
+            renderDataPtr[i].positionY = positionYPtr[bodyIndex];
+            renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
+            renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
             renderDataPtr[i].rotation = rotationPtr[bodyIndex];
             renderDataPtr[i].radius = radiusPtr[i];
 			renderDataPtr[i].color = 0xFFFFFF;
@@ -250,6 +246,8 @@ namespace PS_AGONY
         // Prepare instance data.
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* CORE_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
         const BodyTextureId* CORE_RESTRICT bodyTextureIdPtr = bodies.textureId;
 
@@ -263,8 +261,10 @@ namespace PS_AGONY
         {
             const BodyIndex bodyIndex = bodyIndexPtr[i];
 
-            renderDataPtr[i].x = positionXPtr[bodyIndex];
-            renderDataPtr[i].y = positionYPtr[bodyIndex];
+            renderDataPtr[i].positionX = positionXPtr[bodyIndex];
+            renderDataPtr[i].positionY = positionYPtr[bodyIndex];
+            renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
+            renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
             renderDataPtr[i].rotation = rotationPtr[bodyIndex];
             renderDataPtr[i].halfWidth = halfWidthPtr[i];
             renderDataPtr[i].halfHeight = halfHeightPtr[i];
@@ -405,20 +405,24 @@ namespace PS_AGONY
         vao.setAttributeDivisor(1, 1);
 
         vao.enableAttribute(2);
-        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
+        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
         vao.setAttributeDivisor(2, 1);
 
         vao.enableAttribute(3);
-        vao.setFloatAttribute(3, 1, sizeof(float) * 3, 1);
+        vao.setFloatAttribute(3, 1, sizeof(float) * 4, 1);
         vao.setAttributeDivisor(3, 1);
 
-		vao.enableAttribute(4);
-        vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
-		vao.setAttributeDivisor(4, 1);
+        vao.enableAttribute(4);
+        vao.setFloatAttribute(4, 1, sizeof(float) * 5, 1);
+        vao.setAttributeDivisor(4, 1);
 
-        vao.enableAttribute(5);
-        vao.setIntAttribute(5, 1, sizeof(float) * 5, 1);
-        vao.setAttributeDivisor(5, 1);
+		vao.enableAttribute(5);
+        vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
+		vao.setAttributeDivisor(5, 1);
+
+        vao.enableAttribute(6);
+        vao.setIntAttribute(6, 1, sizeof(float) * 7, 1);
+        vao.setAttributeDivisor(6, 1);
     }
 
     void SimulationRenderer::ensureBoxInstanceVboCapacity(size_t count)
@@ -445,20 +449,24 @@ namespace PS_AGONY
         vao.setAttributeDivisor(1, 1);
 
         vao.enableAttribute(2);
-        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
+        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
         vao.setAttributeDivisor(2, 1);
 
         vao.enableAttribute(3);
-        vao.setFloatAttribute(3, 2, sizeof(float) * 3, 1);
+        vao.setFloatAttribute(3, 1, sizeof(float) * 4, 1);
         vao.setAttributeDivisor(3, 1);
 
         vao.enableAttribute(4);
-        vao.setIntAttribute(4, 1, sizeof(float) * 5, 1);
+        vao.setFloatAttribute(4, 2, sizeof(float) * 5, 1);
         vao.setAttributeDivisor(4, 1);
 
         vao.enableAttribute(5);
-        vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
+        vao.setIntAttribute(5, 1, sizeof(float) * 7, 1);
         vao.setAttributeDivisor(5, 1);
+
+        vao.enableAttribute(6);
+        vao.setIntAttribute(6, 1, sizeof(float) * 8, 1);
+        vao.setAttributeDivisor(6, 1);
     }
 
     void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)

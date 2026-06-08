@@ -9,7 +9,6 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
 {
     constexpr float boundary = 12.0f;
     constexpr float thickness = 20.0f;
-    constexpr float centerBoxSize = boundary * 0.5f;
 
     constexpr int circleCount = 800;
     constexpr int boxCount = 800;
@@ -21,7 +20,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
     };
 
     PS_AGONY::Material material1 = {
-        .elasticity = 0.0,
+        .elasticity = 1.0,
         .staticFriction = 1.0,
         .dynamicFriction = 1.0
     };
@@ -47,7 +46,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
         const float r = Random::real<float>(0.1f, 0.2f);
         const float mass = 3.14f * r * r;
 
-        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
+        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, r }, material0Index, r);
     }
     for (int i = 0; i < boxCount; i++)
     {
@@ -60,12 +59,12 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
         const float height = Random::real<float>(0.2f, 0.4f);
         const float mass = width * height;
 
-        simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, { 0.0f, 0.0f }, material0Index, { width, height });
+        simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, { 0.0f, height * -0.5f }, material0Index, { width, height });
     }
 
     {
         constexpr float radius = 4.0f;
-        simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
+        //simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, { 0.0f, -radius }, material1Index, 4.0f, 1);
     }
 }
 
