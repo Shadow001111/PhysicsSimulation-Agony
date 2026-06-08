@@ -43,6 +43,9 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Simulation update");
 
+        // Delta time check.
+        if (deltaTime <= 0) return;
+
         // Physics steps.
         updateTimeAccumulator += deltaTime;
 
@@ -201,7 +204,7 @@ namespace PS_AGONY
         const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
-        const Vec2 newBodyVelocity = mainBodyHolder.holderVelocity;
+        const Vec2 newBodyVelocity = mainBodyHolder.getVelocity();
 
         bodies.velocityX[bodyIndex] = newBodyVelocity.x;
         bodies.velocityY[bodyIndex] = newBodyVelocity.y;
@@ -764,8 +767,8 @@ namespace PS_AGONY
         const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
-        const Vec2 newBodyPosition = mainBodyHolder.holderPosition + mainBodyHolder.bodyOffset;
-        const Vec2 newBodyVelocity = mainBodyHolder.holderVelocity;
+        const Vec2 newBodyPosition = mainBodyHolder.getPosition() + mainBodyHolder.bodyOffset;
+        const Vec2 newBodyVelocity = mainBodyHolder.getVelocity();
 
         Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
         Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();

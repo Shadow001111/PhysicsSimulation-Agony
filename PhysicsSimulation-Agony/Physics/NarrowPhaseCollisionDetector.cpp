@@ -91,9 +91,9 @@ namespace PS_AGONY
         circleBoxPairs.reserve(bodyPairCount);
         boxBoxPairs.reserve(bodyPairCount);
 
-        // Sort body pairs by type.
+        // Partition body pairs by type.
         {
-            TRACY_SCOPE_N("Sort pairs");
+            TRACY_SCOPE_N("Partition pairs");
 
             const BodyType* CORE_RESTRICT bodyTypePtr = bodies.bodyType;
 

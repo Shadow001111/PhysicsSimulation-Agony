@@ -359,8 +359,8 @@ static int gameFunc()
                 //simulation.createBox({ 0.0, 0.0 }, { 0.0, 0.0 }, 3.14 * 0.25, 0.0, 0.0, material0Index, { centerBoxSize, centerBoxSize });
             }
 
-            const int circleCount = 500;
-            const int boxCount = 500;
+            const int circleCount = 800;
+            const int boxCount = 800;
             for (int i = 0; i < circleCount; i++)
             {
                 const float x = Random::real<float>(-5.0f, 5.0f);
@@ -388,7 +388,7 @@ static int gameFunc()
 
             {
                 constexpr float radius = 4.0f;
-                simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius, 1);
+                //simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, material1Index, radius, 1);
             }
         }
         else if constexpr (true)
@@ -471,27 +471,18 @@ static int gameFunc()
         }
         {
             PS_AGONY::Vec2 mouseWorldPosition;
-            PS_AGONY::Vec2 mouseWorldVelocity;
             {
                 const glm::dvec2 mousePosition = windowInputManager.getMousePosition();
-                const glm::dvec2 mouseNextPosition = mousePosition + windowInputManager.getMouseDelta();
 
                 const glm::dvec2 wndSize = { wnd.getWidth(), wnd.getHeight() };
 
                 glm::dvec2 positionNDC = (mousePosition / wndSize) * 2.0 - 1.0;
                 positionNDC.y = -positionNDC.y;
 
-                glm::dvec2 nextPositionNDC = (mouseNextPosition / wndSize) * 2.0 - 1.0;
-                nextPositionNDC.y = -nextPositionNDC.y;
-
                 mouseWorldPosition = camera.screenToWorldSpace(positionNDC);
-                PS_AGONY::Vec2 mouseWorldNextPosition = camera.screenToWorldSpace(nextPositionNDC);
-
-                mouseWorldVelocity = mouseWorldNextPosition - mouseWorldPosition;
             }
 
-            mainBodyHolder.holderPosition = mouseWorldPosition;
-            mainBodyHolder.holderVelocity = mouseWorldVelocity / PS_AGONY::Real(deltaTime);
+            mainBodyHolder.setPosition(mouseWorldPosition, deltaTime);
 
             if (windowInputManager.isMouseButtonJustReleased(0))
             {

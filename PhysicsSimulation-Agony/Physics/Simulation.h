@@ -34,7 +34,7 @@ namespace PS_AGONY
 		{
 			//
 			Real updateInterval = 1 / 300.0;
-			uint32_t collisionSolvingIterations = 8;
+			uint32_t collisionSolvingIterations = 12;
 			uint32_t maxIterationsPerUpdateCall = 6;
 
 			// Environment.

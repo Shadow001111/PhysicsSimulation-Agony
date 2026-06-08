@@ -5,11 +5,28 @@
 
 namespace PS_AGONY::Interactivity
 {
-	struct BodyHolder
+	class BodyHolder
 	{
-		std::optional<BodyIndex> heldBody;
 		Vec2 holderPosition;
 		Vec2 holderVelocity;
+	public:
+		std::optional<BodyIndex> heldBody;
 		Vec2 bodyOffset;
+
+		void setPosition(const Vec2& newPosition, Real deltaTime)
+		{
+			if (deltaTime <= 0) [[unlikely]]
+			{
+				holderVelocity = Vec2();
+			}
+			else
+			{
+				holderVelocity = (newPosition - holderPosition) / deltaTime;
+			}
+			holderPosition = newPosition;
+		}
+
+		const Vec2& getPosition() const noexcept { return holderPosition; }
+		const Vec2& getVelocity() const noexcept { return holderVelocity; }
 	};
 }
