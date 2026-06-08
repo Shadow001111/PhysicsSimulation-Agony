@@ -9,7 +9,6 @@
 #include "Interactivity/BodyHolder.h"
 
 #include <vector>
-#include <optional>
 
 namespace PS_AGONY
 {
@@ -112,6 +111,8 @@ namespace PS_AGONY
 		void buildBoxAABBs();
 
 		void computeRotationCosSin();
+
+		void computeTruePositions();
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 

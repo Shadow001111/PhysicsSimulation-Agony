@@ -50,6 +50,10 @@ namespace PS_AGONY
     public:
         const Real* positionX = nullptr;
         const Real* positionY = nullptr;
+        const Real* localCenterOfMassX = nullptr;
+        const Real* localCenterOfMassY = nullptr;
+        const Real* truePositionX = nullptr;
+        const Real* truePositionY = nullptr;
         const Real* velocityX = nullptr;
         const Real* velocityY = nullptr;
         const Real* rotation = nullptr;
@@ -58,8 +62,6 @@ namespace PS_AGONY
         const Real* invMass = nullptr;
         const Real* inertia = nullptr;
         const Real* invInertia = nullptr;
-		const Real* localCenterOfMassX = nullptr;
-		const Real* localCenterOfMassY = nullptr;
 		const Real* rotationCos = nullptr;
 		const Real* rotationSin = nullptr;
 
@@ -76,6 +78,10 @@ namespace PS_AGONY
             count(data.getCount()),
             positionX(data.positionX.data()),
             positionY(data.positionY.data()),
+            localCenterOfMassX(data.localCenterOfMassX.data()),
+            localCenterOfMassY(data.localCenterOfMassY.data()),
+            truePositionX(data.truePositionX.data()),
+            truePositionY(data.truePositionY.data()),
             velocityX(data.velocityX.data()),
             velocityY(data.velocityY.data()),
             rotation(data.rotation.data()),
@@ -84,8 +90,6 @@ namespace PS_AGONY
             invMass(data.invMass.data()),
             inertia(data.inertia.data()),
             invInertia(data.invInertia.data()),
-			localCenterOfMassX(data.localCenterOfMassX.data()),
-			localCenterOfMassY(data.localCenterOfMassY.data()),
 			rotationCos(data.rotationCos.data()),
 			rotationSin(data.rotationSin.data()),
             materialIndex(data.materialIndex.data()),

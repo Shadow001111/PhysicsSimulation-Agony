@@ -138,8 +138,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY;
         const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* CORE_RESTRICT radiusPtr = circles.radius;
@@ -202,8 +202,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-box collision");
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY;
         const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
@@ -336,8 +336,8 @@ namespace PS_AGONY
             B_UP
         };
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY;
         const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;

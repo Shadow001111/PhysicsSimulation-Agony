@@ -155,7 +155,9 @@ namespace PS_AGONY
         renderBoxBodies(viewProjectionMatrix);
 
 		renderBodyCentersOfMass(viewProjectionMatrix);
-		//renderBodyAABBs(viewProjectionMatrix);
+        renderBodyPositions(viewProjectionMatrix);
+        renderBodyTruePositions(viewProjectionMatrix);
+		renderBodyAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -190,6 +192,64 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.785f;
             renderDataPtr[i].radius = 0.03f;
 			renderDataPtr[i].color = 0xFF0000;
+        }
+
+        // Render.
+        renderCircleShapes(viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderBodyPositions(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = bodies.getCount();
+        if (count == 0) return;
+
+        // Reserve space.
+        circleResources.instanceData.resize(count);
+
+        // Prepare instance data.
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+
+        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            renderDataPtr[i].positionX = positionXPtr[i];
+            renderDataPtr[i].positionY = positionYPtr[i];
+            renderDataPtr[i].localCOMX = 0.0f;
+            renderDataPtr[i].localCOMY = 0.0f;
+            renderDataPtr[i].rotation = 0.0f;
+            renderDataPtr[i].radius = 0.03f;
+            renderDataPtr[i].color = 0x0000FF;
+        }
+
+        // Render.
+        renderCircleShapes(viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderBodyTruePositions(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = bodies.getCount();
+        if (count == 0) return;
+
+        // Reserve space.
+        circleResources.instanceData.resize(count);
+
+        // Prepare instance data.
+        const Real* CORE_RESTRICT truePositionXPtr = bodies.truePositionX;
+        const Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY;
+
+        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            renderDataPtr[i].positionX = truePositionXPtr[i];
+            renderDataPtr[i].positionY = truePositionYPtr[i];
+            renderDataPtr[i].localCOMX = 0.0f;
+            renderDataPtr[i].localCOMY = 0.0f;
+            renderDataPtr[i].rotation = 0.0f;
+            renderDataPtr[i].radius = 0.03f;
+            renderDataPtr[i].color = 0x00FF00;
         }
 
         // Render.

@@ -186,6 +186,8 @@ namespace PS_AGONY
 
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
         const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT truePositionXPtr = bodies.truePositionX.data();
+        const Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY.data();
         const Real* CORE_RESTRICT massPtr = bodies.mass.data();
 
         Real minSqDistance = FLT_MAX;
@@ -197,18 +199,20 @@ namespace PS_AGONY
         {
             if (massPtr[i] == 0) continue;
 
-            const Vec2 bodyPosition = { positionXPtr[i], positionYPtr[i] };
+            const Vec2 bodyTruePosition = { truePositionXPtr[i], truePositionYPtr[i] };
 
-            const Vec2 delta = bodyPosition - grabPosition;
+            const Vec2 delta = bodyTruePosition - grabPosition;
 
             const Real sqDistance = glm::dot(delta, delta);
 
             if (sqDistance > MAX_GRAB_DISTANCE_SQ) continue;
             else if (sqDistance < minSqDistance)
             {
+                const Vec2 bodyPosition = { positionXPtr[i], positionYPtr[i] };
+
                 minSqDistance = sqDistance;
                 closestBody = i;
-                closestBodyDelta = delta;
+                closestBodyDelta = bodyPosition - grabPosition;
             }
         }
 
@@ -378,11 +382,14 @@ namespace PS_AGONY
     {
         const size_t bodyCount = bodies.getCount();
 
+        // Compute rotation cos/sin for all bodies, which are used in collision resolution.
+        computeRotationCosSin();
+
+        // Compute true position for all bodies.
+        computeTruePositions();
+
         // Rebuild AABBs.
         buildBodyAABBs();
-
-		// Compute rotation cos/sin for all bodies, which is used in collision resolution.
-		computeRotationCosSin();
 
         // Early return.
         if (bodyCount < 2) return;
@@ -406,6 +413,9 @@ namespace PS_AGONY
             // Collision resolution.
             resolveCollisions(narrowCollisionData);
 
+            // Compute true position for all bodies.
+            computeTruePositions();
+
 			// Rebuild AABBs.
             buildBodyAABBs();
         }
@@ -425,8 +435,8 @@ namespace PS_AGONY
         const size_t count = circles.getCount();
         if (count == 0) return;
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY.data();
 
         const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
         const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
@@ -459,8 +469,8 @@ namespace PS_AGONY
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY.data();
         const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
         const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
@@ -514,6 +524,34 @@ namespace PS_AGONY
 		}
     }
 
+    void Simulation::computeTruePositions()
+    {
+        TRACY_SCOPE_N("Compute true positions");
+
+        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
+        const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
+        const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+
+        Real* CORE_RESTRICT truePositionXPtr = bodies.truePositionX.data();
+        Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY.data();
+
+        const size_t bodyCount = bodies.getCount();
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            const Real positionX = positionXPtr[i];
+            const Real positionY = positionYPtr[i];
+            const Real localCenterOfMassX = localCenterOfMassXPtr[i];
+            const Real localCenterOfMassY = localCenterOfMassYPtr[i];
+            const Real cosRot = rotationCosPtr[i];
+            const Real sinRot = rotationSinPtr[i];
+            truePositionXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
+            truePositionYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
+        }
+    }
+
     void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         TRACY_SCOPE_N("Resolve collisions");
@@ -523,15 +561,15 @@ namespace PS_AGONY
         // Get pointers.
         Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
         Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+
+        const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
+        const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
+
         Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
 		Real* CORE_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
         const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
 		const Real* CORE_RESTRICT invInertiaPtr = bodies.invInertia.data();
-		const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
-		const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
-		const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-		const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
         const MaterialIndex* CORE_RESTRICT materialIndexPtr = bodies.materialIndex.data();
         const Material* CORE_RESTRICT materialPtr = materials.data();
@@ -544,18 +582,15 @@ namespace PS_AGONY
             return { velocityX, velocityY };
 			};
 
-        // Note: Pre-computing and updating world COMs is slower than recomputing.
         auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
         {
 			const Real positionX = positionXPtr[bodyIndex];
 			const Real positionY = positionYPtr[bodyIndex];
-            const Real localCenterOfMassX = localCenterOfMassXPtr[bodyIndex];
-            const Real localCenterOfMassY = localCenterOfMassYPtr[bodyIndex];
-            const Real cosRot = rotationCosPtr[bodyIndex];
-            const Real sinRot = rotationSinPtr[bodyIndex];
-            const Real centerOfMassX = positionX + localCenterOfMassX * cosRot - localCenterOfMassY * sinRot;
-            const Real centerOfMassY = positionY + localCenterOfMassX * sinRot + localCenterOfMassY * cosRot;
-            return { centerOfMassX, centerOfMassY };
+
+            const Real localCOMX = localCenterOfMassXPtr[bodyIndex];
+            const Real localCOMY = localCenterOfMassYPtr[bodyIndex];
+
+            return { positionX + localCOMX, positionY + localCOMY };
 			};
 
         // Main loop.
@@ -775,11 +810,13 @@ namespace PS_AGONY
             const Real correctionA = invMassA * invTotalInvMass * correction;
             const Real correctionB = invMassB * invTotalInvMass * correction;
 
-            positionXPtr[bodyIndexA] -= normal.x * correctionA;
-            positionYPtr[bodyIndexA] -= normal.y * correctionA;
+            const Vec2 correctionAVec = normal * correctionA;
+            const Vec2 correctionBVec = normal * correctionB;
 
-            positionXPtr[bodyIndexB] += normal.x * correctionB;
-            positionYPtr[bodyIndexB] += normal.y * correctionB;
+            positionXPtr[bodyIndexA] -= correctionAVec.x;
+            positionYPtr[bodyIndexA] -= correctionAVec.y;
+            positionXPtr[bodyIndexB] += correctionBVec.x;
+            positionYPtr[bodyIndexB] += correctionBVec.y;
         }
     }
 

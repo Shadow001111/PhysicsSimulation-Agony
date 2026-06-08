@@ -49,6 +49,11 @@ namespace PS_AGONY
 	{
 		SimdAlignedVector<Real> positionX;
 		SimdAlignedVector<Real> positionY;
+		SimdAlignedVector<Real> localCenterOfMassX;
+		SimdAlignedVector<Real> localCenterOfMassY;
+		SimdAlignedVector<Real> truePositionX;
+		SimdAlignedVector<Real> truePositionY;
+
 		SimdAlignedVector<Real> velocityX;
 		SimdAlignedVector<Real> velocityY;
 		SimdAlignedVector<Real> rotation;
@@ -57,8 +62,6 @@ namespace PS_AGONY
 		SimdAlignedVector<Real> invMass;
 		SimdAlignedVector<Real> inertia;
 		SimdAlignedVector<Real> invInertia;
-		SimdAlignedVector<Real> localCenterOfMassX;
-		SimdAlignedVector<Real> localCenterOfMassY;
 		SimdAlignedVector<Real> rotationCos;
 		SimdAlignedVector<Real> rotationSin;
 
@@ -85,6 +88,10 @@ namespace PS_AGONY
 		{
 			this->positionX.push_back(pos.x);
 			this->positionY.push_back(pos.y);
+			this->localCenterOfMassX.push_back(localCenterOfMass.x);
+			this->localCenterOfMassY.push_back(localCenterOfMass.y);
+			this->truePositionX.push_back(0);
+			this->truePositionY.push_back(0);
 			this->velocityX.push_back(vel.x);
 			this->velocityY.push_back(vel.y);
 			this->rotation.push_back(rot);
@@ -93,8 +100,6 @@ namespace PS_AGONY
 			this->invMass.push_back(invMass);
 			this->inertia.push_back(inertia);
 			this->invInertia.push_back(invInertia);
-			this->localCenterOfMassX.push_back(localCenterOfMass.x);
-			this->localCenterOfMassY.push_back(localCenterOfMass.y);
 			this->rotationCos.push_back(std::cos(rot));
 			this->rotationSin.push_back(std::sin(rot));
 			this->materialIndex.push_back(materialIndex);
@@ -114,6 +119,10 @@ namespace PS_AGONY
 			return
 				PS_AGONY::getVectorMemoryUsage(positionX) +
 				PS_AGONY::getVectorMemoryUsage(positionY) +
+				PS_AGONY::getVectorMemoryUsage(localCenterOfMassX) +
+				PS_AGONY::getVectorMemoryUsage(localCenterOfMassY) +
+				PS_AGONY::getVectorMemoryUsage(truePositionX) +
+				PS_AGONY::getVectorMemoryUsage(truePositionY) +
 				PS_AGONY::getVectorMemoryUsage(velocityX) +
 				PS_AGONY::getVectorMemoryUsage(velocityY) +
 				PS_AGONY::getVectorMemoryUsage(rotation) +
@@ -122,8 +131,6 @@ namespace PS_AGONY
 				PS_AGONY::getVectorMemoryUsage(invMass) +
 				PS_AGONY::getVectorMemoryUsage(inertia) +
 				PS_AGONY::getVectorMemoryUsage(invInertia) +
-				PS_AGONY::getVectorMemoryUsage(localCenterOfMassX) +
-				PS_AGONY::getVectorMemoryUsage(localCenterOfMassY) +
 				PS_AGONY::getVectorMemoryUsage(rotationCos) +
 				PS_AGONY::getVectorMemoryUsage(rotationSin) +
 				PS_AGONY::getVectorMemoryUsage(materialIndex) +

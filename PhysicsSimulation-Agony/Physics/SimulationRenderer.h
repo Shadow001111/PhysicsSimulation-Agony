@@ -96,6 +96,8 @@ namespace PS_AGONY
 
 		void renderBodies(const Mat4& viewProjectionMatrix);
 		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix);
+		void renderBodyPositions(const Mat4& viewProjectionMatrix);
+		void renderBodyTruePositions(const Mat4& viewProjectionMatrix);
 		void renderCircleBodies(const Mat4& viewProjectionMatrix);
 		void renderBoxBodies(const Mat4& viewProjectionMatrix);
 
