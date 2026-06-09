@@ -99,6 +99,11 @@ namespace PS_AGONY
 
             for (auto [bodyIndexA, bodyIndexB] : bodyPairs)
             {
+                const Real invMassA = bodies.invMass[bodyIndexA];
+                const Real invMassB = bodies.invMass[bodyIndexB];
+                if (invMassA == Real(0) && invMassB == Real(0))
+                    continue; // Skip static-static pairs entirely.
+
                 BodyType bodyTypeA = bodyTypePtr[bodyIndexA];
                 BodyType bodyTypeB = bodyTypePtr[bodyIndexB];
 

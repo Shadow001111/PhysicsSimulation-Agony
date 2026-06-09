@@ -45,7 +45,7 @@ namespace PS_AGONY
 			Vec2 gravity{ 0.0, -9.81 };
 
 			// Baumgarte stabilization.
-			const Real positionCorrectionPercent = 0.8;
+			const Real positionCorrectionPercent = 1.0;
 			const Real slop = 0.0;
 		};
 
