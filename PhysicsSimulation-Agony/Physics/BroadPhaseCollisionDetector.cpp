@@ -375,6 +375,7 @@ namespace PS_AGONY
         // Sort indices by morton code.
         sortBodyIndicesByMortonCodes(bodyCount);
         const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        const BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
 
         // Top-down tree build with Morton-code binary split.
         // For a node covering sorted range [nodeStart, nodeEnd):
@@ -417,8 +418,8 @@ namespace PS_AGONY
                 }
 
                 // Find the split position.
-                const uint32_t mcFirst = mortonCodePtr[indices[nodeStart]];
-                const uint32_t mcLast = mortonCodePtr[indices[nodeEnd - 1]];
+                const uint32_t mcFirst = mortonCodePtr[indicesPtr[nodeStart]];
+                const uint32_t mcLast = mortonCodePtr[indicesPtr[nodeEnd - 1]];
 
                 uint32_t mid;
                 if (mcFirst == mcLast)
@@ -439,7 +440,7 @@ namespace PS_AGONY
                     while (lo < hi)
                     {
                         const uint32_t m = (lo + hi) >> 1;
-                        if ((mortonCodePtr[indices[m]] & splitBit) == 0u)
+                        if ((mortonCodePtr[indicesPtr[m]] & splitBit) == 0u)
                             lo = m + 1;
                         else
                             hi = m;
@@ -474,7 +475,7 @@ namespace PS_AGONY
                 if (node.leftChildIndex == BvhNode::INVALID_INDEX)
                 {
                     constexpr Real DEAD_MAX = -std::numeric_limits<Real>::max();
-                    constexpr Real DEAD_MIN = std::numeric_limits<Real>::max();
+                    constexpr Real DEAD_MIN =  std::numeric_limits<Real>::max();
 
                     const uint32_t leafIndex = node.leafIndex;
                     Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
@@ -493,7 +494,7 @@ namespace PS_AGONY
 
                     for (uint32_t leafBodyIndex = 0; leafBodyIndex < nodeRange; leafBodyIndex++)
                     {
-                        const BodyIndex bodyIndex = indices[nodeStart + leafBodyIndex];
+                        const BodyIndex bodyIndex = indicesPtr[nodeStart + leafBodyIndex];
 
                         const Real bodyMinX = bodyMinXPtr[bodyIndex];
                         const Real bodyMaxX = bodyMaxXPtr[bodyIndex];
