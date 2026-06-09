@@ -60,9 +60,13 @@ namespace PS_AGONY
         updateTimeAccumulator -= stepCount * simulationSettings.updateInterval;
 
         const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.timeScale;
-        for (uint32_t i = 0; i < stepCount; i++)
+        if (stepCount > 0)
         {
-            physicsStep(fixedDeltaTime);
+            for (uint32_t i = 0; i < stepCount; i++)
+            {
+                physicsStep(fixedDeltaTime);
+            }
+            postUpdate();
         }
 
         // Debug data.
@@ -282,6 +286,13 @@ namespace PS_AGONY
         iterativeCollisionSolving();
     }
 
+    void Simulation::postUpdate()
+    {
+        // That's for renderer to have actual information.
+        computeTruePositions();
+        buildBodyAABBs();
+    }
+
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
     {
         using RealSimd = Simd<Real>;
@@ -389,13 +400,9 @@ namespace PS_AGONY
 
     void Simulation::iterativeCollisionSolving()
     {
+        runtimeDebugData.collisionSolvingIterationsHappened = 0;
+
         const size_t bodyCount = bodies.getCount();
-
-        // Compute true position for all bodies.
-        computeTruePositions();
-
-        // Rebuild AABBs.
-        buildBodyAABBs();
 
         // Early return.
         if (bodyCount < 2) return;
@@ -404,6 +411,12 @@ namespace PS_AGONY
         uint32_t i = 0;
         for (;i < simulationSettings.collisionSolvingIterations; i++)
         {
+            // Compute true position for all bodies.
+            computeTruePositions();
+
+            // Rebuild AABBs.
+            buildBodyAABBs();
+
             // Broad phase.
             const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
             if (broadCollisionData.empty()) break;
@@ -419,12 +432,6 @@ namespace PS_AGONY
 
             // Collision resolution.
             resolveCollisions(narrowCollisionData);
-
-            // Compute true position for all bodies.
-            computeTruePositions();
-
-			// Rebuild AABBs.
-            buildBodyAABBs();
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }

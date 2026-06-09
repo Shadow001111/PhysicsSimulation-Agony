@@ -104,6 +104,8 @@ namespace PS_AGONY
 	private:
 		void physicsStep(Real deltaTime);
 
+		void postUpdate();
+
 		void applyExternalForces(size_t bodyCount, Real deltaTime);
 
 		void integrate(size_t bodyCount, Real deltaTime);
