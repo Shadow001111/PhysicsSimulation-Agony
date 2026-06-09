@@ -44,7 +44,7 @@ namespace PS_AGONY
 			Real timeScale = 1.0;
 			Vec2 gravity{ 0.0, -9.81 };
 
-			// Baumgarte stabilization.
+			// Baumgarte stabilization. Good when solver runs on maximum, because that thing makes it run on maximum for a single body.
 			const Real positionCorrectionPercent = 1.0;
 			const Real slop = 0.0;
 		};

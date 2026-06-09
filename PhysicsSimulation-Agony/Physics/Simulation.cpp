@@ -67,8 +67,10 @@ namespace PS_AGONY
 
         // Debug data.
         {
+            constexpr Real DEBUG_DATA_SWITCH_INTERVAL = 0.25;
+
             debugDataResetTimeAccumulator += deltaTime;
-            if (debugDataResetTimeAccumulator > 1.0)
+            if (debugDataResetTimeAccumulator > DEBUG_DATA_SWITCH_INTERVAL)
             {
                 debugDataSnaphot = runtimeDebugData;
 
@@ -79,7 +81,7 @@ namespace PS_AGONY
                 collectMemoryUsage(debugDataSnaphot);
             }
 
-            runtimeDebugData.updatesHappened += stepCount;
+            runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
             runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
 
             runtimeDebugData.maxCollisionSolvingIterations = simulationSettings.collisionSolvingIterations;
