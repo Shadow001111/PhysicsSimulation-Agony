@@ -155,14 +155,8 @@ namespace PS_AGONY
         indices.resize(bodyCount);
         std::iota(indices.begin(), indices.end(), 0);
 
-        {
-            TRACY_SCOPE_N("Build tree");
-            buildBvhTree(nodes, indices, bodyCount);
-        }
-        {
-            TRACY_SCOPE_N("Query pairs");
-            queryBvhPairs(nodes, indices);
-        }
+        buildBvhTree(nodes, indices, bodyCount);
+        queryBvhPairs(nodes, indices);
     }
 
     void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax)
@@ -338,6 +332,8 @@ namespace PS_AGONY
         const uint32_t bodyCount
     )
     {
+        TRACY_SCOPE_N("Build tree");
+
         const Real* CORE_RESTRICT bodyMinXPtr = bodiesAABB.minX;
         const Real* CORE_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
         const Real* CORE_RESTRICT bodyMinYPtr = bodiesAABB.minY;
@@ -346,7 +342,7 @@ namespace PS_AGONY
         // Compute world AABB.
         Real globalMinX, globalMaxX, globalMinY, globalMaxY;
         {
-            TRACY_SCOPE_N("World AABB");
+            TRACY_SCOPE_N("Compute world AABB");
             globalMinX =  std::numeric_limits<Real>::max();
             globalMaxX = -std::numeric_limits<Real>::max();
             globalMinY =  std::numeric_limits<Real>::max();
@@ -540,12 +536,12 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
     {
+        TRACY_SCOPE_N("Query pairs");
+
         constexpr uint32_t LANES = RealSimd::lanes;
         constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
 
-        constexpr uint32_t CAP = BvhNode::KD_LEAF_SIZE;
-
-        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, CAP / LANES>();
+        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
         
         // Get pointers.
         const Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
@@ -596,6 +592,8 @@ namespace PS_AGONY
                 gatherLeaf(leafA, nodeA.leafIndex);
                 const uint32_t countA = nodeA.end - nodeA.start;
 
+                std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
+
                 if (nodePair.a == nodePair.b)
                 {
                     // Self-query: emit upper-triangle pairs only.
@@ -608,7 +606,7 @@ namespace PS_AGONY
 
                         auto maskRow = maskArray[i];
                         uint32_t mask = 0;
-                        for (uint32_t j = 0; j < CAP; j += LANES)
+                        for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
                         {
                             const RealSimd vMinXj = RealSimd::load(leafA.minX + j);
                             const RealSimd vMaxXj = RealSimd::load(leafA.maxX + j);
@@ -622,6 +620,11 @@ namespace PS_AGONY
                             const uint32_t localMask = overlap.movemask() & maskRow[j >> LANES_LOG2];
                             mask |= localMask << j;
                         }
+                        masks[i] = mask;
+                    }
+                    for (uint32_t i = 0; i < countA; i++)
+                    {
+                        uint32_t mask = masks[i];
                         while (mask)
                         {
                             const uint32_t lane = std::countr_zero(mask);
@@ -646,7 +649,7 @@ namespace PS_AGONY
                         const RealSimd vMaxYi(leafA.maxY[i]);
 
                         uint32_t mask = 0;
-                        for (uint32_t j = 0; j < CAP; j += LANES)
+                        for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
                         {
                             const RealSimd vMinXj = RealSimd::load(leafB.minX + j);
                             const RealSimd vMaxXj = RealSimd::load(leafB.maxX + j);
@@ -659,10 +662,15 @@ namespace PS_AGONY
 
                             mask |= overlap.movemask() << j;
                         }
+                        masks[i] = mask;
+                    }
+                    for (uint32_t i = 0; i < countA; i++)
+                    {
+                        uint32_t mask = masks[i];
                         while (mask)
                         {
                             const uint32_t lane = std::countr_zero(mask);
-                            mask &= mask - 1;
+                            mask &= mask - 1; // Clear lowest set bit.
                             collisionData.emplace_back(
                                 indicesPtr[nodeA.start + i],
                                 indicesPtr[nodeB.start + lane]);
