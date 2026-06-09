@@ -64,7 +64,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
 
     {
         constexpr float radius = 4.0f;
-        simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 1.0f, 20000.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
+        simulation.createCircle({ 0.0f, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 20000.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
     }
 }
 

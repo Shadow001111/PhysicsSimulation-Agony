@@ -526,6 +526,8 @@ namespace PS_AGONY
 
     void Simulation::computeTruePositions()
     {
+        using RealSimd = Simd<Real>;
+
         TRACY_SCOPE_N("Compute true positions");
 
         const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
@@ -539,7 +541,26 @@ namespace PS_AGONY
         Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY.data();
 
         const size_t bodyCount = bodies.getCount();
-        for (size_t i = 0; i < bodyCount; i++)
+
+        size_t i = 0;
+        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+        {
+            const RealSimd positionX = RealSimd::load(positionXPtr + i);
+            const RealSimd positionY = RealSimd::load(positionYPtr + i);
+
+            const RealSimd localCenterOfMassX = RealSimd::load(localCenterOfMassXPtr + i);
+            const RealSimd localCenterOfMassY = RealSimd::load(localCenterOfMassYPtr + i);
+
+            const RealSimd cosRot = RealSimd::load(rotationCosPtr + i);
+            const RealSimd sinRot = RealSimd::load(rotationSinPtr + i);
+
+            const RealSimd truePositionX = RealSimd::neg_mul_add(localCenterOfMassX, cosRot,     RealSimd::mul_add(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
+            const RealSimd truePositionY = RealSimd::neg_mul_add(localCenterOfMassX, sinRot, RealSimd::neg_mul_add(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
+        
+            truePositionX.store(truePositionXPtr + i);
+            truePositionY.store(truePositionYPtr + i);
+        }
+        for (; i < bodyCount; i++)
         {
             const Real positionX = positionXPtr[i];
             const Real positionY = positionYPtr[i];
