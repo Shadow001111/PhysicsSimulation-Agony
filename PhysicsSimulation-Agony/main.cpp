@@ -75,19 +75,32 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(1);
 
-    // Real-time counters?
+    // App.
     {
+        ss << "App:";
+
         const float smoothedDelta = debugData.smoothedDelta;
 
         const float FPS = smoothedDelta > 0.0f
             ? 1.0f / smoothedDelta
             : 0.0f;
-        ss << "FPS: " << FPS << " (" << smoothedDelta * 1000.0f << " ms)";
+        ss << "\n  FPS: " << FPS << " (" << smoothedDelta * 1000.0f << " ms)";
+
+        
+    }
+
+    // Simulation.
+    {
+        ss << "\nSimulation:";
 
         float upsPercent = (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen;
         upsPercent = std::min(upsPercent, 1.0f);
-        ss << "\nUPS: " << simulationData.updatesHappened << " / " << simulationData.updatesSupposedToHappen
+        ss << "\n  UPS: " << simulationData.updatesHappened << " / " << simulationData.updatesSupposedToHappen
             << " (" << upsPercent * 100.0f << "%)";
+
+        float collisionIterationsPercent = (float)simulationData.collisionSolvingIterationsHappened / (float)simulationData.maxCollisionSolvingIterations;
+        ss << "\n  Collision iterations: " << simulationData.collisionSolvingIterationsHappened << " / " << simulationData.maxCollisionSolvingIterations
+            << " (" << collisionIterationsPercent * 100.0f << "%)";
     }
 
     // Memory.

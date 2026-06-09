@@ -2,6 +2,7 @@
 #include "GlmTypes.h"
 #include "BodySoA.h"
 #include "Material.h"
+#include "Constants.h"
 
 #include "BroadPhaseCollisionDetector.h"
 #include "NarrowPhaseCollisionDetector.h"
@@ -20,6 +21,9 @@ namespace PS_AGONY
 			uint32_t updatesHappened = 0;
 			uint32_t updatesSupposedToHappen = 0;
 
+			uint32_t collisionSolvingIterationsHappened = 0;
+			uint32_t maxCollisionSolvingIterations = 0;
+
 			size_t bodyDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
 			size_t boxDataMemoryUsage = 0;
@@ -34,7 +38,7 @@ namespace PS_AGONY
 			//
 			Real updateInterval = 1 / 300.0;
 			uint32_t collisionSolvingIterations = 12;
-			uint32_t maxIterationsPerUpdateCall = 6;
+			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.
 			Real timeScale = 1.0;

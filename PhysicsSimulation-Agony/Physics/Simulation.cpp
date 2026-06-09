@@ -1,5 +1,4 @@
 #include "Simulation.h"
-#include "Constants.h"
 
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
@@ -50,13 +49,16 @@ namespace PS_AGONY
         // Delta time check.
         if (deltaTime <= 0) return;
 
-        // Physics steps.
-        updateTimeAccumulator += deltaTime;
+        // Cap how much real time this call is allowed to consume.
+        const Real cappedDeltaTime = std::min(deltaTime, simulationSettings.maxDeltaTimePerUpdateCall);
 
+        // Advance counter.
+        updateTimeAccumulator += cappedDeltaTime;
+
+        // Physics steps.
         uint32_t stepCount = std::floor(updateTimeAccumulator / simulationSettings.updateInterval);
         updateTimeAccumulator -= stepCount * simulationSettings.updateInterval;
 
-        stepCount = std::min(stepCount, simulationSettings.maxIterationsPerUpdateCall);
         const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.timeScale;
         for (uint32_t i = 0; i < stepCount; i++)
         {
@@ -79,6 +81,8 @@ namespace PS_AGONY
 
             runtimeDebugData.updatesHappened += stepCount;
             runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
+
+            runtimeDebugData.maxCollisionSolvingIterations = simulationSettings.collisionSolvingIterations;
         }
     }
 
@@ -264,13 +268,15 @@ namespace PS_AGONY
 
         if (materials.empty()) [[unlikely]]
         {
-            std::cerr << "[AGONY][Simulation]: Material count is zero, which must be impossible.\n";
+            std::cerr << "[AGONY][Simulation]: Material count is zero, which should be impossible.\n";
             materials.emplace_back(); // Default material.
         }
 
         applyExternalForces(bodyCount, deltaTime);
         applyConstraints();
         integrate(bodyCount, deltaTime);
+        wrapRotation();
+        computeRotationCosSin();
         iterativeCollisionSolving();
     }
 
@@ -383,12 +389,6 @@ namespace PS_AGONY
     {
         const size_t bodyCount = bodies.getCount();
 
-        // Wrap rotations.
-        wrapRotation();
-
-        // Compute rotation cos/sin for all bodies, which are used in collision resolution.
-        computeRotationCosSin();
-
         // Compute true position for all bodies.
         computeTruePositions();
 
@@ -399,7 +399,8 @@ namespace PS_AGONY
         if (bodyCount < 2) return;
 
         // Solves until runs out of iterations or no collision is found.
-        for (uint32_t i = 0; i < simulationSettings.collisionSolvingIterations; i++)
+        uint32_t i = 0;
+        for (;i < simulationSettings.collisionSolvingIterations; i++)
         {
             // Broad phase.
             const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
@@ -423,6 +424,7 @@ namespace PS_AGONY
 			// Rebuild AABBs.
             buildBodyAABBs();
         }
+        runtimeDebugData.collisionSolvingIterationsHappened = i;
     }
 
     void Simulation::buildBodyAABBs()

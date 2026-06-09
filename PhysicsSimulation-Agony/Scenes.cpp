@@ -281,6 +281,49 @@ void load_Planet(PS_AGONY::Simulation& simulation)
     }
 }
 
+void load_BalancerSwing(PS_AGONY::Simulation& simulation)
+{
+    constexpr float balancerWidth = 30.0f;
+    constexpr float balancerThickness = 3.0f;
+    constexpr float balancerAtitude = 10.0f;
+    constexpr float balancerMass = 100000.0f;
+
+    PS_AGONY::Material material0 = {
+            .elasticity = 0.0,
+            .staticFriction = 1000.0,
+            .dynamicFriction = 1000.0
+    };
+
+    PS_AGONY::Material material1 = {
+        .elasticity = 0.5,
+        .staticFriction = 1.0,
+        .dynamicFriction = 1.0
+    };
+
+    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
+    PS_AGONY::MaterialIndex material1Index = simulation.createMaterial(material1);
+
+    {
+
+        constexpr float thickness = 2.0f;
+        constexpr float length = 100.0f;
+
+        simulation.createBox({ 0.0, thickness * -0.5f }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
+    }
+    {
+        const float size = (balancerAtitude * balancerAtitude * 0.2f) / std::sqrt(2);
+
+        simulation.createBox({ 0.0, 0.0 }, { 0.0, 0.0 }, PS_AGONY::Constants::PI * 0.25f, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { size, size });
+    }
+    {
+        simulation.createBox({ 0.0, balancerAtitude + balancerThickness * 0.5f }, { 0.0, 0.0 }, 0.0, 0.0, balancerMass, { 0.0f, 0.0f }, material0Index, { balancerWidth, balancerThickness });
+        
+        //constexpr float littleWidth = 0.1f;
+        //constexpr float littleThickness = 0.1f;
+        //simulation.createBox({ 0.0, balancerAtitude - littleThickness  * 0.5f}, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { littleWidth, littleThickness });
+    }
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
 	if (scene == 0)
@@ -299,4 +342,8 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
 	{
 		load_Planet(simulation);
 	}
+    else if (scene == 4)
+    {
+        load_BalancerSwing(simulation);
+    }
 }
