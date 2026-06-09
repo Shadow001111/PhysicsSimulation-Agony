@@ -681,13 +681,16 @@ namespace PS_AGONY
             }
             else
             {
-                const uint32_t areaA = nodeA.end - nodeA.start;
-                const uint32_t areaB = nodeB.end - nodeB.start;
+                const uint32_t bodyCountA = nodeA.end - nodeA.start;
+                const uint32_t bodyCountB = nodeB.end - nodeB.start;
 
-                //const Real areaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
-                //const Real areaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
+                const Real nodeAreaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
+                const Real nodeAreaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
 
-                const bool splitB = aLeaf || (!bLeaf && (areaB > areaA));
+                const auto heuristicA = bodyCountA * nodeAreaA;
+                const auto heuristicB = bodyCountB * nodeAreaB;
+
+                const bool splitB = aLeaf || (!bLeaf && (heuristicB > heuristicA));
                 if (splitB)
                 {
                     // Split node B.
