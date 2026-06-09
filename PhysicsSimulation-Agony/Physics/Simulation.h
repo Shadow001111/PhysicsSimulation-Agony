@@ -110,6 +110,8 @@ namespace PS_AGONY
 		void buildCircleAABBs();
 		void buildBoxAABBs();
 
+		void wrapRotation();
+
 		void computeRotationCosSin();
 
 		void computeTruePositions();

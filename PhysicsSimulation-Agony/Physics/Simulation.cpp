@@ -1,4 +1,5 @@
 #include "Simulation.h"
+#include "Constants.h"
 
 #include "Core/TracyProfiler.h"
 #include "Core/Portablity.h"
@@ -382,6 +383,9 @@ namespace PS_AGONY
     {
         const size_t bodyCount = bodies.getCount();
 
+        // Wrap rotations.
+        wrapRotation();
+
         // Compute rotation cos/sin for all bodies, which are used in collision resolution.
         computeRotationCosSin();
 
@@ -504,6 +508,19 @@ namespace PS_AGONY
             aabbMinYPtr[bodyIndex] = y - ey;
             aabbMaxXPtr[bodyIndex] = x + ex;
             aabbMaxYPtr[bodyIndex] = y + ey;
+        }
+    }
+
+    void Simulation::wrapRotation()
+    {
+        TRACY_SCOPE_N("Wrap rotation");
+
+        Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
+
+        const size_t bodyCount = bodies.getCount();
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            rotationPtr[i] = std::fmod(rotationPtr[i], Constants::TWO_PI);
         }
     }
 

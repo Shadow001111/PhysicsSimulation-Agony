@@ -20,7 +20,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
     };
 
     PS_AGONY::Material material1 = {
-        .elasticity = 1.0,
+        .elasticity = 0.5,
         .staticFriction = 1.0,
         .dynamicFriction = 1.0
     };
