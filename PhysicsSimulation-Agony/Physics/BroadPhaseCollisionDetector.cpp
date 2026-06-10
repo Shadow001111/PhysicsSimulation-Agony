@@ -85,11 +85,14 @@ namespace PS_AGONY
         return arr;
     }
 
-    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const AABBSoAViewer& bodiesAABBViewer, bool rebuild)
+    void BroadPhaseCollisionDetector::setDataViewers(const AABBSoAViewer& aabbs)
+    {
+        bodiesAABB = aabbs;
+    }
+
+    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild)
     {
         TRACY_SCOPE_N("Broad phase");
-
-        bodiesAABB = bodiesAABBViewer;
 
         collisionData.clear();
 

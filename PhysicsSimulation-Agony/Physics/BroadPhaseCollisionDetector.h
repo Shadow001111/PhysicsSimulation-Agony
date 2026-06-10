@@ -84,7 +84,11 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector(BroadPhaseCollisionDetector&&) = default;
 		BroadPhaseCollisionDetector& operator=(BroadPhaseCollisionDetector&&) = default;
 
-		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer, bool rebuild);
+		void setDataViewers(
+			const AABBSoAViewer& aabbs
+		);
+
+		const std::vector<BodyPair>& findCollisions(bool rebuild);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
