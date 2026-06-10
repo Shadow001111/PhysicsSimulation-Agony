@@ -486,7 +486,7 @@ void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDe
             else if (codepoint == '\n')
             {
                 // Update max line width for current line
-                maxLineWidth = std::max(maxLineWidth, currentLineWidth);
+                maxLineWidth = std::fmax(maxLineWidth, currentLineWidth);
                 currentLineWidth = 0.0f;
                 lineCount++;
                 codepoints.push_back(codepoint);
@@ -506,7 +506,7 @@ void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDe
 
             codepoints.push_back(codepoint);
         }
-        maxLineWidth = std::max(maxLineWidth, currentLineWidth);
+        maxLineWidth = std::fmax(maxLineWidth, currentLineWidth);
     }
 
     // Apply bounds scaling
@@ -517,7 +517,7 @@ void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDe
     {
         float widthScale = (bounds.x > 0.0f) ? bounds.x / textWidth : 1.0f;
         float heightScale = (bounds.y > 0.0f) ? bounds.y / textHeight : 1.0f;
-        float fitScale = std::min(widthScale, heightScale);
+        float fitScale = std::fmin(widthScale, heightScale);
 
         scale *= fitScale;
         rowHeight *= fitScale;

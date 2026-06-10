@@ -174,7 +174,7 @@ namespace AudioEngine
         {
             if (v.handle == voiceHandle && v.isActive())
             {
-                v.volume = std::max(0.0f, volume);
+                v.volume = std::fmax(0.0f, volume);
                 break;
             }
         }
@@ -187,7 +187,7 @@ namespace AudioEngine
         {
             if (v.handle == voiceHandle && v.isActive())
             {
-                v.pitch = std::max(0.01f, pitch);
+                v.pitch = std::fmax(0.01f, pitch);
                 break;
             }
         }
@@ -280,8 +280,8 @@ namespace AudioEngine
         v.handle = idOpt.value();
         v.sound = std::move(sound);
         v.loop = loop;
-        v.volume = std::max(0.0f, volume);
-        v.pitch = std::max(0.01f, pitch);
+        v.volume = std::fmax(0.0f, volume);
+        v.pitch = std::fmax(0.01f, pitch);
         v.setPan(pan);
         v.cursor = 0.0;
         return v;

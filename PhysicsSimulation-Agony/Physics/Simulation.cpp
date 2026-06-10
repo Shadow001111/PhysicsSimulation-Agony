@@ -50,7 +50,7 @@ namespace PS_AGONY
         if (deltaTime <= 0) return;
 
         // Cap how much real time this call is allowed to consume.
-        const Real cappedDeltaTime = std::min(deltaTime, simulationSettings.maxDeltaTimePerUpdateCall);
+        const Real cappedDeltaTime = std::fmin(deltaTime, simulationSettings.maxDeltaTimePerUpdateCall);
 
         // Advance counter.
         updateTimeAccumulator += cappedDeltaTime;
@@ -104,8 +104,8 @@ namespace PS_AGONY
         BodyTextureId textureId
     )
     {
-        mass = std::max(Real(0.0), mass);
-        radius = std::max(Real(0.0), radius);
+        mass = std::fmax(Real(0.0), mass);
+        radius = std::fmax(Real(0.0), radius);
 
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = circles.getCount();
@@ -146,9 +146,9 @@ namespace PS_AGONY
         BodyTextureId textureId
     )
     {
-        mass = std::max(Real(0.0), mass);
-        const Real width = std::max(Real(0.0), size.x);
-        const Real height = std::max(Real(0.0), size.y);
+        mass = std::fmax(Real(0.0), mass);
+        const Real width = std::fmax(Real(0.0), size.x);
+        const Real height = std::fmax(Real(0.0), size.y);
 
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = boxes.getCount();
@@ -675,8 +675,8 @@ namespace PS_AGONY
 
             const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
             
-            const Real staticFriction = std::sqrt(std::max(Real(0), materialA->staticFriction * materialB->staticFriction));
-            const Real dynamicFriction = std::sqrt(std::max(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
+            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
 			// Compute world centers of mass.
 			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);

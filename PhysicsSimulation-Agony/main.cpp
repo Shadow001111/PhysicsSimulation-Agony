@@ -94,7 +94,7 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
         ss << "\nSimulation:";
 
         float upsPercent = (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen;
-        upsPercent = std::min(upsPercent, 1.0f);
+        upsPercent = std::fmin(upsPercent, 1.0f);
         ss << "\n  UPS: " << simulationData.updatesHappened << " / " << simulationData.updatesSupposedToHappen
             << " (" << upsPercent * 100.0f << "%)";
 

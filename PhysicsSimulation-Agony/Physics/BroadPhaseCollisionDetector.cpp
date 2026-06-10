@@ -356,16 +356,16 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < bodyCount; i++)
             {
-                globalMinX = std::min(globalMinX, bodyMinXPtr[i]);
-                globalMaxX = std::max(globalMaxX, bodyMaxXPtr[i]);
-                globalMinY = std::min(globalMinY, bodyMinYPtr[i]);
-                globalMaxY = std::max(globalMaxY, bodyMaxYPtr[i]);
+                globalMinX = std::fmin(globalMinX, bodyMinXPtr[i]);
+                globalMaxX = std::fmax(globalMaxX, bodyMaxXPtr[i]);
+                globalMinY = std::fmin(globalMinY, bodyMinYPtr[i]);
+                globalMaxY = std::fmax(globalMaxY, bodyMaxYPtr[i]);
             }
 
             // Prevent division by zero for degenerate scenes.
             constexpr Real kEps = Real(1e-5);
-            globalMaxX = std::max(globalMaxX, globalMinX + kEps);
-            globalMaxY = std::max(globalMaxY, globalMinY + kEps);
+            globalMaxX = std::fmax(globalMaxX, globalMinX + kEps);
+            globalMaxY = std::fmax(globalMaxY, globalMinY + kEps);
         }
 
         // Compute centroids.
@@ -428,7 +428,7 @@ namespace PS_AGONY
                 const uint32_t mcLast = mortonCodePtr[indicesPtr[nodeEnd - 1]];
 
                 uint32_t mid;
-                if (mcFirst == mcLast)
+                if (mcFirst == mcLast) [[unlikely]]
                 {
                     // All bodies hash to the same Morton cell; equal codes can't
                     // be meaningfully split, so fall back to a balanced median.
@@ -494,6 +494,7 @@ namespace PS_AGONY
             BvhNode& node = nodes[idx];
             if (node.leftChildIndex == BvhNode::INVALID_INDEX)
             {
+                // Leaf: compute AABB from its bodies.
                 constexpr Real DEAD_MAX = -std::numeric_limits<Real>::max();
                 constexpr Real DEAD_MIN = std::numeric_limits<Real>::max();
 
@@ -503,7 +504,6 @@ namespace PS_AGONY
                 Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data() + leafIndex);
                 Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data() + leafIndex);
 
-                // Leaf: compute AABB from its bodies.
                 Real minX = DEAD_MIN;
                 Real maxX = DEAD_MAX;
                 Real minY = DEAD_MIN;
@@ -526,10 +526,10 @@ namespace PS_AGONY
                     leafMinYPtr[leafBodyIndex] = bodyMinY;
                     leafMaxYPtr[leafBodyIndex] = bodyMaxY;
 
-                    minX = std::min(minX, bodyMinX);
-                    maxX = std::max(maxX, bodyMaxX);
-                    minY = std::min(minY, bodyMinY);
-                    maxY = std::max(maxY, bodyMaxY);
+                    minX = std::fmin(minX, bodyMinX);
+                    maxX = std::fmax(maxX, bodyMaxX);
+                    minY = std::fmin(minY, bodyMinY);
+                    maxY = std::fmax(maxY, bodyMaxY);
                 }
                 for (uint32_t leafBodyIndex = nodeRange; leafBodyIndex < BvhNode::KD_LEAF_SIZE; leafBodyIndex++)
                 {
@@ -544,12 +544,12 @@ namespace PS_AGONY
             else
             {
                 // Not leaf: compute AABB from its children.
-                const BvhNode& left = nodes[node.leftChildIndex];
+                const BvhNode& left  = nodes[node.leftChildIndex];
                 const BvhNode& right = nodes[node.leftChildIndex + 1];
-                node.minX = std::min(left.minX, right.minX);
-                node.maxX = std::max(left.maxX, right.maxX);
-                node.minY = std::min(left.minY, right.minY);
-                node.maxY = std::max(left.maxY, right.maxY);
+                node.minX = std::fmin(left.minX, right.minX);
+                node.maxX = std::fmax(left.maxX, right.maxX);
+                node.minY = std::fmin(left.minY, right.minY);
+                node.maxY = std::fmax(left.maxY, right.maxY);
             }
         }
     }
