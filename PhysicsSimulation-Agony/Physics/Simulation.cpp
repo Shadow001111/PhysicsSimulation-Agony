@@ -407,6 +407,13 @@ namespace PS_AGONY
         // Early return.
         if (bodyCount < 2) return;
 
+        // Set data viewers.
+        narrowPhaseCollisionDetector.setDataViewers(
+            BodySoAViewer(bodies),
+            CircleSoAViewer(circles),
+            BoxSoAViewer(boxes)
+        );
+
         // Solves until runs out of iterations or no collision is found.
         uint32_t i = 0;
         for (;i < simulationSettings.collisionSolvingIterations; i++)
@@ -418,15 +425,10 @@ namespace PS_AGONY
             buildBodyAABBs();
 
             // Broad phase.
-            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb));
+            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(AABBSoAViewer(bodies.aabb), i == 0);
             if (broadCollisionData.empty()) break;
 
             // Narrow phase.
-            narrowPhaseCollisionDetector.setDataViewers(
-                BodySoAViewer(bodies),
-                CircleSoAViewer(circles),
-                BoxSoAViewer(boxes)
-            );
             const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
             if (narrowCollisionData.empty()) break;
 

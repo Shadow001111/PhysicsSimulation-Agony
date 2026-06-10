@@ -13,7 +13,6 @@
 namespace PS_AGONY
 {
     using RealSimd = Simd<Real>;
-    using I32Simd = Simd<uint32_t>;
     using MortonU32Simd = Simd<uint32_t>;
 
     static constexpr uint64_t integralLog2(uint64_t n)
@@ -86,7 +85,7 @@ namespace PS_AGONY
         return arr;
     }
 
-    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const AABBSoAViewer& bodiesAABBViewer)
+    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(const AABBSoAViewer& bodiesAABBViewer, bool rebuild)
     {
         TRACY_SCOPE_N("Broad phase");
 
@@ -99,7 +98,28 @@ namespace PS_AGONY
 
         collisionData.reserve(bodyCount);
 
-        findCollisionsBVH(bodyCount);
+        {
+            auto& nodes = bvhFunctionResources.nodeVector;
+            auto& indices = bvhFunctionResources.bodyIndexVector1;
+
+            if (rebuild)
+            {
+                nodes.clear();
+                nodes.reserve(2 * bodyCount);
+
+                indices.resize(bodyCount);
+                std::iota(indices.begin(), indices.end(), 0);
+
+                buildBvhTree(nodes, indices, bodyCount);
+            }
+            else
+            {
+                TRACY_SCOPE_N("Refit tree");
+
+                refitBvhNodeAABBS();
+            }
+            queryBvhPairs(nodes, indices);
+        }
 
         return collisionData;
     }
@@ -140,23 +160,6 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(collisionData);
 
         return total;
-    }
-
-    void BroadPhaseCollisionDetector::findCollisionsBVH(size_t bodyCount)
-    {
-        TRACY_SCOPE_N("BVH");
-
-        auto& nodes = bvhFunctionResources.nodeVector;
-        auto& indices = bvhFunctionResources.bodyIndexVector1;
-
-        nodes.clear();
-        nodes.reserve(2 * bodyCount);
-
-        indices.resize(bodyCount);
-        std::iota(indices.begin(), indices.end(), 0);
-
-        buildBvhTree(nodes, indices, bodyCount);
-        queryBvhPairs(nodes, indices);
     }
 
     void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax)
@@ -468,69 +471,82 @@ namespace PS_AGONY
             leafBodyAABBs.minY.resize(leafCount);
             leafBodyAABBs.maxY.resize(leafCount);
 
-            const size_t nodeCount = nodes.size();
-            for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
+            refitBvhNodeAABBS();
+        }
+    }
+
+    void BroadPhaseCollisionDetector::refitBvhNodeAABBS()
+    {
+        auto& nodes = bvhFunctionResources.nodeVector;
+        const auto& indices = bvhFunctionResources.bodyIndexVector1;
+
+        const Real* CORE_RESTRICT bodyMinXPtr = bodiesAABB.minX;
+        const Real* CORE_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
+        const Real* CORE_RESTRICT bodyMinYPtr = bodiesAABB.minY;
+        const Real* CORE_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
+
+        const size_t nodeCount = nodes.size();
+        for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
+        {
+            BvhNode& node = nodes[idx];
+            if (node.leftChildIndex == BvhNode::INVALID_INDEX)
             {
-                BvhNode& node = nodes[idx];
-                if (node.leftChildIndex == BvhNode::INVALID_INDEX)
+                constexpr Real DEAD_MAX = -std::numeric_limits<Real>::max();
+                constexpr Real DEAD_MIN = std::numeric_limits<Real>::max();
+
+                const uint32_t leafIndex = node.leafIndex;
+                Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
+                Real* CORE_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data() + leafIndex);
+                Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data() + leafIndex);
+                Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data() + leafIndex);
+
+                // Leaf: compute AABB from its bodies.
+                Real minX = DEAD_MIN;
+                Real maxX = DEAD_MAX;
+                Real minY = DEAD_MIN;
+                Real maxY = DEAD_MAX;
+
+                const uint32_t nodeStart = node.start;
+                const uint32_t nodeRange = node.end - nodeStart;
+
+                for (uint32_t leafBodyIndex = 0; leafBodyIndex < nodeRange; leafBodyIndex++)
                 {
-                    constexpr Real DEAD_MAX = -std::numeric_limits<Real>::max();
-                    constexpr Real DEAD_MIN =  std::numeric_limits<Real>::max();
+                    const BodyIndex bodyIndex = indices[nodeStart + leafBodyIndex];
 
-                    const uint32_t leafIndex = node.leafIndex;
-                    Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
-                    Real* CORE_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data() + leafIndex);
-                    Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data() + leafIndex);
-                    Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data() + leafIndex);
+                    const Real bodyMinX = bodyMinXPtr[bodyIndex];
+                    const Real bodyMaxX = bodyMaxXPtr[bodyIndex];
+                    const Real bodyMinY = bodyMinYPtr[bodyIndex];
+                    const Real bodyMaxY = bodyMaxYPtr[bodyIndex];
 
-                    // Leaf: compute AABB from its bodies.
-                    Real minX =  std::numeric_limits<Real>::max();
-                    Real maxX = -std::numeric_limits<Real>::max();
-                    Real minY =  std::numeric_limits<Real>::max();
-                    Real maxY = -std::numeric_limits<Real>::max();
+                    leafMinXPtr[leafBodyIndex] = bodyMinX;
+                    leafMaxXPtr[leafBodyIndex] = bodyMaxX;
+                    leafMinYPtr[leafBodyIndex] = bodyMinY;
+                    leafMaxYPtr[leafBodyIndex] = bodyMaxY;
 
-                    const uint32_t nodeStart = node.start;
-                    const uint32_t nodeRange = node.end - nodeStart;
-
-                    for (uint32_t leafBodyIndex = 0; leafBodyIndex < nodeRange; leafBodyIndex++)
-                    {
-                        const BodyIndex bodyIndex = indicesPtr[nodeStart + leafBodyIndex];
-
-                        const Real bodyMinX = bodyMinXPtr[bodyIndex];
-                        const Real bodyMaxX = bodyMaxXPtr[bodyIndex];
-                        const Real bodyMinY = bodyMinYPtr[bodyIndex];
-                        const Real bodyMaxY = bodyMaxYPtr[bodyIndex];
-
-                        leafMinXPtr[leafBodyIndex] = bodyMinX;
-                        leafMaxXPtr[leafBodyIndex] = bodyMaxX;
-                        leafMinYPtr[leafBodyIndex] = bodyMinY;
-                        leafMaxYPtr[leafBodyIndex] = bodyMaxY;
-
-                        minX = std::min(minX, bodyMinX);
-                        maxX = std::max(maxX, bodyMaxX);
-                        minY = std::min(minY, bodyMinY);
-                        maxY = std::max(maxY, bodyMaxY);
-                    }
-                    for (uint32_t leafBodyIndex = nodeRange; leafBodyIndex < BvhNode::KD_LEAF_SIZE; leafBodyIndex++)
-                    {
-                        leafMinXPtr[leafBodyIndex] = DEAD_MIN;
-                        leafMaxXPtr[leafBodyIndex] = DEAD_MAX;
-                        leafMinYPtr[leafBodyIndex] = DEAD_MIN;
-                        leafMaxYPtr[leafBodyIndex] = DEAD_MAX;
-                    }
-                    node.minX = minX; node.maxX = maxX;
-                    node.minY = minY; node.maxY = maxY;
+                    minX = std::min(minX, bodyMinX);
+                    maxX = std::max(maxX, bodyMaxX);
+                    minY = std::min(minY, bodyMinY);
+                    maxY = std::max(maxY, bodyMaxY);
                 }
-                else
+                for (uint32_t leafBodyIndex = nodeRange; leafBodyIndex < BvhNode::KD_LEAF_SIZE; leafBodyIndex++)
                 {
-                    // Not leaf: compute AABB from its children.
-                    const BvhNode& left  = nodes[node.leftChildIndex    ];
-                    const BvhNode& right = nodes[node.leftChildIndex + 1];
-                    node.minX = std::min(left.minX, right.minX);
-                    node.maxX = std::max(left.maxX, right.maxX);
-                    node.minY = std::min(left.minY, right.minY);
-                    node.maxY = std::max(left.maxY, right.maxY);
+                    leafMinXPtr[leafBodyIndex] = DEAD_MIN;
+                    leafMaxXPtr[leafBodyIndex] = DEAD_MAX;
+                    leafMinYPtr[leafBodyIndex] = DEAD_MIN;
+                    leafMaxYPtr[leafBodyIndex] = DEAD_MAX;
                 }
+                node.minX = minX; node.maxX = maxX;
+                node.minY = minY; node.maxY = maxY;
+            }
+            else
+            {
+                // Not leaf: compute AABB from its children.
+                const BvhNode& left = nodes[node.leftChildIndex];
+                const BvhNode& right = nodes[node.leftChildIndex + 1];
+                node.minX = std::min(left.minX, right.minX);
+                node.maxX = std::max(left.maxX, right.maxX);
+                node.minY = std::min(left.minY, right.minY);
+                node.maxY = std::max(left.maxY, right.maxY);
             }
         }
     }

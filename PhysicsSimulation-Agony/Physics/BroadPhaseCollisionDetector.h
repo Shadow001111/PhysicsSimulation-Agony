@@ -84,14 +84,12 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector(BroadPhaseCollisionDetector&&) = default;
 		BroadPhaseCollisionDetector& operator=(BroadPhaseCollisionDetector&&) = default;
 
-		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer);
+		const std::vector<BodyPair>& findCollisions(const AABBSoAViewer& bodiesAABBViewer, bool rebuild);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
 		size_t getMemoryUsage() const;
 	private:
-		void findCollisionsBVH(size_t bodyCount);
-
 		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax);
 
 		template<std::floating_point TReal>
@@ -104,6 +102,8 @@ namespace PS_AGONY
 			std::vector<BodyIndex>& indices,
 			const uint32_t bodyCount
 		);
+
+		void refitBvhNodeAABBS();
 
 		void queryBvhPairs(
 			const std::vector<BvhNode>& nodes,
