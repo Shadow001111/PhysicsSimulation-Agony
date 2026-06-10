@@ -515,8 +515,8 @@ namespace PS_AGONY
             const Real cos = rotationCosPtr[bodyIndex];
             const Real sin = rotationSinPtr[bodyIndex];
 
-            const Real absCos = std::abs(cos);
-            const Real absSin = std::abs(sin);
+            const Real absCos = std::fabs(cos);
+            const Real absSin = std::fabs(sin);
 
             const Real ex = absCos * widthHalf + absSin * heightHalf;
             const Real ey = absSin * widthHalf + absCos * heightHalf;
@@ -813,7 +813,7 @@ namespace PS_AGONY
 					const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
 
 					const Real jn = jnArray[i];
-                    if (std::abs(jt) <= jn * staticFriction)
+                    if (std::fabs(jt) <= jn * staticFriction)
                     {
                         impulseArray[i] = -jt * tangent; // Static friction.
                     }

@@ -288,8 +288,8 @@ namespace PS_AGONY
 
             // Circle center is inside the box (or extremely close to an edge/corner).
             // Choose the nearest face in local space.
-            const Real dx = halfWidthB - std::abs(circleLocalPosition.x);
-            const Real dy = halfHeightB - std::abs(circleLocalPosition.y);
+            const Real dx = halfWidthB - std::fabs(circleLocalPosition.x);
+            const Real dy = halfHeightB - std::fabs(circleLocalPosition.y);
             const bool useX = dx < dy;
             const Real minPen = useX ? dx : dy;
 
@@ -377,8 +377,8 @@ namespace PS_AGONY
             const Vec2 upB =    { -sinB, cosB };
 
             // Relative rotation.
-            const Real absRelativeCos = std::abs(cosA * cosB + sinA * sinB);
-            const Real absRelativeSin = std::abs(cosA * sinB - sinA * cosB);
+            const Real absRelativeCos = std::fabs(cosA * cosB + sinA * sinB);
+            const Real absRelativeSin = std::fabs(cosA * sinB - sinA * cosB);
 
             // Center delta.
             const Vec2 centerDelta = positionB - positionA;
@@ -473,7 +473,7 @@ namespace PS_AGONY
                 const Real dotY = glm::dot(refNormal, upRef);
 
                 // Choose the face with outward normal matching the collision direction.
-                const bool useX = std::abs(dotX) > std::abs(dotY);
+                const bool useX = std::fabs(dotX) > std::fabs(dotY);
 
                 const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
 
@@ -501,7 +501,7 @@ namespace PS_AGONY
                 const Real dotY = glm::dot(refNormal, upInc);
 
                 // Choose the face with outward normal matching the collision direction.
-                const bool useX = std::abs(dotX) > std::abs(dotY);
+                const bool useX = std::fabs(dotX) > std::fabs(dotY);
 
                 const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
 
