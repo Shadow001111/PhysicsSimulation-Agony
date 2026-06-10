@@ -278,6 +278,12 @@ static int gameFunc()
                 {
                     simulation.mainBodyHolderIncreaseAngularVelocity(-30.0 * deltaTime);
                 }
+
+                if (windowInputManager.isKeyJustPressed(GLFW_KEY_SPACE))
+                {
+                    simulation.destroyBody(mainBodyHolder.heldBody.value());
+                    mainBodyHolder.heldBody.reset();
+                }
             }
         }
 

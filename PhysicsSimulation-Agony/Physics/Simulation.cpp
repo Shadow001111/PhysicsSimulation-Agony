@@ -92,7 +92,7 @@ namespace PS_AGONY
         }
     }
 
-    BodyIndex Simulation::createCircle(
+    void Simulation::createCircle(
         Vec2 position,
         Vec2 velocity,
         Real rotation,
@@ -130,11 +130,9 @@ namespace PS_AGONY
             newBodyIndex,
             radius
 		);
-
-        return newBodyIndex;
     }
 
-    BodyIndex Simulation::createBox(
+    void Simulation::createBox(
         Vec2 position,
         Vec2 velocity,
         Real rotation,
@@ -177,8 +175,127 @@ namespace PS_AGONY
             halfWidth,
             halfHeight
         );
+    }
 
-        return newBodyIndex;
+    void Simulation::destroyBody(BodyIndex bodyIndex)
+    {
+        const size_t bodyCount = bodies.getCount();
+        if (bodyIndex >= bodyCount) return;
+
+        const BodyType type = bodies.bodyType[bodyIndex];
+        const BodyIndex shapeIdx = bodies.shapeIndex[bodyIndex];
+
+        // Remove shape entry from the appropriate SoA.
+        if (type == BodyType::Circle)
+        {
+            const size_t circleCount = circles.getCount();
+            if (shapeIdx < circleCount)
+            {
+                // Swap with last element if not already last.
+                if (shapeIdx != circleCount - 1)
+                {
+                    // Swap body indices in circles.
+                    std::swap(circles.bodyIndices[shapeIdx], circles.bodyIndices.back());
+                    std::swap(circles.radius[shapeIdx], circles.radius.back());
+
+                    // Update the body that now occupies shapeIdx to point to the new shape index.
+                    const BodyIndex swappedBody = circles.bodyIndices[shapeIdx];
+                    bodies.shapeIndex[swappedBody] = shapeIdx;
+                }
+                circles.bodyIndices.pop_back();
+                circles.radius.pop_back();
+            }
+        }
+        else if (type == BodyType::Box)
+        {
+            const size_t boxCount = boxes.getCount();
+            if (shapeIdx < boxCount)
+            {
+                if (shapeIdx != boxCount - 1)
+                {
+                    std::swap(boxes.bodyIndices[shapeIdx], boxes.bodyIndices.back());
+                    std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth.back());
+                    std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight.back());
+
+                    const BodyIndex swappedBody = boxes.bodyIndices[shapeIdx];
+                    bodies.shapeIndex[swappedBody] = shapeIdx;
+                }
+                boxes.bodyIndices.pop_back();
+                boxes.halfWidth.pop_back();
+                boxes.halfHeight.pop_back();
+            }
+        }
+
+        // Remove body entry from BodySoA.
+        if (bodyIndex != bodyCount - 1)
+        {
+            // Swap all vectors in BodySoA.
+            std::swap(bodies.positionX[bodyIndex], bodies.positionX.back());
+            std::swap(bodies.positionY[bodyIndex], bodies.positionY.back());
+            std::swap(bodies.localCenterOfMassX[bodyIndex], bodies.localCenterOfMassX.back());
+            std::swap(bodies.localCenterOfMassY[bodyIndex], bodies.localCenterOfMassY.back());
+            std::swap(bodies.truePositionX[bodyIndex], bodies.truePositionX.back());
+            std::swap(bodies.truePositionY[bodyIndex], bodies.truePositionY.back());
+            std::swap(bodies.velocityX[bodyIndex], bodies.velocityX.back());
+            std::swap(bodies.velocityY[bodyIndex], bodies.velocityY.back());
+            std::swap(bodies.rotation[bodyIndex], bodies.rotation.back());
+            std::swap(bodies.angularVelocity[bodyIndex], bodies.angularVelocity.back());
+            std::swap(bodies.mass[bodyIndex], bodies.mass.back());
+            std::swap(bodies.invMass[bodyIndex], bodies.invMass.back());
+            std::swap(bodies.inertia[bodyIndex], bodies.inertia.back());
+            std::swap(bodies.invInertia[bodyIndex], bodies.invInertia.back());
+            std::swap(bodies.rotationCos[bodyIndex], bodies.rotationCos.back());
+            std::swap(bodies.rotationSin[bodyIndex], bodies.rotationSin.back());
+            std::swap(bodies.materialIndex[bodyIndex], bodies.materialIndex.back());
+            std::swap(bodies.aabb.minX[bodyIndex], bodies.aabb.minX.back());
+            std::swap(bodies.aabb.minY[bodyIndex], bodies.aabb.minY.back());
+            std::swap(bodies.aabb.maxX[bodyIndex], bodies.aabb.maxX.back());
+            std::swap(bodies.aabb.maxY[bodyIndex], bodies.aabb.maxY.back());
+            std::swap(bodies.bodyType[bodyIndex], bodies.bodyType.back());
+            std::swap(bodies.shapeIndex[bodyIndex], bodies.shapeIndex.back());
+            std::swap(bodies.textureId[bodyIndex], bodies.textureId.back());
+
+            // Update the shape entry that refers to the swapped body (if any).
+            const BodyIndex swappedBodyIndex = bodyCount - 1;
+            const BodyType swappedType = bodies.bodyType[bodyIndex];
+            const BodyIndex swappedShapeIdx = bodies.shapeIndex[bodyIndex];
+            if (swappedType == BodyType::Circle)
+            {
+                if (swappedShapeIdx < circles.getCount())
+                    circles.bodyIndices[swappedShapeIdx] = bodyIndex;
+            }
+            else if (swappedType == BodyType::Box)
+            {
+                if (swappedShapeIdx < boxes.getCount())
+                    boxes.bodyIndices[swappedShapeIdx] = bodyIndex;
+            }
+        }
+
+        // Pop back all BodySoA vectors.
+        bodies.positionX.pop_back();
+        bodies.positionY.pop_back();
+        bodies.localCenterOfMassX.pop_back();
+        bodies.localCenterOfMassY.pop_back();
+        bodies.truePositionX.pop_back();
+        bodies.truePositionY.pop_back();
+        bodies.velocityX.pop_back();
+        bodies.velocityY.pop_back();
+        bodies.rotation.pop_back();
+        bodies.angularVelocity.pop_back();
+        bodies.mass.pop_back();
+        bodies.invMass.pop_back();
+        bodies.inertia.pop_back();
+        bodies.invInertia.pop_back();
+        bodies.rotationCos.pop_back();
+        bodies.rotationSin.pop_back();
+        bodies.materialIndex.pop_back();
+        bodies.aabb.minX.pop_back();
+        bodies.aabb.minY.pop_back();
+        bodies.aabb.maxX.pop_back();
+        bodies.aabb.maxY.pop_back();
+        bodies.bodyType.pop_back();
+        bodies.shapeIndex.pop_back();
+        bodies.textureId.pop_back();
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
