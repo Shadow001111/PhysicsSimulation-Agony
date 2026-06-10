@@ -674,7 +674,7 @@ namespace PS_AGONY
             const Material* materialB = materialPtr + materialIndexB;
 
             const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
-            
+
             const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
             const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
@@ -694,7 +694,7 @@ namespace PS_AGONY
             Vec2 rAPerpArray[2] =  { Vec2(),  Vec2()  };
             Vec2 rBPerpArray[2] =  { Vec2(),  Vec2()  };
             Real jnArray[2] =      { Real(0), Real(0) };
-            const uint32_t contactCount = std::min(data.contactCount, 2u);
+            const uint32_t contactCount = data.contactCount;//  std::min(data.contactCount, 2u);
 
             const Real impulseScale = Real(1.0) / Real(data.contactCount);
             {
