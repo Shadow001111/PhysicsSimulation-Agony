@@ -7,7 +7,7 @@
 #include <latch>
 #include <iostream>
 
-#include "Core/TracyProfiler.h"
+#include "EcstasyCore/TracyProfiler.h"
 
 namespace Core::Threading
 {

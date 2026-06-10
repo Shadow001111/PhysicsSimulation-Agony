@@ -1,14 +1,12 @@
 ﻿#include "BroadPhaseCollisionDetector.h"
 
-#include "Core/TracyProfiler.h"
-#include "Core/Portablity.h"
-#include "Core/Assert.h"
+#include "EcstasyCore/TracyProfiler.h"
+#include "EcstasyCore/Portablity.h"
 
 #include <numeric>
 #include <bit>
 #include <algorithm>
 #include <array>
-#include <iostream>
 
 namespace PS_AGONY
 {
@@ -168,13 +166,13 @@ namespace PS_AGONY
     void BroadPhaseCollisionDetector::computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax)
     {
         // Get pointers.
-        const Real* CORE_RESTRICT aabbMinXPtr = bodiesAABB.minX;
-        const Real* CORE_RESTRICT aabbMinYPtr = bodiesAABB.minY;
-        const Real* CORE_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
+        const Real* ECSTASY_RESTRICT aabbMinXPtr = bodiesAABB.minX;
+        const Real* ECSTASY_RESTRICT aabbMinYPtr = bodiesAABB.minY;
+        const Real* ECSTASY_RESTRICT aabbMaxXPtr = bodiesAABB.maxX;
+        const Real* ECSTASY_RESTRICT aabbMaxYPtr = bodiesAABB.maxY;
 
-        Real* CORE_RESTRICT centroidXPtr = nullptr;
-        Real* CORE_RESTRICT centroidYPtr = nullptr;
+        Real* ECSTASY_RESTRICT centroidXPtr = nullptr;
+        Real* ECSTASY_RESTRICT centroidYPtr = nullptr;
         {
             auto& centroidX = bvhFunctionResources.transformedCentroidX;
             auto& centroidY = bvhFunctionResources.transformedCentroidY;
@@ -242,10 +240,10 @@ namespace PS_AGONY
         auto& mortonCodes = bvhFunctionResources.mortonCodes;
         mortonCodes.resize(bodyCount);
 
-        MortonCode* CORE_RESTRICT mortonCodePtr = mortonCodes.data();
+        MortonCode* ECSTASY_RESTRICT mortonCodePtr = mortonCodes.data();
 
-        const TReal* CORE_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
-        const TReal* CORE_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
+        const TReal* ECSTASY_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
+        const TReal* ECSTASY_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
 
         TRACY_SCOPE_N("Compute morton codes");
 
@@ -283,11 +281,11 @@ namespace PS_AGONY
         constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
         constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
 
-        const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        const MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
         std::array<uint32_t, RADIX_SIZE> count;
 
-        auto radixPass = [&](uint32_t shift, const BodyIndex* CORE_RESTRICT src, BodyIndex* CORE_RESTRICT dst)
+        auto radixPass = [&](uint32_t shift, const BodyIndex* ECSTASY_RESTRICT src, BodyIndex* ECSTASY_RESTRICT dst)
             {
                 count.fill(0);
 
@@ -322,8 +320,8 @@ namespace PS_AGONY
         temp.resize(bodyCount);
 
         {
-            BodyIndex* CORE_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
-            BodyIndex* CORE_RESTRICT indexTempPtr = temp.data();
+            BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
+            BodyIndex* ECSTASY_RESTRICT indexTempPtr = temp.data();
 
             radixPass(0, indexPtr, indexTempPtr);
             radixPass(8, indexTempPtr, indexPtr);
@@ -340,10 +338,10 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Build tree");
 
-        const Real* CORE_RESTRICT bodyMinXPtr = bodiesAABB.minX;
-        const Real* CORE_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT bodyMinYPtr = bodiesAABB.minY;
-        const Real* CORE_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
+        const Real* ECSTASY_RESTRICT bodyMinXPtr = bodiesAABB.minX;
+        const Real* ECSTASY_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
+        const Real* ECSTASY_RESTRICT bodyMinYPtr = bodiesAABB.minY;
+        const Real* ECSTASY_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
 
         // Compute world AABB.
         Real globalMinX, globalMaxX, globalMinY, globalMaxY;
@@ -380,8 +378,8 @@ namespace PS_AGONY
 
         // Sort indices by morton code.
         sortBodyIndicesByMortonCodes(bodyCount);
-        const MortonCode* CORE_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
-        const BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
+        const MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = indices.data();
 
         // Top-down tree build with Morton-code binary split.
         // For a node covering sorted range [nodeStart, nodeEnd):
@@ -483,10 +481,10 @@ namespace PS_AGONY
         auto& nodes = bvhFunctionResources.nodeVector;
         const auto& indices = bvhFunctionResources.bodyIndexVector1;
 
-        const Real* CORE_RESTRICT bodyMinXPtr = bodiesAABB.minX;
-        const Real* CORE_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
-        const Real* CORE_RESTRICT bodyMinYPtr = bodiesAABB.minY;
-        const Real* CORE_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
+        const Real* ECSTASY_RESTRICT bodyMinXPtr = bodiesAABB.minX;
+        const Real* ECSTASY_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
+        const Real* ECSTASY_RESTRICT bodyMinYPtr = bodiesAABB.minY;
+        const Real* ECSTASY_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
 
         const size_t nodeCount = nodes.size();
         for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
@@ -499,10 +497,10 @@ namespace PS_AGONY
                 constexpr Real DEAD_MIN = std::numeric_limits<Real>::max();
 
                 const uint32_t leafIndex = node.leafIndex;
-                Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
-                Real* CORE_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data() + leafIndex);
-                Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data() + leafIndex);
-                Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data() + leafIndex);
+                Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
+                Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data() + leafIndex);
+                Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data() + leafIndex);
+                Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data() + leafIndex);
 
                 Real minX = DEAD_MIN;
                 Real maxX = DEAD_MAX;
@@ -564,11 +562,11 @@ namespace PS_AGONY
         constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
         
         // Get pointers.
-        const Real* CORE_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
-        const Real* CORE_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
-        const Real* CORE_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
-        const Real* CORE_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
-        const BodyIndex* CORE_RESTRICT indicesPtr = indices.data();
+        const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
+        const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
+        const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
+        const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = indices.data();
 
         // Note: I tried to get rid of 'gatherLeaf' lambda and copy data directly instead doing it two times, but it was slower. Why? :C
         // I guess we are trading small copy overhead for cache efficiency.

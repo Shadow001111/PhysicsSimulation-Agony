@@ -1,10 +1,10 @@
 #include "SimulationRenderer.h"
 #include "Simulation.h"
 
-#include "Core/TracyProfiler.h"
-#include "Core/Portablity.h"
+#include "EcstasyCore/TracyProfiler.h"
+#include "EcstasyCore/Portablity.h"
 
-#include "Graphics/TextureLoader.h"
+#include "EcstasyGraphics/TextureLoader.h"
 
 namespace PS_AGONY
 {
@@ -168,12 +168,12 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-		const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-		const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
-        const Real* CORE_RESTRICT centerXPtr = bodies.localCenterOfMassX;
-        const Real* CORE_RESTRICT centerYPtr = bodies.localCenterOfMassY;
+		const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
+		const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT centerXPtr = bodies.localCenterOfMassX;
+        const Real* ECSTASY_RESTRICT centerYPtr = bodies.localCenterOfMassY;
 
-        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -206,10 +206,10 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
 
-        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -235,10 +235,10 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* CORE_RESTRICT truePositionXPtr = bodies.truePositionX;
-        const Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.truePositionY;
 
-        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -264,17 +264,17 @@ namespace PS_AGONY
 		circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
-        const Real* CORE_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
-        const Real* CORE_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
-        const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
-        const BodyTextureId* CORE_RESTRICT bodyTextureIdPtr = bodies.textureId;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+        const BodyTextureId* ECSTASY_RESTRICT bodyTextureIdPtr = bodies.textureId;
 
-        const Real* CORE_RESTRICT radiusPtr = circles.radius;
-        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices;
+        const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
+        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices;
 
-        CircleInstanceData* CORE_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -303,18 +303,18 @@ namespace PS_AGONY
         boxResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY;
-        const Real* CORE_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
-        const Real* CORE_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
-        const Real* CORE_RESTRICT rotationPtr = bodies.rotation;
-        const BodyTextureId* CORE_RESTRICT bodyTextureIdPtr = bodies.textureId;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+        const BodyTextureId* ECSTASY_RESTRICT bodyTextureIdPtr = bodies.textureId;
 
-        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
-        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
-        const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices;
+        const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
+        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices;
 
-        BoxInstanceData* CORE_RESTRICT renderDataPtr = boxResources.instanceData.data();
+        BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -344,12 +344,12 @@ namespace PS_AGONY
         aabbResources.instanceData.resize(bodyCount);
 
         // Prepare instance data.
-        const Real* CORE_RESTRICT minXPtr = bodies.aabb.minX;
-        const Real* CORE_RESTRICT minYPtr = bodies.aabb.minY;
-        const Real* CORE_RESTRICT maxXPtr = bodies.aabb.maxX;
-        const Real* CORE_RESTRICT maxYPtr = bodies.aabb.maxY;
+        const Real* ECSTASY_RESTRICT minXPtr = bodies.aabb.minX;
+        const Real* ECSTASY_RESTRICT minYPtr = bodies.aabb.minY;
+        const Real* ECSTASY_RESTRICT maxXPtr = bodies.aabb.maxX;
+        const Real* ECSTASY_RESTRICT maxYPtr = bodies.aabb.maxY;
 
-        AABB* CORE_RESTRICT renderDataPtr = aabbResources.instanceData.data();
+        AABB* ECSTASY_RESTRICT renderDataPtr = aabbResources.instanceData.data();
 
         for (size_t i = 0; i < bodyCount; i++)
         {

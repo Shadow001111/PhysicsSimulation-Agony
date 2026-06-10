@@ -1,7 +1,7 @@
 #include "Simulation.h"
 
-#include "Core/TracyProfiler.h"
-#include "Core/Portablity.h"
+#include "EcstasyCore/TracyProfiler.h"
+#include "EcstasyCore/Portablity.h"
 
 #include <iostream>
 #include <algorithm>
@@ -195,11 +195,11 @@ namespace PS_AGONY
         constexpr Real MAX_GRAB_DISTANCE = 2.0;
         constexpr Real MAX_GRAB_DISTANCE_SQ = MAX_GRAB_DISTANCE * MAX_GRAB_DISTANCE;
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
-        const Real* CORE_RESTRICT truePositionXPtr = bodies.truePositionX.data();
-        const Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY.data();
-        const Real* CORE_RESTRICT massPtr = bodies.mass.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.truePositionX.data();
+        const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT massPtr = bodies.mass.data();
 
         Real minSqDistance = FLT_MAX;
         BodyIndex closestBody;
@@ -299,9 +299,9 @@ namespace PS_AGONY
 
         TRACY_SCOPE_N("Apply external forces");
 
-        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
-        const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
 
         const Vec2 gravityDelta = simulationSettings.gravity * deltaTime;
         const RealSimd gravityDeltaXV{ gravityDelta.x };
@@ -347,10 +347,10 @@ namespace PS_AGONY
 
         // Position.
         {
-            Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-            Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
-            const Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
-            const Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+            Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+            Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+            const Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
+            const Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
 
             // Note: having single loop (x and y interleaved) is a very-little faster than doing two separate passes.
             size_t i = 0;
@@ -377,8 +377,8 @@ namespace PS_AGONY
 
         // Rotation.
         {
-            Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
-            const Real* CORE_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+            Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
+            const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
 
             size_t i = 0;
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
@@ -456,16 +456,16 @@ namespace PS_AGONY
         const size_t count = circles.getCount();
         if (count == 0) return;
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
 
-        const BodyIndex* CORE_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
-        const Real* CORE_RESTRICT radiusPtr = circles.radius.data();
+        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
+        const Real* ECSTASY_RESTRICT radiusPtr = circles.radius.data();
 
-        Real* CORE_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
-        Real* CORE_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
-        Real* CORE_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
-        Real* CORE_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -490,19 +490,19 @@ namespace PS_AGONY
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY.data();
-        const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-        const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
-        const BodyIndex* CORE_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
-        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth.data();
-        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight.data();
+        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
+        const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth.data();
+        const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight.data();
 
-        Real* CORE_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
-        Real* CORE_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
-        Real* CORE_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
-        Real* CORE_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -532,7 +532,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Wrap rotation");
 
-        Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
+        Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
         const size_t bodyCount = bodies.getCount();
         for (size_t i = 0; i < bodyCount; i++)
@@ -545,9 +545,9 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Compute rotation cos/sin");
 
-        const Real* CORE_RESTRICT rotationPtr = bodies.rotation.data();
-        Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-        Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
+        Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
         const size_t bodyCount = bodies.getCount();
         for (size_t i = 0; i < bodyCount; i++)
@@ -564,15 +564,15 @@ namespace PS_AGONY
 
         TRACY_SCOPE_N("Compute true positions");
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
-        const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
-        const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
-        const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-        const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
-        Real* CORE_RESTRICT truePositionXPtr = bodies.truePositionX.data();
-        Real* CORE_RESTRICT truePositionYPtr = bodies.truePositionY.data();
+        Real* ECSTASY_RESTRICT truePositionXPtr = bodies.truePositionX.data();
+        Real* ECSTASY_RESTRICT truePositionYPtr = bodies.truePositionY.data();
 
         const size_t bodyCount = bodies.getCount();
 
@@ -614,20 +614,20 @@ namespace PS_AGONY
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
         // Get pointers.
-        Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
+        Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
 
-        const Real* CORE_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
-        const Real* CORE_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
 
-        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
-		Real* CORE_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
-        const Real* CORE_RESTRICT invMassPtr = bodies.invMass.data();
-		const Real* CORE_RESTRICT invInertiaPtr = bodies.invInertia.data();
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
+		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
+		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies.invInertia.data();
 
-        const MaterialIndex* CORE_RESTRICT materialIndexPtr = bodies.materialIndex.data();
-        const Material* CORE_RESTRICT materialPtr = materials.data();
+        const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies.materialIndex.data();
+        const Material* ECSTASY_RESTRICT materialPtr = materials.data();
 
         // Lambdas.
         auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
@@ -885,10 +885,10 @@ namespace PS_AGONY
         const Vec2 newBodyPosition = mainBodyHolder.getPosition() + mainBodyHolder.bodyOffset;
         const Vec2 newBodyVelocity = mainBodyHolder.getVelocity();
 
-        Real* CORE_RESTRICT positionXPtr = bodies.positionX.data();
-        Real* CORE_RESTRICT positionYPtr = bodies.positionY.data();
-        Real* CORE_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* CORE_RESTRICT velocityYPtr = bodies.velocityY.data();
+        Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
 
         positionXPtr[bodyIndex] = newBodyPosition.x;
         positionYPtr[bodyIndex] = newBodyPosition.y;

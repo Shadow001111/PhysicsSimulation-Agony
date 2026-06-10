@@ -2,17 +2,15 @@
 #include "Scenes.h"
 
 #include "Core/FileLogger.h"
-#include "Core/TracyProfiler.h"
-#include "Core/Random.h"
+#include "EcstasyCore/TracyProfiler.h"
 
 #include "Physics/Simulation.h"
 #include "Physics/SimulationRenderer.h"
 
-#include "Graphics/TextRenderer.h"
+#include "EcstasyGraphics/TextRenderer.h"
 
 #include <iostream>
 #include <iomanip>
-#include <memory>
 
 
 static std::string formatSize(size_t value)
@@ -199,11 +197,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    {
-        Random::setSeed(0);
-
-        loadScene(simulation, 0);
-    }
+    loadScene(simulation, 0);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();

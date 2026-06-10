@@ -1,7 +1,7 @@
 #include "NarrowPhaseCollisionDetector.h"
 
-#include "Core/TracyProfiler.h"
-#include "Core/Portablity.h"
+#include "EcstasyCore/TracyProfiler.h"
+#include "EcstasyCore/Portablity.h"
 
 namespace PS_AGONY
 {
@@ -95,7 +95,7 @@ namespace PS_AGONY
         {
             TRACY_SCOPE_N("Partition pairs");
 
-            const BodyType* CORE_RESTRICT bodyTypePtr = bodies.bodyType;
+            const BodyType* ECSTASY_RESTRICT bodyTypePtr = bodies.bodyType;
 
             for (auto [bodyIndexA, bodyIndexB] : bodyPairs)
             {
@@ -143,11 +143,11 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY;
-        const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
-        const Real* CORE_RESTRICT radiusPtr = circles.radius;
+        const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
         for (auto [indexA, indexB] : circleCirclePairs)
         {
@@ -207,16 +207,16 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-box collision");
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY;
-        const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
+        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
-        const Real* CORE_RESTRICT radiusPtr = circles.radius;
+        const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
-        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
-        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
+        const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
         for (auto [indexA, indexB] : circleBoxPairs)
         {
@@ -341,14 +341,14 @@ namespace PS_AGONY
             B_UP
         };
 
-        const Real* CORE_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* CORE_RESTRICT positionYPtr = bodies.truePositionY;
-        const Real* CORE_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* CORE_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* CORE_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
+        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
-        const Real* CORE_RESTRICT halfWidthPtr = boxes.halfWidth;
-        const Real* CORE_RESTRICT halfHeightPtr = boxes.halfHeight;
+        const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
         for (auto [indexA, indexB] : boxBoxPairs)
         {

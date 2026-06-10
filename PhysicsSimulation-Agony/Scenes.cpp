@@ -1,11 +1,12 @@
 #include "Scenes.h"
-#include "Core/Random.h"
+
+#include "EcstasyCore/Random.h"
 
 #include "Physics/Simulation.h"
 
 #include <cmath>
 
-void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
+void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr float boundary = 12.0f;
     constexpr float thickness = 20.0f;
@@ -39,24 +40,24 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
     }
     for (int i = 0; i < circleCount; i++)
     {
-        const float x = Random::real<float>(-5.0f, 5.0f);
-        const float y = Random::real<float>(-5.0f, 5.0f);
-        const float vx = Random::real<float>(-2.0f, 2.0f);
-        const float vy = Random::real<float>(-2.0f, 2.0f);
-        const float r = Random::real<float>(0.1f, 0.2f);
+        const float x = rvg.real<float>(-5.0f, 5.0f);
+        const float y = rvg.real<float>(-5.0f, 5.0f);
+        const float vx = rvg.real<float>(-2.0f, 2.0f);
+        const float vy = rvg.real<float>(-2.0f, 2.0f);
+        const float r = rvg.real<float>(0.1f, 0.2f);
         const float mass = 3.14f * r * r;
 
         simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
     }
     for (int i = 0; i < boxCount; i++)
     {
-        const float x = Random::real<float>(-5.0f, 5.0f);
-        const float y = Random::real<float>(-5.0f, 5.0f);
-        const float vx = Random::real<float>(-2.0f, 2.0f);
-        const float vy = Random::real<float>(-2.0f, 2.0f);
-        const float rotation = Random::real<float>(0.0f, 6.28f);
-        const float width = Random::real<float>(0.2f, 0.4f);
-        const float height = Random::real<float>(0.2f, 0.4f);
+        const float x = rvg.real<float>(-5.0f, 5.0f);
+        const float y = rvg.real<float>(-5.0f, 5.0f);
+        const float vx = rvg.real<float>(-2.0f, 2.0f);
+        const float vy = rvg.real<float>(-2.0f, 2.0f);
+        const float rotation = rvg.real<float>(0.0f, 6.28f);
+        const float width = rvg.real<float>(0.2f, 0.4f);
+        const float height = rvg.real<float>(0.2f, 0.4f);
         const float mass = width * height;
 
         simulation.createBox({ x, y }, { vx, vy }, rotation, 0.0f, mass, { 0.0f, 0.0f }, material0Index, { width, height });
@@ -68,7 +69,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation)
     }
 }
 
-void load_CleanPerfomanceOfContactsTest(PS_AGONY::Simulation& simulation)
+void load_CleanPerfomanceOfContactsTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr int objectCount = 500;
     constexpr float boxSize = 0.1f;
@@ -101,7 +102,7 @@ void load_CleanPerfomanceOfContactsTest(PS_AGONY::Simulation& simulation)
     }
 }
 
-void load_GaltonBoard(PS_AGONY::Simulation& simulation)
+void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr int ballCount = 1500;
     constexpr float ballRadius = 0.05f;
@@ -224,7 +225,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
 
         for (int i = 0; i < ballCount; i++)
         {
-            float rnd = Random::real<float>(0.0f, 1.0f);
+            float rnd = rvg.real<float>(0.0f, 1.0f);
             rnd = 1.0f - rnd;
             rnd *= rnd;
             rnd = 1.0f - rnd;
@@ -232,14 +233,14 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation)
 
             const float xBorder = funnelOpeningWidth * 0.5f + rnd * rotTan;
 
-            const float x = Random::real<float>(-xBorder, xBorder);
+            const float x = rvg.real<float>(-xBorder, xBorder);
             const float y = spawnBottom + rnd;
             simulation.createCircle({ x, y }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1.0f, { 0.0f, 0.0f }, material0Index, ballRadius);
         }
     }
 }
 
-void load_Planet(PS_AGONY::Simulation& simulation)
+void load_Planet(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr float planetRadius = 40.0f;
 
@@ -264,8 +265,8 @@ void load_Planet(PS_AGONY::Simulation& simulation)
 
     for (int i = 0; i < circleCount; i++)
     {
-        const float angle = Random::real<float>(0.0f, 6.28f);
-        const float r = Random::real<float>(0.1f, 1.0f);
+        const float angle = rvg.real<float>(0.0f, 6.28f);
+        const float r = rvg.real<float>(0.1f, 1.0f);
         const float mass = 3.14f * r * r;
 
         const float dist = planetRadius + r;
@@ -281,7 +282,7 @@ void load_Planet(PS_AGONY::Simulation& simulation)
     }
 }
 
-void load_BalancerSwing(PS_AGONY::Simulation& simulation)
+void load_BalancerSwing(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr float balancerWidth = 30.0f;
     constexpr float balancerThickness = 3.0f;
@@ -326,24 +327,27 @@ void load_BalancerSwing(PS_AGONY::Simulation& simulation)
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
+    Ecstasy::Random::Generator rvg; // Random value generator.
+    rvg.setSeed(0);
+
 	if (scene == 0)
 	{
-		load_ALotOfCollisions(simulation);
+		load_ALotOfCollisions(simulation, rvg);
 	}
 	else if (scene == 1)
 	{
-		load_CleanPerfomanceOfContactsTest(simulation);
+		load_CleanPerfomanceOfContactsTest(simulation, rvg);
 	}
 	else if (scene == 2)
 	{
-		load_GaltonBoard(simulation);
+		load_GaltonBoard(simulation, rvg);
 	}
 	else if (scene == 3)
 	{
-		load_Planet(simulation);
+		load_Planet(simulation, rvg);
 	}
     else if (scene == 4)
     {
-        load_BalancerSwing(simulation);
+        load_BalancerSwing(simulation, rvg);
     }
 }

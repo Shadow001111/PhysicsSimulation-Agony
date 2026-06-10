@@ -1,7 +1,7 @@
 #pragma once
 #include "Task.h"
 
-#include "Core/TracyProfiler.h"
+#include "EcstasyCore/TracyProfiler.h"
 
 #include <atomic>
 #include <cstddef>

@@ -1,7 +1,7 @@
 #pragma once
 #include "Shapes.h"
 
-#include "Core/Simd.h"
+#include "Ecstasy/Simd.h"
 
 template<typename T>
 struct Frustum

@@ -1,7 +1,7 @@
 #pragma once
 #include "FixedArenaAllocator.h"
 
-#include "Core/TracyProfiler.h"
+#include "Ecstasy/TracyProfiler.h"
 
 template<typename T, size_t ArenaBlockSize = 256>
 class FixedArenaObjectPool

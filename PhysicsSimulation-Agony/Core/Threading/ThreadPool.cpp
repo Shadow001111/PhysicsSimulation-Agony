@@ -1,6 +1,6 @@
 #include "ThreadPool.h"
 
-#include "Core/TracyProfiler.h"
+#include "EcstasyCore/TracyProfiler.h"
 
 #include <string>
 
