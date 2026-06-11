@@ -44,9 +44,9 @@ namespace PS_AGONY
 			Real timeScale = 1.0;
 			Vec2 gravity{ 0.0, -9.81 };
 
-			// Baumgarte stabilization. Good when solver runs on maximum, because that thing makes it run on maximum for a single body.
+			// Baumgarte stabilization. No slop.
 			const Real positionCorrectionPercent = 1.0;
-			const Real slop = 0.0;
+			const Real velocityCorrectionStrength = 2500.0;
 		};
 
 		// Bodies SoA.
@@ -112,7 +112,7 @@ namespace PS_AGONY
 
 		void integrate(size_t bodyCount, Real deltaTime);
 
-		void iterativeCollisionSolving();
+		void iterativeCollisionSolving(Real deltaTime);
 
 		void buildBodyAABBs();
 		void buildCircleAABBs();
@@ -124,7 +124,7 @@ namespace PS_AGONY
 
 		void computeTruePositions();
 
-		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void resolveCollisions(Real deltaTime, const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 
 		void applyConstraints();
 

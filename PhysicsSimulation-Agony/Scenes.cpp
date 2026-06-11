@@ -11,7 +11,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 12.0f;
     constexpr float thickness = 20.0f;
 
-    constexpr int circleCount = 800 * 4;
+    constexpr int circleCount = 800 * 5;
     constexpr int boxCount = 0;
 
     PS_AGONY::Material material0 = {
@@ -34,9 +34,10 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
         constexpr float halfThickness = thickness * 0.5f;
         constexpr float length = boundary * 2.0f + 2.0f;
 
-        simulation.createBox({ -(boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
-        simulation.createBox({ (boundary + halfThickness),  0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
+        simulation.createBox({ -(boundary + halfThickness), 0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
+        simulation.createBox({  (boundary + halfThickness), 0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
         simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
+        simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
     }
     for (int i = 0; i < circleCount; i++)
     {
@@ -44,7 +45,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
         const float y = rvg.real<float>(-5.0f, 5.0f);
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
-        const float r = rvg.real<float>(0.1f, 0.2f);
+        const float r = 0.2f;// rvg.real<float>(0.1f, 0.2f);
         const float mass = 3.14f * r * r;
 
         simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);

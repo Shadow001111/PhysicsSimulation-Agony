@@ -400,7 +400,7 @@ namespace PS_AGONY
         integrate(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
-        iterativeCollisionSolving();
+        iterativeCollisionSolving(deltaTime);
     }
 
     void Simulation::postUpdate()
@@ -515,7 +515,7 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::iterativeCollisionSolving()
+    void Simulation::iterativeCollisionSolving(Real deltaTime)
     {
         runtimeDebugData.collisionSolvingIterationsHappened = 0;
 
@@ -554,7 +554,7 @@ namespace PS_AGONY
             if (narrowCollisionData.empty()) break;
 
             // Collision resolution.
-            resolveCollisions(narrowCollisionData);
+            resolveCollisions(deltaTime, narrowCollisionData);
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }
@@ -724,11 +724,13 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Simulation::resolveCollisions(Real deltaTime, const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         TRACY_SCOPE_N("Resolve collisions");
 
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
+
+        const Real velocityCorrectionStrength = simulationSettings.velocityCorrectionStrength * deltaTime;
 
         // Get pointers.
         Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
@@ -971,24 +973,25 @@ namespace PS_AGONY
                 }
             }
 
-            // Position resolution.
-            const Real correction = (depth - simulationSettings.slop) * simulationSettings.positionCorrectionPercent;
-            if (correction <= Real(0)) [[unlikely]]
-            {
-                continue;
-            }
+            // Position and velocity(optional) correction.
+            const Real positionCorrection = depth * simulationSettings.positionCorrectionPercent;
 
 			const Real invTotalInvMass = Real(1) / totalInvMass;
-            const Real correctionA = invMassA * invTotalInvMass * correction;
-            const Real correctionB = invMassB * invTotalInvMass * correction;
+            const Real positionCorrectionA = invMassA * invTotalInvMass * positionCorrection;
+            const Real positionCorrectionB = invMassB * invTotalInvMass * positionCorrection;
 
-            const Vec2 correctionAVec = normal * correctionA;
-            const Vec2 correctionBVec = normal * correctionB;
+            const Vec2 positionCorrectionAVec = normal * positionCorrectionA;
+            const Vec2 positionCorrectionBVec = normal * positionCorrectionB;
 
-            positionXPtr[bodyIndexA] -= correctionAVec.x;
-            positionYPtr[bodyIndexA] -= correctionAVec.y;
-            positionXPtr[bodyIndexB] += correctionBVec.x;
-            positionYPtr[bodyIndexB] += correctionBVec.y;
+            positionXPtr[bodyIndexA] -= positionCorrectionAVec.x;
+            positionYPtr[bodyIndexA] -= positionCorrectionAVec.y;
+            positionXPtr[bodyIndexB] += positionCorrectionBVec.x;
+            positionYPtr[bodyIndexB] += positionCorrectionBVec.y;
+
+            velocityXPtr[bodyIndexA] -= positionCorrectionAVec.x * velocityCorrectionStrength;
+            velocityYPtr[bodyIndexA] -= positionCorrectionAVec.y * velocityCorrectionStrength;
+            velocityXPtr[bodyIndexB] += positionCorrectionBVec.x * velocityCorrectionStrength;
+            velocityYPtr[bodyIndexB] += positionCorrectionBVec.y * velocityCorrectionStrength;
         }
     }
 
