@@ -596,11 +596,6 @@ namespace PS_AGONY
             const BvhNode& nodeA = nodes[nodePair.a];
             const BvhNode& nodeB = nodes[nodePair.b];
 
-            // Prune entire subtree pair if their bounding boxes don't overlap.
-            if (nodeA.minX >= nodeB.maxX || nodeA.maxX <= nodeB.minX ||
-                nodeA.minY >= nodeB.maxY || nodeA.maxY <= nodeB.minY)
-                continue;
-
             const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
             const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
 
@@ -703,8 +698,16 @@ namespace PS_AGONY
                 const uint32_t L = nodeA.leftChildIndex;
                 const uint32_t R = L + 1;
                 stack[stackSize++] = { R, R };
-                stack[stackSize++] = { L, R };
                 stack[stackSize++] = { L, L };
+
+                // Prune L and R nodes.
+                const BvhNode& nodeL = nodes[L];
+                const BvhNode& nodeR = nodes[R];
+                if (nodeL.minX < nodeR.maxX && nodeL.maxX > nodeR.minX &&
+                    nodeL.minY < nodeR.maxY && nodeL.maxY > nodeR.minY)
+                {
+                    stack[stackSize++] = { L, R };
+                }
             }
             else
             {
@@ -720,15 +723,45 @@ namespace PS_AGONY
                 const bool splitB = aLeaf || (!bLeaf && (heuristicB > heuristicA));
                 if (splitB)
                 {
-                    // Split node B.
-                    stack[stackSize++] = { nodePair.a, nodeB.leftChildIndex + 1 };
-                    stack[stackSize++] = { nodePair.a, nodeB.leftChildIndex };
+                    // Split node B: check overlap with each child before pushing.
+                    const uint32_t leftChildB  = nodeB.leftChildIndex;
+                    const uint32_t rightChildB = leftChildB + 1;
+
+                    const BvhNode& leftNodeB  = nodes[leftChildB];
+                    const BvhNode& rightNodeB = nodes[rightChildB];
+
+                    if (nodeA.minX < leftNodeB.maxX && nodeA.maxX > leftNodeB.minX &&
+                        nodeA.minY < leftNodeB.maxY && nodeA.maxY > leftNodeB.minY)
+                    {
+                        stack[stackSize++] = { nodePair.a, leftChildB };
+                    }
+
+                    if (nodeA.minX < rightNodeB.maxX && nodeA.maxX > rightNodeB.minX &&
+                        nodeA.minY < rightNodeB.maxY && nodeA.maxY > rightNodeB.minY)
+                    {
+                        stack[stackSize++] = { nodePair.a, rightChildB };
+                    }
                 }
                 else
                 {
-                    // Split node A.
-                    stack[stackSize++] = { nodeA.leftChildIndex + 1, nodePair.b };
-                    stack[stackSize++] = { nodeA.leftChildIndex,  nodePair.b };
+                    // Split node A: check overlap with each child before pushing.
+                    const uint32_t leftChildA  = nodeA.leftChildIndex;
+                    const uint32_t rightChildA = leftChildA + 1;
+
+                    const BvhNode& leftNodeA  = nodes[leftChildA];
+                    const BvhNode& rightNodeA = nodes[rightChildA];
+
+                    if (leftNodeA.minX < nodeB.maxX && leftNodeA.maxX > nodeB.minX &&
+                        leftNodeA.minY < nodeB.maxY && leftNodeA.maxY > nodeB.minY)
+                    {
+                        stack[stackSize++] = { leftChildA, nodePair.b };
+                    }
+
+                    if (rightNodeA.minX < nodeB.maxX && rightNodeA.maxX > nodeB.minX &&
+                        rightNodeA.minY < nodeB.maxY && rightNodeA.maxY > nodeB.minY)
+                    {
+                        stack[stackSize++] = { rightChildA, nodePair.b };
+                    }
                 }
             }
         }
