@@ -692,7 +692,7 @@ namespace PS_AGONY
                     }
                 }
             }
-            else if (nodePair.a == nodePair.b)
+            else if (nodePair.a == nodePair.b) [[unlikely]] // 7%.
             {
                 // Self-query internal node.
                 const uint32_t L = nodeA.leftChildIndex;
@@ -709,7 +709,7 @@ namespace PS_AGONY
                     stack[stackSize++] = { L, R };
                 }
             }
-            else
+            else [[likely]] // 50%.
             {
                 const uint32_t bodyCountA = nodeA.end - nodeA.start;
                 const uint32_t bodyCountB = nodeB.end - nodeB.start;
