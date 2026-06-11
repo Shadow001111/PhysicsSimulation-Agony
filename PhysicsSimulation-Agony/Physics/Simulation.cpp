@@ -256,7 +256,7 @@ namespace PS_AGONY
             std::swap(bodies.textureId[bodyIndex], bodies.textureId.back());
 
             // Update the shape entry that refers to the swapped body (if any).
-            const BodyIndex swappedBodyIndex = bodyCount - 1;
+            //const BodyIndex swappedBodyIndex = bodyCount - 1;
             const BodyType swappedType = bodies.bodyType[bodyIndex];
             const BodyIndex swappedShapeIdx = bodies.shapeIndex[bodyIndex];
             if (swappedType == BodyType::Circle)

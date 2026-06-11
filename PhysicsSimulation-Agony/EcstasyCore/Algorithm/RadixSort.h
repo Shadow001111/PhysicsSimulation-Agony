@@ -5,6 +5,7 @@
 #include <cstring>
 #include <type_traits>
 
+// TODO: It works, but namings of arrays are swapped!
 namespace Ecstasy::Algorithm
 {
     template<

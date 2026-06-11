@@ -36,8 +36,8 @@ namespace PS_AGONY
 		struct SimulationSettings
 		{
 			//
-			Real updateInterval = 1 / 300.0;
-			uint32_t collisionSolvingIterations = 12;
+			Real updateInterval = 1 / 300.0 / 4.0;
+			uint32_t collisionSolvingIterations = 1;// 12;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.

@@ -11,8 +11,8 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 12.0f;
     constexpr float thickness = 20.0f;
 
-    constexpr int circleCount = 800;
-    constexpr int boxCount = 800;
+    constexpr int circleCount = 800 * 4;
+    constexpr int boxCount = 0;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -65,7 +65,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
 
     {
         constexpr float radius = 4.0f;
-        simulation.createCircle({ -boundary, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 20000.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
+        simulation.createCircle({ -boundary, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 50.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
     }
 }
 

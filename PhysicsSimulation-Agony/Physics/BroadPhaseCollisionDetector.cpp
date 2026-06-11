@@ -83,6 +83,8 @@ namespace PS_AGONY
         return arr;
     }
 
+
+
     void BroadPhaseCollisionDetector::setDataViewers(const AABBSoAViewer& aabbs)
     {
         bodiesAABB = aabbs;
@@ -275,6 +277,9 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::sortBodyIndicesByMortonCodes(uint32_t bodyCount)
     {
+        auto& temp = bvhFunctionResources.bodyIndexVector2;
+        temp.resize(bodyCount);
+
         TRACY_SCOPE_N("Sort Morton");
 
         constexpr uint32_t RADIX_BITS = 8;
@@ -283,7 +288,7 @@ namespace PS_AGONY
 
         const MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
-        std::array<uint32_t, RADIX_SIZE> count;
+        alignas(64) std::array<uint32_t, RADIX_SIZE> count;
 
         auto radixPass = [&](uint32_t shift, const BodyIndex* ECSTASY_RESTRICT src, BodyIndex* ECSTASY_RESTRICT dst)
             {
@@ -315,16 +320,12 @@ namespace PS_AGONY
                 }
             };
 
-        //
-        auto& temp = bvhFunctionResources.bodyIndexVector2;
-        temp.resize(bodyCount);
-
         {
             BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
             BodyIndex* ECSTASY_RESTRICT indexTempPtr = temp.data();
 
-            radixPass(0, indexPtr, indexTempPtr);
-            radixPass(8, indexTempPtr, indexPtr);
+            radixPass(0,  indexPtr, indexTempPtr);
+            radixPass(8,  indexTempPtr, indexPtr);
             radixPass(16, indexPtr, indexTempPtr);
             radixPass(24, indexTempPtr, indexPtr);
         }

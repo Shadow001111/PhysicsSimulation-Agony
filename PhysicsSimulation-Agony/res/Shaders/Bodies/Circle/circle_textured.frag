@@ -9,6 +9,7 @@ uniform sampler2D uHardCodedTexture;
 out vec4 fragColor;
 
 const float TILING = 1.0;
+const float SHADING_INFLUENCE = 0.5;
 
 void main()
 {
@@ -32,5 +33,11 @@ void main()
         int checker = int(mod(float(sum), 2.0));
         finalColor = color * (0.8 + 0.2 * float(checker));
     }
+
+    float shading = 1.0 - dist * dist;
+    shading = (1.0 - SHADING_INFLUENCE) + shading * SHADING_INFLUENCE;
+
+    finalColor *= shading;
+
     fragColor = vec4(finalColor, 1.0);
 }
