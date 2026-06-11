@@ -582,6 +582,16 @@ namespace PS_AGONY
                 std::memcpy(out.maxY, leafMaxYPtr + srcIndex, COPY_SIZE);
             };
 
+        // Local buffer to avoid many pushes.
+        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
+        BodyPair pushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+        uint32_t pushBufferSize = 0;
+
+        auto flushPushBuffer = [&] {
+            collisionData.insert(collisionData.end(), pushBuffer, pushBuffer + pushBufferSize);
+            pushBufferSize = 0;
+            };
+
         // Dual-node traversal stack.
         constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
         BvhNodePair stack[MAX_STACK_CAPACITY];
@@ -643,9 +653,11 @@ namespace PS_AGONY
                         {
                             const uint32_t lane = std::countr_zero(mask);
                             mask &= mask - 1; // Clear lowest set bit.
-                            collisionData.emplace_back(
+                            pushBuffer[pushBufferSize++] = {
                                 indicesPtr[nodeA.start + i],
-                                indicesPtr[nodeA.start + lane]);
+                                indicesPtr[nodeA.start + lane]
+                            };
+                            if (pushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flushPushBuffer();
                         }
                     }
                 }
@@ -685,9 +697,11 @@ namespace PS_AGONY
                         {
                             const uint32_t lane = std::countr_zero(mask);
                             mask &= mask - 1; // Clear lowest set bit.
-                            collisionData.emplace_back(
+                            pushBuffer[pushBufferSize++] = {
                                 indicesPtr[nodeA.start + i],
-                                indicesPtr[nodeB.start + lane]);
+                                indicesPtr[nodeB.start + lane]
+                            };
+                            if (pushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flushPushBuffer();
                         }
                     }
                 }
@@ -764,6 +778,10 @@ namespace PS_AGONY
                     }
                 }
             }
+        }
+        if (pushBufferSize > 0)
+        {
+            flushPushBuffer();
         }
     }
 }
