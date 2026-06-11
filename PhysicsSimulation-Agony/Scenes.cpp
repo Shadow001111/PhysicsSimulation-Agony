@@ -8,11 +8,11 @@
 
 void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
-    constexpr float boundary = 12.0f;
+    constexpr float boundary = 10.0f;
     constexpr float thickness = 20.0f;
 
-    constexpr int circleCount = 800 * 5;
-    constexpr int boxCount = 0;
+    constexpr int circleCount = 1500;
+    constexpr int boxCount = 1500;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -29,6 +29,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
     PS_AGONY::MaterialIndex material1Index = simulation.createMaterial(material1);
 
+    constexpr float spawnBoundary = boundary - 1.0f;
     {
 
         constexpr float halfThickness = thickness * 0.5f;
@@ -41,19 +42,19 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     }
     for (int i = 0; i < circleCount; i++)
     {
-        const float x = rvg.real<float>(-5.0f, 5.0f);
-        const float y = rvg.real<float>(-5.0f, 5.0f);
+        const float x = rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float y = rvg.real<float>(-spawnBoundary, spawnBoundary);
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
-        const float r = 0.2f;// rvg.real<float>(0.1f, 0.2f);
+        const float r = 0.2f;//rvg.real<float>(0.1f, 0.2f);
         const float mass = 3.14f * r * r;
 
         simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
     }
     for (int i = 0; i < boxCount; i++)
     {
-        const float x = rvg.real<float>(-5.0f, 5.0f);
-        const float y = rvg.real<float>(-5.0f, 5.0f);
+        const float x = rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float y = rvg.real<float>(-spawnBoundary, spawnBoundary);
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
         const float rotation = rvg.real<float>(0.0f, 6.28f);
@@ -119,7 +120,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generat
     constexpr float wallThickness = 0.1f;
     constexpr float wallHeight = binHeight + 8.0f;
 
-    constexpr float funnelOpeningWidth = ballRadius * 4.0f * 1.5f;
+    constexpr float funnelOpeningWidth = ballRadius * 5.0f * 1.5f;
     constexpr float funnelRotation = 0.9f;
     constexpr float funnelLength = 10.0f;
     constexpr float funnelWidth = 0.05f;

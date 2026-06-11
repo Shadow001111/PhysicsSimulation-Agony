@@ -15,6 +15,7 @@ namespace PS_AGONY
 {
 	class Simulation
 	{
+		static constexpr bool ENABLE_VELOCITY_CORRECTION = true;
 	public:
 		struct DebugData
 		{
@@ -36,8 +37,8 @@ namespace PS_AGONY
 		struct SimulationSettings
 		{
 			//
-			Real updateInterval = 1 / 300.0 / 4.0;
-			uint32_t collisionSolvingIterations = 1;// 12;
+			Real updateInterval = 1 / 300.0;
+			uint32_t collisionSolvingIterations = 3;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.
