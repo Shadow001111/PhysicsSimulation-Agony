@@ -715,16 +715,10 @@ namespace PS_AGONY
             }
             else [[likely]] // 50%.
             {
-                const uint32_t bodyCountA = nodeA.end - nodeA.start;
-                const uint32_t bodyCountB = nodeB.end - nodeB.start;
-
                 const Real nodeAreaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
                 const Real nodeAreaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
 
-                const auto heuristicA = bodyCountA * nodeAreaA;
-                const auto heuristicB = bodyCountB * nodeAreaB;
-
-                const bool splitB = aLeaf || (!bLeaf && (heuristicB > heuristicA));
+                const bool splitB = aLeaf || (!bLeaf && (nodeAreaB > nodeAreaA));
                 if (splitB)
                 {
                     // Split node B: check overlap with each child before pushing.
