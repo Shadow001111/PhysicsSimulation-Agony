@@ -9,6 +9,7 @@ namespace PS_AGONY
 	{
 		using MortonCode = uint32_t;
 
+		// Note: Splitting on cold and hot didn't help.
 		struct BvhNode
 		{
 			// Max KD_LEAF_SIZE is 32. Larger size will fuck up bitwise mask.
@@ -46,15 +47,15 @@ namespace PS_AGONY
 
 		struct BvhFunctionResources
 		{
-			std::vector<BvhNode> nodeVector;
+			std::vector<BvhNode> nodes;
 
 			SimdAlignedVector<Real> transformedCentroidX;
 			SimdAlignedVector<Real> transformedCentroidY;
 
 			SimdAlignedVector<MortonCode> mortonCodes;
 
-			std::vector<BodyIndex> bodyIndexVector1;
-			std::vector<BodyIndex> bodyIndexVector2;
+			std::vector<BodyIndex> mainBodyIndices;
+			std::vector<BodyIndex> tempBodyIndicesToSort;
 		};
 
 		struct LeafBodyAABBSoA
@@ -101,17 +102,11 @@ namespace PS_AGONY
 
 		void sortBodyIndicesByMortonCodes(uint32_t bodyCount);
 
-		void buildBvhTree(
-			std::vector<BvhNode>& nodes,
-			std::vector<BodyIndex>& indices,
-			const uint32_t bodyCount
-		);
+		void buildBvhTree(const uint32_t bodyCount);
 
 		void refitBvhNodeAABBS();
 
-		void queryBvhPairs(
-			const std::vector<BvhNode>& nodes,
-			const std::vector<BodyIndex>& indices);
+		void queryBvhPairs();
 	};
 }
 

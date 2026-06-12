@@ -101,28 +101,25 @@ namespace PS_AGONY
 
         collisionData.reserve(bodyCount);
 
+        if (rebuild)
         {
-            auto& nodes = bvhFunctionResources.nodeVector;
-            auto& indices = bvhFunctionResources.bodyIndexVector1;
+            auto& nodes = bvhFunctionResources.nodes;
+            auto& indices = bvhFunctionResources.mainBodyIndices;
+            nodes.clear();
+            nodes.reserve(2 * bodyCount);
 
-            if (rebuild)
-            {
-                nodes.clear();
-                nodes.reserve(2 * bodyCount);
+            indices.resize(bodyCount);
+            std::iota(indices.begin(), indices.end(), 0);
 
-                indices.resize(bodyCount);
-                std::iota(indices.begin(), indices.end(), 0);
-
-                buildBvhTree(nodes, indices, bodyCount);
-            }
-            else
-            {
-                TRACY_SCOPE_N("Refit tree");
-
-                refitBvhNodeAABBS();
-            }
-            queryBvhPairs(nodes, indices);
+            buildBvhTree(bodyCount);
         }
+        else
+        {
+            TRACY_SCOPE_N("Refit tree");
+
+            refitBvhNodeAABBS();
+        }
+        queryBvhPairs();
 
         return collisionData;
     }
@@ -130,7 +127,7 @@ namespace PS_AGONY
     void BroadPhaseCollisionDetector::fetchAABBs(std::vector<AABB>& outAABBs) const
     {
         // Collect BVH nodes (leafs) AABBs from previous time.
-		const auto& nodes = bvhFunctionResources.nodeVector;
+		const auto& nodes = bvhFunctionResources.nodes;
 		outAABBs.reserve(outAABBs.size() + nodes.size());
         for (const auto& node : nodes)
         {
@@ -145,15 +142,15 @@ namespace PS_AGONY
     {
         size_t total = 0;
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodeVector);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodes);
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidX);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidY);
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector1);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.bodyIndexVector2);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mainBodyIndices);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.tempBodyIndicesToSort);
 
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
@@ -239,10 +236,9 @@ namespace PS_AGONY
     {
         using TRealSimd = Simd<TReal>;
 
-        auto& mortonCodes = bvhFunctionResources.mortonCodes;
-        mortonCodes.resize(bodyCount);
+        bvhFunctionResources.mortonCodes.resize(bodyCount);
 
-        MortonCode* ECSTASY_RESTRICT mortonCodePtr = mortonCodes.data();
+        MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
         const TReal* ECSTASY_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
         const TReal* ECSTASY_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
@@ -277,10 +273,9 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::sortBodyIndicesByMortonCodes(uint32_t bodyCount)
     {
-        auto& temp = bvhFunctionResources.bodyIndexVector2;
-        temp.resize(bodyCount);
+        bvhFunctionResources.tempBodyIndicesToSort.resize(bodyCount);
 
-        TRACY_SCOPE_N("Sort Morton");
+        TRACY_SCOPE_N("Sort indices by morton codes");
 
         constexpr uint32_t RADIX_BITS = 8;
         constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
@@ -321,8 +316,8 @@ namespace PS_AGONY
             };
 
         {
-            BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.bodyIndexVector1.data();
-            BodyIndex* ECSTASY_RESTRICT indexTempPtr = temp.data();
+            BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
+            BodyIndex* ECSTASY_RESTRICT indexTempPtr = bvhFunctionResources.tempBodyIndicesToSort.data();
 
             radixPass(0,  indexPtr, indexTempPtr);
             radixPass(8,  indexTempPtr, indexPtr);
@@ -331,11 +326,7 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::buildBvhTree(
-        std::vector<BvhNode>& nodes,
-        std::vector<BodyIndex>& indices,
-        const uint32_t bodyCount
-    )
+    void BroadPhaseCollisionDetector::buildBvhTree(const uint32_t bodyCount)
     {
         TRACY_SCOPE_N("Build tree");
 
@@ -380,7 +371,7 @@ namespace PS_AGONY
         // Sort indices by morton code.
         sortBodyIndicesByMortonCodes(bodyCount);
         const MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = indices.data();
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         // Top-down tree build with Morton-code binary split.
         // For a node covering sorted range [nodeStart, nodeEnd):
@@ -403,13 +394,13 @@ namespace PS_AGONY
             std::array<BuildTask, MAX_STACK_CAPACITY> stack;
             uint32_t stackSize = 0;
 
-            nodes.emplace_back(0u, bodyCount);
+            bvhFunctionResources.nodes.emplace_back(0u, bodyCount);
             stack[stackSize++] = { 0u };
 
             while (stackSize > 0)
             {
                 const BuildTask task = stack[--stackSize];
-                BvhNode& node = nodes[task.nodeIdx];
+                BvhNode& node = bvhFunctionResources.nodes[task.nodeIdx];
 
                 const uint32_t nodeStart = node.start;
                 const uint32_t nodeEnd = node.end;
@@ -455,14 +446,14 @@ namespace PS_AGONY
                     mid = std::clamp(lo, nodeStart + 1u, nodeEnd - 1u);
                 }
 
-                const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
+                const uint32_t leftIdx = static_cast<uint32_t>(bvhFunctionResources.nodes.size());
                 node.leftChildIndex = leftIdx;
 
                 stack[stackSize++] = { leftIdx + 1 };
                 stack[stackSize++] = { leftIdx };
 
-                nodes.emplace_back(nodeStart, mid);
-                nodes.emplace_back(mid, nodeEnd);
+                bvhFunctionResources.nodes.emplace_back(nodeStart, mid);
+                bvhFunctionResources.nodes.emplace_back(mid, nodeEnd);
             }
         }
         {
@@ -479,18 +470,17 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::refitBvhNodeAABBS()
     {
-        auto& nodes = bvhFunctionResources.nodeVector;
-        const auto& indices = bvhFunctionResources.bodyIndexVector1;
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         const Real* ECSTASY_RESTRICT bodyMinXPtr = bodiesAABB.minX;
         const Real* ECSTASY_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
         const Real* ECSTASY_RESTRICT bodyMinYPtr = bodiesAABB.minY;
         const Real* ECSTASY_RESTRICT bodyMaxYPtr = bodiesAABB.maxY;
 
-        const size_t nodeCount = nodes.size();
+        const size_t nodeCount = bvhFunctionResources.nodes.size();
         for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
         {
-            BvhNode& node = nodes[idx];
+            BvhNode& node = bvhFunctionResources.nodes[idx];
             if (node.leftChildIndex == BvhNode::INVALID_INDEX)
             {
                 // Leaf: compute AABB from its bodies.
@@ -513,7 +503,7 @@ namespace PS_AGONY
 
                 for (uint32_t leafBodyIndex = 0; leafBodyIndex < nodeRange; leafBodyIndex++)
                 {
-                    const BodyIndex bodyIndex = indices[nodeStart + leafBodyIndex];
+                    const BodyIndex bodyIndex = indicesPtr[nodeStart + leafBodyIndex];
 
                     const Real bodyMinX = bodyMinXPtr[bodyIndex];
                     const Real bodyMaxX = bodyMaxXPtr[bodyIndex];
@@ -543,8 +533,8 @@ namespace PS_AGONY
             else
             {
                 // Not leaf: compute AABB from its children.
-                const BvhNode& left  = nodes[node.leftChildIndex];
-                const BvhNode& right = nodes[node.leftChildIndex + 1];
+                const BvhNode& left  = bvhFunctionResources.nodes[node.leftChildIndex];
+                const BvhNode& right = bvhFunctionResources.nodes[node.leftChildIndex + 1];
                 node.minX = std::fmin(left.minX, right.minX);
                 node.maxX = std::fmax(left.maxX, right.maxX);
                 node.minY = std::fmin(left.minY, right.minY);
@@ -553,7 +543,7 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::queryBvhPairs(const std::vector<BvhNode>& nodes, const std::vector<BodyIndex>& indices)
+    void BroadPhaseCollisionDetector::queryBvhPairs()
     {
         TRACY_SCOPE_N("Query pairs");
 
@@ -567,7 +557,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
         const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
         const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = indices.data();
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         // Note: I tried to get rid of 'gatherLeaf' lambda and copy data directly instead doing it two times, but it was slower. Why? :C
         // I guess we are trading small copy overhead for cache efficiency.
@@ -603,8 +593,8 @@ namespace PS_AGONY
         {
             const BvhNodePair nodePair = stack[--stackSize];
 
-            const BvhNode& nodeA = nodes[nodePair.a];
-            const BvhNode& nodeB = nodes[nodePair.b];
+            const BvhNode& nodeA = bvhFunctionResources.nodes[nodePair.a];
+            const BvhNode& nodeB = bvhFunctionResources.nodes[nodePair.b];
 
             const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
             const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
@@ -715,8 +705,8 @@ namespace PS_AGONY
                 stack[stackSize++] = { L, L };
 
                 // Prune L and R nodes.
-                const BvhNode& nodeL = nodes[L];
-                const BvhNode& nodeR = nodes[R];
+                const BvhNode& nodeL = bvhFunctionResources.nodes[L];
+                const BvhNode& nodeR = bvhFunctionResources.nodes[R];
                 if (nodeL.minX < nodeR.maxX && nodeL.maxX > nodeR.minX &&
                     nodeL.minY < nodeR.maxY && nodeL.maxY > nodeR.minY)
                 {
@@ -741,8 +731,8 @@ namespace PS_AGONY
                     const uint32_t leftChildB  = nodeB.leftChildIndex;
                     const uint32_t rightChildB = leftChildB + 1;
 
-                    const BvhNode& leftNodeB  = nodes[leftChildB];
-                    const BvhNode& rightNodeB = nodes[rightChildB];
+                    const BvhNode& leftNodeB  = bvhFunctionResources.nodes[leftChildB];
+                    const BvhNode& rightNodeB = bvhFunctionResources.nodes[rightChildB];
 
                     if (nodeA.minX < leftNodeB.maxX && nodeA.maxX > leftNodeB.minX &&
                         nodeA.minY < leftNodeB.maxY && nodeA.maxY > leftNodeB.minY)
@@ -762,8 +752,8 @@ namespace PS_AGONY
                     const uint32_t leftChildA  = nodeA.leftChildIndex;
                     const uint32_t rightChildA = leftChildA + 1;
 
-                    const BvhNode& leftNodeA  = nodes[leftChildA];
-                    const BvhNode& rightNodeA = nodes[rightChildA];
+                    const BvhNode& leftNodeA  = bvhFunctionResources.nodes[leftChildA];
+                    const BvhNode& rightNodeA = bvhFunctionResources.nodes[rightChildA];
 
                     if (leftNodeA.minX < nodeB.maxX && leftNodeA.maxX > nodeB.minX &&
                         leftNodeA.minY < nodeB.maxY && leftNodeA.maxY > nodeB.minY)
