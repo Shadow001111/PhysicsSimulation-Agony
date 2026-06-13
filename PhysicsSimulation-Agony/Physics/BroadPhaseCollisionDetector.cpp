@@ -708,7 +708,6 @@ namespace PS_AGONY
         // Combined step 3 and 4.
         struct LeafPairJob
         {
-            enum Type { SELF, CROSS } type;
             union
             {
                 uint32_t selfNode; // For SELF.
@@ -720,13 +719,14 @@ namespace PS_AGONY
         jobs.clear();
         jobs.reserve(sameLeafNode.size() + leafNodePairs.size());
 
+        size_t crossJobStartIndex;
         {
-            // TODO: Just store single index, at which jobs start to become cross.
             TRACY_SCOPE_N("Collect jobs");
             for (uint32_t nodeIdx : sameLeafNode)
-                jobs.push_back({ .type = LeafPairJob::SELF, .selfNode = nodeIdx });
+                jobs.push_back({ .selfNode = nodeIdx });
+            crossJobStartIndex = jobs.size();
             for (const auto& pair : leafNodePairs)
-                jobs.push_back({ .type = LeafPairJob::CROSS, .cross = { pair.a, pair.b } });
+                jobs.push_back({ .cross = { pair.a, pair.b } });
         }
 
         // Prepare chunked collision data.
@@ -771,7 +771,7 @@ namespace PS_AGONY
                     {
                         const LeafPairJob& job = jobs[jobIdx];
 
-                        if (job.type == LeafPairJob::SELF)
+                        if (jobIdx < crossJobStartIndex)
                         {
                             // ----- Self intersection (same leaf) -----
                             const uint32_t nodeIdx = job.selfNode;
