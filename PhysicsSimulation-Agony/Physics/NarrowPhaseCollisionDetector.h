@@ -33,10 +33,25 @@ namespace PS_AGONY
 	{
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
-		SymmetricMatrix<std::vector<BodyPair>*, BODY_TYPE_COUNT> bodyPairVectorMatrix;
-		std::vector<BodyPair> circleCirclePairs;
-		std::vector<BodyPair> circleBoxPairs;
-		std::vector<BodyPair> boxBoxPairs;
+		struct alignas(64) InputOutputCollisionData
+		{
+			std::vector<BodyPair> bodyPairs;
+			std::vector<BodyCollisionData> collisionData;
+
+			void clear()
+			{
+				bodyPairs.clear();
+				collisionData.clear();
+			}
+
+			void reserve(size_t newCapacity)
+			{
+				bodyPairs.reserve(newCapacity);
+				collisionData.reserve(newCapacity);
+			}
+		};
+
+		SymmetricMatrix<InputOutputCollisionData, BODY_TYPE_COUNT> bodyPairVectorMatrix;
 
 		std::vector<BodyCollisionData> allCollisionData;
 

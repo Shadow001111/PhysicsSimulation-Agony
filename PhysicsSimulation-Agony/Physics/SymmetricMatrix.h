@@ -26,4 +26,7 @@ public:
     {
         return mData[index(r, c)];
     }
+
+    auto& getDirectAccess() noexcept { return mData; }
+    const auto& getDirectAccess() const noexcept { return mData; }
 };

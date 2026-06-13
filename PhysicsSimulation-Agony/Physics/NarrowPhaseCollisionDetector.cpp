@@ -1,4 +1,5 @@
 #include "NarrowPhaseCollisionDetector.h"
+#include "Threading.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -47,19 +48,7 @@ namespace PS_AGONY
 
 
     NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
-    {
-        // Circle.
-        bodyPairVectorMatrix(0, 0) = &circleCirclePairs;
-        bodyPairVectorMatrix(0, 1) = &circleBoxPairs;
-        //bodyPairVectorMatrix(0, 2) = &circlePolygonPairs;
-
-        // Box.
-        bodyPairVectorMatrix(1, 1) = &boxBoxPairs;
-        //bodyPairVectorMatrix(1, 2) = &boxPolygonPairs;
-
-        // Polygon.
-        //bodyPairVectorMatrix(2, 2) = &polygonPolygonPairs;
-    }
+    {}
 
     void NarrowPhaseCollisionDetector::setDataViewers(
         const BodySoAViewer& bodies,
@@ -78,18 +67,18 @@ namespace PS_AGONY
 
         // Prepare.
         allCollisionData.clear();
-        circleCirclePairs.clear();
-        circleBoxPairs.clear();
-        boxBoxPairs.clear();
 
         const size_t bodyPairCount = bodyPairs.size();
         if (bodyPairCount == 0) return allCollisionData; // No pairs to check.
 
         // Reserve.
         allCollisionData.reserve(bodyPairCount);
-        circleCirclePairs.reserve(bodyPairCount);
-        circleBoxPairs.reserve(bodyPairCount);
-        boxBoxPairs.reserve(bodyPairCount);
+        auto& matrixDirectAccess = bodyPairVectorMatrix.getDirectAccess();
+        for (auto& io : matrixDirectAccess)
+        {
+            io.clear();
+            io.reserve(bodyPairCount);
+        }
 
         // Partition body pairs by type.
         {
@@ -114,14 +103,27 @@ namespace PS_AGONY
                     std::swap(bodyTypeA, bodyTypeB);
                 }
 
-                bodyPairVectorMatrix(static_cast<size_t>(bodyTypeA), static_cast<size_t>(bodyTypeB))->emplace_back(bodyIndexA, bodyIndexB);
+                bodyPairVectorMatrix(static_cast<size_t>(bodyTypeA), static_cast<size_t>(bodyTypeB)).bodyPairs.emplace_back(bodyIndexA, bodyIndexB);
             }
         }
 
         // Process each pair type separately.
+        auto& threadPool = getGlobalThreadPool();
+
         collisionCircleCircle();
         collisionCircleBox();
         collisionBoxBox();
+
+        // Combine data.
+        {
+            TRACY_SCOPE_N("Combine data");
+
+            for (auto& io : matrixDirectAccess)
+            {
+                auto& data = io.collisionData;
+                allCollisionData.insert(allCollisionData.end(), data.begin(), data.end());
+            }
+        }
 
 		return allCollisionData;
 	}
@@ -132,9 +134,12 @@ namespace PS_AGONY
 
         total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
 
-        total += PS_AGONY::getVectorMemoryUsage(circleCirclePairs);
-        total += PS_AGONY::getVectorMemoryUsage(circleBoxPairs);
-        total += PS_AGONY::getVectorMemoryUsage(boxBoxPairs);
+        const auto& matrixDirectAccess = bodyPairVectorMatrix.getDirectAccess();
+        for (const auto& io : matrixDirectAccess)
+        {
+            total += PS_AGONY::getVectorMemoryUsage(io.bodyPairs);
+            total += PS_AGONY::getVectorMemoryUsage(io.collisionData);
+        }
 
         return total;
     }
@@ -149,7 +154,9 @@ namespace PS_AGONY
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
-        for (auto [indexA, indexB] : circleCirclePairs)
+        auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
+
+        for (auto [indexA, indexB] : io.bodyPairs)
         {
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -192,7 +199,7 @@ namespace PS_AGONY
             }
 
             // Result.
-            allCollisionData.emplace_back(
+            io.collisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -218,7 +225,9 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        for (auto [indexA, indexB] : circleBoxPairs)
+        auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
+
+        for (auto [indexA, indexB] : io.bodyPairs)
         {
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -275,7 +284,7 @@ namespace PS_AGONY
 
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-                allCollisionData.emplace_back(
+                io.collisionData.emplace_back(
                     indexA, indexB,
                     normal,
                     depth,
@@ -314,7 +323,7 @@ namespace PS_AGONY
 
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-            allCollisionData.emplace_back(
+            io.collisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -350,7 +359,9 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        for (auto [indexA, indexB] : boxBoxPairs)
+        auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
+
+        for (auto [indexA, indexB] : io.bodyPairs)
         {
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -582,7 +593,7 @@ namespace PS_AGONY
             if (contactCount == 0) continue;
 
             // Store final collision data.
-            allCollisionData.emplace_back(
+            io.collisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,

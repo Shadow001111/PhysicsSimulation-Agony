@@ -402,7 +402,7 @@ namespace PS_AGONY
 
         applyExternalForces(bodyCount, deltaTime);
         applyConstraints();
-        integrate(bodyCount, deltaTime);
+        //integrate(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
         iterativeCollisionSolving(deltaTime);
@@ -559,7 +559,7 @@ namespace PS_AGONY
             if (narrowCollisionData.empty()) break;
 
             // Collision resolution.
-            resolveCollisions(deltaTime, narrowCollisionData);
+            //resolveCollisions(deltaTime, narrowCollisionData);
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }
