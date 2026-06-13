@@ -35,14 +35,13 @@ namespace PS_AGONY
 
 		struct BvhNodePair { uint32_t a, b; };
 
-		struct alignas(Simd<Real>::bytes) LeafBodyAABBs
+		struct LeafPairJob
 		{
-			static_assert(BvhNode::KD_LEAF_SIZE % Simd<Real>::lanes == 0, "KD_LEAF_SIZE must be a multiple of SIMD lanes.");
-
-			Real minX[BvhNode::KD_LEAF_SIZE];
-			Real maxX[BvhNode::KD_LEAF_SIZE];
-			Real minY[BvhNode::KD_LEAF_SIZE];
-			Real maxY[BvhNode::KD_LEAF_SIZE];
+			union
+			{
+				uint32_t selfNode; // For SELF.
+				struct { uint32_t a, b; } cross; // For CROSS.
+			};
 		};
 
 		struct BvhFunctionResources
@@ -56,6 +55,12 @@ namespace PS_AGONY
 
 			std::vector<BodyIndex> mainBodyIndices;
 			std::vector<BodyIndex> tempBodyIndicesToSort;
+
+			std::vector<BvhNodePair> nodePairsToTraverse; // Traverse.
+			std::vector<BvhNodePair> leafNodePairs; // Perform cross between nodes.
+			std::vector<uint32_t> sameLeafNode; // Perform cross with itself.
+
+			std::vector<LeafPairJob> jobs;
 		};
 
 		struct LeafBodyAABBSoA

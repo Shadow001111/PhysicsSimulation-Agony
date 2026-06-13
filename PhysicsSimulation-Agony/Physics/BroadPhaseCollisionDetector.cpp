@@ -154,6 +154,12 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mainBodyIndices);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.tempBodyIndicesToSort);
 
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodePairsToTraverse);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafNodePairs);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.sameLeafNode);
+
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.jobs);
+
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minY);
@@ -568,22 +574,18 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
         const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
-        // Step 1. TODO: Include in getMemoryUsage.
-        static std::vector<BvhNodePair> nodePairsToTraverse; // Traverse.
-        static std::vector<BvhNodePair> leafNodePairs; // Perform cross between nodes.
-        static std::vector<uint32_t> sameLeafNode; // Perform cross with itself.
-
-        nodePairsToTraverse.clear();
-        leafNodePairs.clear();
-        sameLeafNode.clear();
+        // Traverse 1.
+        bvhFunctionResources.nodePairsToTraverse.clear();
+        bvhFunctionResources.leafNodePairs.clear();
+        bvhFunctionResources.sameLeafNode.clear();
 
         constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
         {
-            TRACY_SCOPE_N("Step 1");
+            TRACY_SCOPE_N("Traverse 1");
 
             if (bvhFunctionResources.nodes[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
             {
-                sameLeafNode.push_back(0);
+                bvhFunctionResources.sameLeafNode.push_back(0);
             }
             else
             {
@@ -609,7 +611,7 @@ namespace PS_AGONY
 
                     if (rLeaf)
                     {
-                        sameLeafNode.push_back(R);
+                        bvhFunctionResources.sameLeafNode.push_back(R);
                     }
                     else
                     {
@@ -617,7 +619,7 @@ namespace PS_AGONY
                     }
                     if (lLeaf)
                     {
-                        sameLeafNode.push_back(L);
+                        bvhFunctionResources.sameLeafNode.push_back(L);
                     }
                     else
                     {
@@ -629,25 +631,25 @@ namespace PS_AGONY
                     {
                         if (lLeaf && rLeaf)
                         {
-                            leafNodePairs.emplace_back(L, R);
+                            bvhFunctionResources.leafNodePairs.emplace_back(L, R);
                         }
                         else
                         {
-                            nodePairsToTraverse.emplace_back(L, R);
+                            bvhFunctionResources.nodePairsToTraverse.emplace_back(L, R);
                         }
                     }
                 }
             }
         }
 
-        // Step 2 (traverse more).
+        // Traverse 2.
         {
-            TRACY_SCOPE_N("Step 2");
+            TRACY_SCOPE_N("Traverse 2");
 
-            while (nodePairsToTraverse.size() > 0)
+            while (bvhFunctionResources.nodePairsToTraverse.size() > 0)
             {
-                const BvhNodePair nodePair = nodePairsToTraverse.back();
-                nodePairsToTraverse.pop_back();
+                const BvhNodePair nodePair = bvhFunctionResources.nodePairsToTraverse.back();
+                bvhFunctionResources.nodePairsToTraverse.pop_back();
 
                 const BvhNode& nodeA = bvhFunctionResources.nodes[nodePair.a];
                 const BvhNode& nodeB = bvhFunctionResources.nodes[nodePair.b];
@@ -656,7 +658,7 @@ namespace PS_AGONY
                 const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
                 if (aLeaf && bLeaf)
                 {
-                    leafNodePairs.emplace_back(nodePair);
+                    bvhFunctionResources.leafNodePairs.emplace_back(nodePair);
                     continue;
                 }
 
@@ -675,12 +677,12 @@ namespace PS_AGONY
 
                     if (overlaps(nodeA, leftNodeB))
                     {
-                        nodePairsToTraverse.emplace_back(nodePair.a, leftChildB);
+                        bvhFunctionResources.nodePairsToTraverse.emplace_back(nodePair.a, leftChildB);
                     }
 
                     if (overlaps(nodeA, rightNodeB))
                     {
-                        nodePairsToTraverse.emplace_back(nodePair.a, rightChildB);
+                        bvhFunctionResources.nodePairsToTraverse.emplace_back(nodePair.a, rightChildB);
                     }
                 }
                 else
@@ -694,86 +696,79 @@ namespace PS_AGONY
 
                     if (overlaps(leftNodeA, nodeB))
                     {
-                        nodePairsToTraverse.emplace_back(leftChildA, nodePair.b);
+                        bvhFunctionResources.nodePairsToTraverse.emplace_back(leftChildA, nodePair.b);
                     }
 
                     if (overlaps(rightNodeA, nodeB))
                     {
-                        nodePairsToTraverse.emplace_back(rightChildA, nodePair.b);
+                        bvhFunctionResources.nodePairsToTraverse.emplace_back(rightChildA, nodePair.b);
                     }
                 }
             }
         }
 
-        // Combined step 3 and 4.
-        struct LeafPairJob
+        // Test collisions in leaves.
         {
-            union
+            TRACY_SCOPE_N("Test collisions in leaves");
+
+            bvhFunctionResources.jobs.clear();
+            bvhFunctionResources.jobs.reserve(bvhFunctionResources.sameLeafNode.size() + bvhFunctionResources.leafNodePairs.size());
+
+            // Collect jobs.
+            size_t crossJobStartIndex;
             {
-                uint32_t selfNode; // For SELF.
-                struct { uint32_t a, b; } cross; // For CROSS.
-            };
-        };
+                TRACY_SCOPE_N("Collect jobs");
+                for (uint32_t nodeIdx : bvhFunctionResources.sameLeafNode)
+                    bvhFunctionResources.jobs.push_back({ .selfNode = nodeIdx });
+                crossJobStartIndex = bvhFunctionResources.jobs.size();
+                for (const auto& pair : bvhFunctionResources.leafNodePairs)
+                    bvhFunctionResources.jobs.push_back({ .cross = { pair.a, pair.b } });
+            }
 
-        static std::vector<LeafPairJob> jobs; // TODO: Include in getMemoryUsage.
-        jobs.clear();
-        jobs.reserve(sameLeafNode.size() + leafNodePairs.size());
+            // Prepare chunked collision data.
+            constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
+            struct alignas(64) PairVector { std::vector<BodyPair> pairs; };
+            static std::vector<PairVector> chunkedCollisionData;
 
-        size_t crossJobStartIndex;
-        {
-            TRACY_SCOPE_N("Collect jobs");
-            for (uint32_t nodeIdx : sameLeafNode)
-                jobs.push_back({ .selfNode = nodeIdx });
-            crossJobStartIndex = jobs.size();
-            for (const auto& pair : leafNodePairs)
-                jobs.push_back({ .cross = { pair.a, pair.b } });
-        }
+            // Create executor.
+            auto& threadPool = getGlobalThreadPool();
+            Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, bvhFunctionResources.jobs.size(), 1);
+            const size_t chunkCount = executor.getChunkCount();
 
-        // Prepare chunked collision data.
-        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
-        struct alignas(64) PairVector { std::vector<BodyPair> pairs; };
-        static std::vector<PairVector> chunkedCollisionData;
+            // Resize chunk collision data.
+            {
+                TRACY_SCOPE_N("Resize chunk collision data");
+                if (chunkCount > chunkedCollisionData.size())
+                    chunkedCollisionData.resize(chunkCount);
+                for (size_t i = 0; i < chunkCount; i++)
+                    chunkedCollisionData[i].pairs.clear();
+            }
 
-        // Create executor.
-        auto& threadPool = getGlobalThreadPool();
-        Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, jobs.size(), 1);
-        const size_t chunkCount = executor.getChunkCount();
-
-        // Resize chunk collision data.
-        {
-            TRACY_SCOPE_N("Resize chunk collision data");
-            if (chunkCount > chunkedCollisionData.size())
-                chunkedCollisionData.resize(chunkCount);
-            for (size_t i = 0; i < chunkCount; i++)
-                chunkedCollisionData[i].pairs.clear();
-        }
-
-        // Execute jobs.
-        {
-            TRACY_SCOPE_N("Execute jobs");
-            executor.execute(
-                [&](size_t chunkStart, size_t chunkEnd, size_t chunkId)
-                {
-                    TRACY_SCOPE_N("Cross job");
-
-                    BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
-                    uint32_t localPushBufferSize = 0;
-                    auto& localPairs = chunkedCollisionData[chunkId].pairs;
-
-                    auto flush = [&] {
-                        localPairs.insert(localPairs.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
-                        localPushBufferSize = 0;
-                        };
-
-                    std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
-
-                    for (size_t jobIdx = chunkStart; jobIdx < chunkEnd; ++jobIdx)
+            // Execute jobs.
+            {
+                TRACY_SCOPE_N("Execute jobs");
+                executor.execute(
+                    [&](size_t chunkStart, size_t chunkEnd, size_t chunkId)
                     {
-                        const LeafPairJob& job = jobs[jobIdx];
+                        TRACY_SCOPE_N("Cross job");
 
-                        if (jobIdx < crossJobStartIndex)
+                        BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+                        uint32_t localPushBufferSize = 0;
+                        auto& localPairs = chunkedCollisionData[chunkId].pairs;
+
+                        auto flush = [&] {
+                            localPairs.insert(localPairs.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
+                            localPushBufferSize = 0;
+                            };
+
+                        std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
+
+                        const size_t selfEnd = std::min(chunkEnd, crossJobStartIndex);
+                        size_t jobIdx = chunkStart;
+                        for (; jobIdx < selfEnd; jobIdx++)
                         {
-                            // ----- Self intersection (same leaf) -----
+                            const LeafPairJob& job = bvhFunctionResources.jobs[jobIdx];
+
                             const uint32_t nodeIdx = job.selfNode;
                             const BvhNode& node = bvhFunctionResources.nodes[nodeIdx];
                             const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
@@ -783,8 +778,7 @@ namespace PS_AGONY
                             const Real* leafMaxY = leafMaxYPtr + srcIndex;
                             const uint32_t count = node.end - node.start;
 
-                            // Compute masks for each i (only upper triangle)
-                            for (uint32_t i = 0; i < count; ++i)
+                            for (uint32_t i = 0; i < count; i++)
                             {
                                 const RealSimd vMinXi(leafMinX[i]);
                                 const RealSimd vMaxXi(leafMaxX[i]);
@@ -809,9 +803,7 @@ namespace PS_AGONY
                                 }
                                 masks[i] = mask;
                             }
-
-                            // Generate pairs
-                            for (uint32_t i = 0; i < count; ++i)
+                            for (uint32_t i = 0; i < count; i++)
                             {
                                 uint32_t mask = masks[i];
                                 while (mask)
@@ -826,9 +818,10 @@ namespace PS_AGONY
                                 }
                             }
                         }
-                        else // CROSS
+                        for (; jobIdx < chunkEnd; jobIdx++)
                         {
-                            // ----- Cross intersection (two distinct leaves) -----
+                            const LeafPairJob& job = bvhFunctionResources.jobs[jobIdx];
+
                             const uint32_t nodeAIdx = job.cross.a;
                             const uint32_t nodeBIdx = job.cross.b;
                             const BvhNode& nodeA = bvhFunctionResources.nodes[nodeAIdx];
@@ -847,8 +840,7 @@ namespace PS_AGONY
                             const Real* leafBMinY = leafMinYPtr + srcIndexB;
                             const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
 
-                            // Compute masks (full rectangle)
-                            for (uint32_t i = 0; i < countA; ++i)
+                            for (uint32_t i = 0; i < countA; i++)
                             {
                                 const RealSimd vMinXi(leafAMinX[i]);
                                 const RealSimd vMaxXi(leafAMaxX[i]);
@@ -871,9 +863,7 @@ namespace PS_AGONY
                                 }
                                 masks[i] = mask;
                             }
-
-                            // Generate pairs
-                            for (uint32_t i = 0; i < countA; ++i)
+                            for (uint32_t i = 0; i < countA; i++)
                             {
                                 uint32_t mask = masks[i];
                                 while (mask)
@@ -888,19 +878,20 @@ namespace PS_AGONY
                                 }
                             }
                         }
-                    }
-                    if (localPushBufferSize > 0) flush();
-                }
-            );
-        }
 
-        // Combine results
-        {
-            TRACY_SCOPE_N("Combine chunked data");
-            for (size_t i = 0; i < chunkCount; i++)
+                        if (localPushBufferSize > 0) flush();
+                    }
+                );
+            }
+
+            // Combine results
             {
-                const auto& pairs = chunkedCollisionData[i].pairs;
-                collisionData.insert(collisionData.end(), pairs.begin(), pairs.end());
+                TRACY_SCOPE_N("Combine chunked data");
+                for (size_t i = 0; i < chunkCount; i++)
+                {
+                    const auto& pairs = chunkedCollisionData[i].pairs;
+                    collisionData.insert(collisionData.end(), pairs.begin(), pairs.end());
+                }
             }
         }
     }

@@ -224,45 +224,6 @@ namespace Ecstasy::Threading
         return result;
     }
 
-
-
-    // Parallel for loop using the thread pool. Splits the range [begin, end) into chunks and enqueues them.
-    template<typename Func>
-    void parallelFor(ThreadPool& pool, size_t begin, size_t end, Func&& func)
-    {
-        constexpr size_t LOAD_BALANCING_FACTOR = 4;
-
-        const size_t range = end - begin;
-        if (range == 0) return;
-
-        // Create more chunks than workers for better load balancing.
-        const size_t numWorkers = pool.getThreadCount();
-        const size_t maxChunkCount = numWorkers * LOAD_BALANCING_FACTOR;
-        const size_t chunkSize = (range + maxChunkCount - 1) / maxChunkCount;
-
-        // Compute how many chunks we will actually enqueue.
-        const size_t actualChunkCount = (range + chunkSize - 1) / chunkSize;
-
-        std::latch latch(actualChunkCount);
-
-        for (size_t chunkStart = begin; chunkStart < end; chunkStart += chunkSize)
-        {
-            const size_t chunkEnd = std::min(chunkStart + chunkSize, end);
-            pool.enqueue([&func, chunkStart, chunkEnd, &latch]()
-                {
-                    for (size_t i = chunkStart; i < chunkEnd; i++)
-                        func(i);
-                    latch.count_down();
-                });
-        }
-
-        latch.wait(); // Wait for all chunks to complete
-    }
-
-    void parallelForRange(ThreadPool& pool, size_t begin, size_t end, std::function<void(size_t, size_t)>&& func, size_t loadBalancingFactor = 4);
-
-
-    //
     class ParallelForRangeExecutor
     {
         //static thread_local std::vector<Task> tasks;
