@@ -1,4 +1,5 @@
 #include "Simulation.h"
+#include "Threading.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -40,6 +41,10 @@ namespace PS_AGONY
     {
         materials.reserve(16);
         materials.emplace_back(); // Default material.
+
+        // Spawn a thread pool.
+        auto& threadPool = getGlobalThreadPool();
+        (void)threadPool;
     }
 
     void Simulation::update(Real deltaTime)

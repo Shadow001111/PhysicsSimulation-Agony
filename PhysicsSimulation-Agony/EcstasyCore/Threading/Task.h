@@ -1,7 +1,7 @@
 #pragma once
 #include "move_only_function.h"
 
-namespace Core::Threading
+namespace Ecstasy::Threading
 {
 	template <class F>
 	using move_only_function_impl = move_only_function<F>;

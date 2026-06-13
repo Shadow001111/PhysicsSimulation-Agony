@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <concepts>
 
-namespace Core::Threading
+namespace Ecstasy::Threading
 {
     template <class>
     class move_only_function;
@@ -19,7 +19,7 @@ namespace Core::Threading
         {
             virtual ~base() = default;
             virtual R call(Args&&... args) = 0;
-            virtual base* move_to(void* where) const = 0;
+            virtual base* move_to(void* where) = 0;
         };
 
         template <class F>
@@ -42,7 +42,7 @@ namespace Core::Threading
                 }
             }
 
-            base* move_to(void* where) const override
+            base* move_to(void* where) override
             {
                 return new (where) model<F>(std::move(f));
             }

@@ -236,6 +236,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
     <ClCompile Include="EcstasyCore\FileStream.cpp" />
+    <ClCompile Include="EcstasyCore\Threading\ThreadPool.cpp" />
     <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\Camera2D.cpp" />
@@ -255,6 +256,7 @@
     <ClCompile Include="OpenGLWrappers\VertexArray.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\SimulationRenderer.cpp" />
+    <ClCompile Include="Physics\Threading.cpp" />
     <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
@@ -263,6 +265,10 @@
     <ClInclude Include="EcstasyCore\Algorithm\RadixSort.h" />
     <ClInclude Include="EcstasyCore\Assert.h" />
     <ClInclude Include="EcstasyCore\Random.h" />
+    <ClInclude Include="EcstasyCore\Threading\ChaseLevQueue.h" />
+    <ClInclude Include="EcstasyCore\Threading\move_only_function.h" />
+    <ClInclude Include="EcstasyCore\Threading\Task.h" />
+    <ClInclude Include="EcstasyCore\Threading\ThreadPool.h" />
     <ClInclude Include="Physics\Constants.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />

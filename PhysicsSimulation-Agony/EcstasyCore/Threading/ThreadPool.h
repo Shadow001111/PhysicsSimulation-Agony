@@ -5,11 +5,11 @@
 #include <future>
 #include <atomic>
 #include <latch>
-#include <iostream>
+#include <functional>
 
-#include "EcstasyCore/TracyProfiler.h"
+#include "../TracyProfiler.h"
 
-namespace Core::Threading
+namespace Ecstasy::Threading
 {
     class ThreadPool;  // forward declaration
 
@@ -116,6 +116,7 @@ namespace Core::Threading
         size_t getThreadCount() const noexcept { return threadCount; }
     };
 
+    // TODO: Must use multiproducer queue, because enqueue can come from different threads.
     class ThreadPool
     {
         friend WorkerThread;
@@ -176,16 +177,9 @@ namespace Core::Threading
             std::invoke(std::move(f), std::move(args)...);
             };
 
-        // The queue has a fixed capacity; spin until there is room.
-        {
-            TRACY_SCOPE_N("Push");
-            while (!worker.tasks.try_push(std::move(task))) [[unlikely]]
-            {
-                TRACY_SCOPE_N("Spin");
-                TracyMessage("Can't push!", 11);
-                std::this_thread::yield();
-            }
-        }
+        // Push task.
+        worker.tasks.push(std::move(task));
+
         {
             TRACY_SCOPE_N("Add pending task count");
             pendingTaskCount.fetch_add(1, std::memory_order_relaxed);
@@ -196,7 +190,7 @@ namespace Core::Threading
         }
         {
             TRACY_SCOPE_N("Notify");
-            workVersion.notify_one(); // TODO: Maybe add 'sleepingWorkerCount' and call only when its not zero.
+            workVersion.notify_one();
         }
     }
 
@@ -220,10 +214,8 @@ namespace Core::Threading
 
         Task task = [t = std::move(packaged)]() mutable { t(); };
 
-        while (!worker.tasks.try_push(std::move(task)))
-        {
-            std::this_thread::yield();
-        }
+        // Push task.
+        worker.tasks.push(std::move(task));
 
         pendingTaskCount.fetch_add(1, std::memory_order_relaxed);
         
@@ -266,4 +258,24 @@ namespace Core::Threading
 
         latch.wait(); // Wait for all chunks to complete
     }
-} // namespace Core::Threading
+
+    void parallelForRange(ThreadPool& pool, size_t begin, size_t end, std::function<void(size_t, size_t)>&& func, size_t loadBalancingFactor = 4);
+
+
+    //
+    class ParallelForRangeExecutor
+    {
+        //static thread_local std::vector<Task> tasks;
+
+        ThreadPool& pool;
+        size_t begin, end;
+
+        size_t chunkCount = 0, chunkSize = 0;
+    public:
+        ParallelForRangeExecutor(ThreadPool& pool, size_t begin, size_t end, size_t loadBalancingFactor);
+
+        void execute(std::function<void(size_t, size_t, size_t)>&& func);
+
+        size_t getChunkCount() const noexcept { return chunkCount; }
+    };
+}
