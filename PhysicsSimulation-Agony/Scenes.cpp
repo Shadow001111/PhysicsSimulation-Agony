@@ -49,7 +49,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
         const float r = 0.2f;//rvg.real<float>(0.1f, 0.2f);
         const float mass = 3.14f * r * r;
 
-        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
+        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r, 1);
     }
     for (int i = 0; i < boxCount; i++)
     {

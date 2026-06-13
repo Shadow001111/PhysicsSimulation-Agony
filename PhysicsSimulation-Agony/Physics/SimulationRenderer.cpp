@@ -23,7 +23,7 @@ namespace PS_AGONY
                 .compression = TextureCompression::Format::NONE,
                 .isHDR = false
             };
-            TextureLoader::createTexture2DFromImage(hardcodedTexture, "res/Textures/Francis.png", params);
+            TextureLoader::createTexture2DFromImage(hardcodedTexture, "res/Textures/Ev.png", params);
         }
     }
 

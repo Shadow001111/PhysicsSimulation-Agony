@@ -2,6 +2,7 @@
 #include "GlmTypes.h"
 #include "BodySoAViewer.h"
 #include "SymmetricMatrix.h"
+#include "Threading.h"
 
 namespace PS_AGONY
 {
@@ -33,30 +34,18 @@ namespace PS_AGONY
 	{
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
-		struct alignas(64) InputOutputCollisionData
-		{
-			std::vector<BodyPair> bodyPairs;
-			std::vector<BodyCollisionData> collisionData;
+		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(size_t, size_t, std::vector<BodyCollisionData>&);
 
-			void clear()
-			{
-				bodyPairs.clear();
-				collisionData.clear();
-			}
-
-			void reserve(size_t newCapacity)
-			{
-				bodyPairs.reserve(newCapacity);
-				collisionData.reserve(newCapacity);
-			}
-		};
-
-		struct alignas(64) AlignedCollisionDataVector
+		struct alignas(64) CacheAlignedCollisionDataVector
 		{
 			std::vector<BodyCollisionData> vector;
 		};
 
-		SymmetricMatrix<InputOutputCollisionData, BODY_TYPE_COUNT> bodyPairVectorMatrix;
+		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;
+
+		SymmetricMatrix<std::vector<BodyPair>, BODY_TYPE_COUNT> bodyPairVectorMatrix;
+
+		std::vector<Ecstasy::Threading::Task> tasks;
 
 		std::vector<BodyCollisionData> allCollisionData;
 
@@ -82,6 +71,9 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 	private:
+		void findCollisionsSingleThreaded();
+		void findCollisionsMultiThreaded();
+
 		void collisionCircleCircle(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCirclePolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
