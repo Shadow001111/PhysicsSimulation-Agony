@@ -8,6 +8,7 @@
 #include <bit>
 #include <algorithm>
 #include <array>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -858,6 +859,9 @@ namespace PS_AGONY
                 }
             }
         }
+
+        // Last flush.
+        if (localPushBufferSize > 0) flush();
     }
 
     void BroadPhaseCollisionDetector::testCollisionsInLeavesMultiThreaded()
