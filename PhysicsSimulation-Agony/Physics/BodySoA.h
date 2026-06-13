@@ -14,11 +14,17 @@ namespace PS_AGONY
 		return container.capacity() * sizeof(container[0]);
 	}
 
-	template<typename T>
-	using SimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<T>::bytes>>;
+	template<typename T, size_t aligment>
+	using AlignedVector = std::vector<T, AlignedAllocator<T, aligment>>;
 
 	template<typename T>
-	using RealSimdAlignedVector = std::vector<T, AlignedAllocator<T, Simd<Real>::bytes>>;
+	using AlignedVector64 = std::vector<T, AlignedAllocator<T, 64>>;
+
+	template<typename T>
+	using SimdAlignedVector = AlignedVector<T, Simd<T>::bytes>;
+
+	template<typename T>
+	using RealSimdAlignedVector = AlignedVector<T, Simd<Real>::bytes>;
 
 	struct AABB
 	{

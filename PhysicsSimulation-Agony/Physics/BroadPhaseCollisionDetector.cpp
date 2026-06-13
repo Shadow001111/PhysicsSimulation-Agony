@@ -160,6 +160,10 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.jobs);
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.chunkedCollisionData);
+        for (auto& vec : bvhFunctionResources.chunkedCollisionData)
+        {
+            total += PS_AGONY::getVectorMemoryUsage(vec.pairs);
+        }
 
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
