@@ -154,8 +154,8 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.tempBodyIndicesToSort);
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodePairsToTraverse);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafNodePairs);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.sameLeafNode);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafPairsToTestCollisions);
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leavesToTestCollisions);
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.jobs);
 
@@ -559,11 +559,23 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Query pairs");
 
-        constexpr uint32_t LANES = RealSimd::lanes;
-        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+        // Traverse.
+        traverseNodesToGetOverlappingLeafPairs();
 
-        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
-        
+        // Test collisions in leaves.
+        const bool useThreading = USE_THREADING;
+        if (useThreading)
+        {
+            testCollisionsInLeavesMultiThreaded();
+        }
+        else
+        {
+            testCollisionsInLeavesSingleThreaded();
+        }
+    }
+
+    void BroadPhaseCollisionDetector::traverseNodesToGetOverlappingLeafPairs()
+    {
         auto overlaps = [](const BvhNode& a, const BvhNode& b) noexcept -> bool
             {
                 return
@@ -571,17 +583,9 @@ namespace PS_AGONY
                     a.minY < b.maxY && a.maxY > b.minY;
             };
 
-        // Get pointers.
-        const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
-        const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
-        const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
-        const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
-
-        // Traverse 1.
         bvhFunctionResources.nodePairsToTraverse.clear();
-        bvhFunctionResources.leafNodePairs.clear();
-        bvhFunctionResources.sameLeafNode.clear();
+        bvhFunctionResources.leafPairsToTestCollisions.clear();
+        bvhFunctionResources.leavesToTestCollisions.clear();
 
         constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
         {
@@ -589,7 +593,7 @@ namespace PS_AGONY
 
             if (bvhFunctionResources.nodes[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
             {
-                bvhFunctionResources.sameLeafNode.push_back(0);
+                bvhFunctionResources.leavesToTestCollisions.push_back(0);
             }
             else
             {
@@ -615,7 +619,7 @@ namespace PS_AGONY
 
                     if (rLeaf)
                     {
-                        bvhFunctionResources.sameLeafNode.push_back(R);
+                        bvhFunctionResources.leavesToTestCollisions.push_back(R);
                     }
                     else
                     {
@@ -623,7 +627,7 @@ namespace PS_AGONY
                     }
                     if (lLeaf)
                     {
-                        bvhFunctionResources.sameLeafNode.push_back(L);
+                        bvhFunctionResources.leavesToTestCollisions.push_back(L);
                     }
                     else
                     {
@@ -635,7 +639,7 @@ namespace PS_AGONY
                     {
                         if (lLeaf && rLeaf)
                         {
-                            bvhFunctionResources.leafNodePairs.emplace_back(L, R);
+                            bvhFunctionResources.leafPairsToTestCollisions.emplace_back(L, R);
                         }
                         else
                         {
@@ -662,7 +666,7 @@ namespace PS_AGONY
                 const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
                 if (aLeaf && bLeaf)
                 {
-                    bvhFunctionResources.leafNodePairs.emplace_back(nodePair);
+                    bvhFunctionResources.leafPairsToTestCollisions.emplace_back(nodePair);
                     continue;
                 }
 
@@ -710,190 +714,345 @@ namespace PS_AGONY
                 }
             }
         }
+    }
 
-        // Test collisions in leaves.
+    void BroadPhaseCollisionDetector::testCollisionsInLeavesSingleThreaded()
+    {
+        TRACY_SCOPE_N("Test collisions in leaves");
+
+        constexpr uint32_t LANES = RealSimd::lanes;
+        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
+        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
+
+        // Get pointers.
+        const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
+        const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
+        const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
+        const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+
+        //
+        std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
+
+        BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+        uint32_t localPushBufferSize = 0;
+
+        auto flush = [&] {
+            collisionData.insert(collisionData.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
+            localPushBufferSize = 0;
+            };
+
+        // Test self cross.
         {
-            TRACY_SCOPE_N("Test collisions in leaves");
-
-            bvhFunctionResources.jobs.clear();
-            bvhFunctionResources.jobs.reserve(bvhFunctionResources.sameLeafNode.size() + bvhFunctionResources.leafNodePairs.size());
-
-            // Collect jobs.
-            size_t crossJobStartIndex;
+            TRACY_SCOPE_N("Self cross");
+            for (const uint32_t nodeIndex : bvhFunctionResources.leavesToTestCollisions)
             {
-                TRACY_SCOPE_N("Collect jobs");
-                for (uint32_t nodeIdx : bvhFunctionResources.sameLeafNode)
-                    bvhFunctionResources.jobs.push_back({ .selfNode = nodeIdx });
-                crossJobStartIndex = bvhFunctionResources.jobs.size();
-                for (const auto& pair : bvhFunctionResources.leafNodePairs)
-                    bvhFunctionResources.jobs.push_back({ .cross = { pair.a, pair.b } });
-            }
+                const BvhNode& node = bvhFunctionResources.nodes[nodeIndex];
+                const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
+                const Real* leafMinX = leafMinXPtr + srcIndex;
+                const Real* leafMaxX = leafMaxXPtr + srcIndex;
+                const Real* leafMinY = leafMinYPtr + srcIndex;
+                const Real* leafMaxY = leafMaxYPtr + srcIndex;
+                const uint32_t count = node.end - node.start;
 
-            // Prepare chunked collision data.
-            constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
-
-            // Create executor.
-            auto& threadPool = getGlobalThreadPool();
-            Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, bvhFunctionResources.jobs.size(), 2);
-            const size_t chunkCount = executor.getChunkCount();
-
-            // Resize chunk collision data.
-            {
-                TRACY_SCOPE_N("Resize chunked collision data");
-                if (chunkCount > bvhFunctionResources.chunkedCollisionData.size())
-                    bvhFunctionResources.chunkedCollisionData.resize(chunkCount);
-                for (size_t i = 0; i < chunkCount; i++)
-                    bvhFunctionResources.chunkedCollisionData[i].pairs.clear();
-            }
-
-            // Execute jobs.
-            {
-                TRACY_SCOPE_N("Execute jobs");
-                executor.execute(
-                    [&](size_t chunkStart, size_t chunkEnd, size_t chunkId)
-                    {
-                        TRACY_SCOPE_N("Cross job");
-
-                        BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
-                        uint32_t localPushBufferSize = 0;
-                        auto& localPairs = bvhFunctionResources.chunkedCollisionData[chunkId].pairs;
-
-                        auto flush = [&] {
-                            localPairs.insert(localPairs.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
-                            localPushBufferSize = 0;
-                            };
-
-                        std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
-
-                        const size_t selfEnd = std::min(chunkEnd, crossJobStartIndex);
-                        size_t jobIdx = chunkStart;
-                        for (; jobIdx < selfEnd; jobIdx++)
-                        {
-                            const LeafPairJob& job = bvhFunctionResources.jobs[jobIdx];
-
-                            const uint32_t nodeIdx = job.selfNode;
-                            const BvhNode& node = bvhFunctionResources.nodes[nodeIdx];
-                            const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
-                            const Real* leafMinX = leafMinXPtr + srcIndex;
-                            const Real* leafMaxX = leafMaxXPtr + srcIndex;
-                            const Real* leafMinY = leafMinYPtr + srcIndex;
-                            const Real* leafMaxY = leafMaxYPtr + srcIndex;
-                            const uint32_t count = node.end - node.start;
-
-                            for (uint32_t i = 0; i < count; i++)
-                            {
-                                const RealSimd vMinXi(leafMinX[i]);
-                                const RealSimd vMaxXi(leafMaxX[i]);
-                                const RealSimd vMinYi(leafMinY[i]);
-                                const RealSimd vMaxYi(leafMaxY[i]);
-
-                                auto maskRow = maskArray[i];
-                                uint32_t mask = 0;
-                                for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
-                                {
-                                    const RealSimd vMinXj = RealSimd::load(leafMinX + j);
-                                    const RealSimd vMaxXj = RealSimd::load(leafMaxX + j);
-                                    const RealSimd vMinYj = RealSimd::load(leafMinY + j);
-                                    const RealSimd vMaxYj = RealSimd::load(leafMaxY + j);
-
-                                    const RealSimd overlap =
-                                        (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
-                                        (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
-
-                                    const uint32_t localMask = overlap.movemask() & maskRow[j >> LANES_LOG2];
-                                    mask |= localMask << j;
-                                }
-                                masks[i] = mask;
-                            }
-                            for (uint32_t i = 0; i < count; i++)
-                            {
-                                uint32_t mask = masks[i];
-                                while (mask)
-                                {
-                                    const uint32_t lane = std::countr_zero(mask);
-                                    mask &= mask - 1;
-                                    localPushBuffer[localPushBufferSize++] = {
-                                        indicesPtr[node.start + i],
-                                        indicesPtr[node.start + lane]
-                                    };
-                                    if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
-                                }
-                            }
-                        }
-                        for (; jobIdx < chunkEnd; jobIdx++)
-                        {
-                            const LeafPairJob& job = bvhFunctionResources.jobs[jobIdx];
-
-                            const uint32_t nodeAIdx = job.cross.a;
-                            const uint32_t nodeBIdx = job.cross.b;
-                            const BvhNode& nodeA = bvhFunctionResources.nodes[nodeAIdx];
-                            const BvhNode& nodeB = bvhFunctionResources.nodes[nodeBIdx];
-                            const uint32_t countA = nodeA.end - nodeA.start;
-
-                            const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
-                            const Real* leafAMinX = leafMinXPtr + srcIndexA;
-                            const Real* leafAMaxX = leafMaxXPtr + srcIndexA;
-                            const Real* leafAMinY = leafMinYPtr + srcIndexA;
-                            const Real* leafAMaxY = leafMaxYPtr + srcIndexA;
-
-                            const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
-                            const Real* leafBMinX = leafMinXPtr + srcIndexB;
-                            const Real* leafBMaxX = leafMaxXPtr + srcIndexB;
-                            const Real* leafBMinY = leafMinYPtr + srcIndexB;
-                            const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
-
-                            for (uint32_t i = 0; i < countA; i++)
-                            {
-                                const RealSimd vMinXi(leafAMinX[i]);
-                                const RealSimd vMaxXi(leafAMaxX[i]);
-                                const RealSimd vMinYi(leafAMinY[i]);
-                                const RealSimd vMaxYi(leafAMaxY[i]);
-
-                                uint32_t mask = 0;
-                                for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
-                                {
-                                    const RealSimd vMinXj = RealSimd::load(leafBMinX + j);
-                                    const RealSimd vMaxXj = RealSimd::load(leafBMaxX + j);
-                                    const RealSimd vMinYj = RealSimd::load(leafBMinY + j);
-                                    const RealSimd vMaxYj = RealSimd::load(leafBMaxY + j);
-
-                                    const RealSimd overlap =
-                                        (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
-                                        (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
-
-                                    mask |= overlap.movemask() << j;
-                                }
-                                masks[i] = mask;
-                            }
-                            for (uint32_t i = 0; i < countA; i++)
-                            {
-                                uint32_t mask = masks[i];
-                                while (mask)
-                                {
-                                    const uint32_t lane = std::countr_zero(mask);
-                                    mask &= mask - 1;
-                                    localPushBuffer[localPushBufferSize++] = {
-                                        indicesPtr[nodeA.start + i],
-                                        indicesPtr[nodeB.start + lane]
-                                    };
-                                    if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
-                                }
-                            }
-                        }
-
-                        if (localPushBufferSize > 0) flush();
-                    }
-                );
-            }
-
-            // Combine results.
-            {
-                TRACY_SCOPE_N("Combine chunked data");
-                for (size_t i = 0; i < chunkCount; i++)
+                for (uint32_t i = 0; i < count; i++)
                 {
-                    const auto& pairs = bvhFunctionResources.chunkedCollisionData[i].pairs;
-                    collisionData.insert(collisionData.end(), pairs.begin(), pairs.end());
+                    const RealSimd vMinXi(leafMinX[i]);
+                    const RealSimd vMaxXi(leafMaxX[i]);
+                    const RealSimd vMinYi(leafMinY[i]);
+                    const RealSimd vMaxYi(leafMaxY[i]);
+
+                    auto maskRow = maskArray[i];
+                    uint32_t mask = 0;
+                    for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+                    {
+                        const RealSimd vMinXj = RealSimd::load(leafMinX + j);
+                        const RealSimd vMaxXj = RealSimd::load(leafMaxX + j);
+                        const RealSimd vMinYj = RealSimd::load(leafMinY + j);
+                        const RealSimd vMaxYj = RealSimd::load(leafMaxY + j);
+
+                        const RealSimd overlap =
+                            (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                            (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                        const uint32_t localMask = overlap.movemask() & maskRow[j >> LANES_LOG2];
+                        mask |= localMask << j;
+                    }
+                    masks[i] = mask;
                 }
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    uint32_t mask = masks[i];
+                    while (mask)
+                    {
+                        const uint32_t lane = std::countr_zero(mask);
+                        mask &= mask - 1;
+                        localPushBuffer[localPushBufferSize++] = {
+                            indicesPtr[node.start + i],
+                            indicesPtr[node.start + lane]
+                        };
+                        if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
+                    }
+                }
+            }
+        }
+
+        // Test AxB cross.
+        {
+            TRACY_SCOPE_N("AxB cross");
+            for (auto [nodeIndexA, nodeIndexB] : bvhFunctionResources.leafPairsToTestCollisions)
+            {
+                const BvhNode& nodeA = bvhFunctionResources.nodes[nodeIndexA];
+                const BvhNode& nodeB = bvhFunctionResources.nodes[nodeIndexB];
+                const uint32_t countA = nodeA.end - nodeA.start;
+
+                const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
+                const Real* leafAMinX = leafMinXPtr + srcIndexA;
+                const Real* leafAMaxX = leafMaxXPtr + srcIndexA;
+                const Real* leafAMinY = leafMinYPtr + srcIndexA;
+                const Real* leafAMaxY = leafMaxYPtr + srcIndexA;
+
+                const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
+                const Real* leafBMinX = leafMinXPtr + srcIndexB;
+                const Real* leafBMaxX = leafMaxXPtr + srcIndexB;
+                const Real* leafBMinY = leafMinYPtr + srcIndexB;
+                const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
+
+                for (uint32_t i = 0; i < countA; i++)
+                {
+                    const RealSimd vMinXi(leafAMinX[i]);
+                    const RealSimd vMaxXi(leafAMaxX[i]);
+                    const RealSimd vMinYi(leafAMinY[i]);
+                    const RealSimd vMaxYi(leafAMaxY[i]);
+
+                    uint32_t mask = 0;
+                    for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+                    {
+                        const RealSimd vMinXj = RealSimd::load(leafBMinX + j);
+                        const RealSimd vMaxXj = RealSimd::load(leafBMaxX + j);
+                        const RealSimd vMinYj = RealSimd::load(leafBMinY + j);
+                        const RealSimd vMaxYj = RealSimd::load(leafBMaxY + j);
+
+                        const RealSimd overlap =
+                            (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                            (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                        mask |= overlap.movemask() << j;
+                    }
+                    masks[i] = mask;
+                }
+                for (uint32_t i = 0; i < countA; i++)
+                {
+                    uint32_t mask = masks[i];
+                    while (mask)
+                    {
+                        const uint32_t lane = std::countr_zero(mask);
+                        mask &= mask - 1;
+                        localPushBuffer[localPushBufferSize++] = {
+                            indicesPtr[nodeA.start + i],
+                            indicesPtr[nodeB.start + lane]
+                        };
+                        if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
+                    }
+                }
+            }
+        }
+    }
+
+    void BroadPhaseCollisionDetector::testCollisionsInLeavesMultiThreaded()
+    {
+        TRACY_SCOPE_N("Test collisions in leaves");
+
+        constexpr uint32_t LANES = RealSimd::lanes;
+        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
+        
+        // Get pointers.
+        const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
+        const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
+        const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
+        const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+
+        bvhFunctionResources.jobs.clear();
+        bvhFunctionResources.jobs.reserve(bvhFunctionResources.leavesToTestCollisions.size() + bvhFunctionResources.leafPairsToTestCollisions.size());
+
+        // Collect jobs.
+        size_t crossJobStartIndex;
+        {
+            TRACY_SCOPE_N("Collect jobs");
+            for (uint32_t nodeIdx : bvhFunctionResources.leavesToTestCollisions)
+                bvhFunctionResources.jobs.push_back({ .selfNode = nodeIdx });
+            crossJobStartIndex = bvhFunctionResources.jobs.size();
+            for (const auto& pair : bvhFunctionResources.leafPairsToTestCollisions)
+                bvhFunctionResources.jobs.push_back({ .cross = { pair.a, pair.b } });
+        }
+
+        // Prepare chunked collision data.
+        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
+
+        // Create executor.
+        auto& threadPool = getGlobalThreadPool();
+        Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, bvhFunctionResources.jobs.size(), 2);
+        const size_t chunkCount = executor.getChunkCount();
+
+        // Resize chunk collision data.
+        {
+            TRACY_SCOPE_N("Resize chunked collision data");
+            if (chunkCount > bvhFunctionResources.chunkedCollisionData.size())
+                bvhFunctionResources.chunkedCollisionData.resize(chunkCount);
+            for (size_t i = 0; i < chunkCount; i++)
+                bvhFunctionResources.chunkedCollisionData[i].pairs.clear();
+        }
+
+        // Execute jobs.
+        {
+            TRACY_SCOPE_N("Execute jobs");
+            executor.execute(
+                [&](size_t chunkStart, size_t chunkEnd, size_t chunkId)
+                {
+                    TRACY_SCOPE_N("Cross job");
+
+                    BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+                    uint32_t localPushBufferSize = 0;
+                    auto& localPairs = bvhFunctionResources.chunkedCollisionData[chunkId].pairs;
+
+                    auto flush = [&] {
+                        localPairs.insert(localPairs.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
+                        localPushBufferSize = 0;
+                        };
+
+                    std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
+
+                    const size_t selfEnd = std::min(chunkEnd, crossJobStartIndex);
+                    size_t jobIdx = chunkStart;
+                    for (; jobIdx < selfEnd; jobIdx++)
+                    {
+                        const LeafPairJob& job = bvhFunctionResources.jobs[jobIdx];
+
+                        const uint32_t nodeIdx = job.selfNode;
+                        const BvhNode& node = bvhFunctionResources.nodes[nodeIdx];
+                        const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
+                        const Real* leafMinX = leafMinXPtr + srcIndex;
+                        const Real* leafMaxX = leafMaxXPtr + srcIndex;
+                        const Real* leafMinY = leafMinYPtr + srcIndex;
+                        const Real* leafMaxY = leafMaxYPtr + srcIndex;
+                        const uint32_t count = node.end - node.start;
+
+                        for (uint32_t i = 0; i < count; i++)
+                        {
+                            const RealSimd vMinXi(leafMinX[i]);
+                            const RealSimd vMaxXi(leafMaxX[i]);
+                            const RealSimd vMinYi(leafMinY[i]);
+                            const RealSimd vMaxYi(leafMaxY[i]);
+
+                            auto maskRow = maskArray[i];
+                            uint32_t mask = 0;
+                            for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+                            {
+                                const RealSimd vMinXj = RealSimd::load(leafMinX + j);
+                                const RealSimd vMaxXj = RealSimd::load(leafMaxX + j);
+                                const RealSimd vMinYj = RealSimd::load(leafMinY + j);
+                                const RealSimd vMaxYj = RealSimd::load(leafMaxY + j);
+
+                                const RealSimd overlap =
+                                    (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                                    (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                                const uint32_t localMask = overlap.movemask() & maskRow[j >> LANES_LOG2];
+                                mask |= localMask << j;
+                            }
+                            masks[i] = mask;
+                        }
+                        for (uint32_t i = 0; i < count; i++)
+                        {
+                            uint32_t mask = masks[i];
+                            while (mask)
+                            {
+                                const uint32_t lane = std::countr_zero(mask);
+                                mask &= mask - 1;
+                                localPushBuffer[localPushBufferSize++] = {
+                                    indicesPtr[node.start + i],
+                                    indicesPtr[node.start + lane]
+                                };
+                                if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
+                            }
+                        }
+                    }
+                    for (; jobIdx < chunkEnd; jobIdx++)
+                    {
+                        const LeafPairJob& job = bvhFunctionResources.jobs[jobIdx];
+
+                        const uint32_t nodeAIdx = job.cross.a;
+                        const uint32_t nodeBIdx = job.cross.b;
+                        const BvhNode& nodeA = bvhFunctionResources.nodes[nodeAIdx];
+                        const BvhNode& nodeB = bvhFunctionResources.nodes[nodeBIdx];
+                        const uint32_t countA = nodeA.end - nodeA.start;
+
+                        const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
+                        const Real* leafAMinX = leafMinXPtr + srcIndexA;
+                        const Real* leafAMaxX = leafMaxXPtr + srcIndexA;
+                        const Real* leafAMinY = leafMinYPtr + srcIndexA;
+                        const Real* leafAMaxY = leafMaxYPtr + srcIndexA;
+
+                        const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
+                        const Real* leafBMinX = leafMinXPtr + srcIndexB;
+                        const Real* leafBMaxX = leafMaxXPtr + srcIndexB;
+                        const Real* leafBMinY = leafMinYPtr + srcIndexB;
+                        const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
+
+                        for (uint32_t i = 0; i < countA; i++)
+                        {
+                            const RealSimd vMinXi(leafAMinX[i]);
+                            const RealSimd vMaxXi(leafAMaxX[i]);
+                            const RealSimd vMinYi(leafAMinY[i]);
+                            const RealSimd vMaxYi(leafAMaxY[i]);
+
+                            uint32_t mask = 0;
+                            for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+                            {
+                                const RealSimd vMinXj = RealSimd::load(leafBMinX + j);
+                                const RealSimd vMaxXj = RealSimd::load(leafBMaxX + j);
+                                const RealSimd vMinYj = RealSimd::load(leafBMinY + j);
+                                const RealSimd vMaxYj = RealSimd::load(leafBMaxY + j);
+
+                                const RealSimd overlap =
+                                    (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                                    (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                                mask |= overlap.movemask() << j;
+                            }
+                            masks[i] = mask;
+                        }
+                        for (uint32_t i = 0; i < countA; i++)
+                        {
+                            uint32_t mask = masks[i];
+                            while (mask)
+                            {
+                                const uint32_t lane = std::countr_zero(mask);
+                                mask &= mask - 1;
+                                localPushBuffer[localPushBufferSize++] = {
+                                    indicesPtr[nodeA.start + i],
+                                    indicesPtr[nodeB.start + lane]
+                                };
+                                if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
+                            }
+                        }
+                    }
+
+                    if (localPushBufferSize > 0) flush();
+                }
+            );
+        }
+
+        // Combine results.
+        {
+            TRACY_SCOPE_N("Combine chunked data");
+            for (size_t i = 0; i < chunkCount; i++)
+            {
+                const auto& pairs = bvhFunctionResources.chunkedCollisionData[i].pairs;
+                collisionData.insert(collisionData.end(), pairs.begin(), pairs.end());
             }
         }
     }
