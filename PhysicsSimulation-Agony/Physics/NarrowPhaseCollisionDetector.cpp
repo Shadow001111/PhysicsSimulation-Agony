@@ -108,11 +108,25 @@ namespace PS_AGONY
         }
 
         // Process each pair type separately.
-        auto& threadPool = getGlobalThreadPool();
+        const bool useThreading = true;
+        if (useThreading)
+        {
+            auto& threadPool = getGlobalThreadPool();
 
-        collisionCircleCircle();
-        collisionCircleBox();
-        collisionBoxBox();
+            auto fut1 = threadPool.enqueueFuture(&NarrowPhaseCollisionDetector::collisionCircleCircle, this);
+            auto fut2 = threadPool.enqueueFuture(&NarrowPhaseCollisionDetector::collisionCircleBox, this);
+            auto fut3 = threadPool.enqueueFuture(&NarrowPhaseCollisionDetector::collisionBoxBox, this);
+
+            fut1.wait();
+            fut2.wait();
+            fut3.wait();
+        }
+        else
+        {
+            collisionCircleCircle();
+            collisionCircleBox();
+            collisionBoxBox();
+        }
 
         // Combine data.
         {
@@ -156,7 +170,10 @@ namespace PS_AGONY
 
         auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
 
-        for (auto [indexA, indexB] : io.bodyPairs)
+        auto bodyPairs = std::move(io.bodyPairs);
+        auto collisionData = std::move(io.collisionData);
+
+        for (auto [indexA, indexB] : bodyPairs)
         {
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -199,7 +216,7 @@ namespace PS_AGONY
             }
 
             // Result.
-            io.collisionData.emplace_back(
+            collisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -208,6 +225,9 @@ namespace PS_AGONY
                 1
             );
         }
+
+        io.bodyPairs = std::move(bodyPairs);
+        io.collisionData = std::move(collisionData);
     }
 
     void NarrowPhaseCollisionDetector::collisionCircleBox()
@@ -225,9 +245,12 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
+        auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Box);
 
-        for (auto [indexA, indexB] : io.bodyPairs)
+        auto bodyPairs = std::move(io.bodyPairs);
+        auto collisionData = std::move(io.collisionData);
+
+        for (auto [indexA, indexB] : bodyPairs)
         {
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -284,7 +307,7 @@ namespace PS_AGONY
 
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-                io.collisionData.emplace_back(
+                collisionData.emplace_back(
                     indexA, indexB,
                     normal,
                     depth,
@@ -323,7 +346,7 @@ namespace PS_AGONY
 
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-            io.collisionData.emplace_back(
+            collisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -332,6 +355,9 @@ namespace PS_AGONY
                 1
             );
         }
+
+        io.bodyPairs = std::move(bodyPairs);
+        io.collisionData = std::move(collisionData);
     }
 
     void NarrowPhaseCollisionDetector::collisionCirclePolygon()
@@ -359,9 +385,12 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
+        auto& io = bodyPairVectorMatrix((size_t)BodyType::Box, (size_t)BodyType::Box);
 
-        for (auto [indexA, indexB] : io.bodyPairs)
+        auto bodyPairs = std::move(io.bodyPairs);
+        auto collisionData = std::move(io.collisionData);
+
+        for (auto [indexA, indexB] : bodyPairs)
         {
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -593,7 +622,7 @@ namespace PS_AGONY
             if (contactCount == 0) continue;
 
             // Store final collision data.
-            io.collisionData.emplace_back(
+            collisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -602,6 +631,9 @@ namespace PS_AGONY
                 contactCount
             );
         }
+
+        io.bodyPairs = std::move(bodyPairs);
+        io.collisionData = std::move(collisionData);
     }
 
     void NarrowPhaseCollisionDetector::collisionBoxPolygon()
