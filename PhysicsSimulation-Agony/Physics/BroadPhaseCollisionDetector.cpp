@@ -159,13 +159,14 @@ namespace PS_AGONY
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.jobs);
 
+        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.chunkedCollisionData);
+
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minY);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxY);
 
         total += PS_AGONY::getVectorMemoryUsage(collisionData);
-
         return total;
     }
 
@@ -726,8 +727,6 @@ namespace PS_AGONY
 
             // Prepare chunked collision data.
             constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
-            struct alignas(64) PairVector { std::vector<BodyPair> pairs; };
-            static std::vector<PairVector> chunkedCollisionData;
 
             // Create executor.
             auto& threadPool = getGlobalThreadPool();
@@ -736,11 +735,11 @@ namespace PS_AGONY
 
             // Resize chunk collision data.
             {
-                TRACY_SCOPE_N("Resize chunk collision data");
-                if (chunkCount > chunkedCollisionData.size())
-                    chunkedCollisionData.resize(chunkCount);
+                TRACY_SCOPE_N("Resize chunked collision data");
+                if (chunkCount > bvhFunctionResources.chunkedCollisionData.size())
+                    bvhFunctionResources.chunkedCollisionData.resize(chunkCount);
                 for (size_t i = 0; i < chunkCount; i++)
-                    chunkedCollisionData[i].pairs.clear();
+                    bvhFunctionResources.chunkedCollisionData[i].pairs.clear();
             }
 
             // Execute jobs.
@@ -753,7 +752,7 @@ namespace PS_AGONY
 
                         BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
                         uint32_t localPushBufferSize = 0;
-                        auto& localPairs = chunkedCollisionData[chunkId].pairs;
+                        auto& localPairs = bvhFunctionResources.chunkedCollisionData[chunkId].pairs;
 
                         auto flush = [&] {
                             localPairs.insert(localPairs.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
@@ -883,12 +882,12 @@ namespace PS_AGONY
                 );
             }
 
-            // Combine results
+            // Combine results.
             {
                 TRACY_SCOPE_N("Combine chunked data");
                 for (size_t i = 0; i < chunkCount; i++)
                 {
-                    const auto& pairs = chunkedCollisionData[i].pairs;
+                    const auto& pairs = bvhFunctionResources.chunkedCollisionData[i].pairs;
                     collisionData.insert(collisionData.end(), pairs.begin(), pairs.end());
                 }
             }

@@ -62,85 +62,153 @@ namespace PS_AGONY
     }
 
     const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(const std::vector<BodyPair>& bodyPairs)
-	{
+    {
         TRACY_SCOPE_N("Narrow phase");
-
-        // Prepare.
         allCollisionData.clear();
+        if (bodyPairs.empty()) return allCollisionData;
 
-        const size_t bodyPairCount = bodyPairs.size();
-        if (bodyPairCount == 0) return allCollisionData; // No pairs to check.
-
-        // Reserve.
-        allCollisionData.reserve(bodyPairCount);
-        auto& matrixDirectAccess = bodyPairVectorMatrix.getDirectAccess();
-        for (auto& io : matrixDirectAccess)
-        {
-            io.clear();
-            io.reserve(bodyPairCount);
-        }
-
-        // Partition body pairs by type.
+        // 1. Partition pairs by type (unchanged, stores in bodyPairVectorMatrix)
         {
             TRACY_SCOPE_N("Partition pairs");
-
             const BodyType* ECSTASY_RESTRICT bodyTypePtr = bodies.bodyType;
-
-            for (auto [bodyIndexA, bodyIndexB] : bodyPairs)
-            {
-                const Real invMassA = bodies.invMass[bodyIndexA];
-                const Real invMassB = bodies.invMass[bodyIndexB];
-                if (invMassA == Real(0) && invMassB == Real(0))
-                    continue; // Skip static-static pairs entirely.
-
-                BodyType bodyTypeA = bodyTypePtr[bodyIndexA];
-                BodyType bodyTypeB = bodyTypePtr[bodyIndexB];
-
-                // Ensure bodyTypeA <= bodyTypeB.
-                if (bodyTypeA > bodyTypeB)
-                {
-                    std::swap(bodyIndexA, bodyIndexB);
-                    std::swap(bodyTypeA, bodyTypeB);
+            auto& matrixAccess = bodyPairVectorMatrix.getDirectAccess();
+            for (auto& io : matrixAccess) {
+                io.clear();
+                io.bodyPairs.reserve(bodyPairs.size());
+            }
+            for (auto [idxA, idxB] : bodyPairs) {
+                if (bodies.invMass[idxA] == Real(0) && bodies.invMass[idxB] == Real(0))
+                    continue;
+                BodyType typeA = bodyTypePtr[idxA];
+                BodyType typeB = bodyTypePtr[idxB];
+                if (typeA > typeB) {
+                    std::swap(idxA, idxB);
+                    std::swap(typeA, typeB);
                 }
-
-                bodyPairVectorMatrix(static_cast<size_t>(bodyTypeA), static_cast<size_t>(bodyTypeB)).bodyPairs.emplace_back(bodyIndexA, bodyIndexB);
+                bodyPairVectorMatrix((size_t)typeA, (size_t)typeB).bodyPairs.emplace_back(idxA, idxB);
             }
         }
 
-        // Process each pair type separately.
-        const bool useThreading = true;
-        if (useThreading)
-        {
-            auto& threadPool = getGlobalThreadPool();
+        constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
+        constexpr size_t LOAD_BALANCING_FACTOR = 1;
+        constexpr size_t MIN_PARALLEL_PAIRS = 256;
+        const bool useThreading = true;  // could be a member flag
 
-            auto fut1 = threadPool.enqueueFuture(&NarrowPhaseCollisionDetector::collisionCircleCircle, this);
-            auto fut2 = threadPool.enqueueFuture(&NarrowPhaseCollisionDetector::collisionCircleBox, this);
-            auto fut3 = threadPool.enqueueFuture(&NarrowPhaseCollisionDetector::collisionBoxBox, this);
+        // 2. Collision function dispatch table (only upper triangle needed)
+        using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(size_t, size_t, std::vector<BodyCollisionData>&);
+        static const CollisionFunc dispatch[BODY_TYPE_COUNT][BODY_TYPE_COUNT] = {
+            /* Circle */ {
+                /* Circle */ &NarrowPhaseCollisionDetector::collisionCircleCircle,
+                /* Box    */ &NarrowPhaseCollisionDetector::collisionCircleBox,
+                /* Polygon*/ &NarrowPhaseCollisionDetector::collisionCirclePolygon,
+            },
+            /* Box */ {
+                /* Circle */ nullptr,
+                /* Box    */ &NarrowPhaseCollisionDetector::collisionBoxBox,
+                /* Polygon*/ &NarrowPhaseCollisionDetector::collisionBoxPolygon,
+            },
+            /* Polygon */ {
+                /* Circle */ nullptr,
+                /* Box    */ nullptr,
+                /* Polygon*/ &NarrowPhaseCollisionDetector::collisionPolygonPolygon,
+            },
+        };
 
-            fut1.wait();
-            fut2.wait();
-            fut3.wait();
-        }
-        else
-        {
-            collisionCircleCircle();
-            collisionCircleBox();
-            collisionBoxBox();
-        }
+        // 3. Prepare temporary storage for chunked results (reused across frames)
+        //    Each entry is a vector of AlignedCollisionDataVector (one per chunk)
+        static SymmetricMatrix<std::vector<AlignedCollisionDataVector>, BODY_TYPE_COUNT> chunkedResults;
 
-        // Combine data.
-        {
-            TRACY_SCOPE_N("Combine data");
+        // 4. Build tasks for all pair types (upper triangle) – mixed together
+        std::vector<Ecstasy::Threading::Task> tasks;
+        size_t totalTaskCount = 0;
+        auto& threadPool = getGlobalThreadPool();
 
-            for (auto& io : matrixDirectAccess)
-            {
-                auto& data = io.collisionData;
-                allCollisionData.insert(allCollisionData.end(), data.begin(), data.end());
+        struct TypeWork {
+            size_t row, col;
+            size_t pairCount;
+            size_t chunkCount;
+            CollisionFunc func;
+            bool useParallel;
+        };
+        std::vector<TypeWork> workItems;
+
+        for (size_t row = 0; row < BODY_TYPE_COUNT; ++row) {
+            for (size_t col = row; col < BODY_TYPE_COUNT; ++col) {
+                auto& io = bodyPairVectorMatrix(row, col);
+                size_t pairCount = io.bodyPairs.size();
+                if (pairCount == 0) continue;
+
+                CollisionFunc func = dispatch[row][col];
+                if (!func) continue;
+
+                bool useParallel = useThreading && (pairCount >= MIN_PARALLEL_PAIRS);
+                size_t chunkCount = 0;
+                if (useParallel) {
+                    auto [chunkCountTmp, chunkSize] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
+                        threadPool, pairCount, LOAD_BALANCING_FACTOR);
+                    chunkCount = chunkCountTmp;
+                    // Resize the chunked result vector for this type
+                    auto& typeChunks = chunkedResults(row, col);
+                    if (typeChunks.size() < chunkCount) typeChunks.resize(chunkCount);
+                    for (size_t i = 0; i < chunkCount; ++i) typeChunks[i].vector.clear();
+                }
+                workItems.push_back({ row, col, pairCount, chunkCount, func, useParallel });
+                if (useParallel) totalTaskCount += chunkCount;
             }
         }
 
-		return allCollisionData;
-	}
+        // Single latch for all parallel tasks
+        std::latch latch(totalTaskCount);
+        tasks.reserve(totalTaskCount);
+
+        // Enqueue tasks for all types (mixed)
+        for (const auto& wi : workItems) {
+            auto& io = bodyPairVectorMatrix(wi.row, wi.col);
+            if (!wi.useParallel) continue;
+
+            auto& typeChunks = chunkedResults(wi.row, wi.col);
+            size_t chunkSize = (wi.pairCount + wi.chunkCount - 1) / wi.chunkCount; // approximate
+            size_t chunkId = 0;
+            for (size_t start = 0; start < wi.pairCount; start += chunkSize) {
+                size_t end = std::min(start + chunkSize, wi.pairCount);
+                tasks.emplace_back([this, wi, start, end, chunkId, &typeChunks, &latch]() {
+                    (this->*wi.func)(start, end, typeChunks[chunkId].vector);
+                    latch.count_down();
+                    });
+                ++chunkId;
+            }
+        }
+
+        if (totalTaskCount > 0) {
+            threadPool.enqueueBulk(tasks);
+            latch.wait();
+        }
+
+        // 5. Combine results from all types (both serial and parallel)
+        allCollisionData.reserve(bodyPairs.size()); // upper bound estimate
+        for (const auto& wi : workItems) {
+            auto& io = bodyPairVectorMatrix(wi.row, wi.col);
+            if (!wi.useParallel) {
+                // Serial processing: directly into io.collisionData
+                (this->*wi.func)(0, wi.pairCount, io.collisionData);
+                allCollisionData.insert(allCollisionData.end(),
+                    io.collisionData.begin(), io.collisionData.end());
+            }
+            else {
+                // Parallel: gather from chunked vectors
+                auto& typeChunks = chunkedResults(wi.row, wi.col);
+                for (size_t i = 0; i < wi.chunkCount; ++i) {
+                    auto& dataVec = typeChunks[i].vector;
+                    allCollisionData.insert(allCollisionData.end(),
+                        dataVec.begin(), dataVec.end());
+                    // Clear for next frame (optional, helps reuse)
+                    dataVec.clear();
+                }
+            }
+        }
+
+        return allCollisionData;
+    }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
@@ -158,7 +226,7 @@ namespace PS_AGONY
         return total;
     }
 
-    void NarrowPhaseCollisionDetector::collisionCircleCircle()
+    void NarrowPhaseCollisionDetector::collisionCircleCircle(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
@@ -170,11 +238,10 @@ namespace PS_AGONY
 
         auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
 
-        auto bodyPairs = std::move(io.bodyPairs);
-        auto collisionData = std::move(io.collisionData);
-
-        for (auto [indexA, indexB] : bodyPairs)
+        for (size_t pairIndex = startIndex; pairIndex < endIndex; pairIndex++)
         {
+            auto [indexA, indexB] = io.bodyPairs[pairIndex];
+
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
@@ -216,7 +283,7 @@ namespace PS_AGONY
             }
 
             // Result.
-            collisionData.emplace_back(
+            outCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -225,12 +292,9 @@ namespace PS_AGONY
                 1
             );
         }
-
-        io.bodyPairs = std::move(bodyPairs);
-        io.collisionData = std::move(collisionData);
     }
 
-    void NarrowPhaseCollisionDetector::collisionCircleBox()
+    void NarrowPhaseCollisionDetector::collisionCircleBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-box collision");
 
@@ -247,11 +311,10 @@ namespace PS_AGONY
 
         auto& io = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Box);
 
-        auto bodyPairs = std::move(io.bodyPairs);
-        auto collisionData = std::move(io.collisionData);
-
-        for (auto [indexA, indexB] : bodyPairs)
+        for (size_t pairIndex = startIndex; pairIndex < endIndex; pairIndex++)
         {
+            auto [indexA, indexB] = io.bodyPairs[pairIndex];
+
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
@@ -307,7 +370,7 @@ namespace PS_AGONY
 
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-                collisionData.emplace_back(
+                outCollisionData.emplace_back(
                     indexA, indexB,
                     normal,
                     depth,
@@ -346,7 +409,7 @@ namespace PS_AGONY
 
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
-            collisionData.emplace_back(
+            outCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -355,16 +418,13 @@ namespace PS_AGONY
                 1
             );
         }
-
-        io.bodyPairs = std::move(bodyPairs);
-        io.collisionData = std::move(collisionData);
     }
 
-    void NarrowPhaseCollisionDetector::collisionCirclePolygon()
+    void NarrowPhaseCollisionDetector::collisionCirclePolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
     {
     }
 
-    void NarrowPhaseCollisionDetector::collisionBoxBox()
+    void NarrowPhaseCollisionDetector::collisionBoxBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Box-box collision");
 
@@ -387,11 +447,10 @@ namespace PS_AGONY
 
         auto& io = bodyPairVectorMatrix((size_t)BodyType::Box, (size_t)BodyType::Box);
 
-        auto bodyPairs = std::move(io.bodyPairs);
-        auto collisionData = std::move(io.collisionData);
-
-        for (auto [indexA, indexB] : bodyPairs)
+        for (size_t pairIndex = startIndex; pairIndex < endIndex; pairIndex++)
         {
+            auto [indexA, indexB] = io.bodyPairs[pairIndex];
+
             // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
@@ -622,7 +681,7 @@ namespace PS_AGONY
             if (contactCount == 0) continue;
 
             // Store final collision data.
-            collisionData.emplace_back(
+            outCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
@@ -631,16 +690,13 @@ namespace PS_AGONY
                 contactCount
             );
         }
-
-        io.bodyPairs = std::move(bodyPairs);
-        io.collisionData = std::move(collisionData);
     }
 
-    void NarrowPhaseCollisionDetector::collisionBoxPolygon()
+    void NarrowPhaseCollisionDetector::collisionBoxPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
     {
     }
 
-    void NarrowPhaseCollisionDetector::collisionPolygonPolygon()
+    void NarrowPhaseCollisionDetector::collisionPolygonPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
     {
     }
 }

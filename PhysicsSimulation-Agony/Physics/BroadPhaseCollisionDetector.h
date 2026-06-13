@@ -44,6 +44,11 @@ namespace PS_AGONY
 			};
 		};
 
+		struct alignas(64) PairVector
+		{
+			std::vector<BodyPair> pairs;
+		};
+
 		struct BvhFunctionResources
 		{
 			std::vector<BvhNode> nodes;
@@ -59,6 +64,8 @@ namespace PS_AGONY
 			std::vector<BvhNodePair> nodePairsToTraverse; // Traverse.
 			std::vector<BvhNodePair> leafNodePairs; // Perform cross between nodes.
 			std::vector<uint32_t> sameLeafNode; // Perform cross with itself.
+
+			std::vector<PairVector> chunkedCollisionData;
 
 			std::vector<LeafPairJob> jobs;
 		};

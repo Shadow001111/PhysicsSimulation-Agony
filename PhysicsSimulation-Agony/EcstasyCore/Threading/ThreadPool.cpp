@@ -277,11 +277,10 @@ namespace Ecstasy::Threading
         const size_t range = end - begin;
         if (range == 0) return;
 
-        const size_t numWorkers = pool.getThreadCount();
-        const size_t maxChunkCount = numWorkers * loadBalancingFactor;
+        auto chunkCountAndSize = getChunkCountAndSize(pool, range, loadBalancingFactor);
 
-        chunkSize = (range + maxChunkCount - 1) / maxChunkCount;
-        chunkCount = (range + chunkSize - 1) / chunkSize;
+        chunkCount = chunkCountAndSize.first;
+        chunkSize = chunkCountAndSize.second;
     }
 
     void ParallelForRangeExecutor::execute(std::function<void(size_t, size_t, size_t)>&& func)
@@ -312,5 +311,15 @@ namespace Ecstasy::Threading
         pool.enqueueBulk(tasks);
 
         latch.wait(); // Wait for all chunks to complete
+    }
+
+    std::pair<size_t, size_t> ParallelForRangeExecutor::getChunkCountAndSize(ThreadPool& pool, size_t taskRange, size_t loadBalancingFactor)
+    {
+        const size_t numWorkers = pool.getThreadCount();
+        const size_t maxChunkCount = numWorkers * loadBalancingFactor;
+
+        const size_t chunkSize = (taskRange + maxChunkCount - 1) / maxChunkCount;
+        const size_t chunkCount = (taskRange + chunkSize - 1) / chunkSize;
+        return { chunkCount, chunkSize };
     }
 }

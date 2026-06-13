@@ -122,11 +122,8 @@ namespace Ecstasy::Threading
         friend WorkerThread;
 
         alignas(64) std::atomic<uint32_t> workVersion{ 0 };
-
         alignas(64) WorkerThreadContainer workers;
-
         alignas(64) std::atomic<size_t> nextWorker{ 0 };
-
         alignas(64) std::atomic<size_t> pendingTaskCount{ 0 };
 
 
@@ -238,5 +235,7 @@ namespace Ecstasy::Threading
         void execute(std::function<void(size_t, size_t, size_t)>&& func);
 
         size_t getChunkCount() const noexcept { return chunkCount; }
+
+        static std::pair<size_t, size_t> getChunkCountAndSize(ThreadPool& pool, size_t taskRange, size_t loadBalancingFactor);
     };
 }

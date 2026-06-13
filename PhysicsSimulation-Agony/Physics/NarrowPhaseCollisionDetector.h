@@ -51,6 +51,11 @@ namespace PS_AGONY
 			}
 		};
 
+		struct alignas(64) AlignedCollisionDataVector
+		{
+			std::vector<BodyCollisionData> vector;
+		};
+
 		SymmetricMatrix<InputOutputCollisionData, BODY_TYPE_COUNT> bodyPairVectorMatrix;
 
 		std::vector<BodyCollisionData> allCollisionData;
@@ -77,11 +82,11 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 	private:
-		void collisionCircleCircle();
-		void collisionCircleBox();
-		void collisionCirclePolygon();
-		void collisionBoxBox();
-		void collisionBoxPolygon();
-		void collisionPolygonPolygon();
+		void collisionCircleCircle(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCircleBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCirclePolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionPolygonPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
 	};
 }
