@@ -8,7 +8,6 @@
 #include <bit>
 #include <algorithm>
 #include <array>
-#include <iostream>
 
 namespace PS_AGONY
 {
@@ -732,7 +731,7 @@ namespace PS_AGONY
 
             // Create executor.
             auto& threadPool = getGlobalThreadPool();
-            Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, bvhFunctionResources.jobs.size(), 1);
+            Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, bvhFunctionResources.jobs.size(), 2);
             const size_t chunkCount = executor.getChunkCount();
 
             // Resize chunk collision data.
