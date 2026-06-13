@@ -61,9 +61,9 @@ namespace PS_AGONY
 			std::vector<BodyIndex> mainBodyIndices;
 			std::vector<BodyIndex> tempBodyIndicesToSort;
 
-			std::vector<BvhNodePair> nodePairsToTraverse; // Traverse.
-			std::vector<BvhNodePair> leafNodePairs; // Perform cross between nodes.
-			std::vector<uint32_t> sameLeafNode; // Perform cross with itself.
+			std::vector<BvhNodePair> nodePairsToTraverse;
+			std::vector<BvhNodePair> leafPairsToTestCollisions;
+			std::vector<uint32_t> leavesToTestCollisions;
 
 			std::vector<PairVector> chunkedCollisionData;
 
@@ -82,6 +82,9 @@ namespace PS_AGONY
 			RealSimdAlignedVector<LeafData> minY;
 			RealSimdAlignedVector<LeafData> maxY;
 		};
+
+
+		static constexpr bool USE_THREADING = true;
 
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;
@@ -119,6 +122,11 @@ namespace PS_AGONY
 		void refitBvhNodeAABBS();
 
 		void queryBvhPairs();
+
+		void traverseNodesToGetOverlappingLeafPairs();
+
+		void testCollisionsInLeavesSingleThreaded();
+		void testCollisionsInLeavesMultiThreaded();
 	};
 }
 

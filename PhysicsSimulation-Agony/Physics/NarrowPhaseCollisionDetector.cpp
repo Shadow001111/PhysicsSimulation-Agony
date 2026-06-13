@@ -126,7 +126,7 @@ namespace PS_AGONY
         allCollisionData.reserve(bodyPairs.size());
         
         // Find collisions.
-        const bool useThreading = true;
+        const bool useThreading = USE_THREADING;
         if (useThreading)
         {
             findCollisionsMultiThreaded();
@@ -143,13 +143,20 @@ namespace PS_AGONY
     {
         size_t total = 0;
 
-        total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
-
         const auto& matrixDirectAccess = bodyPairVectorMatrix.getDirectAccess();
-        for (const auto& shapeBodyPairs : matrixDirectAccess)
+        for (const auto& vec : matrixDirectAccess)
         {
-            total += PS_AGONY::getVectorMemoryUsage(shapeBodyPairs);
+            total += PS_AGONY::getVectorMemoryUsage(vec);
         }
+
+        const auto& chunkedResultsDirectAccess = chunkedResults.getDirectAccess();
+        for (const auto& vec : chunkedResultsDirectAccess)
+        {
+            total += PS_AGONY::getVectorMemoryUsage(vec);
+        }
+        total += PS_AGONY::getVectorMemoryUsage(tasks);
+
+        total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
 
         return total;
     }
@@ -179,9 +186,6 @@ namespace PS_AGONY
         allCollisionData.clear();
         
         constexpr size_t LOAD_BALANCING_FACTOR = 1;
-
-        // Temporary storage for chunked results.
-        static SymmetricMatrix<std::vector<CacheAlignedCollisionDataVector>, BODY_TYPE_COUNT> chunkedResults;
 
         // Build tasks for all pair types.
         size_t totalTaskCount = 0;
