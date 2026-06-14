@@ -58,7 +58,7 @@ namespace PS_AGONY
 
 		std::vector<TypeWork> workItems;
 		SymmetricMatrix<std::vector<CacheAlignedCollisionDataVector>, BODY_TYPE_COUNT> chunkedResults;
-		std::vector<Ecstasy::Threading::Task> tasks;
+		std::vector<std::function<std::vector<BodyCollisionData>&()>> collisionDataTasks;
 
 		std::vector<BodyCollisionData> allCollisionData;
 
