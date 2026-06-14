@@ -47,7 +47,7 @@ namespace PS_AGONY
 
 			// Baumgarte stabilization. No slop.
 			const Real positionCorrectionPercent = 1.0;
-			const Real velocityCorrectionStrength = 2500.0;
+			const Real velocityCorrectionStrength = 8.0;
 		};
 
 		// Bodies SoA.
@@ -125,7 +125,7 @@ namespace PS_AGONY
 
 		void computeTruePositions();
 
-		void resolveCollisions(Real deltaTime, const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 
 		void applyConstraints();
 
