@@ -49,7 +49,7 @@ namespace PS_AGONY
 		};
 
 
-		static constexpr bool USE_THREADING = true;
+		static constexpr bool USE_THREADING = Threading::MAX_THREADS_ALLOWED > 0;
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
 		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;

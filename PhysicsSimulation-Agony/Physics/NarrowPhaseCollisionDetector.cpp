@@ -189,7 +189,7 @@ namespace PS_AGONY
 
         // Build tasks for all pair types.
         size_t totalTaskCount = 0;
-        auto& threadPool = getGlobalThreadPool();;
+        auto& threadPool = Threading::getGlobalThreadPool();
 
         auto& bodyPairVectorMatrixDA = bodyPairVectorMatrix.getDirectAccess();
         auto& chunkedResultsDA = chunkedResults.getDirectAccess();
@@ -259,15 +259,12 @@ namespace PS_AGONY
         auto futures = threadPool.enqueueFutureBulk(collisionDataTasks);
 
         // Combine results from all types.
+        for (auto& fut : futures)
         {
-            TRACY_SCOPE_N("Combine results");
-            for (auto& fut : futures)
-            {
-                auto& chunkResult = fut.get();
-                allCollisionData.insert(allCollisionData.end(),
-                    std::make_move_iterator(chunkResult.begin()),
-                    std::make_move_iterator(chunkResult.end()));
-            }
+            auto& chunkResult = fut.get();
+            allCollisionData.insert(allCollisionData.end(),
+                std::make_move_iterator(chunkResult.begin()),
+                std::make_move_iterator(chunkResult.end()));
         }
     }
 

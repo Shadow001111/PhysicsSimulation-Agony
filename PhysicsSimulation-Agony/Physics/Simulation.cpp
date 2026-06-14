@@ -43,7 +43,7 @@ namespace PS_AGONY
         materials.emplace_back(); // Default material.
 
         // Spawn a thread pool.
-        auto& threadPool = getGlobalThreadPool();
+        auto& threadPool = Threading::getGlobalThreadPool();
         (void)threadPool;
     }
 

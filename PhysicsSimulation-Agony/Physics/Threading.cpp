@@ -1,10 +1,13 @@
 #include "Threading.h"
 
-namespace PS_AGONY
+namespace PS_AGONY::Threading
 {
-	Ecstasy::Threading::ThreadPool& getGlobalThreadPool()
+	ThreadPool& getGlobalThreadPool()
 	{
-		static Ecstasy::Threading::ThreadPool pool;
+		static Ecstasy::Threading::ThreadPool pool(std::min(
+			(uint32_t)std::thread::hardware_concurrency(),
+			MAX_THREADS_ALLOWED
+		));
 		return pool;
 	}
 }

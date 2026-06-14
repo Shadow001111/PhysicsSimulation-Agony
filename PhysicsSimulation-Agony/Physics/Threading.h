@@ -1,7 +1,11 @@
 #pragma once
 #include "EcstasyCore/Threading/ThreadPool.h"
 
-namespace PS_AGONY
+namespace PS_AGONY::Threading
 {
-	Ecstasy::Threading::ThreadPool& getGlobalThreadPool();
+	const uint32_t MAX_THREADS_ALLOWED = -1;
+
+	using ThreadPool = Ecstasy::Threading::ThreadPool;
+
+	ThreadPool& getGlobalThreadPool();
 }

@@ -1,5 +1,4 @@
 ﻿#include "BroadPhaseCollisionDetector.h"
-#include "Threading.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -897,7 +896,7 @@ namespace PS_AGONY
         constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 256;
 
         // Create executor.
-        auto& threadPool = getGlobalThreadPool();
+        auto& threadPool = Threading::getGlobalThreadPool();
         Ecstasy::Threading::ParallelForRangeExecutor executor(threadPool, 0, bvhFunctionResources.jobs.size(), 2);
         const size_t chunkCount = executor.getChunkCount();
 

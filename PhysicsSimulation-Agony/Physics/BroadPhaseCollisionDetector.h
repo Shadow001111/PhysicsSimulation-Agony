@@ -1,5 +1,6 @@
 #pragma once
 #include "BodySoAViewer.h"
+#include "Threading.h"
 
 #include <vector>
 
@@ -84,7 +85,7 @@ namespace PS_AGONY
 		};
 
 
-		static constexpr bool USE_THREADING = true;
+		static constexpr bool USE_THREADING = Threading::MAX_THREADS_ALLOWED > 0;
 
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;

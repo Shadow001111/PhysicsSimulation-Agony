@@ -231,6 +231,8 @@ namespace Ecstasy::Threading
     inline std::vector<std::future<ResultType>> ThreadPool::enqueueFutureBulk(
         std::vector<std::function<ResultType()>> funcs)
     {
+        TRACY_SCOPE_N("ThreadPool::enqueueFutureBulk");
+
         const size_t taskCount = funcs.size();
         if (taskCount == 0) return {};
 
