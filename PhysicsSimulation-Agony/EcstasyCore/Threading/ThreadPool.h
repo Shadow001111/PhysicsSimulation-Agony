@@ -148,6 +148,9 @@ namespace Ecstasy::Threading
 
         void enqueueBulk(std::vector<Task>& tasks);
 
+        template<typename ResultType>
+        inline std::vector<std::future<ResultType>> ThreadPool::enqueueFutureBulk(std::vector<std::function<ResultType()>> funcs);
+
         void shutdown();
         size_t getThreadCount() const noexcept { return workers.getThreadCount(); }
         size_t getPendingTasks() const noexcept { return pendingTaskCount.load(std::memory_order_relaxed); }
@@ -222,6 +225,68 @@ namespace Ecstasy::Threading
         workVersion.fetch_add(1, std::memory_order_release);
         workVersion.notify_one();
         return result;
+    }
+
+    template<typename ResultType>
+    inline std::vector<std::future<ResultType>> ThreadPool::enqueueFutureBulk(
+        std::vector<std::function<ResultType()>> funcs)
+    {
+        const size_t taskCount = funcs.size();
+        if (taskCount == 0) return {};
+
+        const size_t workerCount = workers.getThreadCount();
+        if (workerCount == 0)
+            throw std::runtime_error("enqueueFutureBulk on ThreadPool with no workers");
+
+        const size_t startOffset = nextWorker.fetch_add(1, std::memory_order_relaxed) % workerCount;
+
+        // Build packaged tasks first and harvest all futures before any moves occur.
+        std::vector<std::packaged_task<ResultType()>> packagedTasks;
+        std::vector<std::future<ResultType>> futures;
+        packagedTasks.reserve(taskCount);
+        futures.reserve(taskCount);
+        for (auto& func : funcs)
+        {
+            packagedTasks.emplace_back(std::move(func));
+            futures.push_back(packagedTasks.back().get_future());
+        }
+
+        // Distribute contiguous blocks to worker queues in round-robin order.
+        const size_t base = taskCount / workerCount;
+        const size_t remainder = taskCount % workerCount;
+
+        size_t taskOffset = 0;
+        for (size_t i = 0; i < workerCount; i++)
+        {
+            const size_t workerIdx = (startOffset + i) % workerCount;
+            const size_t count = base + (i < remainder ? 1 : 0);
+            if (count == 0) continue;
+
+            WorkerThread& worker = workers[workerIdx];
+            if (worker.stop.load(std::memory_order_relaxed))
+                throw std::runtime_error("enqueueFutureBulk on stopped ThreadPool");
+
+            // Wrap each packaged_task in a void Task by moving it into a lambda.
+            // The packaged_task is move-only, so it must be captured by move.
+            std::vector<Task> genericTasks;
+            genericTasks.reserve(count);
+            for (size_t t = 0; t < count; ++t)
+            {
+                genericTasks.emplace_back(
+                    [pkg = std::move(packagedTasks[taskOffset + t])]() mutable {
+                        pkg();
+                    });
+            }
+            worker.tasks.bulk_push(genericTasks.data(), count);
+
+            taskOffset += count;
+        }
+
+        pendingTaskCount.fetch_add(taskCount, std::memory_order_release);
+        workVersion.fetch_add(1, std::memory_order_release);
+        workVersion.notify_all();
+
+        return futures;
     }
 
     class ParallelForRangeExecutor

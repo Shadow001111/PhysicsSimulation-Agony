@@ -155,7 +155,7 @@ namespace PS_AGONY
         {
             total += PS_AGONY::getVectorMemoryUsage(vec);
         }
-        total += PS_AGONY::getVectorMemoryUsage(tasks);
+        total += PS_AGONY::getVectorMemoryUsage(collisionDataTasks);
 
         total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
 
@@ -231,12 +231,9 @@ namespace PS_AGONY
             }
         }
 
-        // Single latch for all parallel tasks.
-        std::latch latch(totalTaskCount);
-
         // Enqueue tasks.
-        tasks.clear();
-        tasks.reserve(totalTaskCount);
+        collisionDataTasks.clear();
+        collisionDataTasks.reserve(totalTaskCount);
 
         {
             TRACY_SCOPE_N("Create tasks");
@@ -249,30 +246,27 @@ namespace PS_AGONY
                 for (size_t start = 0; start < wi.pairCount; start += chunkSize)
                 {
                     size_t end = std::min(start + chunkSize, wi.pairCount);
-                    tasks.emplace_back([this, wi, start, end, chunkId, &typeChunks, &latch]()
+                    collisionDataTasks.emplace_back([this, wi, start, end, chunkId, &typeChunks]()
                         {
                             (this->*wi.func)(start, end, typeChunks[chunkId].vector);
-                            latch.count_down();
+                            return std::ref(typeChunks[chunkId].vector);
                         });
                     chunkId++;
                 }
             }
         }
         
-        threadPool.enqueueBulk(tasks);
-        latch.wait();
+        auto futures = threadPool.enqueueFutureBulk(collisionDataTasks);
 
         // Combine results from all types.
         {
             TRACY_SCOPE_N("Combine results");
-            for (const auto& wi : workItems)
+            for (auto& fut : futures)
             {
-                auto& typeChunks = chunkedResultsDA[wi.index];
-                for (size_t i = 0; i < wi.chunkCount; i++)
-                {
-                    auto& dataVec = typeChunks[i].vector;
-                    allCollisionData.insert(allCollisionData.end(), dataVec.begin(), dataVec.end());
-                }
+                auto& chunkResult = fut.get();
+                allCollisionData.insert(allCollisionData.end(),
+                    std::make_move_iterator(chunkResult.begin()),
+                    std::make_move_iterator(chunkResult.end()));
             }
         }
     }
