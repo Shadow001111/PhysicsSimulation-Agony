@@ -125,6 +125,8 @@ namespace PS_AGONY
 
 		void computeTruePositions();
 
+		void experimentalBodyCollisionDataGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 
 		void applyConstraints();

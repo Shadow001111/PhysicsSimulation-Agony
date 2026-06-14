@@ -3,7 +3,7 @@
 
 namespace PS_AGONY::Threading
 {
-	const uint32_t MAX_THREADS_ALLOWED = -1;
+	const uint32_t MAX_THREADS_ALLOWED = 0;
 
 	using ThreadPool = Ecstasy::Threading::ThreadPool;
 

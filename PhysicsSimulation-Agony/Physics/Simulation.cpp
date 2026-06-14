@@ -6,6 +6,8 @@
 
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace PS_AGONY
 {
@@ -558,6 +560,9 @@ namespace PS_AGONY
             const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
             if (narrowCollisionData.empty()) break;
 
+            // Experimental.
+            experimentalBodyCollisionDataGraphColoring(narrowCollisionData);
+
             // Collision resolution.
             resolveCollisions(narrowCollisionData);
         }
@@ -727,6 +732,100 @@ namespace PS_AGONY
             truePositionXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
             truePositionYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
         }
+    }
+
+    void Simulation::experimentalBodyCollisionDataGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    {
+        TRACY_SCOPE_N("Graph coloring");
+
+        static std::vector<std::vector<std::size_t>> outSubsets;
+        outSubsets.clear();
+
+        struct CollisionSubset
+        {
+            std::vector<std::size_t> collisionIndices;
+            std::vector<uint32_t> usedBodies;
+
+            void reset() noexcept
+            {
+                collisionIndices.clear();
+                usedBodies.clear();
+            }
+        };
+
+        static std::vector<CollisionSubset> subsets;
+
+        if (subsets.capacity() < narrowPhaseCollisions.size())
+        {
+            subsets.reserve(narrowPhaseCollisions.size());
+        }
+
+        if (subsets.size() < narrowPhaseCollisions.size())
+        {
+            const std::size_t oldSize = subsets.size();
+            subsets.resize(narrowPhaseCollisions.size());
+
+            for (std::size_t i = oldSize; i < subsets.size(); i++)
+            {
+                subsets[i].collisionIndices.reserve(8);
+                subsets[i].usedBodies.reserve(16);
+            }
+        }
+
+        for (std::size_t i = 0; i < subsets.size(); i++)
+        {
+            subsets[i].reset();
+        }
+
+        std::size_t activeSubsetCount = 0;
+
+        for (std::size_t i = 0; i < narrowPhaseCollisions.size(); i++)
+        {
+            const BodyCollisionData& collision = narrowPhaseCollisions[i];
+
+            auto containsBody = [](const std::vector<uint32_t>& bodies, uint32_t body) -> bool
+                {
+                    return std::find(bodies.begin(), bodies.end(), body) != bodies.end();
+                };
+
+            std::size_t targetSubset = activeSubsetCount;
+
+            for (std::size_t s = 0; s < activeSubsetCount; s++)
+            {
+                const bool inCurrent =
+                    containsBody(subsets[s].usedBodies, collision.bodyA) ||
+                    containsBody(subsets[s].usedBodies, collision.bodyB);
+
+                const bool inPrevious =
+                    (s > 0) &&
+                    (containsBody(subsets[s - 1].usedBodies, collision.bodyA) ||
+                        containsBody(subsets[s - 1].usedBodies, collision.bodyB));
+
+                if (!inCurrent && !inPrevious)
+                {
+                    targetSubset = s;
+                    break;
+                }
+            }
+
+            if (targetSubset == activeSubsetCount)
+            {
+                activeSubsetCount++;
+            }
+
+            subsets[targetSubset].collisionIndices.push_back(i);
+            subsets[targetSubset].usedBodies.push_back(collision.bodyA);
+            subsets[targetSubset].usedBodies.push_back(collision.bodyB);
+        }
+
+        outSubsets.resize(activeSubsetCount);
+
+        for (std::size_t i = 0; i < activeSubsetCount; i++)
+        {
+            outSubsets[i] = subsets[i].collisionIndices;
+        }
+
+        std::cout << outSubsets.size() << "\n";
     }
 
     void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
