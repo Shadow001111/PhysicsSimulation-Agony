@@ -13,8 +13,9 @@ namespace Ecstasy::Threading
 {
     class ThreadPool;  // forward declaration
 
-    struct alignas(64) WorkerThread
+    class alignas(64) WorkerThread
     {
+    public:
         ChaseLevQueue tasks{ 1024 * 64 };
         std::thread thread;
         size_t index;
@@ -23,6 +24,8 @@ namespace Ecstasy::Threading
         WorkerThread(size_t idx) : index(idx) {}
 
         void run(ThreadPool* pool);
+    private:
+        void configureThread();
     };
 
     class WorkerThreadContainer

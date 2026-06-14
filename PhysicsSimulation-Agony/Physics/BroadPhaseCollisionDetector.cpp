@@ -724,7 +724,7 @@ namespace PS_AGONY
         constexpr uint32_t LANES = RealSimd::lanes;
         constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
         constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
-        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
+        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 256;
 
         // Get pointers.
         const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
@@ -894,7 +894,7 @@ namespace PS_AGONY
         }
 
         // Prepare chunked collision data.
-        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 64;
+        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 256;
 
         // Create executor.
         auto& threadPool = getGlobalThreadPool();
@@ -1052,6 +1052,8 @@ namespace PS_AGONY
 
         // Combine results.
         {
+            // Note: Computing total size, resizing and using memcpy is slower.
+
             TRACY_SCOPE_N("Combine chunked data");
             for (size_t i = 0; i < chunkCount; i++)
             {

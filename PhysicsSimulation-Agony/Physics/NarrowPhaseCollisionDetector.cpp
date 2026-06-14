@@ -149,6 +149,7 @@ namespace PS_AGONY
             total += PS_AGONY::getVectorMemoryUsage(vec);
         }
 
+        total += PS_AGONY::getVectorMemoryUsage(workItems);
         const auto& chunkedResultsDirectAccess = chunkedResults.getDirectAccess();
         for (const auto& vec : chunkedResultsDirectAccess)
         {
@@ -183,28 +184,19 @@ namespace PS_AGONY
     void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded()
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
-        allCollisionData.clear();
         
         constexpr size_t LOAD_BALANCING_FACTOR = 1;
 
         // Build tasks for all pair types.
         size_t totalTaskCount = 0;
-        auto& threadPool = getGlobalThreadPool();
-
-        struct TypeWork
-        {
-            size_t index;
-            size_t pairCount;
-            size_t chunkCount;
-            CollisionFunc func;
-        };
-        std::vector<TypeWork> workItems;
+        auto& threadPool = getGlobalThreadPool();;
 
         auto& bodyPairVectorMatrixDA = bodyPairVectorMatrix.getDirectAccess();
         auto& chunkedResultsDA = chunkedResults.getDirectAccess();
         const auto& collisionFuncsDA = collisionFuncs.getDirectAccess();
         {
             TRACY_SCOPE_N("Work items");
+            workItems.clear();
             for (size_t index = 0; index < bodyPairVectorMatrixDA.size(); index++)
             {
                 auto& shapeBodyPairs = bodyPairVectorMatrixDA[index];
@@ -214,10 +206,12 @@ namespace PS_AGONY
                 CollisionFunc func = collisionFuncsDA[index];
 
                 size_t chunkCount = 0;
+                size_t chunkSize = 0;
                 {
-                    auto [chunkCountTmp, chunkSize] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
+                    auto [chunkCountTmp, chunkSizeTmp] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
                         threadPool, pairCount, LOAD_BALANCING_FACTOR);
                     chunkCount = chunkCountTmp;
+                    chunkSize = chunkSizeTmp;
 
                     // Resize the chunked result vector for this type.
                     auto& typeChunks = chunkedResultsDA[index];
@@ -232,7 +226,7 @@ namespace PS_AGONY
                         typeChunks[i].vector.clear();
                     }
                 }
-                workItems.emplace_back(index, pairCount, chunkCount, func);
+                workItems.emplace_back(index, pairCount, chunkCount, chunkSize, func);
                 totalTaskCount += chunkCount;
             }
         }
@@ -250,7 +244,7 @@ namespace PS_AGONY
             {
                 auto& typeChunks = chunkedResultsDA[wi.index];
 
-                size_t chunkSize = (wi.pairCount + wi.chunkCount - 1) / wi.chunkCount;
+                size_t chunkSize = wi.chunkSize;
                 size_t chunkId = 0;
                 for (size_t start = 0; start < wi.pairCount; start += chunkSize)
                 {
