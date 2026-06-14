@@ -559,7 +559,7 @@ namespace PS_AGONY
             if (narrowCollisionData.empty()) break;
 
             // Collision resolution.
-            resolveCollisions(deltaTime, narrowCollisionData);
+            resolveCollisions(narrowCollisionData);
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }
@@ -729,14 +729,11 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::resolveCollisions(Real deltaTime, const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         TRACY_SCOPE_N("Resolve collisions");
 
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
-
-        // Note: I am note sure if it should be multiplied by delta time.
-        const Real velocityCorrectionStrength = simulationSettings.velocityCorrectionStrength * deltaTime;
 
         // Get pointers.
         Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
@@ -997,8 +994,8 @@ namespace PS_AGONY
             }
             if (ENABLE_VELOCITY_CORRECTION)
             {
-                const Real correctionA = correctionStrengthA * velocityCorrectionStrength;
-                const Real correctionB = correctionStrengthB * velocityCorrectionStrength;
+                const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
+                const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
 
                 const Vec2 correctionAVec = normal * correctionA;
                 const Vec2 correctionBVec = normal * correctionB;
