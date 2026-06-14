@@ -32,10 +32,6 @@ namespace PS_AGONY
 
 	class NarrowPhaseCollisionDetector
 	{
-		static constexpr bool USE_THREADING = true;
-
-		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
-
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(size_t, size_t, std::vector<BodyCollisionData>&);
 
 		struct alignas(64) CacheAlignedCollisionDataVector
@@ -43,10 +39,24 @@ namespace PS_AGONY
 			std::vector<BodyCollisionData> vector;
 		};
 
+		struct TypeWork
+		{
+			size_t index;
+			size_t pairCount;
+			size_t chunkCount;
+			size_t chunkSize;
+			CollisionFunc func;
+		};
+
+
+		static constexpr bool USE_THREADING = true;
+		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
+
 		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;
 
 		SymmetricMatrix<std::vector<BodyPair>, BODY_TYPE_COUNT> bodyPairVectorMatrix;
 
+		std::vector<TypeWork> workItems;
 		SymmetricMatrix<std::vector<CacheAlignedCollisionDataVector>, BODY_TYPE_COUNT> chunkedResults;
 		std::vector<Ecstasy::Threading::Task> tasks;
 

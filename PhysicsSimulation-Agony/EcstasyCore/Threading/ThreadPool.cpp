@@ -5,8 +5,48 @@
 #include <string>
 #include <iostream>
 
+#define NOMINMAX
+#define NOGDI
+#define NOCRYPT
+#define NOUSER
+#define NOKERNEL
+#define NOMCX
+#define NOSERVICE
+#define NOCOMM
+#define NOSOUND
+#define NOHELP
+#define NOMB
+#define NOWH
+#define NOGDI
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
+#include <windows.h>
+
 namespace Ecstasy::Threading
 {
+    static std::string threadPriorityToString(int priority)
+    {
+        if (priority == THREAD_PRIORITY_ERROR_RETURN)
+        {
+            return "Error: " + std::to_string(GetLastError());
+        }
+
+        switch (priority)
+        {
+        case THREAD_PRIORITY_IDLE:               return "IDLE (-15)";
+        case THREAD_PRIORITY_LOWEST:             return "LOWEST (-2)";
+        case THREAD_PRIORITY_BELOW_NORMAL:       return "BELOW_NORMAL (-1)";
+        case THREAD_PRIORITY_NORMAL:             return "NORMAL (0)";
+        case THREAD_PRIORITY_ABOVE_NORMAL:       return "ABOVE_NORMAL (+1)";
+        case THREAD_PRIORITY_HIGHEST:            return "HIGHEST (+2)";
+        case THREAD_PRIORITY_TIME_CRITICAL:      return "TIME_CRITICAL (+15)";
+        default:
+            // Some unexpected value (should not happen with valid handles).
+            return "Unknown (" + std::to_string(priority) + ")";
+        }
+    }
+
+
     ThreadPool::ThreadPool(size_t numThreads)
     {
         if (numThreads == 0)
@@ -129,10 +169,7 @@ namespace Ecstasy::Threading
 
     void WorkerThread::run(ThreadPool* pool)
     {
-        #ifdef TRACY_ENABLE
-        std::string threadName = "worker_" + std::to_string(index);
-        tracy::SetThreadName(threadName.c_str());
-        #endif
+        configureThread();
 
         const size_t workerCount = pool->getThreadCount();
 
@@ -212,6 +249,22 @@ namespace Ecstasy::Threading
                 } while (!stop.load(std::memory_order_relaxed) && pool->getPendingTasks() == 0);
                 TracyMessage("Awake", 5);
             }
+        }
+    }
+
+    void WorkerThread::configureThread()
+    {
+        // Tracy thread name.
+    #ifdef TRACY_ENABLE
+        std::string threadName = "worker_" + std::to_string(index);
+        tracy::SetThreadName(threadName.c_str());
+    #endif
+
+        // Priority.
+        {
+            //auto handle = thread.native_handle();
+
+            //SetThreadPriority(handle, THREAD_PRIORITY_NORMAL);
         }
     }
 
