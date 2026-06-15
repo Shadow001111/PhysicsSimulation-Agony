@@ -739,8 +739,8 @@ namespace PS_AGONY
         // TODO: Double buffering.
 
         //constexpr size_t MIN_PASS_SIZE = 128;
-        constexpr size_t MAX_PASS_SIZE = 256;
-        constexpr size_t WORKER_COUNT = 4;
+        constexpr size_t MAX_PASS_SIZE = 256; // TODO: Maybe configure at runtime?
+        constexpr size_t WORKER_COUNT = 8; // TODO: Make customizable for hardware_currency() * factor.
 
         struct alignas(64) WorkerData
         {
@@ -818,6 +818,8 @@ namespace PS_AGONY
 
         auto pushStagingPass = [](std::vector<size_t>& stagingPass, size_t stageIndex)
             {
+                TRACY_SCOPE_N("Push staging pass");
+
                 auto& wData = workerData[stageIndex];
 
                 // Wait for worker to finish.
@@ -855,6 +857,7 @@ namespace PS_AGONY
                 // Coloring.
                 {
                     TRACY_SCOPE_N("Coloring pass");
+                    // TODO: Maybe write a quick path for stageIndex 0.
                     size_t readSize = std::min(MAX_PASS_SIZE, remainingIndices.size());
                     for (size_t readPos = 0; readPos < readSize;)
                     {
