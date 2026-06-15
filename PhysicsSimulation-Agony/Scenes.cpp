@@ -11,8 +11,8 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 10.0f;
     constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 2000;
-    constexpr int boxCount = 0;
+    constexpr int circleCount = 3000;
+    constexpr int boxCount = 3000;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -338,8 +338,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
 
 	if (scene == 0)
 	{
-		load_ALotOfCollisions(simulation, rvg, -15.0f, 0.0f);
-        load_ALotOfCollisions(simulation, rvg,  15.0f, 0.0f);
+        load_ALotOfCollisions(simulation, rvg, 0.0f, 0.0f);
+		//load_ALotOfCollisions(simulation, rvg, -15.0f, 0.0f);
+        //load_ALotOfCollisions(simulation, rvg,  15.0f, 0.0f);
 	}
 	else if (scene == 1)
 	{

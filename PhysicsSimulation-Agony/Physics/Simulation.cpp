@@ -739,39 +739,29 @@ namespace PS_AGONY
         // TODO: Double buffering. Though then maybe some indices may interfere, that means workers need to work on same 'page'.
         //          Page is double(or tripple) buffer.
 
-        //constexpr size_t MIN_PASS_SIZE = 128;
-        constexpr size_t MAX_PASS_SIZE = 256; // TODO: Maybe configure at runtime?
-        constexpr size_t WORKER_COUNT = 8; // TODO: Make customizable for hardware_currency() * factor.
+        constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
+        constexpr auto MAX_PASS_SIZE = ResolveCollisionsThreadedResources::MAX_PASS_SIZE;
 
-        struct alignas(64) WorkerData
-        {
-            std::vector<size_t> indices;
-            std::atomic<bool> isProcessing{ false };
-            std::atomic<bool> isDestroyed{ true };
-        };
-
-        using UsedSlot = uint8_t;
+        using UsedSlot = ResolveCollisionsThreadedResources::UsedSlot;
 
         // Fill remaining indices.
-        static std::vector<size_t> remainingIndices;
         const size_t collisionCount = narrowPhaseCollisions.size();
-        remainingIndices.resize(collisionCount);
+        resolveCollisionsThreadedResources.remainingIndices.resize(collisionCount);
         {
             TRACY_SCOPE_NC("Fill indices", Ecstasy::Color::Red);
-            for (size_t i = 0; i < collisionCount; i++) remainingIndices[i] = i;
+            for (size_t i = 0; i < collisionCount; i++) resolveCollisionsThreadedResources.remainingIndices[i] = i;
         }
         
         // Worker data.
-        static std::array<WorkerData, WORKER_COUNT> workerData;
         {
             TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
             for (size_t i = 0; i < WORKER_COUNT; i++)
             {
-                auto& wData = workerData[i];
+                auto& wData = resolveCollisionsThreadedResources.workerData[i];
                 wData.isDestroyed.wait(false, std::memory_order_acquire);
             }
         }
-        for (auto& w : workerData)
+        for (auto& w : resolveCollisionsThreadedResources.workerData)
         {
             w.indices.clear();
             w.isProcessing.store(false, std::memory_order_relaxed);
@@ -779,16 +769,14 @@ namespace PS_AGONY
         }
 
         //
-        static std::vector<size_t> stagingPass;
-        stagingPass.clear();
+        resolveCollisionsThreadedResources.stagingPass.clear();
 
-        static std::vector<UsedSlot> usedBodies;
-        usedBodies.resize(bodies.getCount());
+        resolveCollisionsThreadedResources.usedBodies.resize(bodies.getCount());
 
         // Lambdas.
         auto workerFunc = [this, &narrowPhaseCollisions](size_t workerIndex)
             {
-                auto& wData = workerData[workerIndex];
+                auto& wData = resolveCollisionsThreadedResources.workerData[workerIndex];
                 try
                 {
                     while (true)
@@ -820,11 +808,11 @@ namespace PS_AGONY
                 wData.isDestroyed.notify_one();
             };
 
-        auto pushStagingPass = [](std::vector<size_t>& stagingPass, size_t stageIndex)
+        auto pushStagingPass = [this](std::vector<size_t>& stagingPass, size_t stageIndex)
             {
                 TRACY_SCOPE_NC("Push staging pass", Ecstasy::Color::Gold);
 
-                auto& wData = workerData[stageIndex];
+                auto& wData = resolveCollisionsThreadedResources.workerData[stageIndex];
 
                 // Wait for worker to finish.
                 {
@@ -853,7 +841,11 @@ namespace PS_AGONY
         while (true)
         {
             // Clear body-using history.
-            std::fill(usedBodies.begin(), usedBodies.end(), UsedSlot(-1));
+            std::fill(
+                resolveCollisionsThreadedResources.usedBodies.begin(),
+                resolveCollisionsThreadedResources.usedBodies.end(),
+                UsedSlot(-1)
+            );
 
             // Stage loop.
             for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
@@ -862,62 +854,73 @@ namespace PS_AGONY
                 {
                     TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Pink);
                     
-                    size_t readSize = std::min(MAX_PASS_SIZE, remainingIndices.size());
+                    size_t readSize = std::min(MAX_PASS_SIZE, resolveCollisionsThreadedResources.remainingIndices.size());
                     if (stageIndex == 0)
                     {   
                         // Quick pass: no body conflicts at stage 0.
                         // Note: The order is different from else branch.
 
+                        const auto beg = resolveCollisionsThreadedResources.remainingIndices.cbegin();
+
                         // Copy first indices.
-                        stagingPass.insert(stagingPass.end(), remainingIndices.begin(), remainingIndices.begin() + readSize);
+                        resolveCollisionsThreadedResources.stagingPass.insert(resolveCollisionsThreadedResources.stagingPass.end(),
+                            beg,
+                            beg + readSize
+                        );
 
                         // Remove taken indices from remainingIndices.
-                        remainingIndices.erase(               remainingIndices.begin(), remainingIndices.begin() + readSize);
+                        resolveCollisionsThreadedResources.remainingIndices.erase(
+                            beg,
+                            beg + readSize
+                        );
 
                         // Mark indices as used.
-                        for (const size_t idx : stagingPass)
+                        for (const size_t idx : resolveCollisionsThreadedResources.stagingPass)
                         {
                             const auto& coll = narrowPhaseCollisions[idx];
-                            usedBodies[coll.bodyA] = 0;
-                            usedBodies[coll.bodyB] = 0;
+                            resolveCollisionsThreadedResources.usedBodies[coll.bodyA] = 0;
+                            resolveCollisionsThreadedResources.usedBodies[coll.bodyB] = 0;
                         }
                     }
                     else
                     {
                         for (size_t readPos = 0; readPos < readSize;)
                         {
-                            const size_t idx = remainingIndices[readPos];
+                            const size_t idx = resolveCollisionsThreadedResources.remainingIndices[readPos];
                             const auto& coll = narrowPhaseCollisions[idx];
 
-                            if (usedBodies[coll.bodyA] < stageIndex || usedBodies[coll.bodyB] < stageIndex)
+                            if (
+                                resolveCollisionsThreadedResources.usedBodies[coll.bodyA] < stageIndex ||
+                                resolveCollisionsThreadedResources.usedBodies[coll.bodyB] < stageIndex
+                                )
                             {
                                 readPos++;
                                 continue;
                             }
-                            stagingPass.push_back(idx);
-                            usedBodies[coll.bodyA] = stageIndex;
-                            usedBodies[coll.bodyB] = stageIndex;
+                            resolveCollisionsThreadedResources.stagingPass.push_back(idx);
+                            resolveCollisionsThreadedResources.usedBodies[coll.bodyA] = stageIndex;
+                            resolveCollisionsThreadedResources.usedBodies[coll.bodyB] = stageIndex;
 
-                            remainingIndices[readPos] = remainingIndices.back();
-                            remainingIndices.pop_back();
+                            resolveCollisionsThreadedResources.remainingIndices[readPos] = resolveCollisionsThreadedResources.remainingIndices.back();
+                            resolveCollisionsThreadedResources.remainingIndices.pop_back();
                             readSize--;
                         }
                     }
                 }
 
                 // Check.
-                if (stagingPass.empty())
+                if (resolveCollisionsThreadedResources.stagingPass.empty())
                 {
                     maxAllowedStages = stageIndex;
                     break;
                 }
 
                 // Push pass.
-                pushStagingPass(stagingPass, stageIndex);
+                pushStagingPass(resolveCollisionsThreadedResources.stagingPass, stageIndex);
             }
 
             // Check.
-            if (remainingIndices.empty() || maxAllowedStages < 2) break;
+            if (resolveCollisionsThreadedResources.remainingIndices.empty() || maxAllowedStages < 2) break;
         }
 
         // Wait for workers to finish and stop them.
@@ -925,7 +928,7 @@ namespace PS_AGONY
             TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
             for (size_t i = 0; i < WORKER_COUNT; i++)
             {
-                auto& wData = workerData[i];
+                auto& wData = resolveCollisionsThreadedResources.workerData[i];
                 wData.isProcessing.wait(true, std::memory_order_acquire);
 
                 // Stop. Call with empty indices array will stop worker.
@@ -935,9 +938,9 @@ namespace PS_AGONY
         }
 
         // Execute remaining on main thread.
-        if (!remainingIndices.empty())
+        if (!resolveCollisionsThreadedResources.remainingIndices.empty())
         {
-            resolveCollisionsPartially(narrowPhaseCollisions, remainingIndices);
+            resolveCollisionsPartially(narrowPhaseCollisions, resolveCollisionsThreadedResources.remainingIndices);
         }
     }
 

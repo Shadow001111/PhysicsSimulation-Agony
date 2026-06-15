@@ -50,6 +50,26 @@ namespace PS_AGONY
 			const Real velocityCorrectionStrength = 8.0;
 		};
 
+		struct ResolveCollisionsThreadedResources
+		{
+			struct alignas(64) WorkerData
+			{
+				std::vector<size_t> indices;
+				std::atomic<bool> isProcessing{ false };
+				std::atomic<bool> isDestroyed{ true };
+			};
+
+			using UsedSlot = uint8_t;
+
+			static constexpr size_t MAX_PASS_SIZE = 256; // TODO: Maybe configure at runtime?
+			static constexpr size_t WORKER_COUNT = 8; // TODO: Make customizable for hardware_currency() * factor.
+
+			std::vector<size_t> remainingIndices;
+			std::array<WorkerData, WORKER_COUNT> workerData;
+			std::vector<size_t> stagingPass;
+			std::vector<UsedSlot> usedBodies;
+		};
+
 		// Bodies SoA.
 		BodySoA bodies;
 		CircleSoA circles;
@@ -64,6 +84,9 @@ namespace PS_AGONY
 		// Collisions.
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
+
+		// Resources.
+		ResolveCollisionsThreadedResources resolveCollisionsThreadedResources;
 
 		// Timers.
 		Real updateTimeAccumulator = 0.0;
