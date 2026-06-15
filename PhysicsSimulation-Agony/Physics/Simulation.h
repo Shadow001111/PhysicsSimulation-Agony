@@ -32,6 +32,7 @@ namespace PS_AGONY
 			size_t materialDataMemoryUsage = 0;
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
+			size_t solverMemoryUsage = 0;
 		};
 	private:
 		struct SimulationSettings
@@ -61,7 +62,7 @@ namespace PS_AGONY
 
 			using UsedSlot = uint8_t;
 
-			static constexpr size_t MAX_PASS_SIZE = 256; // TODO: Maybe configure at runtime?
+			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick.
 			static constexpr size_t WORKER_COUNT = 8; // TODO: Make customizable for hardware_currency() * factor.
 
 			std::vector<size_t> remainingIndices;

@@ -732,6 +732,12 @@ namespace PS_AGONY
 
     void Simulation::resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
+        if (narrowPhaseCollisions.size() < ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS)
+        {
+            resolveCollisions(narrowPhaseCollisions);
+            return;
+        }
+
         TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
 
         // TODO: (for future) We can create a lot of staging buffers, not waiting for workers to finish.
@@ -740,7 +746,7 @@ namespace PS_AGONY
         //          Page is double(or tripple) buffer.
 
         constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
-        constexpr auto MAX_PASS_SIZE = ResolveCollisionsThreadedResources::MAX_PASS_SIZE;
+        constexpr auto MAX_VALID_INDICES_PER_PASS = ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS;
 
         using UsedSlot = ResolveCollisionsThreadedResources::UsedSlot;
 
@@ -854,11 +860,12 @@ namespace PS_AGONY
                 {
                     TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Pink);
                     
-                    size_t readSize = std::min(MAX_PASS_SIZE, resolveCollisionsThreadedResources.remainingIndices.size());
                     if (stageIndex == 0)
                     {   
                         // Quick pass: no body conflicts at stage 0.
                         // Note: The order is different from else branch.
+
+                        size_t readSize = std::min(MAX_VALID_INDICES_PER_PASS, resolveCollisionsThreadedResources.remainingIndices.size());
 
                         const auto beg = resolveCollisionsThreadedResources.remainingIndices.cbegin();
 
@@ -884,7 +891,9 @@ namespace PS_AGONY
                     }
                     else
                     {
-                        for (size_t readPos = 0; readPos < readSize;)
+                        size_t readSize = resolveCollisionsThreadedResources.remainingIndices.size();
+                        size_t validIndicesCollected = 0;
+                        for (size_t readPos = 0; readPos < readSize && validIndicesCollected < MAX_VALID_INDICES_PER_PASS;)
                         {
                             const size_t idx = resolveCollisionsThreadedResources.remainingIndices[readPos];
                             const auto& coll = narrowPhaseCollisions[idx];
@@ -904,6 +913,8 @@ namespace PS_AGONY
                             resolveCollisionsThreadedResources.remainingIndices[readPos] = resolveCollisionsThreadedResources.remainingIndices.back();
                             resolveCollisionsThreadedResources.remainingIndices.pop_back();
                             readSize--;
+
+                            validIndicesCollected++;
                         }
                     }
                 }
@@ -1528,23 +1539,24 @@ namespace PS_AGONY
     void Simulation::collectMemoryUsage(DebugData& data) const
     {
         // Memory
-        {
-            auto& total = data.bodyDataMemoryUsage;
-            total = sizeof(BodySoA);
-            total += bodies.getMemoryUsage();
-        }
-        {
-            auto& total = data.circleDataMemoryUsage;
-            total = sizeof(CircleSoA);
-            total += circles.getMemoryUsage();
-        }
-        {
-            auto& total = data.boxDataMemoryUsage;
-            total = sizeof(BoxSoA);
-            total += boxes.getMemoryUsage();
-        }
+        data.bodyDataMemoryUsage = sizeof(BodySoA) + bodies.getMemoryUsage();
+        data.circleDataMemoryUsage = sizeof(CircleSoA) + circles.getMemoryUsage();
+        data.boxDataMemoryUsage = sizeof(BoxSoA) + boxes.getMemoryUsage();
+
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = sizeof(BroadPhaseCollisionDetector) + broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = sizeof(NarrowPhaseCollisionDetector) + narrowPhaseCollisionDetector.getMemoryUsage();
+        {
+            auto& total = data.solverMemoryUsage; total = 0;
+
+            data.solverMemoryUsage += sizeof(ResolveCollisionsThreadedResources);
+            data.solverMemoryUsage += getVectorMemoryUsage(resolveCollisionsThreadedResources.remainingIndices);
+            data.solverMemoryUsage += getVectorMemoryUsage(resolveCollisionsThreadedResources.stagingPass);
+            data.solverMemoryUsage += getVectorMemoryUsage(resolveCollisionsThreadedResources.usedBodies);
+            for (const auto& wData : resolveCollisionsThreadedResources.workerData)
+            {
+                data.solverMemoryUsage += getVectorMemoryUsage(wData.indices);
+            }
+        }
     }
 }
