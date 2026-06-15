@@ -867,7 +867,7 @@ namespace PS_AGONY
 
                         size_t readSize = std::min(MAX_VALID_INDICES_PER_PASS, resolveCollisionsThreadedResources.remainingIndices.size());
 
-                        const auto beg = resolveCollisionsThreadedResources.remainingIndices.cbegin();
+                        const auto beg = resolveCollisionsThreadedResources.remainingIndices.end() - readSize;
 
                         // Copy first indices.
                         resolveCollisionsThreadedResources.stagingPass.insert(resolveCollisionsThreadedResources.stagingPass.end(),
