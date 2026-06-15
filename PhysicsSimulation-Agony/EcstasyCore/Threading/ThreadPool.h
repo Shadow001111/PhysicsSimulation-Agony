@@ -162,18 +162,11 @@ namespace Ecstasy::Threading
         TRACY_SCOPE_N("ThreadPool::enqueue");
 
         // Choose a worker in round-robin order.
-        size_t idx;
-        {
-            TRACY_SCOPE_N("Get next worker id");
-            idx = nextWorker.fetch_add(1, std::memory_order_relaxed) % workers.getThreadCount();
-        }
+        size_t idx = nextWorker.fetch_add(1, std::memory_order_relaxed) % workers.getThreadCount();
         WorkerThread& worker = workers[idx];
 
-        {
-            TRACY_SCOPE_N("Read stop");
-            if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
-                throw std::runtime_error("enqueue on stopped ThreadPool");
-        }
+        if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
+            throw std::runtime_error("enqueue on stopped ThreadPool");
         
         Task task = [f = std::forward<F>(f),
             ...args = std::forward<Args>(args)]() mutable {
@@ -183,18 +176,9 @@ namespace Ecstasy::Threading
         // Push task.
         worker.tasks.push(std::move(task));
 
-        {
-            TRACY_SCOPE_N("Add pending task count");
-            pendingTaskCount.fetch_add(1, std::memory_order_relaxed);
-        }
-        {
-            TRACY_SCOPE_N("Add work version");
-            workVersion.fetch_add(1, std::memory_order_release);
-        }
-        {
-            TRACY_SCOPE_N("Notify");
-            workVersion.notify_one();
-        }
+        pendingTaskCount.fetch_add(1, std::memory_order_relaxed);
+        workVersion.fetch_add(1, std::memory_order_release);
+        workVersion.notify_one();
     }
 
     template<class F, class... Args>

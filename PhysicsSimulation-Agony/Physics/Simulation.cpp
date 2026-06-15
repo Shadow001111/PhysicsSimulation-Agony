@@ -49,7 +49,7 @@ namespace PS_AGONY
 
     void Simulation::update(Real deltaTime)
     {
-        TRACY_SCOPE_N("Simulation update");
+        TRACY_SCOPE_NC("Simulation update", Ecstasy::Color::Wheat);
 
         // Delta time check.
         if (deltaTime <= 0) return;
@@ -389,7 +389,7 @@ namespace PS_AGONY
 
     void Simulation::physicsStep(Real deltaTime)
     {
-        TRACY_SCOPE_N("Physics step");
+        TRACY_SCOPE_NC("Physics step", Ecstasy::Color::Orange);
 
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
@@ -419,7 +419,7 @@ namespace PS_AGONY
     {
         using RealSimd = Simd<Real>;
 
-        TRACY_SCOPE_N("Apply external forces");
+        TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
 
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
@@ -463,7 +463,7 @@ namespace PS_AGONY
     {
         using RealSimd = Simd<Real>;
 
-        TRACY_SCOPE_N("Intergrate");
+        TRACY_SCOPE_NC("Intergrate", Ecstasy::Color::Blue);
 
         const RealSimd deltaTimeV{ deltaTime };
 
@@ -567,14 +567,14 @@ namespace PS_AGONY
 
     void Simulation::buildBodyAABBs()
     {
-        TRACY_SCOPE_N("Build body AABBs");
+        TRACY_SCOPE_NC("Build body AABBs", Ecstasy::Color::Green);
         buildCircleAABBs();
         buildBoxAABBs();
     }
 
     void Simulation::buildCircleAABBs()
     {
-        TRACY_SCOPE_N("Build circle AABBs");
+        TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Color::LightGreen);
 
         const size_t count = circles.getCount();
         if (count == 0) return;
@@ -608,7 +608,7 @@ namespace PS_AGONY
 
     void Simulation::buildBoxAABBs()
     {
-        TRACY_SCOPE_N("Build box AABBs");
+        TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Color::DarkGreen);
 
         const size_t count = boxes.getCount();
         if (count == 0) return;
@@ -653,7 +653,7 @@ namespace PS_AGONY
 
     void Simulation::wrapRotation()
     {
-        TRACY_SCOPE_N("Wrap rotation");
+        TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Color::Cyan);
 
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
@@ -666,7 +666,7 @@ namespace PS_AGONY
 
     void Simulation::computeRotationCosSin()
     {
-        TRACY_SCOPE_N("Compute rotation cos/sin");
+        TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Color::Teal);
 
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
         Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
@@ -685,7 +685,7 @@ namespace PS_AGONY
     {
         using RealSimd = Simd<Real>;
 
-        TRACY_SCOPE_N("Compute true positions");
+        TRACY_SCOPE_NC("Compute true positions", Ecstasy::Color::Magenta);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
@@ -732,11 +732,12 @@ namespace PS_AGONY
 
     void Simulation::resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        TRACY_SCOPE_N("Resolve collisions (Threaded)");
+        TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
 
         // TODO: (for future) We can create a lot of staging buffers, not waiting for workers to finish.
         // TODO: Push buffer immediately after worker took it.
-        // TODO: Double buffering.
+        // TODO: Double buffering. Though then maybe some indices may interfere, that means workers need to work on same 'page'.
+        //          Page is double(or tripple) buffer.
 
         //constexpr size_t MIN_PASS_SIZE = 128;
         constexpr size_t MAX_PASS_SIZE = 256; // TODO: Maybe configure at runtime?
@@ -760,7 +761,7 @@ namespace PS_AGONY
         // Worker data.
         static std::array<WorkerData, WORKER_COUNT> workerData;
         {
-            TRACY_SCOPE_N("Wait for workers to get destroyed");
+            TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
             for (size_t i = 0; i < WORKER_COUNT; i++)
             {
                 auto& wData = workerData[i];
@@ -818,13 +819,13 @@ namespace PS_AGONY
 
         auto pushStagingPass = [](std::vector<size_t>& stagingPass, size_t stageIndex)
             {
-                TRACY_SCOPE_N("Push staging pass");
+                TRACY_SCOPE_NC("Push staging pass", Ecstasy::Color::Gold);
 
                 auto& wData = workerData[stageIndex];
 
                 // Wait for worker to finish.
                 {
-                    TRACY_SCOPE_N("Wait for worker");
+                    TRACY_SCOPE_NC("Wait for worker", Ecstasy::Color::Silver);
                     wData.isProcessing.wait(true, std::memory_order_acquire);
                 }
 
@@ -856,7 +857,7 @@ namespace PS_AGONY
             {
                 // Coloring.
                 {
-                    TRACY_SCOPE_N("Coloring pass");
+                    TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Pink);
                     // TODO: Maybe write a quick path for stageIndex 0.
                     size_t readSize = std::min(MAX_PASS_SIZE, remainingIndices.size());
                     for (size_t readPos = 0; readPos < readSize;)
@@ -896,7 +897,7 @@ namespace PS_AGONY
 
         // Wait for workers to finish and stop them.
         {
-            TRACY_SCOPE_N("Wait for workers to finish");
+            TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
             for (size_t i = 0; i < WORKER_COUNT; i++)
             {
                 auto& wData = workerData[i];
@@ -917,7 +918,7 @@ namespace PS_AGONY
 
     void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        TRACY_SCOPE_N("Resolve collisions");
+        TRACY_SCOPE_NC("Resolve collisions", Ecstasy::Color::Violet);
 
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
@@ -1195,7 +1196,7 @@ namespace PS_AGONY
 
     void Simulation::resolveCollisionsPartially(const std::vector<BodyCollisionData>& narrowPhaseCollisions, const std::vector<size_t>& collisionIndices)
     {
-        TRACY_SCOPE_N("Resolve collisions (Partially)");
+        TRACY_SCOPE_NC("Resolve collisions (Partially)", Ecstasy::Color::HotPink);
 
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
