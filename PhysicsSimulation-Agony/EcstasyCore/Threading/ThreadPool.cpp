@@ -98,11 +98,8 @@ namespace Ecstasy::Threading
 
             WorkerThread& worker = workers[workerIdx];
 
-            {
-                TRACY_SCOPE_N("Read stop");
-                if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
-                    throw std::runtime_error("enqueueBulk on stopped ThreadPool");
-            }
+            if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
+                throw std::runtime_error("enqueueBulk on stopped ThreadPool");
 
             // Push.
             worker.tasks.bulk_push(taskSource + taskOffset, count);
@@ -111,18 +108,9 @@ namespace Ecstasy::Threading
         }
 
         // Update global counters and notify waiting threads.
-        {
-            TRACY_SCOPE_N("Add pending task count");
-            pendingTaskCount.fetch_add(taskCount, std::memory_order_release);
-        }
-        {
-            TRACY_SCOPE_N("Add work version");
-            workVersion.fetch_add(1, std::memory_order_release);
-        }
-        {
-            TRACY_SCOPE_N("Notify");
-            workVersion.notify_all();
-        }
+        pendingTaskCount.fetch_add(taskCount, std::memory_order_release);
+        workVersion.fetch_add(1, std::memory_order_release);
+        workVersion.notify_all();
     }
 
     void ThreadPool::shutdown()
