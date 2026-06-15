@@ -149,9 +149,8 @@ namespace PS_AGONY
 
 		void computeTruePositions();
 
-		void resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 		void resolveCollisionsPartially(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 			const std::vector<size_t>& collisionIndices
