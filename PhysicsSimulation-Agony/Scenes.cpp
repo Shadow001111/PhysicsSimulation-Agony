@@ -6,12 +6,12 @@
 
 #include <cmath>
 
-void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg, float globalOffsetX, float globalOffsetY)
 {
     constexpr float boundary = 10.0f;
-    constexpr float thickness = 20.0f;
+    constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 500;// 2000;
+    constexpr int circleCount = 2000;
     constexpr int boxCount = 0;
 
     PS_AGONY::Material material0 = {
@@ -35,26 +35,28 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
         constexpr float halfThickness = thickness * 0.5f;
         constexpr float length = boundary * 2.0f + 2.0f;
 
-        simulation.createBox({ -(boundary + halfThickness), 0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
-        simulation.createBox({  (boundary + halfThickness), 0.0 }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
-        simulation.createBox({ 0.0, -(boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
-        simulation.createBox({ 0.0,  (boundary + halfThickness) }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
+        const float b = boundary + halfThickness;
+
+        simulation.createBox({ globalOffsetX - b, globalOffsetY }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
+        simulation.createBox({ globalOffsetX + b, globalOffsetY }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
+        simulation.createBox({ globalOffsetX, globalOffsetY - b }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
+        simulation.createBox({ globalOffsetX, globalOffsetY + b }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
     }
     for (int i = 0; i < circleCount; i++)
     {
-        const float x = rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float y = rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float x = globalOffsetX + rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
         const float r = rvg.real<float>(0.1f, 0.15f);
         const float mass = 3.14f * r * r;
 
-        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r, 1);
+        simulation.createCircle({ x, y }, { vx, vy }, 0.0f, 0.0f, mass, { 0.0f, 0.0f }, material0Index, r);
     }
     for (int i = 0; i < boxCount; i++)
     {
-        const float x = rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float y = rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float x = globalOffsetX + rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
         const float rotation = rvg.real<float>(0.0f, 6.28f);
@@ -66,8 +68,10 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     }
 
     {
-        constexpr float radius = 4.0f;
-        simulation.createCircle({ -boundary, boundary + thickness + radius + 0.5f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 50.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
+        //constexpr float radius = 4.0f;
+        //simulation.createCircle(
+        //    { globalOffsetX -boundary, globalOffsetY + boundary + thickness + radius + 0.5f },
+        //    { 0.0f, 0.0f }, 0.0f, 0.0f, 50.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
     }
 }
 
@@ -334,7 +338,8 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
 
 	if (scene == 0)
 	{
-		load_ALotOfCollisions(simulation, rvg);
+		load_ALotOfCollisions(simulation, rvg, -15.0f, 0.0f);
+        load_ALotOfCollisions(simulation, rvg,  15.0f, 0.0f);
 	}
 	else if (scene == 1)
 	{
