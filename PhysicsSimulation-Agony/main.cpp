@@ -116,6 +116,7 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
         ss << "\n  Boxes data: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
         ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
         ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
+        ss << "\n  Solver: " << formatSizeBinary(simulationData.solverMemoryUsage);
     }
 
     // Convert stream to string.
