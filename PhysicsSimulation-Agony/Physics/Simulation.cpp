@@ -756,7 +756,10 @@ namespace PS_AGONY
         static std::vector<size_t> remainingIndices;
         const size_t collisionCount = narrowPhaseCollisions.size();
         remainingIndices.resize(collisionCount);
-        for (size_t i = 0; i < collisionCount; i++) remainingIndices[i] = i;
+        {
+            TRACY_SCOPE_NC("Fill indices", Ecstasy::Color::Red);
+            for (size_t i = 0; i < collisionCount; i++) remainingIndices[i] = i;
+        }
         
         // Worker data.
         static std::array<WorkerData, WORKER_COUNT> workerData;
@@ -858,25 +861,47 @@ namespace PS_AGONY
                 // Coloring.
                 {
                     TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Pink);
-                    // TODO: Maybe write a quick path for stageIndex 0.
+                    
                     size_t readSize = std::min(MAX_PASS_SIZE, remainingIndices.size());
-                    for (size_t readPos = 0; readPos < readSize;)
-                    {
-                        const size_t idx = remainingIndices[readPos];
-                        const auto& coll = narrowPhaseCollisions[idx];
+                    if (stageIndex == 0)
+                    {   
+                        // Quick pass: no body conflicts at stage 0.
+                        // Note: The order is different from else branch.
 
-                        if (usedBodies[coll.bodyA] < stageIndex || usedBodies[coll.bodyB] < stageIndex)
+                        // Copy first indices.
+                        stagingPass.insert(stagingPass.end(), remainingIndices.begin(), remainingIndices.begin() + readSize);
+
+                        // Remove taken indices from remainingIndices.
+                        remainingIndices.erase(               remainingIndices.begin(), remainingIndices.begin() + readSize);
+
+                        // Mark indices as used.
+                        for (const size_t idx : stagingPass)
                         {
-                            readPos++;
-                            continue;
+                            const auto& coll = narrowPhaseCollisions[idx];
+                            usedBodies[coll.bodyA] = 0;
+                            usedBodies[coll.bodyB] = 0;
                         }
-                        stagingPass.push_back(idx);
-                        usedBodies[coll.bodyA] = stageIndex;
-                        usedBodies[coll.bodyB] = stageIndex;
+                    }
+                    else
+                    {
+                        for (size_t readPos = 0; readPos < readSize;)
+                        {
+                            const size_t idx = remainingIndices[readPos];
+                            const auto& coll = narrowPhaseCollisions[idx];
 
-                        remainingIndices[readPos] = remainingIndices.back();
-                        remainingIndices.pop_back();
-                        readSize--;
+                            if (usedBodies[coll.bodyA] < stageIndex || usedBodies[coll.bodyB] < stageIndex)
+                            {
+                                readPos++;
+                                continue;
+                            }
+                            stagingPass.push_back(idx);
+                            usedBodies[coll.bodyA] = stageIndex;
+                            usedBodies[coll.bodyB] = stageIndex;
+
+                            remainingIndices[readPos] = remainingIndices.back();
+                            remainingIndices.pop_back();
+                            readSize--;
+                        }
                     }
                 }
 
