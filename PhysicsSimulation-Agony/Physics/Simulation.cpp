@@ -6,8 +6,6 @@
 
 #include <iostream>
 #include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace PS_AGONY
 {
@@ -560,11 +558,9 @@ namespace PS_AGONY
             const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
             if (narrowCollisionData.empty()) break;
 
-            // Experimental.
-            experimentalBodyCollisionDataGraphColoring(narrowCollisionData);
-
             // Collision resolution.
-            resolveCollisions(narrowCollisionData);
+            //resolveCollisions(narrowCollisionData);
+            resolveCollisionsThreaded(narrowCollisionData);
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }
@@ -734,98 +730,186 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::experimentalBodyCollisionDataGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Simulation::resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        TRACY_SCOPE_N("Graph coloring");
+        TRACY_SCOPE_N("Resolve collisions (Threaded)");
 
-        static std::vector<std::vector<std::size_t>> outSubsets;
-        outSubsets.clear();
+        // TODO: (for future) We can create a lot of staging buffers, not waiting for workers to finish.
+        // TODO: Push buffer immediately after worker took it.
+        // TODO: Double buffering.
 
-        struct CollisionSubset
+        //constexpr size_t MIN_PASS_SIZE = 128;
+        constexpr size_t MAX_PASS_SIZE = 256;
+        constexpr size_t WORKER_COUNT = 4;
+
+        struct alignas(64) WorkerData
         {
-            std::vector<std::size_t> collisionIndices;
-            std::vector<uint32_t> usedBodies;
-
-            void reset() noexcept
-            {
-                collisionIndices.clear();
-                usedBodies.clear();
-            }
+            std::vector<size_t> indices;
+            std::atomic<bool> isProcessing{ false };
+            std::atomic<bool> isDestroyed{ true };
         };
 
-        static std::vector<CollisionSubset> subsets;
+        using UsedSlot = uint8_t;
 
-        if (subsets.capacity() < narrowPhaseCollisions.size())
+        // Fill remaining indices.
+        static std::vector<size_t> remainingIndices;
+        const size_t collisionCount = narrowPhaseCollisions.size();
+        remainingIndices.resize(collisionCount);
+        for (size_t i = 0; i < collisionCount; i++) remainingIndices[i] = i;
+        
+        // Worker data.
+        static std::array<WorkerData, WORKER_COUNT> workerData;
         {
-            subsets.reserve(narrowPhaseCollisions.size());
-        }
-
-        if (subsets.size() < narrowPhaseCollisions.size())
-        {
-            const std::size_t oldSize = subsets.size();
-            subsets.resize(narrowPhaseCollisions.size());
-
-            for (std::size_t i = oldSize; i < subsets.size(); i++)
+            TRACY_SCOPE_N("Wait for workers to get destroyed");
+            for (size_t i = 0; i < WORKER_COUNT; i++)
             {
-                subsets[i].collisionIndices.reserve(8);
-                subsets[i].usedBodies.reserve(16);
+                auto& wData = workerData[i];
+                wData.isDestroyed.wait(false, std::memory_order_acquire);
             }
         }
-
-        for (std::size_t i = 0; i < subsets.size(); i++)
+        for (auto& w : workerData)
         {
-            subsets[i].reset();
+            w.indices.clear();
+            w.isProcessing.store(false, std::memory_order_relaxed);
+            w.isDestroyed.store(false, std::memory_order_relaxed);
         }
 
-        std::size_t activeSubsetCount = 0;
+        //
+        static std::vector<size_t> stagingPass;
+        stagingPass.clear();
 
-        for (std::size_t i = 0; i < narrowPhaseCollisions.size(); i++)
-        {
-            const BodyCollisionData& collision = narrowPhaseCollisions[i];
+        static std::vector<UsedSlot> usedBodies;
+        usedBodies.resize(bodies.getCount());
 
-            auto containsBody = [](const std::vector<uint32_t>& bodies, uint32_t body) -> bool
-                {
-                    return std::find(bodies.begin(), bodies.end(), body) != bodies.end();
-                };
-
-            std::size_t targetSubset = activeSubsetCount;
-
-            for (std::size_t s = 0; s < activeSubsetCount; s++)
+        // Lambdas.
+        auto workerFunc = [this, &narrowPhaseCollisions](size_t workerIndex)
             {
-                const bool inCurrent =
-                    containsBody(subsets[s].usedBodies, collision.bodyA) ||
-                    containsBody(subsets[s].usedBodies, collision.bodyB);
-
-                const bool inPrevious =
-                    (s > 0) &&
-                    (containsBody(subsets[s - 1].usedBodies, collision.bodyA) ||
-                        containsBody(subsets[s - 1].usedBodies, collision.bodyB));
-
-                if (!inCurrent && !inPrevious)
+                auto& wData = workerData[workerIndex];
+                try
                 {
-                    targetSubset = s;
+                    while (true)
+                    {
+                        // Wait for data to arrive.
+                        wData.isProcessing.wait(false, std::memory_order_acquire);
+
+                        // Check for stop.
+                        if (wData.indices.empty()) break;
+
+                        // Execute.
+                        resolveCollisionsPartially(narrowPhaseCollisions, wData.indices);
+                        wData.indices.clear();
+
+                        // Notify main thread that worker is finished.
+                        wData.isProcessing.store(false, std::memory_order_release);
+                        wData.isProcessing.notify_one();
+                    }
+                    wData.isProcessing.store(false, std::memory_order_release);
+                    wData.isProcessing.notify_one();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cout << "Resolve collisions worker caught an exception: " << e.what() << "\n";
+                    wData.isProcessing.store(false, std::memory_order_release);
+                    wData.isProcessing.notify_one();
+                }
+                wData.isDestroyed.store(true, std::memory_order_release);
+                wData.isDestroyed.notify_one();
+            };
+
+        auto pushStagingPass = [](std::vector<size_t>& stagingPass, size_t stageIndex)
+            {
+                auto& wData = workerData[stageIndex];
+
+                // Wait for worker to finish.
+                {
+                    TRACY_SCOPE_N("Wait for worker");
+                    wData.isProcessing.wait(true, std::memory_order_acquire);
+                }
+
+                // Push staging pass.
+                wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
+
+                // Notify worker that data is ready.
+                wData.isProcessing.store(true, std::memory_order_release);
+                wData.isProcessing.notify_one();
+            };
+
+        // Launch workers.
+        auto& threadPool = Threading::getGlobalThreadPool();
+
+        for (size_t i = 0; i < WORKER_COUNT; i++)
+        {
+            threadPool.enqueue(workerFunc, i);
+        }
+
+        // Main loop.
+        size_t maxAllowedStages = WORKER_COUNT;
+        while (true)
+        {
+            // Clear body-using history.
+            std::fill(usedBodies.begin(), usedBodies.end(), UsedSlot(-1));
+
+            // Stage loop.
+            for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
+            {
+                // Coloring.
+                {
+                    TRACY_SCOPE_N("Coloring pass");
+                    size_t readSize = std::min(MAX_PASS_SIZE, remainingIndices.size());
+                    for (size_t readPos = 0; readPos < readSize;)
+                    {
+                        const size_t idx = remainingIndices[readPos];
+                        const auto& coll = narrowPhaseCollisions[idx];
+
+                        if (usedBodies[coll.bodyA] < stageIndex || usedBodies[coll.bodyB] < stageIndex)
+                        {
+                            readPos++;
+                            continue;
+                        }
+                        stagingPass.push_back(idx);
+                        usedBodies[coll.bodyA] = stageIndex;
+                        usedBodies[coll.bodyB] = stageIndex;
+
+                        remainingIndices[readPos] = remainingIndices.back();
+                        remainingIndices.pop_back();
+                        readSize--;
+                    }
+                }
+
+                // Check.
+                if (stagingPass.empty())
+                {
+                    maxAllowedStages = stageIndex;
                     break;
                 }
+
+                // Push pass.
+                pushStagingPass(stagingPass, stageIndex);
             }
 
-            if (targetSubset == activeSubsetCount)
-            {
-                activeSubsetCount++;
-            }
-
-            subsets[targetSubset].collisionIndices.push_back(i);
-            subsets[targetSubset].usedBodies.push_back(collision.bodyA);
-            subsets[targetSubset].usedBodies.push_back(collision.bodyB);
+            // Check.
+            if (remainingIndices.empty() || maxAllowedStages < 2) break;
         }
 
-        outSubsets.resize(activeSubsetCount);
-
-        for (std::size_t i = 0; i < activeSubsetCount; i++)
+        // Wait for workers to finish and stop them.
         {
-            outSubsets[i] = subsets[i].collisionIndices;
+            TRACY_SCOPE_N("Wait for workers to finish");
+            for (size_t i = 0; i < WORKER_COUNT; i++)
+            {
+                auto& wData = workerData[i];
+                wData.isProcessing.wait(true, std::memory_order_acquire);
+
+                // Stop. Call with empty indices array will stop worker.
+                wData.isProcessing.store(true, std::memory_order_release);
+                wData.isProcessing.notify_one();
+            }
         }
 
-        std::cout << outSubsets.size() << "\n";
+        // Execute remaining on main thread.
+        if (!remainingIndices.empty())
+        {
+            resolveCollisionsPartially(narrowPhaseCollisions, remainingIndices);
+        }
     }
 
     void Simulation::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
@@ -870,7 +954,6 @@ namespace PS_AGONY
 			};
 
         // Main loop.
-        // Note: Storing velocities on stack, updating them, then storing back with pointers was slower than how its right now. Why?!
         for (const auto& data : narrowPhaseCollisions)
         {
 			// Get body indices.
@@ -1105,6 +1188,287 @@ namespace PS_AGONY
                 velocityYPtr[bodyIndexB] += correctionBVec.y;
             }
         }
+    }
+
+    void Simulation::resolveCollisionsPartially(const std::vector<BodyCollisionData>& narrowPhaseCollisions, const std::vector<size_t>& collisionIndices)
+    {
+        TRACY_SCOPE_N("Resolve collisions (Partially)");
+
+        constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
+
+        // Get pointers.
+        Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
+
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
+        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies.invInertia.data();
+
+        const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies.materialIndex.data();
+        const Material* ECSTASY_RESTRICT materialPtr = materials.data();
+
+        // Lambdas.
+        auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
+            {
+                const Real velocityX = velocityXPtr[bodyIndex];
+                const Real velocityY = velocityYPtr[bodyIndex];
+                return { velocityX, velocityY };
+            };
+
+        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+            {
+                const Real positionX = positionXPtr[bodyIndex];
+                const Real positionY = positionYPtr[bodyIndex];
+
+                const Real localCOMX = localCenterOfMassXPtr[bodyIndex];
+                const Real localCOMY = localCenterOfMassYPtr[bodyIndex];
+
+                return { positionX + localCOMX, positionY + localCOMY };
+            };
+
+        // Main loop.
+        for (const size_t dataIndex : collisionIndices)
+        {
+            const auto& data = narrowPhaseCollisions[dataIndex];
+
+            // Get body indices.
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
+
+            // Get inv masses.
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0)) [[unlikely]]
+            {
+                continue;
+            }
+
+            // Get materials.
+            const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
+            const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
+
+            const Material* materialA = materialPtr + materialIndexA;
+            const Material* materialB = materialPtr + materialIndexB;
+
+            const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
+
+            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
+
+            // Compute world centers of mass.
+            const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+            const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+
+            //
+            const Real invInertiaA = invInertiaPtr[bodyIndexA];
+            const Real invInertiaB = invInertiaPtr[bodyIndexB];
+
+            const Vec2 normal = data.normal;
+            const Real depth = data.depth;
+
+            // Calculate collision impulses.
+            Vec2 impulseArray[2] = { Vec2(),  Vec2() };
+            Vec2 rAPerpArray[2] = { Vec2(),  Vec2() };
+            Vec2 rBPerpArray[2] = { Vec2(),  Vec2() };
+            Real jnArray[2] = { Real(0), Real(0) };
+            const uint32_t contactCount = data.contactCount;//  std::min(data.contactCount, 2u);
+
+            const Real impulseScale = Real(1.0) / Real(data.contactCount);
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+
+                bool noContacts = true;
+
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 contactPoint = data.contacts[i];
+
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
+
+                    const Vec2 rAPerp = { -rA.y, rA.x };
+                    const Vec2 rBPerp = { -rB.y, rB.x };
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
+
+                    if (velocityAlongNormal > Real(0)) continue;
+
+                    const Real rAPerpDotN = glm::dot(rAPerp, normal);
+                    const Real rBPerpDotN = glm::dot(rBPerp, normal);
+
+                    const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
+
+                    impulseArray[i] = jn * normal;
+                    rAPerpArray[i] = rAPerp;
+                    rBPerpArray[i] = rBPerp;
+                    jnArray[i] = jn;
+
+                    noContacts = false;
+                }
+
+                // Check if there is at least one valid contact.
+                if (noContacts) continue;
+            }
+
+            // Apply collision impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
+
+            // Calculate friction impulses.
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 rAPerp = rAPerpArray[i];
+                    const Vec2 rBPerp = rBPerpArray[i];
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
+                    const Real tangentLengthSq = glm::dot(tangent, tangent);
+                    if (tangentLengthSq < frictionEpsilonSq)
+                    {
+                        impulseArray[i] = Vec2(0.0, 0.0);
+                        continue;
+                    }
+
+                    tangent /= std::sqrt(tangentLengthSq);
+
+                    const Real rAPerpDotT = glm::dot(rAPerp, tangent);
+                    const Real rBPerpDotT = glm::dot(rBPerp, tangent);
+
+                    const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
+
+                    const Real jn = jnArray[i];
+                    if (std::fabs(jt) <= jn * staticFriction)
+                    {
+                        impulseArray[i] = -jt * tangent; // Static friction.
+                    }
+                    else
+                    {
+                        const Real maxDynamic = jn * dynamicFriction;
+                        const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
+                        impulseArray[i] = f * tangent; // Dynamic friction.
+                    }
+                }
+            }
+
+            // Apply friction impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
+
+            // Position and velocity correction.
+            const Real invTotalInvMass_x_Depth = depth / totalInvMass;
+            const Real correctionStrengthA = invMassA * invTotalInvMass_x_Depth;
+            const Real correctionStrengthB = invMassB * invTotalInvMass_x_Depth;
+            {
+                const Real correctionA = correctionStrengthA * simulationSettings.positionCorrectionPercent;
+                const Real correctionB = correctionStrengthB * simulationSettings.positionCorrectionPercent;
+
+                const Vec2 correctionAVec = normal * correctionA;
+                const Vec2 correctionBVec = normal * correctionB;
+
+                positionXPtr[bodyIndexA] -= correctionAVec.x;
+                positionYPtr[bodyIndexA] -= correctionAVec.y;
+                positionXPtr[bodyIndexB] += correctionBVec.x;
+                positionYPtr[bodyIndexB] += correctionBVec.y;
+            }
+            if (ENABLE_VELOCITY_CORRECTION)
+            {
+                const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
+                const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
+
+                const Vec2 correctionAVec = normal * correctionA;
+                const Vec2 correctionBVec = normal * correctionB;
+
+                velocityXPtr[bodyIndexA] -= correctionAVec.x;
+                velocityYPtr[bodyIndexA] -= correctionAVec.y;
+                velocityXPtr[bodyIndexB] += correctionBVec.x;
+                velocityYPtr[bodyIndexB] += correctionBVec.y;
+            }
+        }
+        
     }
 
     void Simulation::applyConstraints()
