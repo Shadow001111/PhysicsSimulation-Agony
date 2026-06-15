@@ -63,7 +63,7 @@ namespace PS_AGONY
 			using UsedSlot = uint8_t;
 
 			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick.
-			static constexpr size_t WORKER_COUNT = 8; // TODO: Make customizable for hardware_currency() * factor.
+			static constexpr size_t WORKER_COUNT = 8;
 
 			std::vector<size_t> remainingIndices;
 			std::array<WorkerData, WORKER_COUNT> workerData;
