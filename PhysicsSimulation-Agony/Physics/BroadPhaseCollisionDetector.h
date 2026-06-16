@@ -71,6 +71,7 @@ namespace PS_AGONY
 
 				bool stopRequested = false;
 				bool finished = true;
+				bool running = false;
 
 				std::vector<uint32_t> incomingSelfTasks;
 				std::vector<BvhNodePair> incomingCrossTasks;
@@ -82,6 +83,7 @@ namespace PS_AGONY
 
 				void pushSelfTasks(const uint32_t* taskSource, size_t taskCount)
 				{
+					bool needNotify = false;
 					{
 						TRACY_SCOPE_N("Push");
 						std::lock_guard lock(mutex);
@@ -89,15 +91,20 @@ namespace PS_AGONY
 							incomingSelfTasks.end(),
 							taskSource, taskSource + taskCount
 						);
+						needNotify = !running;
 					}
 					{
 						TRACY_SCOPE_N("Notify");
-						cv.notify_one();
+						if (needNotify)
+						{
+							cv.notify_one();
+						}
 					}
 				}
 
 				void pushCrossTasks(const BvhNodePair* taskSource, size_t taskCount)
 				{
+					bool needNotify = false;
 					{
 						TRACY_SCOPE_N("Push");
 						std::lock_guard lock(mutex);
@@ -105,10 +112,14 @@ namespace PS_AGONY
 							incomingCrossTasks.end(),
 							taskSource, taskSource + taskCount
 						);
+						needNotify = !running;
 					}
 					{
 						TRACY_SCOPE_N("Notify");
-						cv.notify_one();
+						if (needNotify)
+						{
+							cv.notify_one();
+						}
 					}
 				}
 			};
