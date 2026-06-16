@@ -2,7 +2,11 @@
 #include "BodySoAViewer.h"
 #include "Threading.h"
 
+#include "EcstasyCore/TracyProfiler.h"
+
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 
 namespace PS_AGONY
 {
@@ -36,15 +40,6 @@ namespace PS_AGONY
 
 		struct BvhNodePair { uint32_t a, b; };
 
-		struct LeafPairJob
-		{
-			union
-			{
-				uint32_t selfNode; // For SELF.
-				struct { uint32_t a, b; } cross; // For CROSS.
-			};
-		};
-
 		struct alignas(64) PairVector
 		{
 			std::vector<BodyPair> pairs;
@@ -65,10 +60,67 @@ namespace PS_AGONY
 			std::vector<BvhNodePair> nodePairsToTraverse;
 			std::vector<BvhNodePair> leafPairsToTestCollisions;
 			std::vector<uint32_t> leavesToTestCollisions;
+		};
 
-			std::vector<PairVector> chunkedCollisionData;
+		struct QueryPairsThreadedResources
+		{
+			struct alignas(64) WorkerData
+			{
+				TracyLockableN(std::mutex, mutex, "Worker mutex");
+				std::condition_variable_any cv;
 
-			std::vector<LeafPairJob> jobs;
+				bool stopRequested = false;
+				bool running = false;
+				bool finished = true;
+
+				uint64_t pendingTaskCount = 0;
+
+				std::vector<uint32_t> incomingSelfTasks;
+				std::vector<BvhNodePair> incomingCrossTasks;
+
+				std::vector<uint32_t> localSelfTasks;
+				std::vector<BvhNodePair> localCrossTasks;
+
+				std::vector<BodyPair> outCollisionData;
+
+				void pushSelfTasks(const uint32_t* taskSource, size_t taskCount)
+				{
+					{
+						TRACY_SCOPE_N("Push");
+						std::lock_guard lock(mutex);
+						incomingSelfTasks.insert(
+							incomingSelfTasks.end(),
+							taskSource, taskSource + taskCount
+						);
+						pendingTaskCount += static_cast<uint64_t>(taskCount);
+					}
+					{
+						TRACY_SCOPE_N("Notify");
+						cv.notify_one();
+					}
+				}
+
+				void pushCrossTasks(const BvhNodePair* taskSource, size_t taskCount)
+				{
+					{
+						TRACY_SCOPE_N("Push");
+						std::lock_guard lock(mutex);
+						incomingCrossTasks.insert(
+							incomingCrossTasks.end(),
+							taskSource, taskSource + taskCount
+						);
+						pendingTaskCount += static_cast<uint64_t>(taskCount);
+					}
+					{
+						TRACY_SCOPE_N("Notify");
+						cv.notify_one();
+					}
+				}
+			};
+
+			static constexpr size_t WORKER_COUNT = std::min(4ull, size_t(Threading::MAX_THREADS_ALLOWED));
+
+			std::array<WorkerData, WORKER_COUNT> workerData;
 		};
 
 		struct LeafBodyAABBSoA
@@ -89,6 +141,7 @@ namespace PS_AGONY
 
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;
+		QueryPairsThreadedResources queryPairsThreadedResources;
 
 		LeafBodyAABBSoA leafBodyAABBs;
 
@@ -126,6 +179,7 @@ namespace PS_AGONY
 		void queryBvhPairsThreaded();
 
 		void traverseNodesToGetOverlappingLeafPairs();
+		void traverseNodesToGetOverlappingLeafPairsThreaded();
 
 		void testCollisionsInLeaves();
 		void testCollisionsInLeavesThreaded();
