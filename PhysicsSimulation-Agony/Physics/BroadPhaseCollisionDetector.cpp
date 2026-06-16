@@ -962,11 +962,11 @@ namespace PS_AGONY
 
         uint32_t selfTaskStack[TASK_STACK_CAPACITY];
         size_t selfTaskStackSize = 0;
-        size_t selfTaskWorkerIndex = 0;
 
         BvhNodePair crossTaskStack[TASK_STACK_CAPACITY];
         size_t crossTaskStackSize = 0;
-        size_t crossTaskWorkerIndex = 0;
+
+        size_t workerIndex = 0;
 
         auto flushSelfTaskStack = [&]()
             {
@@ -976,13 +976,13 @@ namespace PS_AGONY
 
                 {
                     TRACY_SCOPE_N("Push tasks");
-                    queryPairsThreadedResources.workerData[selfTaskWorkerIndex].pushSelfTasks(selfTaskStack, selfTaskStackSize);
+                    queryPairsThreadedResources.workerData[workerIndex].pushSelfTasks(selfTaskStack, selfTaskStackSize);
                 }
                 selfTaskStackSize = 0;
 
-                selfTaskWorkerIndex++;
-                if (selfTaskWorkerIndex >= QueryPairsThreadedResources::WORKER_COUNT)
-                    selfTaskWorkerIndex = 0;
+                workerIndex++;
+                if (workerIndex >= QueryPairsThreadedResources::WORKER_COUNT)
+                    workerIndex = 0;
             };
 
         auto pushSelfTask = [&](uint32_t task)
@@ -1002,13 +1002,13 @@ namespace PS_AGONY
 
                 {
                     TRACY_SCOPE_N("Push tasks");
-                    queryPairsThreadedResources.workerData[crossTaskWorkerIndex].pushCrossTasks(crossTaskStack, crossTaskStackSize);
+                    queryPairsThreadedResources.workerData[workerIndex].pushCrossTasks(crossTaskStack, crossTaskStackSize);
                 }
                 crossTaskStackSize = 0;
 
-                crossTaskWorkerIndex++;
-                if (crossTaskWorkerIndex >= QueryPairsThreadedResources::WORKER_COUNT)
-                    crossTaskWorkerIndex = 0;
+                workerIndex++;
+                if (workerIndex >= QueryPairsThreadedResources::WORKER_COUNT)
+                    workerIndex = 0;
             };
 
         auto pushCrossTask = [&](BvhNodePair task)
@@ -1083,6 +1083,9 @@ namespace PS_AGONY
             }
         }
 
+        // Flush remaining self tasks.
+        flushSelfTaskStack();
+
         // Traverse 2.
         {
             TRACY_SCOPE_N("Traverse 2");
@@ -1148,8 +1151,7 @@ namespace PS_AGONY
             }
         }
 
-        // Flush remaining tasks.
-        flushSelfTaskStack();
+        // Flush remaining cross tasks.
         flushCrossTaskStack();
     }
 
