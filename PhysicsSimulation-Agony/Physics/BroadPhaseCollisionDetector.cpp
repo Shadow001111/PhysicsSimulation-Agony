@@ -586,9 +586,7 @@ namespace PS_AGONY
         {
             std::lock_guard lock(wData.mutex);
             wData.stopRequested = false;
-            wData.running = false;
             wData.finished = false;
-            wData.pendingTaskCount = 0;
 
             wData.incomingSelfTasks.clear();
             wData.incomingCrossTasks.clear();
@@ -607,12 +605,15 @@ namespace PS_AGONY
                     while (true)
                     {
                         std::unique_lock lk(wData.mutex);
-                        wData.cv.wait(lk, [&]
-                            {
-                                return wData.stopRequested ||
-                                    !wData.incomingSelfTasks.empty() ||
-                                    !wData.incomingCrossTasks.empty();
-                            });
+                        {
+                            TRACY_SCOPE_NC("Wait for request", Ecstasy::Color::DarkViolet);
+                            wData.cv.wait(lk, [&]
+                                {
+                                    return wData.stopRequested ||
+                                        !wData.incomingSelfTasks.empty() ||
+                                        !wData.incomingCrossTasks.empty();
+                                });
+                        }
 
                         if (wData.stopRequested &&
                             wData.incomingSelfTasks.empty() &&
@@ -621,7 +622,6 @@ namespace PS_AGONY
                             break;
                         }
 
-                        wData.running = true;
                         wData.localSelfTasks.swap(wData.incomingSelfTasks);
                         wData.localCrossTasks.swap(wData.incomingCrossTasks);
                         lk.unlock();
@@ -737,17 +737,11 @@ namespace PS_AGONY
                             }
                         }
 
-                        const uint64_t consumed =
-                            static_cast<uint64_t>(wData.localSelfTasks.size()) +
-                            static_cast<uint64_t>(wData.localCrossTasks.size());
-
                         wData.localSelfTasks.clear();
                         wData.localCrossTasks.clear();
 
                         lk.lock();
-                        wData.pendingTaskCount -= consumed;
-                        wData.running = false;
-                        wData.cv.notify_all();
+                        wData.cv.notify_one();
                     }
                 }
                 catch (...)
@@ -756,10 +750,9 @@ namespace PS_AGONY
                 }
                 {
                     std::lock_guard lk(wData.mutex);
-                    wData.running = false;
                     wData.finished = true;
                 }
-                wData.cv.notify_all();
+                wData.cv.notify_one();
             };
 
         for (size_t i = 0; i < WORKER_COUNT; i++)
@@ -771,31 +764,33 @@ namespace PS_AGONY
 
         // Wait for workers to finish and stop them. Combine data.
         {
-            TRACY_SCOPE_NC("Wait for workers to finish. Combine data.", Ecstasy::Color::Brown);
+            TRACY_SCOPE_NC("Wait for workers to finish and combine data", Ecstasy::Color::Brown);
             for (auto& wData : queryPairsThreadedResources.workerData)
             {
-                std::unique_lock lk(wData.mutex);
-                wData.cv.wait(lk, [&]
-                    {
-                        return !wData.running && wData.pendingTaskCount == 0;
-                    });
-                wData.stopRequested = true;
-                wData.cv.notify_all();
+                {
+                    std::unique_lock lk(wData.mutex);
+                    wData.stopRequested = true;
+                }
+                wData.cv.notify_one();
             }
             for (auto& wData : queryPairsThreadedResources.workerData)
             {
                 {
+                    TRACY_SCOPE_N("Wait");
                     std::unique_lock lk(wData.mutex);
                     wData.cv.wait(lk, [&]
                         {
                             return wData.finished;
                         });
                 }
-                collisionData.insert(
-                    collisionData.end(),
-                    wData.outCollisionData.begin(),
-                    wData.outCollisionData.end()
-                );
+                {
+                    TRACY_SCOPE_N("Combine data");
+                    collisionData.insert(
+                        collisionData.end(),
+                        wData.outCollisionData.begin(),
+                        wData.outCollisionData.end()
+                    );
+                }
             }
         }
     }

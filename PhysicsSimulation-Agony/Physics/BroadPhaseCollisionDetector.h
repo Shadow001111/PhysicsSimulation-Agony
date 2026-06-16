@@ -70,10 +70,7 @@ namespace PS_AGONY
 				std::condition_variable_any cv;
 
 				bool stopRequested = false;
-				bool running = false;
 				bool finished = true;
-
-				uint64_t pendingTaskCount = 0;
 
 				std::vector<uint32_t> incomingSelfTasks;
 				std::vector<BvhNodePair> incomingCrossTasks;
@@ -92,7 +89,6 @@ namespace PS_AGONY
 							incomingSelfTasks.end(),
 							taskSource, taskSource + taskCount
 						);
-						pendingTaskCount += static_cast<uint64_t>(taskCount);
 					}
 					{
 						TRACY_SCOPE_N("Notify");
@@ -109,7 +105,6 @@ namespace PS_AGONY
 							incomingCrossTasks.end(),
 							taskSource, taskSource + taskCount
 						);
-						pendingTaskCount += static_cast<uint64_t>(taskCount);
 					}
 					{
 						TRACY_SCOPE_N("Notify");
@@ -182,7 +177,6 @@ namespace PS_AGONY
 		void traverseNodesToGetOverlappingLeafPairsThreaded();
 
 		void testCollisionsInLeaves();
-		void testCollisionsInLeavesThreaded();
 	};
 }
 
