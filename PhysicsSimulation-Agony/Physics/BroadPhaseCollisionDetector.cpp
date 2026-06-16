@@ -599,6 +599,7 @@ namespace PS_AGONY
         auto workerFunc = [&](size_t workerIndex)
             {
                 auto& wData = queryPairsThreadedResources.workerData[workerIndex];
+                wData.running = false;
                 try
                 {
                     std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
@@ -622,6 +623,7 @@ namespace PS_AGONY
                             break;
                         }
 
+                        wData.running = true;
                         wData.localSelfTasks.swap(wData.incomingSelfTasks);
                         wData.localCrossTasks.swap(wData.incomingCrossTasks);
                         lk.unlock();
@@ -741,6 +743,7 @@ namespace PS_AGONY
                         wData.localCrossTasks.clear();
 
                         lk.lock();
+                        wData.running = false;
                         wData.cv.notify_one();
                     }
                 }
