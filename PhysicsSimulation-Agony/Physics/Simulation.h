@@ -65,8 +65,9 @@ namespace PS_AGONY
 			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick.
 			static constexpr size_t WORKER_COUNT = std::min(8ull, size_t(Threading::MAX_THREADS_ALLOWED));
 
-			std::vector<size_t> remainingIndices;
 			std::array<WorkerData, WORKER_COUNT> workerData;
+
+			std::vector<size_t> remainingIndices;
 			std::vector<size_t> stagingPass;
 			std::vector<UsedSlot> usedBodies;
 		};
