@@ -123,11 +123,12 @@ namespace PS_AGONY
 		void refitBvhNodeAABBS();
 
 		void queryBvhPairs();
+		void queryBvhPairsThreaded();
 
 		void traverseNodesToGetOverlappingLeafPairs();
 
-		void testCollisionsInLeavesSingleThreaded();
-		void testCollisionsInLeavesMultiThreaded();
+		void testCollisionsInLeaves();
+		void testCollisionsInLeavesThreaded();
 	};
 }
 

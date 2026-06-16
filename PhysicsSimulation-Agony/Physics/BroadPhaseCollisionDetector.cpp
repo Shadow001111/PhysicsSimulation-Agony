@@ -7,7 +7,6 @@
 #include <bit>
 #include <algorithm>
 #include <array>
-#include <iostream>
 
 namespace PS_AGONY
 {
@@ -120,7 +119,16 @@ namespace PS_AGONY
 
             refitBvhNodeAABBS();
         }
-        queryBvhPairs();
+
+        const bool useThreading = USE_THREADING;
+        if (useThreading)
+        {
+            queryBvhPairsThreaded();
+        }
+        else
+        {
+            queryBvhPairs();
+        }
 
         return collisionData;
     }
@@ -559,19 +567,16 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Query pairs");
 
-        // Traverse.
         traverseNodesToGetOverlappingLeafPairs();
+        testCollisionsInLeaves();
+    }
 
-        // Test collisions in leaves.
-        const bool useThreading = USE_THREADING;
-        if (useThreading)
-        {
-            testCollisionsInLeavesMultiThreaded();
-        }
-        else
-        {
-            testCollisionsInLeavesSingleThreaded();
-        }
+    void BroadPhaseCollisionDetector::queryBvhPairsThreaded()
+    {
+        TRACY_SCOPE_N("Query pairs (Threaded)");
+
+        traverseNodesToGetOverlappingLeafPairs();
+        testCollisionsInLeavesThreaded();
     }
 
     void BroadPhaseCollisionDetector::traverseNodesToGetOverlappingLeafPairs()
@@ -716,7 +721,7 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::testCollisionsInLeavesSingleThreaded()
+    void BroadPhaseCollisionDetector::testCollisionsInLeaves()
     {
         TRACY_SCOPE_N("Test collisions in leaves");
 
@@ -863,7 +868,7 @@ namespace PS_AGONY
         if (localPushBufferSize > 0) flush();
     }
 
-    void BroadPhaseCollisionDetector::testCollisionsInLeavesMultiThreaded()
+    void BroadPhaseCollisionDetector::testCollisionsInLeavesThreaded()
     {
         TRACY_SCOPE_N("Test collisions in leaves");
 
