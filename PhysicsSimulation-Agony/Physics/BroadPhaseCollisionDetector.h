@@ -38,7 +38,12 @@ namespace PS_AGONY
 			{}
 		};
 
-		struct BvhNodePair { uint32_t a, b; };
+		struct BvhNodePair
+		{
+			uint32_t a, b;
+
+			BvhNodePair swap() const noexcept { return { b, a }; }
+		};
 
 		struct alignas(64) PairVector
 		{
