@@ -944,6 +944,9 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::traverseNodesToGetOverlappingLeafPairsThreaded()
     {
+        // Note: Swapping two nodes, so first one will have less range, results in faster leaf task execeution speed
+        // because it does less iterations. But it slows down traversing because of branch misprediction.
+
         auto overlaps = [](const BvhNode& a, const BvhNode& b) noexcept -> bool
             {
                 return
