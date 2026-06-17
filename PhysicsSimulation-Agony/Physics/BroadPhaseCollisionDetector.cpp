@@ -682,6 +682,8 @@ namespace PS_AGONY
                             }
                             for (const BvhNodePair nodePair : wData.localCrossTasks)
                             {
+                                // Note: Swapping nodes, so nodeA will have smaller range, doesn't speed up things.
+                                // Although it matters only when leaves aren't full. Maybe that's why.
                                 const uint32_t nodeAIdx = nodePair.a;
                                 const uint32_t nodeBIdx = nodePair.b;
                                 const BvhNode& nodeA = bvhFunctionResources.nodes[nodeAIdx];
