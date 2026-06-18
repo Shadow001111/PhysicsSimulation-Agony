@@ -72,7 +72,7 @@ namespace PS_AGONY
 		{
 			struct alignas(64) WorkerData
 			{
-				TracyLockableN(std::mutex, mutex, "Worker mutex");
+				mutable TracyLockableN(std::mutex, mutex, "Worker mutex");
 				std::condition_variable_any cv;
 
 				bool stopRequested = false;
