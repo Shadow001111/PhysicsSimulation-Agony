@@ -1,7 +1,7 @@
 #pragma once
 #include "GlmTypes.h"
-#include "Simd.h"
 
+#include "EcstasyCore/Simd.h"
 #include "Core/MemoryAllocation/AlignedAllocator.h"
 
 #include <vector>
@@ -21,10 +21,10 @@ namespace PS_AGONY
 	using AlignedVector64 = std::vector<T, AlignedAllocator<T, 64>>;
 
 	template<typename T>
-	using SimdAlignedVector = AlignedVector<T, Simd<T>::bytes>;
+	using SimdAlignedVector = AlignedVector<T, Ecstasy::Simd<T>::bytes>;
 
 	template<typename T>
-	using RealSimdAlignedVector = AlignedVector<T, Simd<Real>::bytes>;
+	using RealSimdAlignedVector = AlignedVector<T, Ecstasy::Simd<Real>::bytes>;
 
 	struct AABB
 	{

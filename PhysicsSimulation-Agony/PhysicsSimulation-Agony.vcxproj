@@ -296,7 +296,6 @@
     <ClInclude Include="Physics\GlmTypes.h" />
     <ClInclude Include="Physics\Material.h" />
     <ClInclude Include="EcstasyCore\Portablity.h" />
-    <ClInclude Include="Physics\Simd.h" />
     <ClInclude Include="Physics\Simulation.h" />
     <ClInclude Include="Physics\SymmetricMatrix.h" />
     <ClInclude Include="Physics\Threading.h" />
