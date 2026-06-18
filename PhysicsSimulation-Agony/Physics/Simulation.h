@@ -16,6 +16,7 @@ namespace PS_AGONY
 	class Simulation
 	{
 		static constexpr bool ENABLE_VELOCITY_CORRECTION = true;
+		static constexpr bool ENABLE_FAST_COS_SIN = true;
 	public:
 		struct DebugData
 		{

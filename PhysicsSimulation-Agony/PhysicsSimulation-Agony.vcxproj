@@ -270,6 +270,7 @@
     <ClInclude Include="EcstasyCore\Threading\Task.h" />
     <ClInclude Include="EcstasyCore\Threading\ThreadPool.h" />
     <ClInclude Include="Physics\Constants.h" />
+    <ClInclude Include="Physics\FastCosSin.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BodySoAViewer.h" />

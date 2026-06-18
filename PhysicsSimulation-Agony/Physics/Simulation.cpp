@@ -1,5 +1,6 @@
 #include "Simulation.h"
 #include "Threading.h"
+#include "FastCosSin.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -660,7 +661,10 @@ namespace PS_AGONY
         const size_t bodyCount = bodies.getCount();
         for (size_t i = 0; i < bodyCount; i++)
         {
-            rotationPtr[i] = std::fmod(rotationPtr[i], Constants::TWO_PI);
+            float rot = rotationPtr[i];
+            rot = std::fmod(rot, Constants::TWO_PI);
+            rot += (rot < 0) * Constants::TWO_PI;
+            rotationPtr[i] = rot;
         }
     }
 
@@ -673,12 +677,25 @@ namespace PS_AGONY
         Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
         const size_t bodyCount = bodies.getCount();
-        for (size_t i = 0; i < bodyCount; i++)
+
+        if constexpr (ENABLE_FAST_COS_SIN)
         {
-            const Real rot = rotationPtr[i];
-            rotationCosPtr[i] = std::cos(rot);
-            rotationSinPtr[i] = std::sin(rot);
-		}
+            FastCosSin::bhaskaraCosSinSimd(
+                rotationPtr,
+                rotationCosPtr,
+                rotationSinPtr,
+                bodyCount
+            );
+        }
+        else
+        {
+            for (size_t i = 0; i < bodyCount; i++)
+            {
+                const Real angle = rotationPtr[i];
+                rotationCosPtr[i] = std::cos(angle);
+                rotationSinPtr[i] = std::sin(angle);
+            }
+        }
     }
 
     void Simulation::computeTruePositions()
