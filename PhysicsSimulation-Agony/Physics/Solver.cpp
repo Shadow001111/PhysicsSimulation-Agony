@@ -310,7 +310,7 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Solver::resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         if (narrowPhaseCollisions.size() < ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS)
         {

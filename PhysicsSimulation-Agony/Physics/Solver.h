@@ -59,7 +59,7 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const;
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-		void resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 		void resolveCollisionsThreadedIslands(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 	private:
 		void resolveCollisionsIndirect(
