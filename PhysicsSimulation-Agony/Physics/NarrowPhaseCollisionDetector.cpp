@@ -141,7 +141,7 @@ namespace PS_AGONY
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
-        size_t total = 0;
+        size_t total = sizeof(NarrowPhaseCollisionDetector);
 
         const auto& matrixDirectAccess = bodyPairVectorMatrix.getDirectAccess();
         for (const auto& vec : matrixDirectAccess)

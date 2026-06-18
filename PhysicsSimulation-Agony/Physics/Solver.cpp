@@ -1,0 +1,954 @@
+#include "Solver.h"
+
+#include "EcstasyCore/TracyProfiler.h"
+#include "EcstasyCore/Portablity.h"
+
+#include <numeric>
+#include <iostream>
+
+namespace PS_AGONY
+{
+    void Solver::setDataViewers(
+        BodySoA& bodies,
+        const std::vector<Material>& materials
+    )
+    {
+        this->bodies = &bodies;
+        this->materials = &materials;
+    }
+
+    size_t Solver::getMemoryUsage() const
+    {
+        size_t total = sizeof(Solver);
+
+        total += getVectorMemoryUsage(solverResources.remainingIndices);
+        total += getVectorMemoryUsage(solverResources.stagingPass);
+        total += getVectorMemoryUsage(solverResources.usedBodies);
+        for (const auto& wData : solverResources.workerData)
+        {
+            total += getVectorMemoryUsage(wData.indices);
+        }
+
+        return total;
+    }
+
+    void Solver::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    {
+        TRACY_SCOPE_NC("Resolve collisions", Ecstasy::Color::Violet);
+
+        constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
+
+        // Get pointers.
+        Real* ECSTASY_RESTRICT positionXPtr = bodies->positionX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies->positionY.data();
+
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+
+        const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies->materialIndex.data();
+        const Material* ECSTASY_RESTRICT materialPtr = materials->data();
+
+        // Lambdas.
+        auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
+            {
+                const Real velocityX = velocityXPtr[bodyIndex];
+                const Real velocityY = velocityYPtr[bodyIndex];
+                return { velocityX, velocityY };
+            };
+
+        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+            {
+                const Real positionX = positionXPtr[bodyIndex];
+                const Real positionY = positionYPtr[bodyIndex];
+
+                const Real localCOMX = localCenterOfMassXPtr[bodyIndex];
+                const Real localCOMY = localCenterOfMassYPtr[bodyIndex];
+
+                return { positionX + localCOMX, positionY + localCOMY };
+            };
+
+        // Main loop.
+        for (const auto& data : narrowPhaseCollisions)
+        {
+            // Get body indices.
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
+
+            // Get inv masses.
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0)) [[unlikely]]
+            {
+                continue;
+            }
+
+            // Get materials.
+            const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
+            const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
+
+            const Material* materialA = materialPtr + materialIndexA;
+            const Material* materialB = materialPtr + materialIndexB;
+
+            const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
+
+            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
+
+            // Compute world centers of mass.
+            const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+            const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+
+            //
+            const Real invInertiaA = invInertiaPtr[bodyIndexA];
+            const Real invInertiaB = invInertiaPtr[bodyIndexB];
+
+            const Vec2 normal = data.normal;
+            const Real depth = data.depth;
+
+            // Calculate collision impulses.
+            Vec2 impulseArray[2] = { Vec2(),  Vec2() };
+            Vec2 rAPerpArray[2] = { Vec2(),  Vec2() };
+            Vec2 rBPerpArray[2] = { Vec2(),  Vec2() };
+            Real jnArray[2] = { Real(0), Real(0) };
+            const uint32_t contactCount = data.contactCount;//  std::min(data.contactCount, 2u);
+
+            const Real impulseScale = Real(1.0) / Real(data.contactCount);
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+
+                bool noContacts = true;
+
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 contactPoint = data.contacts[i];
+
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
+
+                    const Vec2 rAPerp = { -rA.y, rA.x };
+                    const Vec2 rBPerp = { -rB.y, rB.x };
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
+
+                    if (velocityAlongNormal > Real(0)) continue;
+
+                    const Real rAPerpDotN = glm::dot(rAPerp, normal);
+                    const Real rBPerpDotN = glm::dot(rBPerp, normal);
+
+                    const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
+
+                    impulseArray[i] = jn * normal;
+                    rAPerpArray[i] = rAPerp;
+                    rBPerpArray[i] = rBPerp;
+                    jnArray[i] = jn;
+
+                    noContacts = false;
+                }
+
+                // Check if there is at least one valid contact.
+                if (noContacts) continue;
+            }
+
+            // Apply collision impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
+
+            // Calculate friction impulses.
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 rAPerp = rAPerpArray[i];
+                    const Vec2 rBPerp = rBPerpArray[i];
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
+                    const Real tangentLengthSq = glm::dot(tangent, tangent);
+                    if (tangentLengthSq < frictionEpsilonSq)
+                    {
+                        impulseArray[i] = Vec2(0.0, 0.0);
+                        continue;
+                    }
+
+                    tangent /= std::sqrt(tangentLengthSq);
+
+                    const Real rAPerpDotT = glm::dot(rAPerp, tangent);
+                    const Real rBPerpDotT = glm::dot(rBPerp, tangent);
+
+                    const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
+
+                    const Real jn = jnArray[i];
+                    if (std::fabs(jt) <= jn * staticFriction)
+                    {
+                        impulseArray[i] = -jt * tangent; // Static friction.
+                    }
+                    else
+                    {
+                        const Real maxDynamic = jn * dynamicFriction;
+                        const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
+                        impulseArray[i] = f * tangent; // Dynamic friction.
+                    }
+                }
+            }
+
+            // Apply friction impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
+
+            // Position and velocity correction.
+            const Real invTotalInvMass_x_Depth = depth / totalInvMass;
+            const Real correctionStrengthA = invMassA * invTotalInvMass_x_Depth;
+            const Real correctionStrengthB = invMassB * invTotalInvMass_x_Depth;
+            {
+                const Real correctionA = correctionStrengthA * simulationSettings.positionCorrectionPercent;
+                const Real correctionB = correctionStrengthB * simulationSettings.positionCorrectionPercent;
+
+                const Vec2 correctionAVec = normal * correctionA;
+                const Vec2 correctionBVec = normal * correctionB;
+
+                positionXPtr[bodyIndexA] -= correctionAVec.x;
+                positionYPtr[bodyIndexA] -= correctionAVec.y;
+                positionXPtr[bodyIndexB] += correctionBVec.x;
+                positionYPtr[bodyIndexB] += correctionBVec.y;
+            }
+            if (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
+            {
+                const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
+                const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
+
+                const Vec2 correctionAVec = normal * correctionA;
+                const Vec2 correctionBVec = normal * correctionB;
+
+                velocityXPtr[bodyIndexA] -= correctionAVec.x;
+                velocityYPtr[bodyIndexA] -= correctionAVec.y;
+                velocityXPtr[bodyIndexB] += correctionBVec.x;
+                velocityYPtr[bodyIndexB] += correctionBVec.y;
+            }
+        }
+    }
+
+    void Solver::resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    {
+        if (narrowPhaseCollisions.size() < ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS)
+        {
+            resolveCollisions(narrowPhaseCollisions);
+            return;
+        }
+
+        TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
+
+        // TODO: (for future) We can create a lot of staging buffers, not waiting for workers to finish.
+        // TODO: Push buffer immediately after worker took it.
+        // TODO: Double buffering. Though then maybe some indices may interfere, that means workers need to work on same 'page'.
+
+        constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
+        constexpr auto MAX_VALID_INDICES_PER_PASS = ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS;
+
+        using UsedSlot = ResolveCollisionsThreadedResources::UsedSlot;
+
+        // Fill remaining indices.
+        const size_t collisionCount = narrowPhaseCollisions.size();
+        solverResources.remainingIndices.resize(collisionCount);
+        {
+            TRACY_SCOPE_NC("Fill indices", Ecstasy::Color::Red);
+            std::iota(
+                solverResources.remainingIndices.begin(),
+                solverResources.remainingIndices.end(),
+                0ull
+            );
+        }
+
+        // Worker data.
+        {
+            TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
+            for (size_t i = 0; i < WORKER_COUNT; i++)
+            {
+                auto& wData = solverResources.workerData[i];
+                wData.isDestroyed.wait(false, std::memory_order_acquire);
+            }
+        }
+        for (auto& w : solverResources.workerData)
+        {
+            w.indices.clear();
+            w.isProcessing.store(false, std::memory_order_relaxed);
+            w.isDestroyed.store(false, std::memory_order_relaxed);
+        }
+
+        //
+        solverResources.stagingPass.clear();
+
+        solverResources.usedBodies.resize(bodies->getCount());
+
+        // Lambdas.
+        auto workerFunc = [this, &narrowPhaseCollisions](size_t workerIndex)
+            {
+                auto& wData = solverResources.workerData[workerIndex];
+                try
+                {
+                    while (true)
+                    {
+                        // Wait for data to arrive.
+                        wData.isProcessing.wait(false, std::memory_order_acquire);
+
+                        // Check for stop.
+                        if (wData.indices.empty()) break;
+
+                        // Execute.
+                        resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
+                        wData.indices.clear();
+
+                        // Notify main thread that worker is finished.
+                        wData.isProcessing.store(false, std::memory_order_release);
+                        wData.isProcessing.notify_one();
+                    }
+                    wData.isProcessing.store(false, std::memory_order_release);
+                    wData.isProcessing.notify_one();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cout << "Resolve collisions worker caught an exception: " << e.what() << "\n";
+                    wData.isProcessing.store(false, std::memory_order_release);
+                    wData.isProcessing.notify_one();
+                }
+                wData.isDestroyed.store(true, std::memory_order_release);
+                wData.isDestroyed.notify_one();
+            };
+
+        // Launch workers.
+        auto& threadPool = Threading::getGlobalThreadPool();
+
+        for (size_t i = 0; i < WORKER_COUNT; i++)
+        {
+            threadPool.enqueue(workerFunc, i);
+        }
+
+        // Main loop.
+        size_t maxAllowedStages = WORKER_COUNT;
+        while (true)
+        {
+            // Clear body-using history.
+            {
+                TRACY_SCOPE_NC("Clear body-using history", Ecstasy::Color::Pink);
+                std::fill(
+                    solverResources.usedBodies.begin(),
+                    solverResources.usedBodies.end(),
+                    UsedSlot(-1)
+                );
+            }
+
+            // Stage loop.
+            {
+                TRACY_SCOPE_NC("Stage loop", Ecstasy::Color::Red);
+                for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
+                {
+                    // Coloring.
+                    {
+                        TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Blue);
+
+                        if (stageIndex == 0)
+                        {
+                            // Quick pass: no body conflicts at stage 0.
+                            // Note: The order is different from else branch.
+
+                            size_t readSize = std::min(MAX_VALID_INDICES_PER_PASS, solverResources.remainingIndices.size());
+
+                            const auto beg = solverResources.remainingIndices.end() - readSize;
+
+                            // Copy first indices.
+                            solverResources.stagingPass.insert(solverResources.stagingPass.end(),
+                                beg,
+                                beg + readSize
+                            );
+
+                            // Remove taken indices from remainingIndices.
+                            solverResources.remainingIndices.erase(
+                                beg,
+                                beg + readSize
+                            );
+
+                            // Mark indices as used.
+                            for (const size_t idx : solverResources.stagingPass)
+                            {
+                                const auto& coll = narrowPhaseCollisions[idx];
+                                solverResources.usedBodies[coll.bodyA] = 0;
+                                solverResources.usedBodies[coll.bodyB] = 0;
+                            }
+                        }
+                        else
+                        {
+                            size_t readSize = solverResources.remainingIndices.size();
+                            for (size_t readPos = 0; readPos < readSize && solverResources.stagingPass.size() < MAX_VALID_INDICES_PER_PASS;)
+                            {
+                                const size_t idx = solverResources.remainingIndices[readPos];
+                                const auto& coll = narrowPhaseCollisions[idx];
+
+                                if (
+                                    solverResources.usedBodies[coll.bodyA] < stageIndex ||
+                                    solverResources.usedBodies[coll.bodyB] < stageIndex
+                                    )
+                                {
+                                    readPos++;
+                                    continue;
+                                }
+                                solverResources.stagingPass.push_back(idx);
+                                solverResources.usedBodies[coll.bodyA] = stageIndex;
+                                solverResources.usedBodies[coll.bodyB] = stageIndex;
+
+                                solverResources.remainingIndices[readPos] = solverResources.remainingIndices.back();
+                                solverResources.remainingIndices.pop_back();
+                                readSize--;
+                            }
+                        }
+                    }
+
+                    // Check.
+                    if (solverResources.stagingPass.empty())
+                    {
+                        maxAllowedStages = stageIndex;
+                        break;
+                    }
+
+                    // Push staging pass.
+                    {
+                        TRACY_SCOPE_NC("Push staging pass", Ecstasy::Color::Gold);
+
+                        auto& wData = solverResources.workerData[stageIndex];
+
+                        // Wait for worker to finish.
+                        {
+                            TRACY_SCOPE_NC("Wait for worker", Ecstasy::Color::Silver);
+                            wData.isProcessing.wait(true, std::memory_order_acquire);
+                        }
+
+                        // Push staging pass.
+                        wData.indices.swap(solverResources.stagingPass); // Staging pass is cleared in worker thread.
+
+                        // Notify worker that data is ready.
+                        wData.isProcessing.store(true, std::memory_order_release);
+                        {
+                            TRACY_SCOPE_NC("Notify", Ecstasy::Color::Silver);
+                            wData.isProcessing.notify_one();
+                        }
+                    };
+                }
+            }
+
+            // Check.
+            if (solverResources.remainingIndices.empty() || maxAllowedStages < 2) break;
+        }
+
+        // Wait for workers to finish and stop them.
+        {
+            TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
+            for (size_t i = 0; i < WORKER_COUNT; i++)
+            {
+                auto& wData = solverResources.workerData[i];
+                wData.isProcessing.wait(true, std::memory_order_acquire);
+
+                // Stop. Call with empty indices array will stop worker.
+                wData.isProcessing.store(true, std::memory_order_release);
+                wData.isProcessing.notify_one();
+            }
+        }
+
+        // Execute remaining on main thread.
+        if (!solverResources.remainingIndices.empty())
+        {
+            resolveCollisionsIndirect(narrowPhaseCollisions, solverResources.remainingIndices);
+        }
+    }
+
+    void Solver::resolveCollisionsIndirect(const std::vector<BodyCollisionData>& narrowPhaseCollisions, const std::vector<size_t>& collisionIndices)
+    {
+        TRACY_SCOPE_NC("Resolve collisions (Indirect)", Ecstasy::Color::HotPink);
+
+        constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
+
+        // Get pointers.
+        Real* ECSTASY_RESTRICT positionXPtr = bodies->positionX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies->positionY.data();
+
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+
+        const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies->materialIndex.data();
+        const Material* ECSTASY_RESTRICT materialPtr = materials->data();
+
+        // Lambdas.
+        auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
+            {
+                const Real velocityX = velocityXPtr[bodyIndex];
+                const Real velocityY = velocityYPtr[bodyIndex];
+                return { velocityX, velocityY };
+            };
+
+        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+            {
+                const Real positionX = positionXPtr[bodyIndex];
+                const Real positionY = positionYPtr[bodyIndex];
+
+                const Real localCOMX = localCenterOfMassXPtr[bodyIndex];
+                const Real localCOMY = localCenterOfMassYPtr[bodyIndex];
+
+                return { positionX + localCOMX, positionY + localCOMY };
+            };
+
+        // Main loop.
+        for (const size_t dataIndex : collisionIndices)
+        {
+            const auto& data = narrowPhaseCollisions[dataIndex];
+
+            // Get body indices.
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
+
+            // Get inv masses.
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0)) [[unlikely]]
+            {
+                continue;
+            }
+
+            // Get materials.
+            const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
+            const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
+
+            const Material* materialA = materialPtr + materialIndexA;
+            const Material* materialB = materialPtr + materialIndexB;
+
+            const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
+
+            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
+
+            // Compute world centers of mass.
+            const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+            const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+
+            //
+            const Real invInertiaA = invInertiaPtr[bodyIndexA];
+            const Real invInertiaB = invInertiaPtr[bodyIndexB];
+
+            const Vec2 normal = data.normal;
+            const Real depth = data.depth;
+
+            // Calculate collision impulses.
+            Vec2 impulseArray[2] = { Vec2(),  Vec2() };
+            Vec2 rAPerpArray[2] = { Vec2(),  Vec2() };
+            Vec2 rBPerpArray[2] = { Vec2(),  Vec2() };
+            Real jnArray[2] = { Real(0), Real(0) };
+            const uint32_t contactCount = data.contactCount;//  std::min(data.contactCount, 2u);
+
+            const Real impulseScale = Real(1.0) / Real(data.contactCount);
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+
+                bool noContacts = true;
+
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 contactPoint = data.contacts[i];
+
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
+
+                    const Vec2 rAPerp = { -rA.y, rA.x };
+                    const Vec2 rBPerp = { -rB.y, rB.x };
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
+
+                    if (velocityAlongNormal > Real(0)) continue;
+
+                    const Real rAPerpDotN = glm::dot(rAPerp, normal);
+                    const Real rBPerpDotN = glm::dot(rBPerp, normal);
+
+                    const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
+
+                    impulseArray[i] = jn * normal;
+                    rAPerpArray[i] = rAPerp;
+                    rBPerpArray[i] = rBPerp;
+                    jnArray[i] = jn;
+
+                    noContacts = false;
+                }
+
+                // Check if there is at least one valid contact.
+                if (noContacts) continue;
+            }
+
+            // Apply collision impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
+
+            // Calculate friction impulses.
+            {
+                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+                const Real angularVelA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 rAPerp = rAPerpArray[i];
+                    const Vec2 rBPerp = rBPerpArray[i];
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
+                    const Real tangentLengthSq = glm::dot(tangent, tangent);
+                    if (tangentLengthSq < frictionEpsilonSq)
+                    {
+                        impulseArray[i] = Vec2(0.0, 0.0);
+                        continue;
+                    }
+
+                    tangent /= std::sqrt(tangentLengthSq);
+
+                    const Real rAPerpDotT = glm::dot(rAPerp, tangent);
+                    const Real rBPerpDotT = glm::dot(rBPerp, tangent);
+
+                    const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
+
+                    const Real jn = jnArray[i];
+                    if (std::fabs(jt) <= jn * staticFriction)
+                    {
+                        impulseArray[i] = -jt * tangent; // Static friction.
+                    }
+                    else
+                    {
+                        const Real maxDynamic = jn * dynamicFriction;
+                        const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
+                        impulseArray[i] = f * tangent; // Dynamic friction.
+                    }
+                }
+            }
+
+            // Apply friction impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
+
+            // Position and velocity correction.
+            const Real invTotalInvMass_x_Depth = depth / totalInvMass;
+            const Real correctionStrengthA = invMassA * invTotalInvMass_x_Depth;
+            const Real correctionStrengthB = invMassB * invTotalInvMass_x_Depth;
+            {
+                const Real correctionA = correctionStrengthA * simulationSettings.positionCorrectionPercent;
+                const Real correctionB = correctionStrengthB * simulationSettings.positionCorrectionPercent;
+
+                const Vec2 correctionAVec = normal * correctionA;
+                const Vec2 correctionBVec = normal * correctionB;
+
+                positionXPtr[bodyIndexA] -= correctionAVec.x;
+                positionYPtr[bodyIndexA] -= correctionAVec.y;
+                positionXPtr[bodyIndexB] += correctionBVec.x;
+                positionYPtr[bodyIndexB] += correctionBVec.y;
+            }
+            if (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
+            {
+                const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
+                const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
+
+                const Vec2 correctionAVec = normal * correctionA;
+                const Vec2 correctionBVec = normal * correctionB;
+
+                velocityXPtr[bodyIndexA] -= correctionAVec.x;
+                velocityYPtr[bodyIndexA] -= correctionAVec.y;
+                velocityXPtr[bodyIndexB] += correctionBVec.x;
+                velocityYPtr[bodyIndexB] += correctionBVec.y;
+            }
+        }
+
+    }
+
+    void Solver::resolveCollisionsThreadedIslands(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    {
+        // Note: This things is solely for test. It can work great, but it depends on scenario.
+        // My scenation has one islands. Plus we need many islands to maximize full of cpu.
+        // Plus I am not sure if we can generate islands and process them at the same time.
+        // It's not optimized yet.
+
+        TRACY_SCOPE_NC("Resolve collisions (Islands)", Ecstasy::Color::Purple);
+
+        const size_t collisionCount = narrowPhaseCollisions.size();
+        if (collisionCount == 0) return;
+
+        const size_t bodyCount = bodies->getCount();
+        const Real* const ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+
+        // 1. Build Physics Islands using Disjoint Set Union (DSU)
+        // Each dynamic body starts in its own individual set.
+        std::vector<uint32_t> parent(bodyCount);
+        std::iota(parent.begin(), parent.end(), 0u);
+
+        auto findRoot = [&](uint32_t i) -> uint32_t {
+            uint32_t root = i;
+            while (root != parent[root]) {
+                root = parent[root];
+            }
+            // Path compression
+            uint32_t curr = i;
+            while (curr != root) {
+                uint32_t nxt = parent[curr];
+                parent[curr] = root;
+                curr = nxt;
+            }
+            return root;
+            };
+
+        // Connect sets only if both interacting bodies are dynamic.
+        // Static bodies (invMass == 0) act as boundaries and must not link islands together.
+        {
+            TRACY_SCOPE_NC("Connect body pairs", Ecstasy::Color::Red);
+            for (size_t i = 0; i < collisionCount; ++i)
+            {
+                const auto& coll = narrowPhaseCollisions[i];
+                if (invMassPtr[coll.bodyA] > 0.0 && invMassPtr[coll.bodyB] > 0.0)
+                {
+                    uint32_t rootA = findRoot(coll.bodyA);
+                    uint32_t rootB = findRoot(coll.bodyB);
+                    if (rootA != rootB) {
+                        parent[rootA] = rootB;
+                    }
+                }
+            }
+        }
+
+        // Structure to pack grouped contacts belonging to an independent simulation island
+        struct Island {
+            std::vector<size_t> collisionIndices;
+        };
+
+        std::vector<int32_t> rootToIslandIdx(bodyCount, -1);
+        std::vector<Island> islands;
+        islands.reserve(64);
+
+        // Map narrow phase indices into their respective independent tracking sets
+        {
+            TRACY_SCOPE_NC("Map sets into islands", Ecstasy::Color::Green);
+            for (size_t i = 0; i < collisionCount; ++i)
+            {
+                const auto& coll = narrowPhaseCollisions[i];
+
+                const bool isDynamicA = (invMassPtr[coll.bodyA] > 0.0);
+                const bool isDynamicB = (invMassPtr[coll.bodyB] > 0.0);
+
+                // If both elements are static, no solver updates are needed
+                if (!isDynamicA && !isDynamicB) continue;
+
+                // Route via the dynamic body to capture the constraint matching
+                const uint32_t dynamicBodyTarget = isDynamicA ? coll.bodyA : coll.bodyB;
+                const uint32_t rootId = findRoot(dynamicBodyTarget);
+
+                if (rootToIslandIdx[rootId] == -1)
+                {
+                    rootToIslandIdx[rootId] = static_cast<int32_t>(islands.size());
+                    islands.emplace_back();
+                }
+                islands[rootToIslandIdx[rootId]].collisionIndices.push_back(i);
+            }
+        }
+
+        if (islands.empty()) return;
+
+        // 2. Parallel Processing with dynamic load-balancing via an atomic counter
+        constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
+
+        std::atomic<size_t> nextIslandIdx{ 0 };
+        std::atomic<size_t> activeWorkers{ WORKER_COUNT };
+
+        auto workerFunc = [this, &narrowPhaseCollisions, &islands, &nextIslandIdx, &activeWorkers]() {
+            try {
+                while (true) {
+                    const size_t idx = nextIslandIdx.fetch_add(1, std::memory_order_relaxed);
+                    if (idx >= islands.size()) break;
+
+                    // Processes the entire island linearly without locks, stalls, or internal cross-thread coloring
+                    resolveCollisionsIndirect(narrowPhaseCollisions, islands[idx].collisionIndices);
+                }
+            }
+            catch (const std::exception& e) {
+                std::cout << "Island worker caught an exception: " << e.what() << "\n";
+            }
+            activeWorkers.fetch_sub(1, std::memory_order_release);
+            activeWorkers.notify_all();
+            };
+
+        // Dispatch workloads across your thread pool
+        auto& threadPool = Threading::getGlobalThreadPool();
+        for (size_t i = 0; i < WORKER_COUNT; i++)
+        {
+            threadPool.enqueue(workerFunc);
+        }
+
+        // Main thread synchronization block
+        {
+            TRACY_SCOPE_NC("Wait for workers", Ecstasy::Color::Blue);
+            while (auto activeWorkersValue = activeWorkers.load(std::memory_order_acquire) > 0)
+            {
+                activeWorkers.wait(activeWorkersValue, std::memory_order_acquire);
+            }
+        }
+    }
+}

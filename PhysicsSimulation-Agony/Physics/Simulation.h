@@ -6,6 +6,7 @@
 
 #include "BroadPhaseCollisionDetector.h"
 #include "NarrowPhaseCollisionDetector.h"
+#include "Solver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -15,7 +16,6 @@ namespace PS_AGONY
 {
 	class Simulation
 	{
-		static constexpr bool ENABLE_VELOCITY_CORRECTION = true;
 		static constexpr bool ENABLE_FAST_COS_SIN = true;
 	public:
 		struct DebugData
@@ -46,31 +46,6 @@ namespace PS_AGONY
 			// Environment.
 			Real timeScale = 1.0;
 			Vec2 gravity{ 0.0, -9.81 };
-
-			// Baumgarte stabilization. No slop.
-			const Real positionCorrectionPercent = 1.0;
-			const Real velocityCorrectionStrength = 8.0;
-		};
-
-		struct ResolveCollisionsThreadedResources
-		{
-			struct alignas(64) WorkerData
-			{
-				std::vector<size_t> indices;
-				std::atomic<bool> isProcessing{ false };
-				std::atomic<bool> isDestroyed{ true };
-			};
-
-			using UsedSlot = uint8_t;
-
-			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick.
-			static constexpr size_t WORKER_COUNT = std::min(12ull, size_t(Threading::MAX_THREADS_ALLOWED));
-
-			std::array<WorkerData, WORKER_COUNT> workerData;
-
-			std::vector<size_t> remainingIndices;
-			std::vector<size_t> stagingPass;
-			std::vector<UsedSlot> usedBodies;
 		};
 
 		// Bodies SoA.
@@ -84,12 +59,10 @@ namespace PS_AGONY
 		// Settings.
 		SimulationSettings simulationSettings;
 
-		// Collisions.
+		// Phases.
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
-
-		// Resources.
-		ResolveCollisionsThreadedResources resolveCollisionsThreadedResources;
+		Solver solver;
 
 		// Timers.
 		Real updateTimeAccumulator = 0.0;
@@ -150,14 +123,6 @@ namespace PS_AGONY
 		void computeRotationCosSin();
 
 		void computeTruePositions();
-
-		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-
-		void resolveCollisionsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-		void resolveCollisionsPartially(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			const std::vector<size_t>& collisionIndices
-		);
 
 		void applyConstraints();
 

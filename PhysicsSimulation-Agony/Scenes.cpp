@@ -339,8 +339,8 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
 	if (scene == 0)
 	{
         load_ALotOfCollisions(simulation, rvg, 0.0f, 0.0f);
-		//load_ALotOfCollisions(simulation, rvg, -15.0f, 0.0f);
-        //load_ALotOfCollisions(simulation, rvg,  15.0f, 0.0f);
+		//load_ALotOfCollisions(simulation, rvg, -30.0f, 0.0f);
+        //load_ALotOfCollisions(simulation, rvg,  30.0f, 0.0f);
 	}
 	else if (scene == 1)
 	{

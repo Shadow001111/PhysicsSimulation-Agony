@@ -148,7 +148,7 @@ namespace PS_AGONY
 
     size_t BroadPhaseCollisionDetector::getMemoryUsage() const
     {
-        size_t total = 0;
+        size_t total = sizeof(BroadPhaseCollisionDetector);
 
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodes);
 
@@ -163,8 +163,7 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodePairsToTraverse);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafPairsToTestCollisions);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leavesToTestCollisions);
-
-        total += sizeof(QueryPairsThreadedResources);
+        
         for (const auto& wData : queryPairsThreadedResources.workerData)
         {
             std::lock_guard lock(wData.mutex);

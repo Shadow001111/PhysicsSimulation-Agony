@@ -108,7 +108,9 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
             simulationData.circleDataMemoryUsage +
             simulationData.boxDataMemoryUsage +
             simulationData.broadPhaseDetectorMemoryUsage +
-            simulationData.narrowPhaseDetectorMemoryUsage;
+            simulationData.narrowPhaseDetectorMemoryUsage +
+            simulationData.solverMemoryUsage
+            ;
 
         ss << "\nMemory: " << formatSizeBinary(total);
         ss << "\n  Bodies data: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
