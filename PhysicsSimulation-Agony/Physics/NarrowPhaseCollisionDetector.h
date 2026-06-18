@@ -82,6 +82,8 @@ namespace PS_AGONY
 
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs);
 
+		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
+
 		size_t getMemoryUsage() const;
 	private:
 		void findCollisionsSingleThreaded();

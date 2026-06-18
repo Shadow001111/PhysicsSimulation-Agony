@@ -103,6 +103,7 @@ namespace PS_AGONY
 
 		void renderBodyAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 
 		// Render shapes.
 

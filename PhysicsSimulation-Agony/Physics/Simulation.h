@@ -95,7 +95,8 @@ namespace PS_AGONY
 		void mainBodyHolderRelease();
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
 
-		void fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
+		void getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
+		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }
 
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
