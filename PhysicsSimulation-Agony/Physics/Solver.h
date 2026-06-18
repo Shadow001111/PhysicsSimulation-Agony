@@ -60,7 +60,6 @@ namespace PS_AGONY
 
 		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 		void resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-		void resolveCollisionsThreadedIslands(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 	private:
 		void resolveCollisionsIndirect(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
