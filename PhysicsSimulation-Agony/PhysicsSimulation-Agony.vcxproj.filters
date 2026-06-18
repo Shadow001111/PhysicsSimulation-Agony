@@ -215,5 +215,8 @@
     <ClInclude Include="EcstasyCore\Threading\ThreadPool.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\FastCosSin.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
