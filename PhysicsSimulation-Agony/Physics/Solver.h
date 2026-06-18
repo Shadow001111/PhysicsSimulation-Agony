@@ -32,7 +32,7 @@ namespace PS_AGONY
 			std::array<WorkerData, WORKER_COUNT> workerData;
 
 			std::vector<size_t> remainingIndices;
-			std::vector<size_t> stagingPass;
+			std::array<std::vector<size_t>, WORKER_COUNT> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
 		};
 
