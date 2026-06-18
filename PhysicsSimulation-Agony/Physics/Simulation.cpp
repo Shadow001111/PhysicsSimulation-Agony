@@ -654,12 +654,32 @@ namespace PS_AGONY
 
     void Simulation::wrapRotation()
     {
+        using RealSimd = Ecstasy::Simd<Real>;
+        constexpr size_t LANES = RealSimd::lanes;
+
         TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Color::Cyan);
 
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
         const size_t bodyCount = bodies.getCount();
-        for (size_t i = 0; i < bodyCount; i++)
+
+        const RealSimd twoPIV(Constants::TWO_PI);
+        const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
+
+        size_t i = 0;
+        for (; i + LANES <= bodyCount; i += LANES)
+        {
+            RealSimd rot = RealSimd::load(rotationPtr + i);
+
+            RealSimd q = (rot * invTwoPIV).to_int32().to_float();
+            rot = rot - q * twoPIV;
+
+            RealSimd isRotNegativeMask = rot < RealSimd(0);
+            rot += isRotNegativeMask & twoPIV;
+
+            rot.store(rotationPtr + i);
+        }
+        for (; i < bodyCount; i++)
         {
             float rot = rotationPtr[i];
             rot = std::fmod(rot, Constants::TWO_PI);

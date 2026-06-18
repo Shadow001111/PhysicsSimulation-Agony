@@ -156,7 +156,7 @@ namespace PS_AGONY
 		//renderBodyCentersOfMass(viewProjectionMatrix);
         //renderBodyPositions(viewProjectionMatrix);
         //renderBodyTruePositions(viewProjectionMatrix);
-		renderBodyAABBs(viewProjectionMatrix);
+		//renderBodyAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
