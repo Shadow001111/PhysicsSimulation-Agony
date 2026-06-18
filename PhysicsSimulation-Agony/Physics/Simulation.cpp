@@ -566,7 +566,7 @@ namespace PS_AGONY
             if (narrowCollisionData.empty()) break;
 
             // Collision resolution.
-            solver.resolveCollisionsThreaded(narrowCollisionData);
+            solver.resolveCollisionsThreadedGraphColoring(narrowCollisionData);
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }
