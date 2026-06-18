@@ -847,6 +847,5 @@ namespace PS_AGONY
                 velocityYPtr[bodyIndexB] += correctionBVec.y;
             }
         }
-
     }
 }

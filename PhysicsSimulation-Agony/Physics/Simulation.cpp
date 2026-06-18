@@ -384,7 +384,7 @@ namespace PS_AGONY
         bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
     }
 
-    void Simulation::fetchBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
+    void Simulation::getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
     {
 		broadPhaseCollisionDetector.fetchAABBs(outAABBs);
     }

@@ -44,6 +44,7 @@ namespace PS_AGONY
         // Render.
         renderBodies(viewProjectionMatrix);
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+        //renderContactPoints(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
@@ -366,11 +367,47 @@ namespace PS_AGONY
     {
         // Fetch AABBs.
 		aabbResources.instanceData.clear();
-        simulation.fetchBroadPhaseAABBs(aabbResources.instanceData);
+        simulation.getBroadPhaseAABBs(aabbResources.instanceData);
         if (aabbResources.instanceData.empty()) return;
 
         // Render.
 		renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    {
+        const auto& collisionData = simulation.getBodyCollisionData();
+
+        const size_t collisionCount = collisionData.size();
+        if (collisionCount == 0) return;
+
+        // Reserve space.
+        circleResources.instanceData.clear();
+
+        // Prepare instance data.
+        for (size_t i = 0; i < collisionCount; i++)
+        {
+            const auto& collData = collisionData[i];
+
+            for (size_t j = 0; j < collData.contactCount; j++)
+            {
+                const auto& contact = collData.contacts[j];
+
+                auto& renderData = circleResources.instanceData.emplace_back();
+
+                renderData.positionX = contact.x;
+                renderData.positionY = contact.y;
+                renderData.localCOMX = 0.0f;
+                renderData.localCOMY = 0.0f;
+                renderData.rotation = 0.0f;
+                renderData.radius = 0.05f;
+                renderData.color = 0xFF0000;
+                renderData.textureId = 0;
+            }
+        }
+
+        // Render.
+        renderCircleShapes(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderCircleShapes(const Mat4& viewProjectionMatrix)
