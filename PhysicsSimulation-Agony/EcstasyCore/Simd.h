@@ -637,7 +637,7 @@ namespace Ecstasy
                 return sub(fill_lanes_with_zero(), a);
             else if constexpr (std::is_same_v<T, float>)
             {
-                const Simd sign_mask = fill_lanes_with_value(-0.0).as_float();
+                const Simd sign_mask = fill_lanes_with_value(-0.0);
                 return bitwise_xor(a, sign_mask);
             }
             else

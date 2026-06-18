@@ -164,6 +164,17 @@ namespace PS_AGONY
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafPairsToTestCollisions);
         total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leavesToTestCollisions);
 
+        total += sizeof(QueryPairsThreadedResources);
+        for (const auto& wData : queryPairsThreadedResources.workerData)
+        {
+            std::lock_guard lock(wData.mutex);
+            total += PS_AGONY::getVectorMemoryUsage(wData.incomingSelfTasks);
+            total += PS_AGONY::getVectorMemoryUsage(wData.incomingCrossTasks);
+            total += PS_AGONY::getVectorMemoryUsage(wData.localSelfTasks);
+            total += PS_AGONY::getVectorMemoryUsage(wData.localCrossTasks);
+            total += PS_AGONY::getVectorMemoryUsage(wData.outCollisionData);
+        }
+
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
         total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minY);
