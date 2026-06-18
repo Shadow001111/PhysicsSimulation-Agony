@@ -419,7 +419,7 @@ namespace PS_AGONY
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
     {
-        using RealSimd = Simd<Real>;
+        using RealSimd = Ecstasy::Simd<Real>;
 
         TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
 
@@ -463,7 +463,7 @@ namespace PS_AGONY
 
     void Simulation::integrate(size_t bodyCount, Real deltaTime)
     {
-        using RealSimd = Simd<Real>;
+        using RealSimd = Ecstasy::Simd<Real>;
 
         TRACY_SCOPE_NC("Intergrate", Ecstasy::Color::Blue);
 
@@ -725,7 +725,7 @@ namespace PS_AGONY
 
     void Simulation::computeTruePositions()
     {
-        using RealSimd = Simd<Real>;
+        using RealSimd = Ecstasy::Simd<Real>;
 
         TRACY_SCOPE_NC("Compute true positions", Ecstasy::Color::Magenta);
 

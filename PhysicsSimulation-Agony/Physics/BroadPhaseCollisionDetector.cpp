@@ -1,6 +1,7 @@
 ﻿#include "BroadPhaseCollisionDetector.h"
 
 #include "EcstasyCore/Portablity.h"
+#include "EcstasyCore/Simd.h"
 
 #include <numeric>
 #include <bit>
@@ -9,8 +10,8 @@
 
 namespace PS_AGONY
 {
-    using RealSimd = Simd<Real>;
-    using MortonU32Simd = Simd<uint32_t>;
+    using RealSimd = Ecstasy::Simd<Real>;
+    using MortonU32Simd = Ecstasy::Simd<uint32_t>;
 
     static constexpr uint64_t integralLog2(uint64_t n)
     {
@@ -255,7 +256,7 @@ namespace PS_AGONY
     template<std::floating_point TReal>
     void BroadPhaseCollisionDetector::computeMortonCodes(uint32_t bodyCount)
     {
-        using TRealSimd = Simd<TReal>;
+        using TRealSimd = Ecstasy::Simd<TReal>;
 
         bvhFunctionResources.mortonCodes.resize(bodyCount);
 
