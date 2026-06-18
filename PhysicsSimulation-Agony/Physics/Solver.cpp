@@ -22,7 +22,10 @@ namespace PS_AGONY
         size_t total = sizeof(Solver);
 
         total += getVectorMemoryUsage(solverResources.remainingIndices);
-        total += getVectorMemoryUsage(solverResources.stagingPass);
+        for (auto& pass : solverResources.stagingPasses)
+        {
+            total += getVectorMemoryUsage(pass);
+        }
         total += getVectorMemoryUsage(solverResources.usedBodies);
         for (const auto& wData : solverResources.workerData)
         {
@@ -358,7 +361,10 @@ namespace PS_AGONY
         }
 
         //
-        solverResources.stagingPass.clear();
+        for (auto& pass : solverResources.stagingPasses)
+        {
+            pass.clear();
+        }
         solverResources.usedBodies.resize(bodies->getCount());
 
         std::atomic<uint32_t> workNotDone{ 0 };
@@ -426,9 +432,12 @@ namespace PS_AGONY
 
             // Stage loop.
             {
-                TRACY_SCOPE_NC("Stage loop", Ecstasy::Color::Red);
+                TRACY_SCOPE_NC("Stages loop", Ecstasy::Color::Red);
+
                 for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
                 {
+                    auto& stagingPass = solverResources.stagingPasses[stageIndex];
+
                     // Coloring.
                     {
                         TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Blue);
@@ -443,7 +452,7 @@ namespace PS_AGONY
                             const auto beg = solverResources.remainingIndices.end() - readSize;
 
                             // Copy first indices.
-                            solverResources.stagingPass.insert(solverResources.stagingPass.end(),
+                            stagingPass.insert(stagingPass.end(),
                                 beg,
                                 beg + readSize
                             );
@@ -455,7 +464,7 @@ namespace PS_AGONY
                             );
 
                             // Mark indices as used.
-                            for (const size_t idx : solverResources.stagingPass)
+                            for (const size_t idx : stagingPass)
                             {
                                 const auto& coll = narrowPhaseCollisions[idx];
                                 solverResources.usedBodies[coll.bodyA] = 0;
@@ -465,7 +474,7 @@ namespace PS_AGONY
                         else
                         {
                             size_t readSize = solverResources.remainingIndices.size();
-                            for (size_t readPos = 0; readPos < readSize && solverResources.stagingPass.size() < MAX_VALID_INDICES_PER_PASS;)
+                            for (size_t readPos = 0; readPos < readSize && stagingPass.size() < MAX_VALID_INDICES_PER_PASS;)
                             {
                                 const size_t idx = solverResources.remainingIndices[readPos];
                                 const auto& coll = narrowPhaseCollisions[idx];
@@ -478,7 +487,7 @@ namespace PS_AGONY
                                     readPos++;
                                     continue;
                                 }
-                                solverResources.stagingPass.push_back(idx);
+                                stagingPass.push_back(idx);
                                 solverResources.usedBodies[coll.bodyA] = stageIndex;
                                 solverResources.usedBodies[coll.bodyB] = stageIndex;
 
@@ -490,11 +499,26 @@ namespace PS_AGONY
                     }
 
                     // Check.
-                    if (solverResources.stagingPass.empty())
+                    if (stagingPass.empty())
                     {
                         maxAllowedStages = stageIndex;
                         break;
                     }
+                }
+
+                // Wait for previous wave to finish.
+                {
+                    TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
+
+                    while (uint32_t val = workNotDone.load(std::memory_order_acquire) != 0)
+                    {
+                        workNotDone.wait(val, std::memory_order_acquire);
+                    }
+                }
+
+                for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
+                {
+                    auto& stagingPass = solverResources.stagingPasses[stageIndex];
 
                     // Push staging pass.
                     {
@@ -509,7 +533,7 @@ namespace PS_AGONY
                         }
 
                         // Push staging pass.
-                        wData.indices.swap(solverResources.stagingPass); // Staging pass is cleared in worker thread.
+                        wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
 
                         // Notify worker that data is ready.
                         wData.isProcessing.store(true, std::memory_order_release);
@@ -517,20 +541,10 @@ namespace PS_AGONY
                             TRACY_SCOPE_NC("Notify", Ecstasy::Color::Silver);
                             wData.isProcessing.notify_one();
                         }
-                        
+
                         // Increment.
                         workNotDone.fetch_add(1, std::memory_order_release);
                     };
-                }
-
-                // Wait for previous wave to finish.
-                {
-                    TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
-
-                    while (uint32_t val = workNotDone.load(std::memory_order_acquire) != 0)
-                    {
-                        workNotDone.wait(val, std::memory_order_acquire);
-                    }
                 }
             }
 
