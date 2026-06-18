@@ -359,11 +359,12 @@ namespace PS_AGONY
 
         //
         solverResources.stagingPass.clear();
-
         solverResources.usedBodies.resize(bodies->getCount());
 
+        std::atomic<uint32_t> workNotDone{ 0 };
+
         // Lambdas.
-        auto workerFunc = [this, &narrowPhaseCollisions](size_t workerIndex)
+        auto workerFunc = [this, &narrowPhaseCollisions, &workNotDone](size_t workerIndex)
             {
                 auto& wData = solverResources.workerData[workerIndex];
                 try
@@ -378,6 +379,10 @@ namespace PS_AGONY
 
                         // Execute.
                         resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
+
+                        workNotDone.fetch_sub(1, std::memory_order_release);
+                        workNotDone.notify_one();
+
                         wData.indices.clear();
 
                         // Notify main thread that worker is finished.
@@ -512,7 +517,20 @@ namespace PS_AGONY
                             TRACY_SCOPE_NC("Notify", Ecstasy::Color::Silver);
                             wData.isProcessing.notify_one();
                         }
+                        
+                        // Increment.
+                        workNotDone.fetch_add(1, std::memory_order_release);
                     };
+                }
+
+                // Wait for previous wave to finish.
+                {
+                    TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
+
+                    while (uint32_t val = workNotDone.load(std::memory_order_acquire) != 0)
+                    {
+                        workNotDone.wait(val, std::memory_order_acquire);
+                    }
                 }
             }
 
