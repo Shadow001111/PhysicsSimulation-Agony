@@ -1058,7 +1058,6 @@ namespace PS_AGONY
         // TODO: (for future) We can create a lot of staging buffers, not waiting for workers to finish.
         // TODO: Push buffer immediately after worker took it.
         // TODO: Double buffering. Though then maybe some indices may interfere, that means workers need to work on same 'page'.
-        //          Page is double(or tripple) buffer.
 
         constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
         constexpr auto MAX_VALID_INDICES_PER_PASS = ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS;
@@ -1127,29 +1126,6 @@ namespace PS_AGONY
                 }
                 wData.isDestroyed.store(true, std::memory_order_release);
                 wData.isDestroyed.notify_one();
-            };
-
-        auto pushStagingPass = [this](std::vector<size_t>& stagingPass, size_t stageIndex)
-            {
-                TRACY_SCOPE_NC("Push staging pass", Ecstasy::Color::Gold);
-
-                auto& wData = resolveCollisionsThreadedResources.workerData[stageIndex];
-
-                // Wait for worker to finish.
-                {
-                    TRACY_SCOPE_NC("Wait for worker", Ecstasy::Color::Silver);
-                    wData.isProcessing.wait(true, std::memory_order_acquire);
-                }
-
-                // Push staging pass.
-                wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
-
-                // Notify worker that data is ready.
-                wData.isProcessing.store(true, std::memory_order_release);
-                {
-                    TRACY_SCOPE_NC("Notify", Ecstasy::Color::Silver);
-                    wData.isProcessing.notify_one();
-                }
             };
 
         // Launch workers.
@@ -1246,8 +1222,28 @@ namespace PS_AGONY
                         break;
                     }
 
-                    // Push pass.
-                    pushStagingPass(resolveCollisionsThreadedResources.stagingPass, stageIndex);
+                    // Push staging pass.
+                    {
+                        TRACY_SCOPE_NC("Push staging pass", Ecstasy::Color::Gold);
+
+                        auto& wData = resolveCollisionsThreadedResources.workerData[stageIndex];
+
+                        // Wait for worker to finish.
+                        {
+                            TRACY_SCOPE_NC("Wait for worker", Ecstasy::Color::Silver);
+                            wData.isProcessing.wait(true, std::memory_order_acquire);
+                        }
+
+                        // Push staging pass.
+                        wData.indices.swap(resolveCollisionsThreadedResources.stagingPass); // Staging pass is cleared in worker thread.
+
+                        // Notify worker that data is ready.
+                        wData.isProcessing.store(true, std::memory_order_release);
+                        {
+                            TRACY_SCOPE_NC("Notify", Ecstasy::Color::Silver);
+                            wData.isProcessing.notify_one();
+                        }
+                    };
                 }
             }
 
