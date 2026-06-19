@@ -315,7 +315,7 @@ namespace PS_AGONY
 
     void Solver::resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        if (narrowPhaseCollisions.size() < ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS)
+        if (narrowPhaseCollisions.size() < 5000)
         {
             resolveCollisions(narrowPhaseCollisions);
             return;

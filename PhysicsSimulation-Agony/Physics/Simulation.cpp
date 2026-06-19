@@ -697,30 +697,12 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Color::Teal);
 
-        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
-        Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-        Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
-
-        const size_t bodyCount = bodies.getCount();
-
-        if constexpr (ENABLE_FAST_COS_SIN)
-        {
-            FastCosSin::bhaskaraCosSinSimd(
-                rotationPtr,
-                rotationCosPtr,
-                rotationSinPtr,
-                bodyCount
-            );
-        }
-        else
-        {
-            for (size_t i = 0; i < bodyCount; i++)
-            {
-                const Real angle = rotationPtr[i];
-                rotationCosPtr[i] = std::cos(angle);
-                rotationSinPtr[i] = std::sin(angle);
-            }
-        }
+        FastCosSin::order4CosSinSimd(
+            bodies.rotation.data(),
+            bodies.rotationCos.data(),
+            bodies.rotationSin.data(),
+            bodies.getCount()
+        );
     }
 
     void Simulation::computeTruePositions()
