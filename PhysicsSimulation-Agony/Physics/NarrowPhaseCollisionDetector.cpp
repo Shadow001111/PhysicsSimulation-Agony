@@ -216,7 +216,7 @@ namespace PS_AGONY
                     // Resize the chunked result vector for this type.
                     auto& typeChunks = chunkedResultsDA[index];
 
-                    if (typeChunks.size() < chunkCount)
+                    if (chunkCount > typeChunks.size())
                     {
                         typeChunks.resize(chunkCount);
                     }

@@ -617,15 +617,12 @@ namespace PS_AGONY
                     while (true)
                     {
                         std::unique_lock lk(wData.mutex);
-                        {
-                            TRACY_SCOPE_NC("Wait for request", Ecstasy::Color::DarkViolet);
-                            wData.cv.wait(lk, [&]
-                                {
-                                    return wData.stopRequested ||
-                                        !wData.incomingSelfTasks.empty() ||
-                                        !wData.incomingCrossTasks.empty();
-                                });
-                        }
+                        wData.cv.wait(lk, [&]
+                            {
+                                return wData.stopRequested ||
+                                    !wData.incomingSelfTasks.empty() ||
+                                    !wData.incomingCrossTasks.empty();
+                            });
 
                         if (wData.stopRequested &&
                             wData.incomingSelfTasks.empty() &&
@@ -988,10 +985,7 @@ namespace PS_AGONY
                 
                 TRACY_SCOPE_N("Flush self task stack");
 
-                {
-                    TRACY_SCOPE_N("Push tasks");
-                    queryPairsThreadedResources.workerData[workerIndex].pushSelfTasks(selfTaskStack, selfTaskStackSize);
-                }
+                queryPairsThreadedResources.workerData[workerIndex].pushSelfTasks(selfTaskStack, selfTaskStackSize);
                 selfTaskStackSize = 0;
 
                 workerIndex++;
@@ -1014,10 +1008,7 @@ namespace PS_AGONY
 
                 TRACY_SCOPE_N("Flush cross task stack");
 
-                {
-                    TRACY_SCOPE_N("Push tasks");
-                    queryPairsThreadedResources.workerData[workerIndex].pushCrossTasks(crossTaskStack, crossTaskStackSize);
-                }
+                queryPairsThreadedResources.workerData[workerIndex].pushCrossTasks(crossTaskStack, crossTaskStackSize);
                 crossTaskStackSize = 0;
 
                 workerIndex++;

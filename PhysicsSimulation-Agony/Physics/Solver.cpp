@@ -430,16 +430,15 @@ namespace PS_AGONY
                 );
             }
 
-            //
-            size_t startReadPos = 0;
-            for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
+            // Coloring.
             {
-                auto& stagingPass = solverResources.stagingPasses[stageIndex];
-
-                // Coloring.
+                TRACY_SCOPE_NC("Coloring", Ecstasy::Color::Blue);
+                size_t startReadPos = 0;
+                for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
                 {
-                    TRACY_SCOPE_NC("Coloring pass", Ecstasy::Color::Blue);
+                    auto& stagingPass = solverResources.stagingPasses[stageIndex];
 
+                    // Coloring.
                     if (stageIndex == 0)
                     {
                         // Quick pass: no body conflicts at stage 0.
@@ -506,13 +505,13 @@ namespace PS_AGONY
                             startReadPos = untakenStart;
                         }
                     }
-                }
 
-                // Check.
-                if (stagingPass.empty())
-                {
-                    maxAllowedStages = stageIndex;
-                    break;
+                    // Check.
+                    if (stagingPass.empty())
+                    {
+                        maxAllowedStages = stageIndex;
+                        break;
+                    }
                 }
             }
 
@@ -536,24 +535,16 @@ namespace PS_AGONY
 
                     auto& wData = solverResources.workerData[stageIndex];
 
-                    // Wait for worker to finish.
-                    {
-                        TRACY_SCOPE_NC("Wait for worker", Ecstasy::Color::Silver);
-                        wData.isProcessing.wait(true, std::memory_order_acquire);
-                    }
+                    // Wait for worker to finish. Doesn't take too long.
+                    wData.isProcessing.wait(true, std::memory_order_acquire);
 
                     // Push staging pass.
                     wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
 
                     // Notify worker that data is ready.
-                    wData.isProcessing.store(true, std::memory_order_release);
-                    {
-                        TRACY_SCOPE_NC("Notify", Ecstasy::Color::Silver);
-                        wData.isProcessing.notify_one();
-                    }
-
-                    // Increment.
                     workNotDone.fetch_add(1, std::memory_order_release);
+                    wData.isProcessing.store(true, std::memory_order_release);
+                    wData.isProcessing.notify_one();
                 };
             }
 

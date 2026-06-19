@@ -163,7 +163,7 @@ namespace Ecstasy::Threading
 
         constexpr int MAX_SPIN_COUNT = 5000;
 
-        TracyMessage("Worker start", 12);
+        //TracyMessage("Worker start", 12);
         while (!stop.load(std::memory_order_relaxed))
         {
             // Possibly sleep now, so it won't sleep during executing task.
@@ -225,7 +225,7 @@ namespace Ecstasy::Threading
                 }
                 if (returnToStart) [[likely]] continue;
 
-                TracyMessage("Sleep", 5);
+                //TracyMessage("Sleep", 5);
 
                 //Wait for new tasks (or stop).
                 uint32_t currentVersion = pool->workVersion.load(std::memory_order_acquire);
@@ -235,7 +235,7 @@ namespace Ecstasy::Threading
                     pool->workVersion.wait(currentVersion, std::memory_order_acquire);
                     currentVersion = pool->workVersion.load(std::memory_order_acquire);
                 } while (!stop.load(std::memory_order_relaxed) && pool->getPendingTasks() == 0);
-                TracyMessage("Awake", 5);
+                //TracyMessage("Awake", 5);
             }
         }
     }

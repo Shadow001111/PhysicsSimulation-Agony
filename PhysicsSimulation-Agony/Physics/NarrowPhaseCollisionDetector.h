@@ -69,10 +69,10 @@ namespace PS_AGONY
 	public:
 		NarrowPhaseCollisionDetector();
 		~NarrowPhaseCollisionDetector() = default;
-		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = default;
-		NarrowPhaseCollisionDetector& operator=(const NarrowPhaseCollisionDetector&) = default;
-		NarrowPhaseCollisionDetector(NarrowPhaseCollisionDetector&&) = default;
-		NarrowPhaseCollisionDetector& operator=(NarrowPhaseCollisionDetector&&) = default;
+		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = delete;
+		NarrowPhaseCollisionDetector& operator=(const NarrowPhaseCollisionDetector&) = delete;
+		NarrowPhaseCollisionDetector(NarrowPhaseCollisionDetector&&) = delete;
+		NarrowPhaseCollisionDetector& operator=(NarrowPhaseCollisionDetector&&) = delete;
 
 		void setDataViewers(
 			const BodySoAViewer& bodies,

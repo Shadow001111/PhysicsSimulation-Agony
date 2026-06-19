@@ -72,7 +72,8 @@ namespace PS_AGONY
 		{
 			struct alignas(64) WorkerData
 			{
-				mutable TracyLockableN(std::mutex, mutex, "Worker mutex");
+				//mutable TracyLockableN(std::mutex, mutex, "Worker mutex");
+				mutable std::mutex mutex;
 				std::condition_variable_any cv;
 
 				bool stopRequested = false;
@@ -91,7 +92,6 @@ namespace PS_AGONY
 				{
 					bool needNotify = false;
 					{
-						TRACY_SCOPE_N("Push");
 						std::lock_guard lock(mutex);
 						incomingSelfTasks.insert(
 							incomingSelfTasks.end(),
@@ -99,12 +99,9 @@ namespace PS_AGONY
 						);
 						needNotify = !running;
 					}
+					if (needNotify)
 					{
-						TRACY_SCOPE_N("Notify");
-						if (needNotify)
-						{
-							cv.notify_one();
-						}
+						cv.notify_one();
 					}
 				}
 
@@ -112,7 +109,6 @@ namespace PS_AGONY
 				{
 					bool needNotify = false;
 					{
-						TRACY_SCOPE_N("Push");
 						std::lock_guard lock(mutex);
 						incomingCrossTasks.insert(
 							incomingCrossTasks.end(),
@@ -120,12 +116,9 @@ namespace PS_AGONY
 						);
 						needNotify = !running;
 					}
+					if (needNotify)
 					{
-						TRACY_SCOPE_N("Notify");
-						if (needNotify)
-						{
-							cv.notify_one();
-						}
+						cv.notify_one();
 					}
 				}
 			};
@@ -161,10 +154,10 @@ namespace PS_AGONY
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;
-		BroadPhaseCollisionDetector(const BroadPhaseCollisionDetector&) = default;
-		BroadPhaseCollisionDetector& operator=(const BroadPhaseCollisionDetector&) = default;
-		BroadPhaseCollisionDetector(BroadPhaseCollisionDetector&&) = default;
-		BroadPhaseCollisionDetector& operator=(BroadPhaseCollisionDetector&&) = default;
+		BroadPhaseCollisionDetector(const BroadPhaseCollisionDetector&) = delete;
+		BroadPhaseCollisionDetector& operator=(const BroadPhaseCollisionDetector&) = delete;
+		BroadPhaseCollisionDetector(BroadPhaseCollisionDetector&&) = delete;
+		BroadPhaseCollisionDetector& operator=(BroadPhaseCollisionDetector&&) = delete;
 
 		void setDataViewers(
 			const AABBSoAViewer& aabbs
