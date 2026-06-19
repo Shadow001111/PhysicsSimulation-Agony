@@ -417,7 +417,8 @@ namespace PS_AGONY
         }
 
         // Main loop.
-        size_t maxAllowedStages = WORKER_COUNT;
+        auto& mainThreadPass = solverResources.stagingPasses[0];
+        size_t maxAllowedStages = WORKER_COUNT + 1;
         while (true)
         {
             // Clear body-using history.
@@ -515,6 +516,13 @@ namespace PS_AGONY
                 }
             }
 
+            // Resolve collisions on main thread, while wave is being executed.
+            if (!mainThreadPass.empty())
+            {
+                resolveCollisionsIndirect(narrowPhaseCollisions, mainThreadPass);
+                mainThreadPass.clear();
+            }
+
             // Wait for previous wave to finish.
             {
                 TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
@@ -525,31 +533,28 @@ namespace PS_AGONY
                 }
             }
 
-            for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
+            // Push staging passes.
             {
-                auto& stagingPass = solverResources.stagingPasses[stageIndex];
-
-                // Push staging pass.
+                TRACY_SCOPE_NC("Push staging passes", Ecstasy::Color::Gold);
+                for (size_t stageIndex = 1; stageIndex < maxAllowedStages; stageIndex++)
                 {
-                    TRACY_SCOPE_NC("Push staging pass", Ecstasy::Color::Gold);
-
-                    auto& wData = solverResources.workerData[stageIndex];
+                    auto& wData = solverResources.workerData[stageIndex - 1];
 
                     // Wait for worker to finish. Doesn't take too long.
                     wData.isProcessing.wait(true, std::memory_order_acquire);
 
                     // Push staging pass.
-                    wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
+                    wData.indices.swap(solverResources.stagingPasses[stageIndex]); // Staging pass is cleared in worker thread.
 
                     // Notify worker that data is ready.
                     workNotDone.fetch_add(1, std::memory_order_release);
                     wData.isProcessing.store(true, std::memory_order_release);
                     wData.isProcessing.notify_one();
-                };
+                }
             }
 
             // Check.
-            if (solverResources.remainingIndices.empty() || maxAllowedStages < 2) break;
+            if (solverResources.remainingIndices.empty() || maxAllowedStages <= 2) break;
         }
 
         // Wait for workers to finish and stop them.
