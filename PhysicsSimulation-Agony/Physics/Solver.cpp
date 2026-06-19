@@ -431,6 +431,7 @@ namespace PS_AGONY
             }
 
             //
+            size_t startReadPos = 0;
             for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
             {
                 auto& stagingPass = solverResources.stagingPasses[stageIndex];
@@ -470,8 +471,10 @@ namespace PS_AGONY
                     }
                     else
                     {
+                        size_t untakenStart = 0;
+                        bool foundSomething = false;
                         size_t readSize = solverResources.remainingIndices.size();
-                        for (size_t readPos = 0; readPos < readSize && stagingPass.size() < MAX_VALID_INDICES_PER_PASS;)
+                        for (size_t readPos = startReadPos; readPos < readSize && stagingPass.size() < MAX_VALID_INDICES_PER_PASS;)
                         {
                             const size_t idx = solverResources.remainingIndices[readPos];
                             const auto& coll = narrowPhaseCollisions[idx];
@@ -482,6 +485,10 @@ namespace PS_AGONY
                                 )
                             {
                                 readPos++;
+                                if (!foundSomething)
+                                {
+                                    untakenStart = readPos;
+                                }
                                 continue;
                             }
                             stagingPass.push_back(idx);
@@ -491,6 +498,12 @@ namespace PS_AGONY
                             solverResources.remainingIndices[readPos] = solverResources.remainingIndices.back();
                             solverResources.remainingIndices.pop_back();
                             readSize--;
+
+                            foundSomething = true;
+                        }
+                        if (untakenStart > 0)
+                        {
+                            startReadPos = untakenStart;
                         }
                     }
                 }
