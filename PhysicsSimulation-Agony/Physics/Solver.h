@@ -27,12 +27,12 @@ namespace PS_AGONY
 			using UsedSlot = uint8_t;
 
 			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick. Looks ideal.
-			static constexpr size_t WORKER_COUNT = std::min(12ull, size_t(Threading::MAX_THREADS_ALLOWED));
+			static constexpr size_t WORKER_COUNT = std::min(11ull, size_t(Threading::MAX_THREADS_ALLOWED));
 
 			std::array<WorkerData, WORKER_COUNT> workerData;
 
 			std::vector<size_t> remainingIndices;
-			std::array<std::vector<size_t>, WORKER_COUNT> stagingPasses;
+			std::array<std::vector<size_t>, WORKER_COUNT + 1> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
 		};
 
