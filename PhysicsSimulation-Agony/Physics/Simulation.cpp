@@ -580,8 +580,6 @@ namespace PS_AGONY
 
     void Simulation::buildCircleAABBs()
     {
-        TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Color::LightGreen);
-
         const size_t count = circles.getCount();
         if (count == 0) return;
 
@@ -614,8 +612,6 @@ namespace PS_AGONY
 
     void Simulation::buildBoxAABBs()
     {
-        TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Color::DarkGreen);
-
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
