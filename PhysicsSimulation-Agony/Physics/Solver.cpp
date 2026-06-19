@@ -386,14 +386,14 @@ namespace PS_AGONY
                         // Execute.
                         resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
 
-                        workNotDone.fetch_sub(1, std::memory_order_release);
-                        workNotDone.notify_one();
-
                         wData.indices.clear();
 
                         // Notify main thread that worker is finished.
                         wData.isProcessing.store(false, std::memory_order_release);
                         wData.isProcessing.notify_one();
+
+                        workNotDone.fetch_sub(1, std::memory_order_release);
+                        workNotDone.notify_one();
                     }
                     wData.isProcessing.store(false, std::memory_order_release);
                     wData.isProcessing.notify_one();
@@ -527,8 +527,10 @@ namespace PS_AGONY
             {
                 TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
 
-                while (uint32_t val = workNotDone.load(std::memory_order_acquire) != 0)
+                while (true)
                 {
+                    uint32_t val = workNotDone.load(std::memory_order_acquire);
+                    if (val == 0) break;
                     workNotDone.wait(val, std::memory_order_acquire);
                 }
             }
@@ -536,18 +538,15 @@ namespace PS_AGONY
             // Push staging passes.
             {
                 TRACY_SCOPE_NC("Push staging passes", Ecstasy::Color::Gold);
+                workNotDone.fetch_add(maxAllowedStages - 1, std::memory_order_release);
                 for (size_t stageIndex = 1; stageIndex < maxAllowedStages; stageIndex++)
                 {
                     auto& wData = solverResources.workerData[stageIndex - 1];
-
-                    // Wait for worker to finish. Doesn't take too long.
-                    wData.isProcessing.wait(true, std::memory_order_acquire);
 
                     // Push staging pass.
                     wData.indices.swap(solverResources.stagingPasses[stageIndex]); // Staging pass is cleared in worker thread.
 
                     // Notify worker that data is ready.
-                    workNotDone.fetch_add(1, std::memory_order_release);
                     wData.isProcessing.store(true, std::memory_order_release);
                     wData.isProcessing.notify_one();
                 }
