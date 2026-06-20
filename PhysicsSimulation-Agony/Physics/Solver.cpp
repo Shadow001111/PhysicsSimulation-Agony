@@ -297,7 +297,7 @@ namespace PS_AGONY
                 positionXPtr[bodyIndexB] += correctionBVec.x;
                 positionYPtr[bodyIndexB] += correctionBVec.y;
             }
-            if (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
+            if constexpr (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
             {
                 const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
                 const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
@@ -356,7 +356,6 @@ namespace PS_AGONY
         for (auto& w : solverResources.workerData)
         {
             w.indices.clear();
-            w.isProcessing.store(false, std::memory_order_relaxed);
             w.isDestroyed.store(false, std::memory_order_relaxed);
         }
 
@@ -367,18 +366,21 @@ namespace PS_AGONY
         }
         solverResources.usedBodies.resize(bodies->getCount());
 
-        std::atomic<uint32_t> workNotDone{ 0 };
+        alignas(64) std::atomic<uint32_t> workNotDone{ 0 };
+        alignas(64) std::atomic<uint32_t> workWave{ 0 };
 
         // Lambdas.
-        auto workerFunc = [this, &narrowPhaseCollisions, &workNotDone](size_t workerIndex)
+        auto workerFunc = [this, &narrowPhaseCollisions, &workNotDone, &workWave](size_t workerIndex)
             {
                 auto& wData = solverResources.workerData[workerIndex];
                 try
                 {
+                    uint32_t previousWave = 0;
                     while (true)
                     {
-                        // Wait for data to arrive.
-                        wData.isProcessing.wait(false, std::memory_order_acquire);
+                        // Wait for data next wave.
+                        workWave.wait(previousWave, std::memory_order_acquire);
+                        previousWave = workWave.load(std::memory_order_acquire);
 
                         // Check for stop.
                         if (wData.indices.empty()) break;
@@ -388,21 +390,16 @@ namespace PS_AGONY
 
                         wData.indices.clear();
 
-                        // Notify main thread that worker is finished.
-                        wData.isProcessing.store(false, std::memory_order_release);
-                        wData.isProcessing.notify_one();
-
                         workNotDone.fetch_sub(1, std::memory_order_release);
                         workNotDone.notify_one();
                     }
-                    wData.isProcessing.store(false, std::memory_order_release);
-                    wData.isProcessing.notify_one();
                 }
                 catch (const std::exception& e)
                 {
                     std::cout << "Resolve collisions worker caught an exception: " << e.what() << "\n";
-                    wData.isProcessing.store(false, std::memory_order_release);
-                    wData.isProcessing.notify_one();
+                    wData.indices.clear();
+                    workNotDone.fetch_sub(1, std::memory_order_release);
+                    workNotDone.notify_one();
                 }
                 wData.isDestroyed.store(true, std::memory_order_release);
                 wData.isDestroyed.notify_one();
@@ -516,6 +513,11 @@ namespace PS_AGONY
                 }
             }
 
+            if (maxAllowedStages == 0) [[unlikely]]
+            {
+                break;
+            }
+
             // Resolve collisions on main thread, while wave is being executed.
             if (!mainThreadPass.empty())
             {
@@ -542,38 +544,39 @@ namespace PS_AGONY
                 for (size_t stageIndex = 1; stageIndex < maxAllowedStages; stageIndex++)
                 {
                     auto& wData = solverResources.workerData[stageIndex - 1];
-
-                    // Push staging pass.
-                    wData.indices.swap(solverResources.stagingPasses[stageIndex]); // Staging pass is cleared in worker thread.
-
-                    // Notify worker that data is ready.
-                    wData.isProcessing.store(true, std::memory_order_release);
-                    wData.isProcessing.notify_one();
+                    auto& stagingPass = solverResources.stagingPasses[stageIndex];
+                    wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
                 }
+
+                // Notify workers that data is ready.
+                workWave.fetch_add(1, std::memory_order_release);
+                workWave.notify_all();
             }
 
             // Check.
             if (solverResources.remainingIndices.empty() || maxAllowedStages <= 2) break;
         }
 
-        // Wait for workers to finish and stop them.
-        {
-            TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
-            for (size_t i = 0; i < WORKER_COUNT; i++)
-            {
-                auto& wData = solverResources.workerData[i];
-                wData.isProcessing.wait(true, std::memory_order_acquire);
-
-                // Stop. Call with empty indices array will stop worker.
-                wData.isProcessing.store(true, std::memory_order_release);
-                wData.isProcessing.notify_one();
-            }
-        }
-
         // Execute remaining on main thread.
         if (!solverResources.remainingIndices.empty())
         {
             resolveCollisionsIndirect(narrowPhaseCollisions, solverResources.remainingIndices);
+        }
+
+        // Wait for last wave to finish.
+        {
+            TRACY_SCOPE_NC("Wait for last wave end", Ecstasy::Color::Brown);
+
+            while (true)
+            {
+                uint32_t val = workNotDone.load(std::memory_order_acquire);
+                if (val == 0) break;
+                workNotDone.wait(val, std::memory_order_acquire);
+            }
+
+            // Signal workers. With empty indices array they will stop.
+            workWave.fetch_add(1, std::memory_order_release);
+            workWave.notify_all();
         }
     }
 
@@ -590,10 +593,10 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
         const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
 
-        Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
-        Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
-        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+        Real* ECSTASY_RESTRICT velocityXPtr =        bodies->velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr =        bodies->velocityY.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr =  bodies->angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr =    bodies->invMass.data();
         const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
         const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies->materialIndex.data();
@@ -841,7 +844,7 @@ namespace PS_AGONY
                 positionXPtr[bodyIndexB] += correctionBVec.x;
                 positionYPtr[bodyIndexB] += correctionBVec.y;
             }
-            if (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
+            if constexpr (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
             {
                 const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
                 const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;

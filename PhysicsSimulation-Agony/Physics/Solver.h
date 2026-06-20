@@ -20,7 +20,6 @@ namespace PS_AGONY
 			struct alignas(64) WorkerData
 			{
 				std::vector<size_t> indices;
-				std::atomic<bool> isProcessing{ false };
 				std::atomic<bool> isDestroyed{ true };
 			};
 
