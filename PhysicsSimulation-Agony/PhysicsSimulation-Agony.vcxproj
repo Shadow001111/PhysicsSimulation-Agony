@@ -237,6 +237,7 @@
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
     <ClCompile Include="EcstasyCore\FileStream.cpp" />
     <ClCompile Include="EcstasyCore\Threading\ThreadPool.cpp" />
+    <ClCompile Include="EcstasyCore\Threading\ThreadUtils.cpp" />
     <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\Camera2D.cpp" />
@@ -270,6 +271,7 @@
     <ClInclude Include="EcstasyCore\Threading\move_only_function.h" />
     <ClInclude Include="EcstasyCore\Threading\Task.h" />
     <ClInclude Include="EcstasyCore\Threading\ThreadPool.h" />
+    <ClInclude Include="EcstasyCore\Threading\ThreadUtils.h" />
     <ClInclude Include="Physics\Constants.h" />
     <ClInclude Include="Physics\FastCosSin.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />

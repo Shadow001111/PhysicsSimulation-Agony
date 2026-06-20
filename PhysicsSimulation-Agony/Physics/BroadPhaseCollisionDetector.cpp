@@ -122,7 +122,7 @@ namespace PS_AGONY
         }
 
         // TODO: Decide at runtime.
-        const bool useThreading = Threading::MAX_THREADS_ALLOWED > 0;
+        const bool useThreading = true;
         if (useThreading)
         {
             queryBvhPairsThreaded();

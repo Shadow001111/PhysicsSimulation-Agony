@@ -16,16 +16,18 @@ namespace Ecstasy::Threading
     class alignas(64) WorkerThread
     {
     public:
+        static constexpr int32_t INVALID_THREAD_PIN_INDEX = 0;
+
         ChaseLevQueue tasks{ 1024 * 64 };
         std::thread thread;
-        size_t index;
+        size_t threadId;
         std::atomic<bool> stop{ false };
 
-        WorkerThread(size_t idx) : index(idx) {}
+        WorkerThread(size_t idx) : threadId(idx) {}
 
-        void run(ThreadPool* pool);
+        void run(ThreadPool* pool, int32_t pinIndex);
     private:
-        void configureThread();
+        void configureThread(int32_t pinIndex);
     };
 
     class WorkerThreadContainer
@@ -134,7 +136,14 @@ namespace Ecstasy::Threading
 
         ChaseLevQueue& getWorkerQueue(size_t idx) { return workers[idx].tasks; }
     public:
-        explicit ThreadPool(size_t numThreads = 0);
+        enum class CoreMode
+        {
+            AnyCores,
+            PerfomanceCores
+            // EfficiencyCores maybe?
+        };
+
+        explicit ThreadPool(size_t numThreads = 0, CoreMode coreMode = CoreMode::AnyCores);
         ~ThreadPool();
 
         ThreadPool(const ThreadPool&) = delete;
