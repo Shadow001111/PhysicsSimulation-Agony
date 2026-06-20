@@ -330,8 +330,6 @@ namespace PS_AGONY
         constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
         constexpr auto MAX_VALID_INDICES_PER_PASS = ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS;
 
-        using UsedSlot = ResolveCollisionsThreadedResources::UsedSlot;
-
         // Fill remaining indices.
         const size_t collisionCount = narrowPhaseCollisions.size();
         solverResources.remainingIndices.resize(collisionCount);
@@ -419,14 +417,11 @@ namespace PS_AGONY
         while (true)
         {
             // Clear body-using history.
-            {
-                TRACY_SCOPE_NC("Clear body-using history", Ecstasy::Color::Pink);
-                std::fill(
-                    solverResources.usedBodies.begin(),
-                    solverResources.usedBodies.end(),
-                    UsedSlot(-1)
-                );
-            }
+            std::fill(
+                solverResources.usedBodies.begin(),
+                solverResources.usedBodies.end(),
+                ResolveCollisionsThreadedResources::UsedSlot(-1)
+            );
 
             // Coloring.
             {
@@ -513,6 +508,7 @@ namespace PS_AGONY
                 }
             }
 
+            // Early exit.
             if (maxAllowedStages == 0) [[unlikely]]
             {
                 break;
