@@ -1,4 +1,5 @@
 ﻿#include "BroadPhaseCollisionDetector.h"
+#include "Threading.h"
 
 #include "EcstasyCore/Portablity.h"
 #include "EcstasyCore/Simd.h"
@@ -120,7 +121,8 @@ namespace PS_AGONY
             refitBvhNodeAABBS();
         }
 
-        const bool useThreading = USE_THREADING;
+        // TODO: Decide at runtime.
+        const bool useThreading = Threading::MAX_THREADS_ALLOWED > 0;
         if (useThreading)
         {
             queryBvhPairsThreaded();
@@ -151,36 +153,37 @@ namespace PS_AGONY
     {
         size_t total = sizeof(BroadPhaseCollisionDetector);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodes);
+        total += getVectorMemoryUsage(bvhFunctionResources.nodes);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidX);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.transformedCentroidY);
+        total += getVectorMemoryUsage(bvhFunctionResources.transformedCentroidX);
+        total += getVectorMemoryUsage(bvhFunctionResources.transformedCentroidY);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
+        total += getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.mainBodyIndices);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.tempBodyIndicesToSort);
+        total += getVectorMemoryUsage(bvhFunctionResources.mainBodyIndices);
+        total += getVectorMemoryUsage(bvhFunctionResources.tempBodyIndicesToSort);
 
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.nodePairsToTraverse);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leafPairsToTestCollisions);
-        total += PS_AGONY::getVectorMemoryUsage(bvhFunctionResources.leavesToTestCollisions);
+        total += getVectorMemoryUsage(bvhFunctionResources.nodePairsToTraverse);
+        total += getVectorMemoryUsage(bvhFunctionResources.leafPairsToTestCollisions);
+        total += getVectorMemoryUsage(bvhFunctionResources.leavesToTestCollisions);
         
+        total += getVectorMemoryUsage(queryPairsThreadedResources.workerData);
         for (const auto& wData : queryPairsThreadedResources.workerData)
         {
             std::lock_guard lock(wData.mutex);
-            total += PS_AGONY::getVectorMemoryUsage(wData.incomingSelfTasks);
-            total += PS_AGONY::getVectorMemoryUsage(wData.incomingCrossTasks);
-            total += PS_AGONY::getVectorMemoryUsage(wData.localSelfTasks);
-            total += PS_AGONY::getVectorMemoryUsage(wData.localCrossTasks);
-            total += PS_AGONY::getVectorMemoryUsage(wData.outCollisionData);
+            total += getVectorMemoryUsage(wData.incomingSelfTasks);
+            total += getVectorMemoryUsage(wData.incomingCrossTasks);
+            total += getVectorMemoryUsage(wData.localSelfTasks);
+            total += getVectorMemoryUsage(wData.localCrossTasks);
+            total += getVectorMemoryUsage(wData.outCollisionData);
         }
 
-        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minX);
-        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxX);
-        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.minY);
-        total += PS_AGONY::getVectorMemoryUsage(leafBodyAABBs.maxY);
+        total += getVectorMemoryUsage(leafBodyAABBs.minX);
+        total += getVectorMemoryUsage(leafBodyAABBs.maxX);
+        total += getVectorMemoryUsage(leafBodyAABBs.minY);
+        total += getVectorMemoryUsage(leafBodyAABBs.maxY);
 
-        total += PS_AGONY::getVectorMemoryUsage(collisionData);
+        total += getVectorMemoryUsage(collisionData);
         return total;
     }
 
@@ -577,7 +580,9 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Query pairs (Threaded)");
 
-        constexpr auto WORKER_COUNT = QueryPairsThreadedResources::WORKER_COUNT;
+        // TODO: Scale worker count at runtime.
+        auto& threadPool = Threading::getGlobalThreadPool();
+        queryPairsThreadedResources.workerCount = std::min<size_t>(4, threadPool.getThreadCount());
 
         constexpr uint32_t LANES = RealSimd::lanes;
         constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
@@ -589,10 +594,8 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
         const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
-        // Get thread pool.
-        auto& threadPool = Threading::getGlobalThreadPool();
-
         // Reset workers and their data.
+        queryPairsThreadedResources.workerData.resize(queryPairsThreadedResources.workerCount);
         for (auto& wData : queryPairsThreadedResources.workerData)
         {
             std::lock_guard lock(wData.mutex);
@@ -768,7 +771,7 @@ namespace PS_AGONY
                 wData.cv.notify_one();
             };
 
-        for (size_t i = 0; i < WORKER_COUNT; i++)
+        for (size_t i = 0; i < queryPairsThreadedResources.workerCount; i++)
         {
             threadPool.enqueue(workerFunc, i);
         }
@@ -989,7 +992,7 @@ namespace PS_AGONY
                 selfTaskStackSize = 0;
 
                 workerIndex++;
-                if (workerIndex >= QueryPairsThreadedResources::WORKER_COUNT)
+                if (workerIndex >= queryPairsThreadedResources.workerCount)
                     workerIndex = 0;
             };
 
@@ -1012,7 +1015,7 @@ namespace PS_AGONY
                 crossTaskStackSize = 0;
 
                 workerIndex++;
-                if (workerIndex >= QueryPairsThreadedResources::WORKER_COUNT)
+                if (workerIndex >= queryPairsThreadedResources.workerCount)
                     workerIndex = 0;
             };
 

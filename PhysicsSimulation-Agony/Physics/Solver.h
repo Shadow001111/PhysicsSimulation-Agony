@@ -2,6 +2,9 @@
 #include "NarrowPhaseCollisionDetector.h"
 #include "Material.h"
 
+#include <atomic>
+#include <vector>
+
 namespace PS_AGONY
 {
 	class Solver
@@ -20,18 +23,39 @@ namespace PS_AGONY
 			struct alignas(64) WorkerData
 			{
 				std::vector<size_t> indices;
-				std::atomic<bool> isDestroyed{ true };
+				std::atomic<bool> isDestroyed{ false };
+
+				WorkerData() = default;
+				~WorkerData() = default;
+
+				WorkerData(const WorkerData&) = default;
+				WorkerData& operator=(const WorkerData&) = default;
+
+				WorkerData(WorkerData&& other) noexcept
+				{
+					indices = std::move(other.indices);
+					isDestroyed.store(true, std::memory_order_release);
+				}
+
+				WorkerData& operator=(WorkerData&& other) noexcept
+				{
+					if (this != &other)
+					{
+						indices = std::move(other.indices);
+						isDestroyed.store(true, std::memory_order_release);
+					}
+					return *this;
+				}
 			};
 
 			using UsedSlot = uint8_t;
 
 			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick. Looks ideal.
-			static constexpr size_t WORKER_COUNT = std::min(11ull, size_t(Threading::MAX_THREADS_ALLOWED));
 
-			std::array<WorkerData, WORKER_COUNT> workerData;
+			std::vector<WorkerData> workerData;
 
 			std::vector<size_t> remainingIndices;
-			std::array<std::vector<size_t>, WORKER_COUNT + 1> stagingPasses;
+			std::vector<std::vector<size_t>> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
 		};
 

@@ -1,4 +1,5 @@
 #include "Solver.h"
+#include "Threading.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -315,7 +316,12 @@ namespace PS_AGONY
 
     void Solver::resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        if (narrowPhaseCollisions.size() < 5000)
+        auto& threadPool = Threading::getGlobalThreadPool();
+
+        const size_t workerCount = threadPool.getThreadCount();
+
+        // TODO: Scale threshold based on worker count at runtime. Maybe scale 'MAX_VALID_INDICES_PER_PASS' too?
+        if (narrowPhaseCollisions.size() < 5000 || workerCount <= 1)
         {
             resolveCollisions(narrowPhaseCollisions);
             return;
@@ -323,11 +329,6 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
 
-        // TODO: (for future) We can create a lot of staging buffers, not waiting for workers to finish.
-        // TODO: Push buffer immediately after worker took it.
-        // TODO: Double buffering. Though then maybe some indices may interfere, that means workers need to work on same 'page'.
-
-        constexpr auto WORKER_COUNT = ResolveCollisionsThreadedResources::WORKER_COUNT;
         constexpr auto MAX_VALID_INDICES_PER_PASS = ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS;
 
         // Fill remaining indices.
@@ -345,12 +346,12 @@ namespace PS_AGONY
         // Worker data.
         {
             TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
-            for (size_t i = 0; i < WORKER_COUNT; i++)
+            for (auto& wData : solverResources.workerData)
             {
-                auto& wData = solverResources.workerData[i];
                 wData.isDestroyed.wait(false, std::memory_order_acquire);
             }
         }
+        solverResources.workerData.resize(workerCount);
         for (auto& w : solverResources.workerData)
         {
             w.indices.clear();
@@ -358,6 +359,7 @@ namespace PS_AGONY
         }
 
         //
+        solverResources.stagingPasses.resize(workerCount + 1);
         for (auto& pass : solverResources.stagingPasses)
         {
             pass.clear();
@@ -403,17 +405,14 @@ namespace PS_AGONY
                 wData.isDestroyed.notify_one();
             };
 
-        // Launch workers.
-        auto& threadPool = Threading::getGlobalThreadPool();
-
-        for (size_t i = 0; i < WORKER_COUNT; i++)
+        for (size_t i = 0; i < workerCount; i++)
         {
             threadPool.enqueue(workerFunc, i);
         }
 
         // Main loop.
         auto& mainThreadPass = solverResources.stagingPasses[0];
-        size_t maxAllowedStages = WORKER_COUNT + 1;
+        size_t maxAllowedStages = workerCount + 1;
         while (true)
         {
             // Clear body-using history.
