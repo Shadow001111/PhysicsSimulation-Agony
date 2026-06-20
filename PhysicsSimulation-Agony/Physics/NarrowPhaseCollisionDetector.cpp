@@ -127,7 +127,7 @@ namespace PS_AGONY
         allCollisionData.reserve(bodyPairs.size());
         
         // Find collisions.
-        const bool useThreading = Threading::MAX_THREADS_ALLOWED > 0;
+        const bool useThreading = true;
         if (useThreading)
         {
             findCollisionsMultiThreaded();

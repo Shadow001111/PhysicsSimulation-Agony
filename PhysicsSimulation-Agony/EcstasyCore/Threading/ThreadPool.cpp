@@ -1,66 +1,47 @@
 #include "ThreadPool.h"
+#include "ThreadUtils.h"
 
 #include "../TracyProfiler.h"
 
 #include <string>
 #include <iostream>
-
-#define NOMINMAX
-#define NOGDI
-#define NOCRYPT
-#define NOUSER
-#define NOKERNEL
-#define NOMCX
-#define NOSERVICE
-#define NOCOMM
-#define NOSOUND
-#define NOHELP
-#define NOMB
-#define NOWH
-#define NOGDI
-#define WIN32_LEAN_AND_MEAN
-#define VC_EXTRALEAN
-#include <windows.h>
+#include <bit>
 
 namespace Ecstasy::Threading
 {
-    static std::string threadPriorityToString(int priority)
-    {
-        if (priority == THREAD_PRIORITY_ERROR_RETURN)
-        {
-            return "Error: " + std::to_string(GetLastError());
-        }
-
-        switch (priority)
-        {
-        case THREAD_PRIORITY_IDLE:               return "IDLE (-15)";
-        case THREAD_PRIORITY_LOWEST:             return "LOWEST (-2)";
-        case THREAD_PRIORITY_BELOW_NORMAL:       return "BELOW_NORMAL (-1)";
-        case THREAD_PRIORITY_NORMAL:             return "NORMAL (0)";
-        case THREAD_PRIORITY_ABOVE_NORMAL:       return "ABOVE_NORMAL (+1)";
-        case THREAD_PRIORITY_HIGHEST:            return "HIGHEST (+2)";
-        case THREAD_PRIORITY_TIME_CRITICAL:      return "TIME_CRITICAL (+15)";
-        default:
-            // Some unexpected value (should not happen with valid handles).
-            return "Unknown (" + std::to_string(priority) + ")";
-        }
-    }
-
-
-    ThreadPool::ThreadPool(size_t numThreads)
+    ThreadPool::ThreadPool(size_t numThreads, CoreMode coreMode)
     {
         if (numThreads == 0)
         {
             const size_t minThreads = 1;
             size_t availableThreadCount = std::thread::hardware_concurrency();
-            numThreads = std::max(availableThreadCount, minThreads);
+            numThreads = std::max<size_t>(availableThreadCount, minThreads);
         }
 
-        workers = WorkerThreadContainer(numThreads);
-        for (size_t i = 0; i < numThreads; i++)
+        // Note: For now, we are gonna clamp thread count here. Probably for ever.
+        if (coreMode == CoreMode::PerfomanceCores)
         {
-            WorkerThread& worker = workers[i];
-            worker.thread = std::thread(&WorkerThread::run, &worker, this);
+            auto pCoreMask = getPcoreAffinityMask();
+            numThreads = std::min<size_t>(numThreads, std::popcount(pCoreMask));
+
+            workers = WorkerThreadContainer(numThreads);
+            for (size_t i = 0; i < numThreads; i++)
+            {
+                const int32_t pinIndex = std::countr_zero(pCoreMask);
+                pCoreMask &= pCoreMask - 1;
+
+                WorkerThread& worker = workers[i];
+                worker.thread = std::thread(&WorkerThread::run, &worker, this, pinIndex);
+            }
+        }
+        else
+        {
+            workers = WorkerThreadContainer(numThreads);
+            for (size_t i = 0; i < numThreads; i++)
+            {
+                WorkerThread& worker = workers[i];
+                worker.thread = std::thread(&WorkerThread::run, &worker, this, WorkerThread::INVALID_THREAD_PIN_INDEX);
+            }
         }
     }
 
@@ -155,9 +136,9 @@ namespace Ecstasy::Threading
     }
 
 
-    void WorkerThread::run(ThreadPool* pool)
+    void WorkerThread::run(ThreadPool* pool, int32_t pinIndex)
     {
-        configureThread();
+        configureThread(pinIndex);
 
         const size_t workerCount = pool->getThreadCount();
 
@@ -189,7 +170,7 @@ namespace Ecstasy::Threading
             {
                 for (size_t i = 1; i < workerCount; i++)
                 {
-                    size_t victimIdx = (index + i) % workerCount;
+                    size_t victimIdx = (threadId + i) % workerCount;
                     ChaseLevQueue& victimQueue = pool->getWorkerQueue(victimIdx);
                     task = victimQueue.steal();
                     if (task)
@@ -240,19 +221,18 @@ namespace Ecstasy::Threading
         }
     }
 
-    void WorkerThread::configureThread()
+    void WorkerThread::configureThread(int32_t pinIndex)
     {
         // Tracy thread name.
     #ifdef TRACY_ENABLE
-        std::string threadName = "worker_" + std::to_string(index);
+        std::string threadName = "worker_" + std::to_string(threadId);
         tracy::SetThreadName(threadName.c_str());
     #endif
 
-        // Priority.
+        // Pinning.
+        if (pinIndex != INVALID_THREAD_PIN_INDEX)
         {
-            //auto handle = thread.native_handle();
-
-            //SetThreadPriority(handle, THREAD_PRIORITY_NORMAL);
+            pinCurrentThreadToCpu(pinIndex);
         }
     }
 
