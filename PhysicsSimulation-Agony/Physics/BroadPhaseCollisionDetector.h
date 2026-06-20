@@ -1,13 +1,11 @@
 #pragma once
 #include "BodySoAViewer.h"
-#include "Threading.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 
 #include <vector>
 #include <mutex>
 #include <condition_variable>
-#include <array>
 
 namespace PS_AGONY
 {
@@ -88,6 +86,43 @@ namespace PS_AGONY
 
 				std::vector<BodyPair> outCollisionData;
 
+
+				WorkerData() = default;
+				~WorkerData() = default;
+				WorkerData(const WorkerData&) = delete;
+				WorkerData& operator=(const WorkerData&) = delete;
+
+				WorkerData(WorkerData&& other) noexcept
+				{
+					stopRequested = std::exchange(stopRequested, true);
+					finished = std::exchange(finished, true);
+					running = std::exchange(running, false);
+
+					incomingSelfTasks  = std::move(other.incomingSelfTasks);
+					incomingCrossTasks = std::move(other.incomingCrossTasks);
+					localSelfTasks	   = std::move(other.localSelfTasks);
+					localCrossTasks    = std::move(other.localCrossTasks);
+					outCollisionData   = std::move(other.outCollisionData);
+				}
+
+				WorkerData& operator=(WorkerData&& other) noexcept
+				{
+					if (this != &other)
+					{
+						stopRequested = std::exchange(stopRequested, true);
+						finished = std::exchange(finished, true);
+						running = std::exchange(running, false);
+
+						incomingSelfTasks = std::move(other.incomingSelfTasks);
+						incomingCrossTasks = std::move(other.incomingCrossTasks);
+						localSelfTasks = std::move(other.localSelfTasks);
+						localCrossTasks = std::move(other.localCrossTasks);
+						outCollisionData = std::move(other.outCollisionData);
+					}
+					return *this;
+				}
+
+
 				void pushSelfTasks(const uint32_t* taskSource, size_t taskCount)
 				{
 					bool needNotify = false;
@@ -123,9 +158,8 @@ namespace PS_AGONY
 				}
 			};
 
-			static constexpr size_t WORKER_COUNT = std::min(4ull, size_t(Threading::MAX_THREADS_ALLOWED));
-
-			std::array<WorkerData, WORKER_COUNT> workerData;
+			std::vector<WorkerData> workerData;
+			size_t workerCount = 0;
 		};
 
 		struct LeafBodyAABBSoA
@@ -140,9 +174,6 @@ namespace PS_AGONY
 			RealSimdAlignedVector<LeafData> minY;
 			RealSimdAlignedVector<LeafData> maxY;
 		};
-
-
-		static constexpr bool USE_THREADING = Threading::MAX_THREADS_ALLOWED > 0;
 
 		AABBSoAViewer bodiesAABB;
 		BvhFunctionResources bvhFunctionResources;

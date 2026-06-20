@@ -1,4 +1,5 @@
 ﻿#include "NarrowPhaseCollisionDetector.h"
+#include "Threading.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -126,7 +127,7 @@ namespace PS_AGONY
         allCollisionData.reserve(bodyPairs.size());
         
         // Find collisions.
-        const bool useThreading = USE_THREADING;
+        const bool useThreading = Threading::MAX_THREADS_ALLOWED > 0;
         if (useThreading)
         {
             findCollisionsMultiThreaded();

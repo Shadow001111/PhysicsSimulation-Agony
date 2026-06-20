@@ -2,7 +2,8 @@
 #include "GlmTypes.h"
 #include "BodySoAViewer.h"
 #include "SymmetricMatrix.h"
-#include "Threading.h"
+
+#include <functional>
 
 namespace PS_AGONY
 {
@@ -47,9 +48,7 @@ namespace PS_AGONY
 			size_t chunkSize;
 			CollisionFunc func;
 		};
-
-
-		static constexpr bool USE_THREADING = Threading::MAX_THREADS_ALLOWED > 0;
+		
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
 		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;
