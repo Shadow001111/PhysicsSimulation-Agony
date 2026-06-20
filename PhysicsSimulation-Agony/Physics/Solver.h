@@ -12,7 +12,7 @@ namespace PS_AGONY
 
 			// Baumgarte stabilization. No slop.
 			const Real positionCorrectionPercent = 1.0;
-			const Real velocityCorrectionStrength = 8.0;
+			const Real velocityCorrectionStrength = 50.0;
 		};
 
 		struct ResolveCollisionsThreadedResources
