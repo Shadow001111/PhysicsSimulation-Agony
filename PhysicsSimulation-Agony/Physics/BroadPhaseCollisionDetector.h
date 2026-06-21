@@ -11,8 +11,6 @@ namespace PS_AGONY
 {
 	class BroadPhaseCollisionDetector
 	{
-		using MortonCode = uint32_t;
-
 		// Note: Splitting on cold and hot didn't help.
 		struct BvhNode
 		{
@@ -49,6 +47,12 @@ namespace PS_AGONY
 			std::vector<BodyPair> pairs;
 		};
 
+		struct PackedBodyIndex
+		{
+			uint32_t key;
+			BodyIndex index;
+		};
+
 		struct BvhFunctionResources
 		{
 			std::vector<BvhNode> nodes;
@@ -56,10 +60,11 @@ namespace PS_AGONY
 			SimdAlignedVector<Real> transformedCentroidX;
 			SimdAlignedVector<Real> transformedCentroidY;
 
-			SimdAlignedVector<MortonCode> mortonCodes;
+			SimdAlignedVector<uint32_t> mortonCodes;
 
 			std::vector<BodyIndex> mainBodyIndices;
-			std::vector<BodyIndex> tempBodyIndicesToSort;
+			std::vector<PackedBodyIndex> tempPackedBodyIndicesToSort;
+			std::vector<PackedBodyIndex> tempPackedBodyIndicesToSort2;
 
 			std::vector<BvhNodePair> nodePairsToTraverse;
 			std::vector<BvhNodePair> leafPairsToTestCollisions;
@@ -209,7 +214,7 @@ namespace PS_AGONY
 
 		void buildBvhTree(const uint32_t bodyCount);
 
-		void refitBvhNodeAABBS();
+		void fitBvhNodeAABBs();
 
 		void queryBvhPairs();
 		void queryBvhPairsThreaded();

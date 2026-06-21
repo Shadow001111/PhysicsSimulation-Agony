@@ -153,6 +153,7 @@
       <AssemblerListingLocation>$(IntDir)%(RelativeDir)\</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)%(RelativeDir)\</ObjectFileName>
       <StringPooling>true</StringPooling>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

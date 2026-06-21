@@ -118,11 +118,11 @@ namespace PS_AGONY
             const Real depth = data.depth;
 
             // Calculate collision impulses.
-            Vec2 impulseArray[2] = { Vec2(),  Vec2() };
-            Vec2 rAPerpArray[2] = { Vec2(),  Vec2() };
-            Vec2 rBPerpArray[2] = { Vec2(),  Vec2() };
-            Real jnArray[2] = { Real(0), Real(0) };
-            const uint32_t contactCount = data.contactCount;//  std::min(data.contactCount, 2u);
+            std::array<Vec2, 2> impulseArray{};
+            std::array<Vec2, 2> rAPerpArray{};
+            std::array<Vec2, 2> rBPerpArray{};
+            std::array<Real, 2> jnArray{};
+            const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
 
             const Real impulseScale = Real(1.0) / Real(data.contactCount);
             {
@@ -255,32 +255,32 @@ namespace PS_AGONY
             }
 
             // Apply friction impulses.
-            {
-                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-                {
-                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
-                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
-                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
-
-                    const Real angularVelocityChangeA = (
-                        glm::dot(rAPerpArray[0], impulseArray[0]) +
-                        glm::dot(rAPerpArray[1], impulseArray[1])
-                        ) * invInertiaA;
-                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
-                }
-
-                {
-                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
-                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
-                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
-
-                    const Real angularVelocityChangeB = (
-                        glm::dot(rBPerpArray[0], impulseArray[0]) +
-                        glm::dot(rBPerpArray[1], impulseArray[1])
-                        ) * invInertiaB;
-                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
-                }
-            }
+            //{
+            //    const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+            //    {
+            //        const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+            //        velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+            //        velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+            //
+            //        const Real angularVelocityChangeA = (
+            //            glm::dot(rAPerpArray[0], impulseArray[0]) +
+            //            glm::dot(rAPerpArray[1], impulseArray[1])
+            //            ) * invInertiaA;
+            //        angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+            //    }
+            //
+            //    {
+            //        const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+            //        velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+            //        velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+            //
+            //        const Real angularVelocityChangeB = (
+            //            glm::dot(rBPerpArray[0], impulseArray[0]) +
+            //            glm::dot(rBPerpArray[1], impulseArray[1])
+            //            ) * invInertiaB;
+            //        angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+            //    }
+            //}
 
             // Position and velocity correction.
             const Real invTotalInvMass_x_Depth = depth / totalInvMass;
@@ -366,8 +366,8 @@ namespace PS_AGONY
         }
         solverResources.usedBodies.resize(bodies->getCount());
 
-        alignas(64) std::atomic<uint32_t> workNotDone{ 0 };
-        alignas(64) std::atomic<uint32_t> workWave{ 0 };
+        std::atomic<uint32_t> workNotDone{ 0 };
+        std::atomic<uint32_t> workWave{ 0 };
 
         // Lambdas.
         auto workerFunc = [this, &narrowPhaseCollisions, &workNotDone, &workWave](size_t workerIndex)
@@ -390,16 +390,22 @@ namespace PS_AGONY
 
                         wData.indices.clear();
 
-                        workNotDone.fetch_sub(1, std::memory_order_release);
-                        workNotDone.notify_one();
+                        auto wND = workNotDone.fetch_sub(1, std::memory_order_release) - 1;
+                        if (wND == 0)
+                        {
+                            workNotDone.notify_one();
+                        }
                     }
                 }
                 catch (const std::exception& e)
                 {
                     std::cout << "Resolve collisions worker caught an exception: " << e.what() << "\n";
                     wData.indices.clear();
-                    workNotDone.fetch_sub(1, std::memory_order_release);
-                    workNotDone.notify_one();
+                    auto wND = workNotDone.fetch_sub(1, std::memory_order_release) - 1;
+                    if (wND == 0)
+                    {
+                        workNotDone.notify_one();
+                    }
                 }
                 wData.isDestroyed.store(true, std::memory_order_release);
                 wData.isDestroyed.notify_one();
@@ -412,7 +418,6 @@ namespace PS_AGONY
 
         // Main loop.
         auto& mainThreadPass = solverResources.stagingPasses[0];
-        size_t maxAllowedStages = workerCount + 1;
         while (true)
         {
             // Clear body-using history.
@@ -423,10 +428,11 @@ namespace PS_AGONY
             );
 
             // Coloring.
+            size_t workerEnableCount = 0;
             {
                 TRACY_SCOPE_NC("Coloring", Ecstasy::Color::Blue);
                 size_t startReadPos = 0;
-                for (size_t stageIndex = 0; stageIndex < maxAllowedStages; stageIndex++)
+                for (size_t stageIndex = 0; stageIndex <= workerCount; stageIndex++)
                 {
                     auto& stagingPass = solverResources.stagingPasses[stageIndex];
 
@@ -496,19 +502,20 @@ namespace PS_AGONY
                         {
                             startReadPos = untakenStart;
                         }
+
+                        // Check.
+                        if (stagingPass.empty())
+                        {
+                            break;
+                        }
                     }
 
-                    // Check.
-                    if (stagingPass.empty())
-                    {
-                        maxAllowedStages = stageIndex;
-                        break;
-                    }
+                    workerEnableCount++;
                 }
             }
 
             // Early exit.
-            if (maxAllowedStages == 0) [[unlikely]]
+            if (workerEnableCount == 0) [[unlikely]]
             {
                 break;
             }
@@ -535,8 +542,8 @@ namespace PS_AGONY
             // Push staging passes.
             {
                 TRACY_SCOPE_NC("Push staging passes", Ecstasy::Color::Gold);
-                workNotDone.fetch_add(maxAllowedStages - 1, std::memory_order_release);
-                for (size_t stageIndex = 1; stageIndex < maxAllowedStages; stageIndex++)
+                workNotDone.fetch_add(workerEnableCount - 1, std::memory_order_release);
+                for (size_t stageIndex = 1; stageIndex < workerEnableCount; stageIndex++)
                 {
                     auto& wData = solverResources.workerData[stageIndex - 1];
                     auto& stagingPass = solverResources.stagingPasses[stageIndex];
@@ -549,7 +556,7 @@ namespace PS_AGONY
             }
 
             // Check.
-            if (solverResources.remainingIndices.empty() || maxAllowedStages <= 2) break;
+            if (solverResources.remainingIndices.empty() || workerEnableCount <= 2) break;
         }
 
         // Execute remaining on main thread.
@@ -659,11 +666,11 @@ namespace PS_AGONY
             const Real depth = data.depth;
 
             // Calculate collision impulses.
-            Vec2 impulseArray[2] = { Vec2(),  Vec2() };
-            Vec2 rAPerpArray[2] = { Vec2(),  Vec2() };
-            Vec2 rBPerpArray[2] = { Vec2(),  Vec2() };
-            Real jnArray[2] = { Real(0), Real(0) };
-            const uint32_t contactCount = data.contactCount;//  std::min(data.contactCount, 2u);
+            std::array<Vec2, 2> impulseArray{};
+            std::array<Vec2, 2> rAPerpArray{};
+            std::array<Vec2, 2> rBPerpArray{};
+            std::array<Real, 2> jnArray{};
+            const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
 
             const Real impulseScale = Real(1.0) / Real(data.contactCount);
             {
