@@ -11,11 +11,11 @@ namespace PS_AGONY
 	{
 		struct SimulationSettings
 		{
-			static constexpr bool ENABLE_VELOCITY_CORRECTION = true;
+			static constexpr bool ENABLE_VELOCITY_CORRECTION = false;
 
 			// Baumgarte stabilization. No slop.
 			const Real positionCorrectionPercent = 1.0;
-			const Real velocityCorrectionStrength = 50.0;
+			const Real velocityCorrectionStrength = 8.0;
 		};
 
 		struct ResolveCollisionsThreadedResources

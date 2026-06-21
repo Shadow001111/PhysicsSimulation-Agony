@@ -8,6 +8,7 @@
 #include <bit>
 #include <algorithm>
 #include <array>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -118,7 +119,7 @@ namespace PS_AGONY
         {
             TRACY_SCOPE_N("Refit tree");
 
-            refitBvhNodeAABBS();
+            fitBvhNodeAABBs();
         }
 
         // TODO: Decide at runtime.
@@ -161,7 +162,8 @@ namespace PS_AGONY
         total += getVectorMemoryUsage(bvhFunctionResources.mortonCodes);
 
         total += getVectorMemoryUsage(bvhFunctionResources.mainBodyIndices);
-        total += getVectorMemoryUsage(bvhFunctionResources.tempBodyIndicesToSort);
+        total += getVectorMemoryUsage(bvhFunctionResources.tempPackedBodyIndicesToSort);
+        total += getVectorMemoryUsage(bvhFunctionResources.tempPackedBodyIndicesToSort2);
 
         total += getVectorMemoryUsage(bvhFunctionResources.nodePairsToTraverse);
         total += getVectorMemoryUsage(bvhFunctionResources.leafPairsToTestCollisions);
@@ -227,10 +229,6 @@ namespace PS_AGONY
             const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
             const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
 
-            // Note: Optimization here makes my deterministic simulation make different results. Rounding probably. I hope it doesn't slow down simulation.
-            // t = ((min + max) * 0.5 - globalMin) * scale
-            // t = (min + max) * 0.5 * scale - globalMin * scale
-            // t = (min + max) * halfScale - scaledGlobalMin
             const RealSimd tx = RealSimd::mul_sub(minX + maxX, halfScaleXV, scaledGlobalMinXV);
             const RealSimd ty = RealSimd::mul_sub(minY + maxY, halfScaleYV, scaledGlobalMinYV);
 
@@ -263,7 +261,7 @@ namespace PS_AGONY
 
         bvhFunctionResources.mortonCodes.resize(bodyCount);
 
-        MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        uint32_t* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
         const TReal* ECSTASY_RESTRICT centroidXPtr = bvhFunctionResources.transformedCentroidX.data();
         const TReal* ECSTASY_RESTRICT centroidYPtr = bvhFunctionResources.transformedCentroidY.data();
@@ -275,11 +273,8 @@ namespace PS_AGONY
         {   // SIMD PATH.
             for (; i + RealSimd::lanes <= bodyCount; i += TRealSimd::lanes)
             {
-                const TRealSimd cx = TRealSimd::load(centroidXPtr + i);
-                const TRealSimd cy = TRealSimd::load(centroidYPtr + i);
-
-                const MortonU32Simd qx = cx.to_uint32();
-                const MortonU32Simd qy = cy.to_uint32();
+                const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).to_uint32();
+                const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).to_uint32();
 
                 const MortonU32Simd code = morton2DSimd(qx, qy);
 
@@ -298,27 +293,46 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::sortBodyIndicesByMortonCodes(uint32_t bodyCount)
     {
-        bvhFunctionResources.tempBodyIndicesToSort.resize(bodyCount);
-
         TRACY_SCOPE_N("Sort indices by morton codes");
 
         constexpr uint32_t RADIX_BITS = 8;
         constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
         constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
 
-        const MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        const uint32_t* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
+        // Build packed key/index array once.
+        bvhFunctionResources.tempPackedBodyIndicesToSort.resize(bodyCount);
+        bvhFunctionResources.tempPackedBodyIndicesToSort2.resize(bodyCount);
+
+        PackedBodyIndex* ECSTASY_RESTRICT packedA = bvhFunctionResources.tempPackedBodyIndicesToSort.data();
+        PackedBodyIndex* ECSTASY_RESTRICT packedB = bvhFunctionResources.tempPackedBodyIndicesToSort2.data();
+
+        {
+            TRACY_SCOPE_N("Pack");
+
+            for (uint32_t i = 0; i < bodyCount; i++)
+            {
+                packedA[i].key = mortonCodePtr[i];
+                packedA[i].index = i;
+            }
+        }
+
+        //
         alignas(64) std::array<uint32_t, RADIX_SIZE> count;
 
-        auto radixPass = [&](uint32_t shift, const BodyIndex* ECSTASY_RESTRICT src, BodyIndex* ECSTASY_RESTRICT dst)
+        auto radixPass = [&](
+            uint32_t shift,
+            const PackedBodyIndex* ECSTASY_RESTRICT src,
+            PackedBodyIndex* ECSTASY_RESTRICT dst
+            )
             {
                 count.fill(0);
 
                 // Count buckets.
                 for (uint32_t i = 0; i < bodyCount; i++)
                 {
-                    const BodyIndex idx = src[i];
-                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
+                    const uint32_t key = (src[i].key >> shift) & RADIX_MASK;
                     count[key]++;
                 }
 
@@ -334,20 +348,31 @@ namespace PS_AGONY
                 // Scatter (stable).
                 for (uint32_t i = 0; i < bodyCount; i++)
                 {
-                    const BodyIndex idx = src[i];
-                    const uint32_t key = (mortonCodePtr[idx] >> shift) & RADIX_MASK;
-                    dst[count[key]++] = idx;
+                    const PackedBodyIndex item = src[i];
+                    const uint32_t key = (item.key >> shift) & RADIX_MASK;
+                    dst[count[key]++] = item;
                 }
             };
 
         {
-            BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
-            BodyIndex* ECSTASY_RESTRICT indexTempPtr = bvhFunctionResources.tempBodyIndicesToSort.data();
+            TRACY_SCOPE_N("Sort");
 
-            radixPass(0,  indexPtr, indexTempPtr);
-            radixPass(8,  indexTempPtr, indexPtr);
-            radixPass(16, indexPtr, indexTempPtr);
-            radixPass(24, indexTempPtr, indexPtr);
+            radixPass(0,  packedA, packedB);
+            radixPass(8,  packedB, packedA);
+            radixPass(16, packedA, packedB);
+            radixPass(24, packedB, packedA);
+        }
+
+        {
+            TRACY_SCOPE_N("Write vack");
+
+            BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
+
+            // Write sorted indices back.
+            for (uint32_t i = 0; i < bodyCount; i++)
+            {
+                indexPtr[i] = packedA[i].index;
+            }
         }
     }
 
@@ -369,7 +394,7 @@ namespace PS_AGONY
             globalMinY =  std::numeric_limits<Real>::max();
             globalMaxY = -std::numeric_limits<Real>::max();
 
-            for (uint32_t i = 0; i < bodyCount; i++)
+            for (size_t i = 0; i < bodyCount; i++)
             {
                 globalMinX = std::fmin(globalMinX, bodyMinXPtr[i]);
                 globalMaxX = std::fmax(globalMaxX, bodyMaxXPtr[i]);
@@ -395,8 +420,8 @@ namespace PS_AGONY
 
         // Sort indices by morton code.
         sortBodyIndicesByMortonCodes(bodyCount);
-        const MortonCode* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+        const uint32_t* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        const BodyIndex* ECSTASY_RESTRICT bodyIndicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         // Top-down tree build with Morton-code binary split.
         // For a node covering sorted range [nodeStart, nodeEnd):
@@ -439,8 +464,8 @@ namespace PS_AGONY
                 }
 
                 // Find the split position.
-                const uint32_t mcFirst = mortonCodePtr[indicesPtr[nodeStart]];
-                const uint32_t mcLast = mortonCodePtr[indicesPtr[nodeEnd - 1]];
+                const uint32_t mcFirst = mortonCodePtr[bodyIndicesPtr[nodeStart]];
+                const uint32_t mcLast = mortonCodePtr[bodyIndicesPtr[nodeEnd - 1]];
 
                 uint32_t mid;
                 if (mcFirst == mcLast) [[unlikely]]
@@ -461,7 +486,7 @@ namespace PS_AGONY
                     while (lo < hi)
                     {
                         const uint32_t m = (lo + hi) >> 1;
-                        if ((mortonCodePtr[indicesPtr[m]] & splitBit) == 0u)
+                        if ((mortonCodePtr[bodyIndicesPtr[m]] & splitBit) == 0u)
                             lo = m + 1;
                         else
                             hi = m;
@@ -489,14 +514,13 @@ namespace PS_AGONY
             leafBodyAABBs.minY.resize(leafCount);
             leafBodyAABBs.maxY.resize(leafCount);
 
-            refitBvhNodeAABBS();
+            fitBvhNodeAABBs();
         }
     }
 
-    void BroadPhaseCollisionDetector::refitBvhNodeAABBS()
+    void BroadPhaseCollisionDetector::fitBvhNodeAABBs()
     {
         const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
-
         const Real* ECSTASY_RESTRICT bodyMinXPtr = bodiesAABB.minX;
         const Real* ECSTASY_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
         const Real* ECSTASY_RESTRICT bodyMinYPtr = bodiesAABB.minY;
@@ -510,7 +534,7 @@ namespace PS_AGONY
             {
                 // Leaf: compute AABB from its bodies.
                 constexpr Real DEAD_MAX = -std::numeric_limits<Real>::max();
-                constexpr Real DEAD_MIN = std::numeric_limits<Real>::max();
+                constexpr Real DEAD_MIN =  std::numeric_limits<Real>::max();
 
                 const uint32_t leafIndex = node.leafIndex;
                 Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
@@ -544,6 +568,7 @@ namespace PS_AGONY
                     maxX = std::fmax(maxX, bodyMaxX);
                     minY = std::fmin(minY, bodyMinY);
                     maxY = std::fmax(maxY, bodyMaxY);
+
                 }
                 for (uint32_t leafBodyIndex = nodeRange; leafBodyIndex < BvhNode::KD_LEAF_SIZE; leafBodyIndex++)
                 {
@@ -661,6 +686,7 @@ namespace PS_AGONY
 
                                     auto maskRow = maskArray[i];
                                     uint32_t mask = 0;
+
                                     for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
                                     {
                                         const RealSimd vMinXj = RealSimd::load(leafMinX + j);
@@ -980,20 +1006,31 @@ namespace PS_AGONY
         BvhNodePair crossTaskStack[TASK_STACK_CAPACITY];
         size_t crossTaskStackSize = 0;
 
-        size_t workerIndex = 0;
-
         auto flushSelfTaskStack = [&]()
             {
                 if (selfTaskStackSize == 0) return;
-                
+
                 TRACY_SCOPE_N("Flush self task stack");
 
-                queryPairsThreadedResources.workerData[workerIndex].pushSelfTasks(selfTaskStack, selfTaskStackSize);
-                selfTaskStackSize = 0;
+                const size_t workerCount = queryPairsThreadedResources.workerCount;
 
-                workerIndex++;
-                if (workerIndex >= queryPairsThreadedResources.workerCount)
-                    workerIndex = 0;
+                const size_t totalTasks = selfTaskStackSize;
+                const size_t base = totalTasks / workerCount;
+                const size_t remainder = totalTasks - workerCount * base;
+
+                size_t offset = 0;
+                for (size_t i = 0; i < workerCount; i++)
+                {
+                    const size_t chunkSize = base + (i < remainder ? 1 : 0);
+                    if (chunkSize > 0)
+                    {
+                        queryPairsThreadedResources.workerData[i].pushSelfTasks(
+                            selfTaskStack + offset, chunkSize);
+                    }
+                    offset += chunkSize;
+                }
+
+                selfTaskStackSize = 0;
             };
 
         auto pushSelfTask = [&](uint32_t task)
@@ -1011,12 +1048,25 @@ namespace PS_AGONY
 
                 TRACY_SCOPE_N("Flush cross task stack");
 
-                queryPairsThreadedResources.workerData[workerIndex].pushCrossTasks(crossTaskStack, crossTaskStackSize);
-                crossTaskStackSize = 0;
+                const size_t workerCount = queryPairsThreadedResources.workerCount;
 
-                workerIndex++;
-                if (workerIndex >= queryPairsThreadedResources.workerCount)
-                    workerIndex = 0;
+                const size_t totalTasks = crossTaskStackSize;
+                const size_t base = totalTasks / workerCount;
+                const size_t remainder = totalTasks - workerCount * base;
+
+                size_t offset = 0;
+                for (size_t i = 0; i < workerCount; i++)
+                {
+                    const size_t chunkSize = base + (i < remainder ? 1 : 0);
+                    if (chunkSize > 0)
+                    {
+                        queryPairsThreadedResources.workerData[i].pushCrossTasks(
+                            crossTaskStack + offset, chunkSize);
+                    }
+                    offset += chunkSize;
+                }
+
+                crossTaskStackSize = 0;
             };
 
         auto pushCrossTask = [&](BvhNodePair task)
@@ -1210,6 +1260,7 @@ namespace PS_AGONY
                     const RealSimd vMinYi(leafMinY[i]);
                     const RealSimd vMaxYi(leafMaxY[i]);
 
+                    // Note: "jStart = i & LANES_UPPER_MASK" slows everything down.
                     auto maskRow = maskArray[i];
                     uint32_t mask = 0;
                     for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)

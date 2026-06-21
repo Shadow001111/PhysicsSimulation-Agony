@@ -503,7 +503,7 @@ namespace PS_AGONY
         {
             Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
             const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
-
+        
             size_t i = 0;
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
             {
@@ -607,6 +607,11 @@ namespace PS_AGONY
             aabbMinYPtr[bodyIndex] = y - radius;
             aabbMaxXPtr[bodyIndex] = x + radius;
             aabbMaxYPtr[bodyIndex] = y + radius;
+
+            if (x + radius < -10000.0f)
+            {
+                std::cout << x << " " << radius << "\n";
+            }
         }
     }
 
@@ -699,6 +704,13 @@ namespace PS_AGONY
             bodies.rotationSin.data(),
             bodies.getCount()
         );
+
+        //for (size_t i = 0; i < bodies.getCount(); i++)
+        //{
+        //    const Real angle = bodies.rotation[i];
+        //    bodies.rotationCos[i] = std::cos(angle);
+        //    bodies.rotationSin[i] = std::sin(angle);
+        //}
     }
 
     void Simulation::computeTruePositions()
