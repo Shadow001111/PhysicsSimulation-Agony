@@ -24,6 +24,7 @@ namespace PS_AGONY
 			{
 				std::vector<size_t> indices;
 				std::atomic<bool> isDestroyed{ false };
+				std::atomic<uint32_t> workWave{ 0 };
 
 				WorkerData() = default;
 				~WorkerData() = default;
@@ -58,8 +59,6 @@ namespace PS_AGONY
 			std::vector<size_t> remainingIndices;
 			std::vector<std::vector<size_t>> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
-
-			alignas(64) std::atomic<uint32_t> workWave{ 0 };
 		};
 
 

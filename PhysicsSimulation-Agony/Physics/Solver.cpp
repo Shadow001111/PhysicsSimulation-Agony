@@ -5,6 +5,7 @@
 #include "EcstasyCore/Portablity.h"
 
 #include <numeric>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -317,12 +318,12 @@ namespace PS_AGONY
     {
         auto& threadPool = Threading::getGlobalThreadPool();
 
-        const size_t availableWorkerCount = threadPool.getThreadCount();// -1;
+        const size_t availableWorkerCount = threadPool.getThreadCount() - 1; // One less to not share logical core with main thread (depends on scheduler).
         const size_t neededWorkerCount = narrowPhaseCollisions.size() * 6 / 5000;
 
         const size_t workerCount = std::min(availableWorkerCount, neededWorkerCount);
 
-        if (narrowPhaseCollisions.size() < 5000 || workerCount <= 1)
+        if (workerCount <= 1)
         {
             resolveCollisions(narrowPhaseCollisions);
             return;
@@ -356,7 +357,8 @@ namespace PS_AGONY
         for (auto& w : solverResources.workerData)
         {
             w.indices.clear();
-            w.isDestroyed.store(false, std::memory_order_relaxed);
+            w.isDestroyed.store(false, std::memory_order_release);
+            w.workWave.store(0, std::memory_order_release);
         }
 
         //
@@ -368,7 +370,6 @@ namespace PS_AGONY
         solverResources.usedBodies.resize(bodies->getCount());
 
         std::atomic<uint32_t> workNotDone{ 0 };
-        solverResources.workWave.store(0, std::memory_order_release);
 
         // Lambdas.
         auto workerFunc = [&](size_t workerIndex)
@@ -380,8 +381,8 @@ namespace PS_AGONY
                     while (true)
                     {
                         // Wait for data next wave.
-                        solverResources.workWave.wait(previousWave, std::memory_order_acquire);
-                        previousWave = solverResources.workWave.load(std::memory_order_acquire);
+                        wData.workWave.wait(previousWave, std::memory_order_acquire);
+                        previousWave = wData.workWave.load(std::memory_order_acquire);
 
                         // Check for stop.
                         if (previousWave == ResolveCollisionsThreadedResources::STOP_WAVE) break;
@@ -544,11 +545,10 @@ namespace PS_AGONY
                     auto& wData = solverResources.workerData[stageIndex - 1];
                     auto& stagingPass = solverResources.stagingPasses[stageIndex];
                     wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
-                }
 
-                // Notify workers that data is ready.
-                solverResources.workWave.fetch_add(1, std::memory_order_release);
-                solverResources.workWave.notify_all();
+                    wData.workWave.fetch_add(1, std::memory_order_release);
+                    wData.workWave.notify_one();
+                }
             }
 
             // Check.
@@ -572,9 +572,12 @@ namespace PS_AGONY
                 workNotDone.wait(val, std::memory_order_acquire);
             }
 
-            // Signal workers. With empty indices array they will stop.
-            solverResources.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
-            solverResources.workWave.notify_all();
+            // Signal workers to stop.
+            for (auto& wData : solverResources.workerData)
+            {
+                wData.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
+                wData.workWave.notify_one();
+            }
         }
     }
 
