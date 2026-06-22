@@ -596,7 +596,6 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-
             const BodyIndex bodyIndex = bodyIndexPtr[i];
             const Real radius = radiusPtr[i];
 
@@ -661,6 +660,8 @@ namespace PS_AGONY
     void Simulation::wrapRotation()
     {
         using RealSimd = Ecstasy::Simd<Real>;
+        using IntSimd = Ecstasy::Simd<int>;
+
         constexpr size_t LANES = RealSimd::lanes;
 
         TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Color::Cyan);
@@ -677,7 +678,7 @@ namespace PS_AGONY
         {
             RealSimd rot = RealSimd::load(rotationPtr + i);
 
-            RealSimd q = (rot * invTwoPIV).to_int32().to_float();
+            RealSimd q = (rot * invTwoPIV).to<IntSimd>().to<RealSimd>();
             rot = rot - q * twoPIV;
 
             RealSimd isRotNegativeMask = rot < RealSimd(0);
@@ -698,7 +699,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Color::Teal);
 
-        FastCosSin::order4CosSinSimd(
+        FastCosSin::order4CosSin(
             bodies.rotation.data(),
             bodies.rotationCos.data(),
             bodies.rotationSin.data(),

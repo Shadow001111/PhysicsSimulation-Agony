@@ -273,8 +273,8 @@ namespace PS_AGONY
         {   // SIMD PATH.
             for (; i + RealSimd::lanes <= bodyCount; i += TRealSimd::lanes)
             {
-                const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).to_uint32();
-                const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).to_uint32();
+                const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).to<MortonU32Simd>();
+                const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).to<MortonU32Simd>();
 
                 const MortonU32Simd code = morton2DSimd(qx, qy);
 
