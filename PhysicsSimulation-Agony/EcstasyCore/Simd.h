@@ -1135,155 +1135,154 @@ namespace Ecstasy
             return s;
         }
 
-        // Type casts
+        // Type casts.
 
-        [[nodiscard]] Simd<int32_t> to_int32() const noexcept
-            requires std::is_same_v<T, float>
+        template<typename Target>
+        [[nodiscard]] Target to() const noexcept
+            requires std::is_same_v<Target, Simd<int32_t, Bits>>&& std::is_same_v<T, float>
         {
-            Simd<int32_t> s;
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvttps_epi32(reg);
             else                       s.reg = _mm_cvttps_epi32(reg);
             return s;
         }
 
-        [[nodiscard]] Simd<int32_t, 128> to_int32() const noexcept
-            requires std::is_same_v<T, double>
+        template<typename Target>
+        [[nodiscard]] Target to() const noexcept
+            requires std::is_same_v<Target, Simd<int32_t, 128>>&& std::is_same_v<T, double>
         {
-            Simd<int32_t, 128> s;
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvttpd_epi32(reg);
             else                       s.reg = _mm_cvttpd_epi32(reg);
             return s;
         }
 
-        [[nodiscard]] Simd<uint32_t, Bits> to_uint32() const noexcept
-            requires std::is_same_v<T, float>
+        template<typename Target>
+        [[nodiscard]] Target to() const noexcept
+            requires std::is_same_v<Target, Simd<uint32_t, Bits>>&& std::is_same_v<T, float>
         {
-            Simd<uint32_t, Bits> s;
-
+            Target s;
             if constexpr (Bits == 128)
             {
-                const __m128  bias_f = _mm_set1_ps(2147483648.0f); // 2^31
+                const __m128  bias_f = _mm_set1_ps(2147483648.0f);
                 const __m128i bias_i = _mm_set1_epi32(0x80000000u);
 
-                const __m128 mask = _mm_cmpge_ps(reg, bias_f);
-                const __m128 adjusted = _mm_sub_ps(reg, _mm_and_ps(mask, bias_f));
+                const __m128  mask = _mm_cmpge_ps(reg, bias_f);
+                const __m128  adjusted = _mm_sub_ps(reg, _mm_and_ps(mask, bias_f));
                 const __m128i signed_i = _mm_cvttps_epi32(adjusted);
-
                 s.reg = _mm_xor_si128(signed_i, _mm_and_si128(_mm_castps_si128(mask), bias_i));
             }
             else
             {
-                const __m256  bias_f = _mm256_set1_ps(2147483648.0f); // 2^31
+                const __m256  bias_f = _mm256_set1_ps(2147483648.0f);
                 const __m256i bias_i = _mm256_set1_epi32(0x80000000u);
 
-                // mask = (reg >= 2^31)
-                const __m256 mask = _mm256_cmp_ps(reg, bias_f, _CMP_GE_OQ);
-
-                // subtract 2^31 only for lanes that need it
-                const __m256 adjusted = _mm256_sub_ps(reg, _mm256_and_ps(mask, bias_f));
-
-                // signed truncation of the adjusted value
+                const __m256  mask = _mm256_cmp_ps(reg, bias_f, _CMP_GE_OQ);
+                const __m256  adjusted = _mm256_sub_ps(reg, _mm256_and_ps(mask, bias_f));
                 const __m256i signed_i = _mm256_cvttps_epi32(adjusted);
-
-                // restore unsigned bit pattern
                 s.reg = _mm256_xor_si256(signed_i, _mm256_and_si256(_mm256_castps_si256(mask), bias_i));
             }
-
             return s;
         }
 
-        [[nodiscard]] Simd<float> to_float() const noexcept
-            requires (std::is_same_v<T, int32_t>)
+        template<typename Target>
+        [[nodiscard]] Target to() const noexcept
+            requires std::is_same_v<Target, Simd<float, Bits>>&& std::is_same_v<T, int32_t>
         {
-            Simd<float> s;
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvtepi32_ps(reg);
             else                       s.reg = _mm_cvtepi32_ps(reg);
             return s;
         }
 
-        [[nodiscard]] Simd<float> to_float() const noexcept
-            requires (std::is_same_v<T, uint32_t>)
+        template<typename Target>
+        [[nodiscard]] Target to() const noexcept
+            requires std::is_same_v<Target, Simd<float, Bits>>&& std::is_same_v<T, uint32_t>
         {
-            // Convert unsigned 32-bit to float using bias method:
-            // (float)(a ^ 0x80000000) + 2147483648.0f
-            Simd<float> s;
-            Simd<uint32_t> biased = bitwise_xor(*this, Simd<uint32_t>(0x80000000U));
-            Simd<float> as_signed_float;
+            Simd<uint32_t, Bits> biased = bitwise_xor(*this, Simd<uint32_t, Bits>(0x80000000u));
+            Target as_signed_float;
             if constexpr (Bits == 256) as_signed_float.reg = _mm256_cvtepi32_ps(biased.reg);
             else                       as_signed_float.reg = _mm_cvtepi32_ps(biased.reg);
-            s.reg = as_signed_float.reg + Simd<float>(2147483648.0f).reg;
+            Target s;
+            s.reg = as_signed_float.reg + Simd<float, Bits>(2147483648.0f).reg;
             return s;
         }
 
-        // Reinterpret casts – zero cost, no instruction emitted
+        // Reinterpret casts – zero cost, no instruction emitted.
 
-        [[nodiscard]] Simd<int32_t> as_int32() const noexcept
-            requires std::is_same_v<T, float>
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires std::is_same_v<Target, Simd<int32_t, Bits>> &&
+        (std::is_same_v<T, float> || std::is_same_v<T, double>)
         {
-            Simd<int32_t> s;
-            if constexpr (Bits == 256) s.reg = _mm256_castps_si256(reg);
-            else                       s.reg = _mm_castps_si128(reg);
+            Target s;
+            if constexpr (Bits == 256)
+            {
+                if constexpr (std::is_same_v<T, float>) s.reg = _mm256_castps_si256(reg);
+                else                                    s.reg = _mm256_castpd_si256(reg);
+            }
+            else
+            {
+                if constexpr (std::is_same_v<T, float>) s.reg = _mm_castps_si128(reg);
+                else                                    s.reg = _mm_castpd_si128(reg);
+            }
             return s;
         }
 
-        [[nodiscard]] Simd<int32_t> as_int32() const noexcept
-            requires std::is_same_v<T, double>
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires std::is_same_v<Target, Simd<uint32_t, Bits>> &&
+        (std::is_same_v<T, float> || std::is_same_v<T, double>)
         {
-            Simd<int32_t> s;
+            Target s;
+            if constexpr (Bits == 256)
+            {
+                if constexpr (std::is_same_v<T, float>) s.reg = _mm256_castps_si256(reg);
+                else                                    s.reg = _mm256_castpd_si256(reg);
+            }
+            else
+            {
+                if constexpr (std::is_same_v<T, float>) s.reg = _mm_castps_si128(reg);
+                else                                    s.reg = _mm_castpd_si128(reg);
+            }
+            return s;
+        }
+
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires std::is_same_v<Target, Simd<int64_t, Bits>>&& std::is_same_v<T, double>
+        {
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
             else                       s.reg = _mm_castpd_si128(reg);
             return s;
         }
 
-        [[nodiscard]] Simd<uint32_t> as_uint32() const noexcept
-            requires std::is_same_v<T, float>
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires std::is_same_v<Target, Simd<uint64_t, Bits>>&& std::is_same_v<T, double>
         {
-            Simd<uint32_t> s;
-            if constexpr (Bits == 256) s.reg = _mm256_castps_si256(reg);
-            else                       s.reg = _mm_castps_si128(reg);
-            return s;
-        }
-
-        [[nodiscard]] Simd<uint32_t> as_uint32() const noexcept
-            requires std::is_same_v<T, double>
-        {
-            Simd<uint32_t> s;
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
             else                       s.reg = _mm_castpd_si128(reg);
             return s;
         }
 
-        [[nodiscard]] Simd<int64_t> as_int64() const noexcept
-            requires std::is_same_v<T, double>
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires std::is_same_v<Target, Simd<float, Bits>>&& std::is_integral_v<T>
         {
-            Simd<int64_t> s;
-            if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
-            else                       s.reg = _mm_castpd_si128(reg);
-            return s;
-        }
-
-        [[nodiscard]] Simd<uint64_t> as_uint64() const noexcept
-            requires std::is_same_v<T, double>
-        {
-            Simd<uint64_t> s;
-            if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
-            else                       s.reg = _mm_castpd_si128(reg);
-            return s;
-        }
-
-        [[nodiscard]] Simd<float> as_float() const noexcept
-            requires (std::is_integral_v<T>)
-        {
-            Simd<float> s;
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(reg);
             else                       s.reg = _mm_castsi128_ps(reg);
             return s;
         }
 
-        [[nodiscard]] Simd<double> as_double() const noexcept
-            requires (std::is_integral_v<T>)
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires std::is_same_v<Target, Simd<double, Bits>>&& std::is_integral_v<T>
         {
-            Simd<double> s;
+            Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(reg);
             else                       s.reg = _mm_castsi128_pd(reg);
             return s;

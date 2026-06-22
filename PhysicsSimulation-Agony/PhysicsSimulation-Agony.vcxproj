@@ -239,6 +239,7 @@
     <ClCompile Include="EcstasyCore\FileStream.cpp" />
     <ClCompile Include="EcstasyCore\Threading\ThreadPool.cpp" />
     <ClCompile Include="EcstasyCore\Threading\ThreadUtils.cpp" />
+    <ClCompile Include="Physics\FastCosSin.cpp" />
     <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\Camera2D.cpp" />
