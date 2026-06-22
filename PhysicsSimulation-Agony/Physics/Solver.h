@@ -51,12 +51,15 @@ namespace PS_AGONY
 			using UsedSlot = uint8_t;
 
 			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick. Looks ideal.
+			static constexpr uint32_t STOP_WAVE = -1;
 
 			std::vector<WorkerData> workerData;
 
 			std::vector<size_t> remainingIndices;
 			std::vector<std::vector<size_t>> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
+
+			alignas(64) std::atomic<uint32_t> workWave{ 0 };
 		};
 
 

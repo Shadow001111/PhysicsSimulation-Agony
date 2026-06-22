@@ -5,7 +5,6 @@
 #include "EcstasyCore/Portablity.h"
 
 #include <numeric>
-#include <iostream>
 
 namespace PS_AGONY
 {
@@ -318,9 +317,11 @@ namespace PS_AGONY
     {
         auto& threadPool = Threading::getGlobalThreadPool();
 
-        const size_t workerCount = threadPool.getThreadCount();
+        const size_t availableWorkerCount = threadPool.getThreadCount();// -1;
+        const size_t neededWorkerCount = narrowPhaseCollisions.size() * 6 / 5000;
 
-        // TODO: Scale threshold based on worker count at runtime. Maybe scale 'MAX_VALID_INDICES_PER_PASS' too?
+        const size_t workerCount = std::min(availableWorkerCount, neededWorkerCount);
+
         if (narrowPhaseCollisions.size() < 5000 || workerCount <= 1)
         {
             resolveCollisions(narrowPhaseCollisions);
@@ -367,10 +368,10 @@ namespace PS_AGONY
         solverResources.usedBodies.resize(bodies->getCount());
 
         std::atomic<uint32_t> workNotDone{ 0 };
-        std::atomic<uint32_t> workWave{ 0 };
+        solverResources.workWave.store(0, std::memory_order_release);
 
         // Lambdas.
-        auto workerFunc = [this, &narrowPhaseCollisions, &workNotDone, &workWave](size_t workerIndex)
+        auto workerFunc = [&](size_t workerIndex)
             {
                 auto& wData = solverResources.workerData[workerIndex];
                 try
@@ -379,11 +380,12 @@ namespace PS_AGONY
                     while (true)
                     {
                         // Wait for data next wave.
-                        workWave.wait(previousWave, std::memory_order_acquire);
-                        previousWave = workWave.load(std::memory_order_acquire);
+                        solverResources.workWave.wait(previousWave, std::memory_order_acquire);
+                        previousWave = solverResources.workWave.load(std::memory_order_acquire);
 
                         // Check for stop.
-                        if (wData.indices.empty()) break;
+                        if (previousWave == ResolveCollisionsThreadedResources::STOP_WAVE) break;
+                        if (wData.indices.empty()) continue;
 
                         // Execute.
                         resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
@@ -399,13 +401,7 @@ namespace PS_AGONY
                 }
                 catch (const std::exception& e)
                 {
-                    std::cout << "Resolve collisions worker caught an exception: " << e.what() << "\n";
-                    wData.indices.clear();
-                    auto wND = workNotDone.fetch_sub(1, std::memory_order_release) - 1;
-                    if (wND == 0)
-                    {
-                        workNotDone.notify_one();
-                    }
+                    throw;
                 }
                 wData.isDestroyed.store(true, std::memory_order_release);
                 wData.isDestroyed.notify_one();
@@ -551,8 +547,8 @@ namespace PS_AGONY
                 }
 
                 // Notify workers that data is ready.
-                workWave.fetch_add(1, std::memory_order_release);
-                workWave.notify_all();
+                solverResources.workWave.fetch_add(1, std::memory_order_release);
+                solverResources.workWave.notify_all();
             }
 
             // Check.
@@ -577,8 +573,8 @@ namespace PS_AGONY
             }
 
             // Signal workers. With empty indices array they will stop.
-            workWave.fetch_add(1, std::memory_order_release);
-            workWave.notify_all();
+            solverResources.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
+            solverResources.workWave.notify_all();
         }
     }
 
