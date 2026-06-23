@@ -29,8 +29,8 @@ namespace PS_AGONY
 				WorkerData() = default;
 				~WorkerData() = default;
 
-				WorkerData(const WorkerData&) = default;
-				WorkerData& operator=(const WorkerData&) = default;
+				WorkerData(const WorkerData&) = delete;
+				WorkerData& operator=(const WorkerData&) = delete;
 
 				WorkerData(WorkerData&& other) noexcept
 				{
@@ -51,7 +51,6 @@ namespace PS_AGONY
 
 			using UsedSlot = uint8_t;
 
-			static constexpr size_t MAX_VALID_INDICES_PER_PASS = 256; // Idk which value to pick. Looks ideal.
 			static constexpr uint32_t STOP_WAVE = -1;
 
 			std::vector<WorkerData> workerData;
