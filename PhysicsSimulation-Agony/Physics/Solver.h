@@ -58,6 +58,8 @@ namespace PS_AGONY
 			std::vector<size_t> remainingIndices;
 			std::vector<std::vector<size_t>> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
+
+			alignas(64) std::atomic<uint32_t> workNotDone{ 0 };
 		};
 
 
