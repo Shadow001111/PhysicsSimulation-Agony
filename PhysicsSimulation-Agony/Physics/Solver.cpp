@@ -316,22 +316,28 @@ namespace PS_AGONY
 
     void Solver::resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        auto& threadPool = Threading::getGlobalThreadPool();
+        constexpr size_t COLLISION_COUNT_PER_WORKER = 830;
+        constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
+        constexpr size_t MAX_VALID_INDICES_PER_PASS = 256;
 
-        const size_t availableWorkerCount = threadPool.getThreadCount() - 1; // One less to not share logical core with main thread (depends on scheduler).
-        const size_t neededWorkerCount = narrowPhaseCollisions.size() * 6 / 5000;
+        static_assert(MIN_COLLISION_COUNT_FOR_THREADING >= MAX_VALID_INDICES_PER_PASS);
 
-        const size_t workerCount = std::min(availableWorkerCount, neededWorkerCount);
-
-        if (workerCount <= 1)
+        // Single-threaded path.
+        if (narrowPhaseCollisions.size() < MIN_COLLISION_COUNT_FOR_THREADING)
         {
             resolveCollisions(narrowPhaseCollisions);
             return;
         }
 
-        TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
+        // Multi-threading path.
+        auto& threadPool = Threading::getGlobalThreadPool();
 
-        constexpr auto MAX_VALID_INDICES_PER_PASS = ResolveCollisionsThreadedResources::MAX_VALID_INDICES_PER_PASS;
+        const size_t availableWorkerCount = threadPool.getThreadCount() - 1; // One less to not share logical core with main thread (depends on scheduler).
+        const size_t neededWorkerCount = narrowPhaseCollisions.size() / COLLISION_COUNT_PER_WORKER;
+
+        const size_t workerCount = std::min(availableWorkerCount, neededWorkerCount);
+
+        TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
 
         // Fill remaining indices.
         const size_t collisionCount = narrowPhaseCollisions.size();
@@ -366,6 +372,7 @@ namespace PS_AGONY
         for (auto& pass : solverResources.stagingPasses)
         {
             pass.clear();
+            pass.reserve(MAX_VALID_INDICES_PER_PASS);
         }
         solverResources.usedBodies.resize(bodies->getCount());
 
@@ -415,7 +422,7 @@ namespace PS_AGONY
 
         // Main loop.
         auto& mainThreadPass = solverResources.stagingPasses[0];
-        while (true)
+        while (solverResources.remainingIndices.size() > MIN_COLLISION_COUNT_FOR_THREADING)
         {
             // Clear body-using history.
             std::fill(
@@ -436,24 +443,21 @@ namespace PS_AGONY
                     // Coloring.
                     if (stageIndex == 0)
                     {
+                        TRACY_SCOPE_NC("Sub-coloring 0", Ecstasy::Color::Gray);
+
                         // Quick pass: no body conflicts at stage 0.
                         // Note: The order is different from else branch.
 
-                        size_t readSize = std::min(MAX_VALID_INDICES_PER_PASS, solverResources.remainingIndices.size());
+                        const size_t readSize = MAX_VALID_INDICES_PER_PASS;
 
-                        const auto beg = solverResources.remainingIndices.end() - readSize;
-
-                        // Copy first indices.
+                        // Copy indices from the back.
                         stagingPass.insert(stagingPass.end(),
-                            beg,
-                            beg + readSize
+                            solverResources.remainingIndices.end() - readSize,
+                            solverResources.remainingIndices.end()
                         );
 
                         // Remove taken indices from remainingIndices.
-                        solverResources.remainingIndices.erase(
-                            beg,
-                            beg + readSize
-                        );
+                        solverResources.remainingIndices.resize(solverResources.remainingIndices.size() - readSize);
 
                         // Mark indices as used.
                         for (const size_t idx : stagingPass)
@@ -465,40 +469,46 @@ namespace PS_AGONY
                     }
                     else
                     {
-                        size_t untakenStart = 0;
-                        bool foundSomething = false;
-                        size_t readSize = solverResources.remainingIndices.size();
-                        for (size_t readPos = startReadPos; readPos < readSize && stagingPass.size() < MAX_VALID_INDICES_PER_PASS;)
-                        {
-                            const size_t idx = solverResources.remainingIndices[readPos];
-                            const auto& coll = narrowPhaseCollisions[idx];
+                        TRACY_SCOPE_NC("Sub-coloring the rest", Ecstasy::Color::Gray);
 
+                        size_t untakenStart = 0;
+                        size_t readSize = solverResources.remainingIndices.size();
+                        for (size_t readPos = startReadPos; readPos < readSize;)
+                        {
+                            const size_t collisionIndex = solverResources.remainingIndices[readPos];
+                            const auto& collisionData = narrowPhaseCollisions[collisionIndex];
+
+                            const BodyIndex bodyIndexA = collisionData.bodyA;
+                            const BodyIndex bodyIndexB = collisionData.bodyB;
+
+                            // Take indices if their bodies either weren't used or used on this stage.
                             if (
-                                solverResources.usedBodies[coll.bodyA] < stageIndex ||
-                                solverResources.usedBodies[coll.bodyB] < stageIndex
+                                solverResources.usedBodies[bodyIndexA] < stageIndex ||
+                                solverResources.usedBodies[bodyIndexB] < stageIndex
                                 )
                             {
                                 readPos++;
-                                if (!foundSomething)
+                                if (stagingPass.empty())
                                 {
                                     untakenStart = readPos;
                                 }
                                 continue;
                             }
-                            stagingPass.push_back(idx);
-                            solverResources.usedBodies[coll.bodyA] = stageIndex;
-                            solverResources.usedBodies[coll.bodyB] = stageIndex;
+                            solverResources.usedBodies[bodyIndexA] = stageIndex;
+                            solverResources.usedBodies[bodyIndexB] = stageIndex;
+
+                            stagingPass.push_back(collisionIndex);
 
                             solverResources.remainingIndices[readPos] = solverResources.remainingIndices.back();
                             solverResources.remainingIndices.pop_back();
                             readSize--;
 
-                            foundSomething = true;
+                            if (stagingPass.size() >= MAX_VALID_INDICES_PER_PASS)
+                            {
+                                break;
+                            }
                         }
-                        if (untakenStart > 0)
-                        {
-                            startReadPos = untakenStart;
-                        }
+                        startReadPos = untakenStart;
 
                         // Check.
                         if (stagingPass.empty())
@@ -506,23 +516,13 @@ namespace PS_AGONY
                             break;
                         }
                     }
-
                     workerEnableCount++;
                 }
             }
 
-            // Early exit.
-            if (workerEnableCount == 0) [[unlikely]]
-            {
-                break;
-            }
-
             // Resolve collisions on main thread, while wave is being executed.
-            if (!mainThreadPass.empty())
-            {
-                resolveCollisionsIndirect(narrowPhaseCollisions, mainThreadPass);
-                mainThreadPass.clear();
-            }
+            resolveCollisionsIndirect(narrowPhaseCollisions, mainThreadPass);
+            mainThreadPass.clear();
 
             // Wait for previous wave to finish.
             {
@@ -550,9 +550,6 @@ namespace PS_AGONY
                     wData.workWave.notify_one();
                 }
             }
-
-            // Check.
-            if (solverResources.remainingIndices.empty() || workerEnableCount <= 2) break;
         }
 
         // Execute remaining on main thread.
