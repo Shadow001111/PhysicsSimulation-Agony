@@ -12,24 +12,6 @@ namespace PS_AGONY
         Real squaredDistance;
     };
 
-    /*static inline Vector2AndSqDistance findClosestPointOnSegment(const Vec2& start, const Vec2& end, const Vec2& point)
-    {
-        const Vec2 startToEnd = end - start;
-        const Vec2 startToPoint = point - start;
-
-        const Real d = glm::dot(startToEnd, startToPoint) / glm::dot(startToEnd, startToEnd);
-
-        const Vec2 closest = start + startToEnd * std::clamp(d, Real(0), Real(1));
-
-        const Vec2 deltaPosition = closest - point;
-
-        Vector2AndSqDistance result;
-        result.vector = closest;
-        result.squaredDistance = glm::dot(deltaPosition, deltaPosition);
-
-        return result;
-    }*/
-
     static __forceinline void flip_sign_if_negative(glm::vec2& v, const float& sign)
     {
         constexpr uint32_t signBit = 1u << 31;
@@ -46,24 +28,44 @@ namespace PS_AGONY
         reinterpret_cast<uint64_t&>(v.y) ^= sign_mask;
     }
 
+    // Thread-local data for each worker: partitioned pairs and results.
+    struct ThreadData
+    {
+        SymmetricMatrix<std::vector<BodyPair>, static_cast<size_t>(BodyType::COUNT)> pairs;
+        std::vector<BodyCollisionData> results;
+
+        void clear()
+        {
+            for (auto& vec : pairs.getDirectAccess())
+                vec.clear();
+            results.clear();
+        }
+    };
+
+    static ThreadData& getThreadLocalData()
+    {
+        static thread_local ThreadData td;
+        return td;
+    }
 
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
         SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> mat;
-        
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Circle  ) = &NarrowPhaseCollisionDetector::collisionCircleCircle;
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Box     ) = &NarrowPhaseCollisionDetector::collisionCircleBox;
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Polygon ) = &NarrowPhaseCollisionDetector::collisionCirclePolygon;
-        
-        mat((size_t)BodyType::Box,    (size_t)BodyType::Box     ) = &NarrowPhaseCollisionDetector::collisionBoxBox;
-        mat((size_t)BodyType::Box,    (size_t)BodyType::Polygon ) = &NarrowPhaseCollisionDetector::collisionBoxPolygon;
-        
+
+        mat((size_t)BodyType::Circle, (size_t)BodyType::Circle) = &NarrowPhaseCollisionDetector::collisionCircleCircle;
+        mat((size_t)BodyType::Circle, (size_t)BodyType::Box) = &NarrowPhaseCollisionDetector::collisionCircleBox;
+        mat((size_t)BodyType::Circle, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionCirclePolygon;
+
+        mat((size_t)BodyType::Box, (size_t)BodyType::Box) = &NarrowPhaseCollisionDetector::collisionBoxBox;
+        mat((size_t)BodyType::Box, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionBoxPolygon;
+
         mat((size_t)BodyType::Polygon, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionPolygonPolygon;
         return mat;
         }();
 
     NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
-    {}
+    {
+    }
 
     void NarrowPhaseCollisionDetector::setDataViewers(
         const BodySoAViewer& bodies,
@@ -87,55 +89,16 @@ namespace PS_AGONY
             return allCollisionData;
         }
 
-        // Partition pairs by body type.
-        {
-            TRACY_SCOPE_N("Partition pairs");
-
-            const BodyType* ECSTASY_RESTRICT bodyTypePtr = bodies.bodyType;
-            const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies.isStatic;
-
-            auto& matrixAccess = bodyPairVectorMatrix.getDirectAccess();
-
-            for (auto& shapeBodyPairs : matrixAccess)
-            {
-                shapeBodyPairs.clear();
-            }
-
-            for (const auto& pair : bodyPairs)
-            {
-                BodyIndex idxA = pair.a;
-                BodyIndex idxB = pair.b;
-
-                if (isStaticPtr[idxA] && isStaticPtr[idxB]) [[unlikely]]
-                {
-                    continue; // Skip static-static pairs.
-                }
-
-                BodyType typeA = bodyTypePtr[idxA];
-                BodyType typeB = bodyTypePtr[idxB];
-
-                if (typeA > typeB)
-                {
-                    std::swap(idxA, idxB);
-                    std::swap(typeA, typeB);
-                }
-
-                bodyPairVectorMatrix(static_cast<size_t>(typeA), static_cast<size_t>(typeB)).emplace_back(idxA, idxB);
-            }
-        }
-
-        // Reserve space.
         allCollisionData.reserve(bodyPairs.size());
-        
-        // Find collisions.
+
         const bool useThreading = true;
         if (useThreading)
         {
-            findCollisionsMultiThreaded();
+            findCollisionsMultiThreaded(bodyPairs);
         }
         else
         {
-            findCollisionsSingleThreaded();
+            findCollisionsSingleThreaded(bodyPairs);
         }
 
         return allCollisionData;
@@ -144,137 +107,113 @@ namespace PS_AGONY
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
         size_t total = sizeof(NarrowPhaseCollisionDetector);
-
-        const auto& matrixDirectAccess = bodyPairVectorMatrix.getDirectAccess();
-        for (const auto& vec : matrixDirectAccess)
-        {
-            total += PS_AGONY::getVectorMemoryUsage(vec);
-        }
-
-        total += PS_AGONY::getVectorMemoryUsage(workItems);
-        const auto& chunkedResultsDirectAccess = chunkedResults.getDirectAccess();
-        for (const auto& vec : chunkedResultsDirectAccess)
-        {
-            total += PS_AGONY::getVectorMemoryUsage(vec);
-        }
-        total += PS_AGONY::getVectorMemoryUsage(collisionDataTasks);
-
         total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
-
         return total;
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded()
+    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs)
     {
         TRACY_SCOPE_N("Single‑threaded narrow phase");
 
-        // Note: Maybe I should make it iterative instead of placing myself.
-        {
-            auto& shapeBodyPairs = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
-            collisionCircleCircle(0, shapeBodyPairs.size(), allCollisionData);
-        }
-        {
-            auto& shapeBodyPairs = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Box);
-            collisionCircleBox(0, shapeBodyPairs.size(), allCollisionData);
-        }
-        {
-            auto& shapeBodyPairs = bodyPairVectorMatrix((size_t)BodyType::Box, (size_t)BodyType::Box);
-            collisionBoxBox(0, shapeBodyPairs.size(), allCollisionData);
-        }
+        ThreadData& td = getThreadLocalData();
+        td.clear();
+        processPairs(bodyPairs, 0, bodyPairs.size(), td);
+        allCollisionData.swap(td.results);
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded()
+    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<BodyPair>& bodyPairs)
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
-        
-        constexpr size_t LOAD_BALANCING_FACTOR = 1;
 
-        // Build tasks for all pair types.
-        size_t totalTaskCount = 0;
+        constexpr size_t LOAD_BALANCING_FACTOR = 2;
         auto& threadPool = Threading::getGlobalThreadPool();
 
-        auto& bodyPairVectorMatrixDA = bodyPairVectorMatrix.getDirectAccess();
-        auto& chunkedResultsDA = chunkedResults.getDirectAccess();
-        const auto& collisionFuncsDA = collisionFuncs.getDirectAccess();
+        // Split work into chunks.
+        auto [chunkCount, chunkSize] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
+            threadPool, bodyPairs.size(), LOAD_BALANCING_FACTOR);
+
+        std::vector<std::future<
+            const std::vector<BodyCollisionData>&
+            >> futures;
+        futures.reserve(chunkCount);
+
+        for (size_t start = 0; start < bodyPairs.size(); start += chunkSize)
         {
-            TRACY_SCOPE_N("Work items");
-            workItems.clear();
-            for (size_t index = 0; index < bodyPairVectorMatrixDA.size(); index++)
-            {
-                auto& shapeBodyPairs = bodyPairVectorMatrixDA[index];
-                size_t pairCount = shapeBodyPairs.size();
-                if (pairCount == 0) continue;
-
-                CollisionFunc func = collisionFuncsDA[index];
-
-                size_t chunkCount = 0;
-                size_t chunkSize = 0;
+            size_t end = std::min(start + chunkSize, bodyPairs.size());
+            futures.emplace_back(threadPool.enqueueFuture([this, &bodyPairs, start, end]() -> const std::vector<BodyCollisionData>&
                 {
-                    auto [chunkCountTmp, chunkSizeTmp] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
-                        threadPool, pairCount, LOAD_BALANCING_FACTOR);
-                    chunkCount = chunkCountTmp;
-                    chunkSize = chunkSizeTmp;
-
-                    // Resize the chunked result vector for this type.
-                    auto& typeChunks = chunkedResultsDA[index];
-
-                    if (chunkCount > typeChunks.size())
-                    {
-                        typeChunks.resize(chunkCount);
-                    }
-
-                    for (size_t i = 0; i < chunkCount; i++)
-                    {
-                        typeChunks[i].vector.clear();
-                    }
-                }
-                workItems.emplace_back(index, pairCount, chunkCount, chunkSize, func);
-                totalTaskCount += chunkCount;
-            }
+                    ThreadData& td = getThreadLocalData();
+                    td.clear();
+                    processPairs(bodyPairs, start, end, td);
+                    return td.results;
+                }));
         }
 
-        // Enqueue tasks.
-        collisionDataTasks.clear();
-        collisionDataTasks.reserve(totalTaskCount);
-
+        // Combine results.
         {
-            TRACY_SCOPE_N("Create tasks");
-            for (const auto& wi : workItems)
-            {
-                auto& typeChunks = chunkedResultsDA[wi.index];
-
-                size_t chunkSize = wi.chunkSize;
-                size_t chunkId = 0;
-                for (size_t start = 0; start < wi.pairCount; start += chunkSize)
-                {
-                    size_t end = std::min(start + chunkSize, wi.pairCount);
-                    collisionDataTasks.emplace_back([this, wi, start, end, chunkId, &typeChunks]()
-                        {
-                            (this->*wi.func)(start, end, typeChunks[chunkId].vector);
-                            return std::ref(typeChunks[chunkId].vector);
-                        });
-                    chunkId++;
-                }
-            }
-        }
-        
-        auto futures = threadPool.enqueueFutureBulk(collisionDataTasks);
-
-        // Combine results from all types.
-        {
-            TRACY_SCOPE_N("Wait for workers to finish and combine data");
+            TRACY_SCOPE_N("Wait for workers and combine");
             for (auto& fut : futures)
             {
-                TRACY_SCOPE_N("Wait and combine data");
-                auto& chunkResult = fut.get();
-                allCollisionData.insert(allCollisionData.end(),
-                    std::make_move_iterator(chunkResult.begin()),
-                    std::make_move_iterator(chunkResult.end()));
+                const auto& chunkResult = fut.get();
+                {
+                    TRACY_SCOPE_N("Combine");
+                    allCollisionData.insert(
+                        allCollisionData.end(),
+                        chunkResult.begin(),
+                        chunkResult.end()
+                    );
+                }
             }
         }
     }
 
-    void NarrowPhaseCollisionDetector::collisionCircleCircle(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
+    void NarrowPhaseCollisionDetector::processPairs(const std::vector<BodyPair>& pairs, size_t start, size_t end, ThreadData& td)
+    {
+        TRACY_SCOPE_N("Process pair range");
+
+        const BodyType* ECSTASY_RESTRICT bodyTypePtr = bodies.bodyType;
+        const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies.isStatic;
+
+        // Partition the given range into type-specific vectors.
+        {
+            TRACY_SCOPE_N("Partition");
+            for (size_t i = start; i < end; i++)
+            {
+                auto [bodyIndexA, bodyIndexB] = pairs[i];
+                if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
+                    continue;
+
+                BodyType typeA = bodyTypePtr[bodyIndexA];
+                BodyType typeB = bodyTypePtr[bodyIndexB];
+
+                if (typeA > typeB)
+                {
+                    std::swap(bodyIndexA, bodyIndexB);
+                    std::swap(typeA, typeB);
+                }
+
+                td.pairs((size_t)typeA, (size_t)typeB).emplace_back(bodyIndexA, bodyIndexB);
+            }
+        }
+
+        // Dispatch each non-empty type group.
+        for (size_t i = 0; i < BODY_TYPE_COUNT; i++)
+        {
+            for (size_t j = i; j < BODY_TYPE_COUNT; j++)
+            {
+                auto& vec = td.pairs(i, j);
+                if (!vec.empty())
+                {
+                    CollisionFunc func = collisionFuncs(i, j);
+                    (this->*func)(vec, td.results);
+                }
+            }
+        }
+    }
+
+    void NarrowPhaseCollisionDetector::collisionCircleCircle(
+        const std::vector<BodyPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
@@ -284,13 +223,8 @@ namespace PS_AGONY
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
-        auto& shapeBodyPairs = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Circle);
-
-        for (size_t pairIndex = startIndex; pairIndex < endIndex; pairIndex++)
+        for (auto [indexA, indexB] : pairs)
         {
-            auto [indexA, indexB] = shapeBodyPairs[pairIndex];
-
-            // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
@@ -300,24 +234,16 @@ namespace PS_AGONY
             const Real radiusA = radiusPtr[shapeA];
             const Real radiusB = radiusPtr[shapeB];
 
-            // Delta position.
             const Vec2 deltaPosition = positionB - positionA;
-
-            // Radius sum.
             const Real radiusSum = radiusA + radiusB;
-
-            // Distance.
             const Real squaredDistance = glm::dot(deltaPosition, deltaPosition);
-            if (squaredDistance >= radiusSum * radiusSum)
-            {
-                continue;
-            }
-            const Real distance = std::sqrt(squaredDistance);
 
-            // Depth.
+            if (squaredDistance >= radiusSum * radiusSum)
+                continue;
+
+            const Real distance = std::sqrt(squaredDistance);
             const Real depth = radiusSum - distance;
 
-            // Normal.
             Vec2 normal;
             if (distance == Real(0)) [[unlikely]]
             {
@@ -330,7 +256,6 @@ namespace PS_AGONY
                 normal = deltaPosition * invDistance;
             }
 
-            // Result.
             outCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
@@ -342,7 +267,9 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::collisionCircleBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
+    void NarrowPhaseCollisionDetector::collisionCircleBox(
+        const std::vector<BodyPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-box collision");
 
@@ -353,17 +280,11 @@ namespace PS_AGONY
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
-
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        auto& shapeBodyPairs = bodyPairVectorMatrix((size_t)BodyType::Circle, (size_t)BodyType::Box);
-
-        for (size_t pairIndex = startIndex; pairIndex < endIndex; pairIndex++)
+        for (auto [indexA, indexB] : pairs)
         {
-            auto [indexA, indexB] = shapeBodyPairs[pairIndex];
-
-            // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
@@ -374,35 +295,28 @@ namespace PS_AGONY
             const BodyIndex shapeB = shapeIndexPtr[indexB];
 
             const Real radiusA = radiusPtr[shapeA];
-
             const Real halfWidthB = halfWidthPtr[shapeB];
             const Real halfHeightB = halfHeightPtr[shapeB];
 
-
-            // Get axes.
             const Vec2 right = { cosB, sinB };
             const Vec2 up = { -sinB, cosB };
 
-            // Circle center in box local space.
             const Vec2 d = positionA - positionB;
             const Vec2 circleLocalPosition = {
                 glm::dot(d, right),
                 glm::dot(d, up)
             };
 
-            // Closest point on box to the circle, in local space.
             const Vec2 closestLocal = {
                 glm::clamp(circleLocalPosition.x, -halfWidthB,  halfWidthB),
                 glm::clamp(circleLocalPosition.y, -halfHeightB, halfHeightB)
             };
 
-            // Distance.
             const Vec2 deltaLocal = closestLocal - circleLocalPosition;
             const Real squaredDistance = glm::dot(deltaLocal, deltaLocal);
 
             if (squaredDistance >= radiusA * radiusA) continue;
 
-            //
             if (squaredDistance > Real(1e-8))
             {
                 const Real distance = std::sqrt(squaredDistance);
@@ -413,9 +327,7 @@ namespace PS_AGONY
                     sinB * deltaLocal.x + cosB * deltaLocal.y
                 };
                 const Vec2 normal = worldDelta * invDistance;
-
                 const Real depth = radiusA - distance;
-
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
                 outCollisionData.emplace_back(
@@ -429,8 +341,7 @@ namespace PS_AGONY
                 continue;
             }
 
-            // Circle center is inside the box (or extremely close to an edge/corner).
-            // Choose the nearest face in local space.
+            // Circle center inside box: choose nearest face.
             const Real dx = halfWidthB - std::fabs(circleLocalPosition.x);
             const Real dy = halfHeightB - std::fabs(circleLocalPosition.y);
             const bool useX = dx < dy;
@@ -441,20 +352,15 @@ namespace PS_AGONY
 
             Vec2 normalLocal;
             if (useX)
-            {
                 normalLocal = Vec2(sx, Real(0));
-            }
             else
-            {
                 normalLocal = Vec2(Real(0), sy);
-            }
 
             const Vec2 normal = -Vec2{
                 cosB * normalLocal.x - sinB * normalLocal.y,
                 sinB * normalLocal.x + cosB * normalLocal.y
             };
             const Real depth = radiusA + minPen;
-
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
             outCollisionData.emplace_back(
@@ -468,11 +374,15 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::collisionCirclePolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
+    void NarrowPhaseCollisionDetector::collisionCirclePolygon(
+        const std::vector<BodyPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
     {
     }
 
-    void NarrowPhaseCollisionDetector::collisionBoxBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
+    void NarrowPhaseCollisionDetector::collisionBoxBox(
+        const std::vector<BodyPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Box-box collision");
 
@@ -493,13 +403,8 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        auto& shapeBodyPairs = bodyPairVectorMatrix((size_t)BodyType::Box, (size_t)BodyType::Box);
-
-        for (size_t pairIndex = startIndex; pairIndex < endIndex; pairIndex++)
+        for (auto [indexA, indexB] : pairs)
         {
-            auto [indexA, indexB] = shapeBodyPairs[pairIndex];
-
-            // Gather data.
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
@@ -516,38 +421,31 @@ namespace PS_AGONY
             const Real halfWidthB = halfWidthPtr[shapeB];
             const Real halfHeightB = halfHeightPtr[shapeB];
 
-            // Get axes.
             const Vec2 rightA = { cosA,  sinA };
-            const Vec2 upA =    { -sinA, cosA };
-
+            const Vec2 upA = { -sinA, cosA };
             const Vec2 rightB = { cosB,  sinB };
-            const Vec2 upB =    { -sinB, cosB };
+            const Vec2 upB = { -sinB, cosB };
 
-            // Relative rotation.
             const Real absRelativeCos = std::fabs(cosA * cosB + sinA * sinB);
             const Real absRelativeSin = std::fabs(cosA * sinB - sinA * cosB);
 
-            // Center delta.
             const Vec2 centerDelta = positionB - positionA;
             const Real centerDeltaOnRightA = glm::dot(centerDelta, rightA);
             const Real centerDeltaOnUpA = glm::dot(centerDelta, upA);
             const Real centerDeltaOnRightB = glm::dot(centerDelta, rightB);
             const Real centerDeltaOnUpB = glm::dot(centerDelta, upB);
 
-            // Projection.
             const Real projectedRadiusBOnRightA = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
             const Real projectedRadiusBOnUpA = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
             const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
             const Real projectedRadiusAOnUpB = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
 
-            // SAT: find axis of minimum penetration.
             Vec2 normal;
             Real depth = FLT_MAX;
             SATAxis bestAxis;
 
             auto sat = [&](Real radiusSum, Real centerDeltaOnAxis, Vec2 axis, SATAxis axisType) -> bool
                 {
-                    // radiusSum = radiusA + radiusB.
                     const Real overlap = radiusSum - std::fabsf(centerDeltaOnAxis);
                     if (overlap < Real(0)) return false;
                     if (overlap < depth)
@@ -560,22 +458,16 @@ namespace PS_AGONY
                     return true;
                 };
 
-            if (!sat(projectedRadiusBOnRightA + halfWidthA,  centerDeltaOnRightA, rightA, SATAxis::A_RIGHT)) continue;
-            if (!sat(projectedRadiusBOnUpA    + halfHeightA, centerDeltaOnUpA,    upA,    SATAxis::A_UP))    continue;
-            if (!sat(projectedRadiusAOnRightB + halfWidthB,  centerDeltaOnRightB, rightB, SATAxis::B_RIGHT)) continue;
-            if (!sat(projectedRadiusAOnUpB    + halfHeightB, centerDeltaOnUpB,    upB,    SATAxis::B_UP))    continue;
+            if (!sat(projectedRadiusBOnRightA + halfWidthA, centerDeltaOnRightA, rightA, SATAxis::A_RIGHT)) continue;
+            if (!sat(projectedRadiusBOnUpA + halfHeightA, centerDeltaOnUpA, upA, SATAxis::A_UP))    continue;
+            if (!sat(projectedRadiusAOnRightB + halfWidthB, centerDeltaOnRightB, rightB, SATAxis::B_RIGHT)) continue;
+            if (!sat(projectedRadiusAOnUpB + halfHeightB, centerDeltaOnUpB, upB, SATAxis::B_UP))    continue;
 
-            // Identify reference and incident boxes.
             const bool refIsA = bestAxis < SATAxis::B_RIGHT;
 
-            Vec2 positionRef;
-            Real halfWidthRef, halfHeightRef;
-            Vec2 rightRef, upRef;
-
-            Vec2 positionInc;
-            Real halfWidthInc, halfHeightInc;
-            Vec2 rightInc, upInc;
-
+            Vec2 positionRef, positionInc;
+            Real halfWidthRef, halfHeightRef, halfWidthInc, halfHeightInc;
+            Vec2 rightRef, upRef, rightInc, upInc;
             Vec2 refNormal;
 
             if (refIsA)
@@ -611,50 +503,36 @@ namespace PS_AGONY
                 refNormal = -normal;
             }
 
-            //
-            Vec2 refEdgeStart, refEdgeEnd, refFaceCenter;
-            Vec2 sideDir;
+            Vec2 refEdgeStart, refEdgeEnd, refFaceCenter, sideDir;
             {
-                // Project reference normal on reference's local axes.
                 const Real dotX = glm::dot(refNormal, rightRef);
                 const Real dotY = glm::dot(refNormal, upRef);
-
-                // Choose the face with outward normal matching the collision direction.
                 const bool useX = std::fabs(dotX) > std::fabs(dotY);
-
                 const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
 
-                // Reference face edge endpoints (world).
-                Vec2 edgeOffset;
                 if (useX)
                 {
                     refFaceCenter = positionRef + rightRef * (sign * halfWidthRef);
-                    edgeOffset = upRef * halfHeightRef;
                     sideDir = upRef;
                 }
                 else
                 {
                     refFaceCenter = positionRef + upRef * (sign * halfHeightRef);
-                    edgeOffset = rightRef * halfWidthRef;
                     sideDir = rightRef;
                 }
+                const Vec2 edgeOffset = sideDir * (useX ? halfHeightRef : halfWidthRef);
                 refEdgeStart = refFaceCenter + edgeOffset;
                 refEdgeEnd = refFaceCenter - edgeOffset;
             }
+
             Vec2 incEdgeStart, incEdgeEnd;
             {
-                // Project reference normal on incidental's local axes.
                 const Real dotX = glm::dot(refNormal, rightInc);
                 const Real dotY = glm::dot(refNormal, upInc);
-
-                // Choose the face with outward normal matching the collision direction.
                 const bool useX = std::fabs(dotX) > std::fabs(dotY);
-
                 const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
 
-                // Reference face edge endpoints (world).
-                Vec2 faceCenter;
-                Vec2 edgeOffset;
+                Vec2 faceCenter, edgeOffset;
                 if (useX)
                 {
                     faceCenter = positionInc + rightInc * (sign * halfWidthInc);
@@ -669,66 +547,34 @@ namespace PS_AGONY
                 incEdgeEnd = faceCenter - edgeOffset;
             }
 
-            // Clip incident edge against reference side planes.
-            // Note: Function return either 0 or 2, so I made it use bool. Returns bool on fail.
             auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
                 {
                     const Real d1 = glm::dot(p1 - planePoint, planeNormal);
                     const Real d2 = glm::dot(p2 - planePoint, planeNormal);
-
-                    if (d1 >= 0 && d2 >= 0)
-                    {
-                        // out1 = p1; out2 = p2; 
-                        return false; // 2
-                    }
-                    if (d1 < 0 && d2 < 0) return true; // 0
-
-                    // One point inside, one outside -> compute intersection.
+                    if (d1 >= 0 && d2 >= 0) return false; // both inside
+                    if (d1 < 0 && d2 < 0) return true;    // both outside
                     const Vec2 dir = p2 - p1;
-                    const Real t = d1 / (d1 - d2); // d1 - d2 != 0
+                    const Real t = d1 / (d1 - d2);
                     const Vec2 intersect = p1 + dir * t;
-
-                    if (d1 >= 0)
-                    {
-                        //out1 = p1;
-                        p2 = intersect;
-                    }
-                    else
-                    {
-                        p1 = intersect;
-                        //out2 = p2;
-                    }
-                    return false; // 2
+                    if (d1 >= 0) p2 = intersect;
+                    else         p1 = intersect;
+                    return false;
                 };
 
-            // Note: Can put 'clipped' instead of inc edge variables to set to array directly above. I tried, but it didn't give any results.
             Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
+            if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
+            if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
 
-            // Clip against first side plane.
-            bool clipFail = clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir);
-            if (clipFail) continue;
-
-            // Clip against second side plane.
-            clipFail = clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir);
-            if (clipFail) continue;
-
-            // Keep points that lie behind the reference face plane.
             Vec2 contacts[2];
             uint32_t contactCount = 0;
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
-
-            for (uint32_t i = 0; i < 2; i++)
+            for (uint32_t i = 0; i < 2; ++i)
             {
-                const Real pointDist = glm::dot(clipped[i], refNormal);
-                if (pointDist <= refPlaneDist + Real(1e-5))
-                {
+                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + Real(1e-5))
                     contacts[contactCount++] = clipped[i];
-                }
             }
-
             if (contactCount == 0) continue;
 
-            // Store final collision data.
             outCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
@@ -740,11 +586,15 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::collisionBoxPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
+    void NarrowPhaseCollisionDetector::collisionBoxPolygon(
+        const std::vector<BodyPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
     {
     }
 
-    void NarrowPhaseCollisionDetector::collisionPolygonPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData)
+    void NarrowPhaseCollisionDetector::collisionPolygonPolygon(
+        const std::vector<BodyPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
     {
     }
 }
