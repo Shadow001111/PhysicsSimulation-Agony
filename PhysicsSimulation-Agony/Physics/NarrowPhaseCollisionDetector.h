@@ -31,15 +31,29 @@ namespace PS_AGONY
 
 	class NarrowPhaseCollisionDetector
 	{
+		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
+
+		struct ChunkData
+		{
+			SymmetricMatrix<std::vector<BodyPair>, BODY_TYPE_COUNT> pairs;
+			std::vector<BodyCollisionData> results;
+
+			void clear()
+			{
+				for (auto& vec : pairs.getDirectAccess())
+					vec.clear();
+				results.clear();
+			}
+		};
+
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
 			const std::vector<BodyPair>&, std::vector<BodyCollisionData>&
 			);
 
-		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
-
 		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;
 
 		std::vector<BodyCollisionData> allCollisionData;
+		std::vector<ChunkData> chunks;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
@@ -68,7 +82,7 @@ namespace PS_AGONY
 		void findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs);
 		void findCollisionsMultiThreaded(const std::vector<BodyPair>& bodyPairs);
 
-		void processPairs(const std::vector<BodyPair>& pairs, size_t start, size_t end, struct ThreadData& td);
+		void processPairs(const std::vector<BodyPair>& pairs, size_t start, size_t end, ChunkData& chunkData);
 
 		void collisionCircleCircle(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
