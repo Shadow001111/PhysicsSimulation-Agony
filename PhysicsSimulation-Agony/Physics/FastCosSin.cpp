@@ -43,13 +43,13 @@ namespace PS_AGONY::FastCosSin
 
 			IntSimd quadrantIndex = (x * invHalfPiV).to<IntSimd>();
 
-			RealSimd u = RealSimd::neg_mul_add(quadrantIndex.to<RealSimd>(), halfPiV, x);
+			RealSimd u = RealSimd::negMulAdd(quadrantIndex.to<RealSimd>(), halfPiV, x);
 
 			RealSimd mirror = (quadrantIndex & IntSimd(1)).to<RealSimd>();
 
-			RealSimd a = RealSimd::mul_add(
+			RealSimd a = RealSimd::mulAdd(
 				mirror,
-				RealSimd::neg_mul_add(RealSimd(2), u, halfPiV),
+				RealSimd::negMulAdd(RealSimd(2), u, halfPiV),
 				u
 			);
 
@@ -57,13 +57,13 @@ namespace PS_AGONY::FastCosSin
 			RealSimd cosMask = (((quadrantIndex + IntSimd(1)) & IntSimd(2)) << signMaskShift).as<RealSimd>();
 
 			RealSimd sinMag = coeff4V;
-			sinMag = RealSimd::mul_add(sinMag, a, coeff3V);
-			sinMag = RealSimd::mul_add(sinMag, a, coeff2V);
-			sinMag = RealSimd::mul_add(sinMag, a, RealSimd(1));
+			sinMag = RealSimd::mulAdd(sinMag, a, coeff3V);
+			sinMag = RealSimd::mulAdd(sinMag, a, coeff2V);
+			sinMag = RealSimd::mulAdd(sinMag, a, RealSimd(1));
 			sinMag = a * sinMag;
 			sinMag = RealSimd::min(sinMag, RealSimd(1));
 
-			RealSimd cosMag = RealSimd::sqrt(RealSimd::neg_mul_add(sinMag, sinMag, RealSimd(1)));
+			RealSimd cosMag = RealSimd::sqrt(RealSimd::negMulAdd(sinMag, sinMag, RealSimd(1)));
 
 			RealSimd sin = sinMag ^ sinMask;
 			RealSimd cos = cosMag ^ cosMask;

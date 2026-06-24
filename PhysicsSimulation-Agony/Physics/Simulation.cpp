@@ -486,8 +486,8 @@ namespace PS_AGONY
                 RealSimd posX = RealSimd::load(positionXPtr + i);
                 RealSimd posY = RealSimd::load(positionYPtr + i);
 
-                posX = RealSimd::mul_add(velX, deltaTimeV, posX);
-                posY = RealSimd::mul_add(velY, deltaTimeV, posY);
+                posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
+                posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
 
                 posX.store(positionXPtr + i);
                 posY.store(positionYPtr + i);
@@ -511,7 +511,7 @@ namespace PS_AGONY
                 
                 RealSimd rot = RealSimd::load(rotationPtr + i);
                 
-                rot = RealSimd::mul_add(angularVel, deltaTimeV, rot);
+                rot = RealSimd::mulAdd(angularVel, deltaTimeV, rot);
                 
                 rot.store(rotationPtr + i);
             }
@@ -744,8 +744,8 @@ namespace PS_AGONY
             const RealSimd cosRot = RealSimd::load(rotationCosPtr + i);
             const RealSimd sinRot = RealSimd::load(rotationSinPtr + i);
 
-            const RealSimd truePositionX = RealSimd::neg_mul_add(localCenterOfMassX, cosRot,     RealSimd::mul_add(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
-            const RealSimd truePositionY = RealSimd::neg_mul_add(localCenterOfMassX, sinRot, RealSimd::neg_mul_add(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
+            const RealSimd truePositionX = RealSimd::negMulAdd(localCenterOfMassX, cosRot,     RealSimd::mulAdd(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
+            const RealSimd truePositionY = RealSimd::negMulAdd(localCenterOfMassX, sinRot, RealSimd::negMulAdd(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
         
             truePositionX.store(truePositionXPtr + i);
             truePositionY.store(truePositionYPtr + i);
