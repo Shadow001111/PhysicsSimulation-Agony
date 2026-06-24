@@ -65,6 +65,7 @@ namespace PS_AGONY
 		const Real* rotationCos = nullptr;
 		const Real* rotationSin = nullptr;
 
+        const uint8_t* isStatic = nullptr;
         const MaterialIndex* materialIndex = nullptr;
         AABBSoAViewer_Internal aabb;
         const BodyType* bodyType = nullptr;
@@ -92,6 +93,7 @@ namespace PS_AGONY
             invInertia(data.invInertia.data()),
 			rotationCos(data.rotationCos.data()),
 			rotationSin(data.rotationSin.data()),
+            isStatic(data.isStatic.data()),
             materialIndex(data.materialIndex.data()),
             aabb(data.aabb),
             bodyType(data.bodyType.data()),

@@ -253,6 +253,7 @@ namespace PS_AGONY
             std::swap(bodies.invInertia[bodyIndex], bodies.invInertia.back());
             std::swap(bodies.rotationCos[bodyIndex], bodies.rotationCos.back());
             std::swap(bodies.rotationSin[bodyIndex], bodies.rotationSin.back());
+            std::swap(bodies.isStatic[bodyIndex], bodies.isStatic.back());
             std::swap(bodies.materialIndex[bodyIndex], bodies.materialIndex.back());
             std::swap(bodies.aabb.minX[bodyIndex], bodies.aabb.minX.back());
             std::swap(bodies.aabb.minY[bodyIndex], bodies.aabb.minY.back());
@@ -295,6 +296,7 @@ namespace PS_AGONY
         bodies.invInertia.pop_back();
         bodies.rotationCos.pop_back();
         bodies.rotationSin.pop_back();
+        bodies.isStatic.pop_back();
         bodies.materialIndex.pop_back();
         bodies.aabb.minX.pop_back();
         bodies.aabb.minY.pop_back();

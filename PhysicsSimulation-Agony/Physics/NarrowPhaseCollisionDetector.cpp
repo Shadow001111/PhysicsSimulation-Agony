@@ -92,6 +92,8 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Partition pairs");
 
             const BodyType* ECSTASY_RESTRICT bodyTypePtr = bodies.bodyType;
+            const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies.isStatic;
+
             auto& matrixAccess = bodyPairVectorMatrix.getDirectAccess();
 
             for (auto& shapeBodyPairs : matrixAccess)
@@ -104,7 +106,7 @@ namespace PS_AGONY
                 BodyIndex idxA = pair.a;
                 BodyIndex idxB = pair.b;
 
-                if (bodies.invMass[idxA] == Real(0) && bodies.invMass[idxB] == Real(0)) [[unlikely]]
+                if (isStaticPtr[idxA] && isStaticPtr[idxB]) [[unlikely]]
                 {
                     continue; // Skip static-static pairs.
                 }
