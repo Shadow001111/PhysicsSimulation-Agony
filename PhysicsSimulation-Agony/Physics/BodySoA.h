@@ -71,6 +71,7 @@ namespace PS_AGONY
 		SimdAlignedVector<Real> rotationCos;
 		SimdAlignedVector<Real> rotationSin;
 
+		std::vector<uint8_t> isStatic; // TODO: Maybe use 1 bit?
 		std::vector<MaterialIndex> materialIndex;
 		AABBSoA aabb;
 		std::vector<BodyType> bodyType;
@@ -108,6 +109,7 @@ namespace PS_AGONY
 			this->invInertia.push_back(invInertia);
 			this->rotationCos.push_back(std::cos(rot));
 			this->rotationSin.push_back(std::sin(rot));
+			this->isStatic.push_back(invMass == 0);
 			this->materialIndex.push_back(materialIndex);
 			this->aabb.minX.push_back(0);
 			this->aabb.minY.push_back(0);
@@ -139,6 +141,7 @@ namespace PS_AGONY
 				PS_AGONY::getVectorMemoryUsage(invInertia) +
 				PS_AGONY::getVectorMemoryUsage(rotationCos) +
 				PS_AGONY::getVectorMemoryUsage(rotationSin) +
+				PS_AGONY::getVectorMemoryUsage(isStatic) +
 				PS_AGONY::getVectorMemoryUsage(materialIndex) +
 				aabb.getMemoryUsage() +
 				PS_AGONY::getVectorMemoryUsage(bodyType) +
