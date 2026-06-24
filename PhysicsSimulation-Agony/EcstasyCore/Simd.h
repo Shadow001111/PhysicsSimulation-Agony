@@ -16,14 +16,14 @@ namespace Ecstasy
 
     inline constexpr size_t kSimdBytes = kSimdBits / 8;
 
-    // Allowed element types
+    // Allowed element types.
     template<typename T>
     concept SimdElement =
         std::is_same_v<T, int32_t>  || std::is_same_v<T, int64_t>  ||
         std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
         std::is_same_v<T, float>    || std::is_same_v<T, double>;
 
-    // Register type trait
+    // Register type trait.
     template<typename T, size_t Bits> struct SimdReg;
     template<> struct SimdReg<int32_t, 128> { using type = __m128i; };
     template<> struct SimdReg<int32_t, 256> { using type = __m256i; };
@@ -47,7 +47,7 @@ namespace Ecstasy
     template<SimdElement T, size_t Bits = kSimdBits>
     struct Simd
     {
-        static_assert(Bits == 128 || Bits == 256);
+        static_assert(Bits == 128 || Bits == 256, "Invalid bit count");
         #if !defined(SIMD_AVX2)
         static_assert(Bits < 256, "256-bit SIMD requires AVX2");
         #endif
