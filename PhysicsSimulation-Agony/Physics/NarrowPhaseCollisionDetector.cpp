@@ -97,7 +97,6 @@ namespace PS_AGONY
             for (auto& shapeBodyPairs : matrixAccess)
             {
                 shapeBodyPairs.clear();
-                shapeBodyPairs.reserve(bodyPairs.size());
             }
 
             for (const auto& pair : bodyPairs)
@@ -105,7 +104,7 @@ namespace PS_AGONY
                 BodyIndex idxA = pair.a;
                 BodyIndex idxB = pair.b;
 
-                if (bodies.invMass[idxA] == Real(0) && bodies.invMass[idxB] == Real(0))
+                if (bodies.invMass[idxA] == Real(0) && bodies.invMass[idxB] == Real(0)) [[unlikely]]
                 {
                     continue; // Skip static-static pairs.
                 }
