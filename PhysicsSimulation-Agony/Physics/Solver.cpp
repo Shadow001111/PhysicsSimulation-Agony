@@ -515,34 +515,33 @@ namespace PS_AGONY
 
             // Push staging passes.
             const bool stop = solverResources.remainingIndices.size() <= MIN_COLLISION_COUNT_FOR_THREADING;
-            if (stop)
             {
                 TRACY_SCOPE_NC("Push staging passes", Ecstasy::Color::Gold);
 
                 solverResources.workNotDone.fetch_add(workerEnableCount - 1, std::memory_order_release);
-                for (size_t stageIndex = 1; stageIndex <= workerCount; stageIndex++)
+                if (stop)
                 {
-                    auto& wData = solverResources.workerData[stageIndex - 1];
-                    auto& stagingPass = solverResources.stagingPasses[stageIndex];
-                    wData.indices.swap(stagingPass);
+                    for (size_t stageIndex = 1; stageIndex <= workerCount; stageIndex++)
+                    {
+                        auto& wData = solverResources.workerData[stageIndex - 1];
+                        auto& stagingPass = solverResources.stagingPasses[stageIndex];
+                        wData.indices.swap(stagingPass);
 
-                    wData.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
-                    wData.workWave.notify_one();
+                        wData.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
+                        wData.workWave.notify_one();
+                    }
                 }
-            }
-            else
-            {
-                TRACY_SCOPE_NC("Push staging passes", Ecstasy::Color::Gold);
-
-                solverResources.workNotDone.fetch_add(workerEnableCount - 1, std::memory_order_release);
-                for (size_t stageIndex = 1; stageIndex < workerEnableCount; stageIndex++)
+                else
                 {
-                    auto& wData = solverResources.workerData[stageIndex - 1];
-                    auto& stagingPass = solverResources.stagingPasses[stageIndex];
-                    wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
+                    for (size_t stageIndex = 1; stageIndex < workerEnableCount; stageIndex++)
+                    {
+                        auto& wData = solverResources.workerData[stageIndex - 1];
+                        auto& stagingPass = solverResources.stagingPasses[stageIndex];
+                        wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
 
-                    wData.workWave.fetch_add(1, std::memory_order_release);
-                    wData.workWave.notify_one();
+                        wData.workWave.fetch_add(1, std::memory_order_release);
+                        wData.workWave.notify_one();
+                    }
                 }
             }
 
