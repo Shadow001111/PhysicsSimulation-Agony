@@ -501,10 +501,6 @@ namespace PS_AGONY
                 break; // Exit main loop.
             }
 
-            // Resolve collisions on main thread, while wave is being executed.
-            resolveCollisionsIndirect(narrowPhaseCollisions, mainThreadPass);
-            mainThreadPass.clear();
-
             // Wait for previous wave end.
             {
                 TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
@@ -533,7 +529,6 @@ namespace PS_AGONY
                     wData.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
                     wData.workWave.notify_one();
                 }
-                break; // Exit main loop.
             }
             else
             {
@@ -550,6 +545,11 @@ namespace PS_AGONY
                     wData.workWave.notify_one();
                 }
             }
+
+            // Resolve collisions on main thread, while wave is being executed.
+            resolveCollisionsIndirect(narrowPhaseCollisions, mainThreadPass);
+            mainThreadPass.clear();
+            if (stop) break;
         }
 
         // Wait for last wave end.
