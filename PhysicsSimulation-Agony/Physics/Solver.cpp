@@ -382,39 +382,34 @@ namespace PS_AGONY
         auto workerFunc = [&](size_t workerIndex)
             {
                 auto& wData = solverResources.workerData[workerIndex];
-                try
+                
+                uint32_t previousWave = 0;
+                while (true)
                 {
-                    uint32_t previousWave = 0;
-                    while (true)
+                    // Stop.
+                    if (previousWave == ResolveCollisionsThreadedResources::STOP_WAVE) break;
+
+                    // Wait for data next wave.
+                    wData.workWave.wait(previousWave, std::memory_order_acquire);
+                    previousWave = wData.workWave.load(std::memory_order_acquire);
+
+                    // If workers will receive stop signal, they still must to execute their work and only then stop.
+
+                    // Check for stop.
+                    if (wData.indices.empty()) continue;
+
+                    // Execute.
+                    resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
+
+                    wData.indices.clear();
+
+                    auto wND = solverResources.workNotDone.fetch_sub(1, std::memory_order_release) - 1;
+                    if (wND == 0)
                     {
-                        // Stop.
-                        if (previousWave == ResolveCollisionsThreadedResources::STOP_WAVE) break;
-
-                        // Wait for data next wave.
-                        wData.workWave.wait(previousWave, std::memory_order_acquire);
-                        previousWave = wData.workWave.load(std::memory_order_acquire);
-
-                        // If workers will receive stop signal, they still must to execute their work and only then stop.
-
-                        // Check for stop.
-                        if (wData.indices.empty()) continue;
-
-                        // Execute.
-                        resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
-
-                        wData.indices.clear();
-
-                        auto wND = solverResources.workNotDone.fetch_sub(1, std::memory_order_release) - 1;
-                        if (wND == 0)
-                        {
-                            solverResources.workNotDone.notify_one();
-                        }
+                        solverResources.workNotDone.notify_one();
                     }
                 }
-                catch (const std::exception& e)
-                {
-                    throw;
-                }
+
                 wData.isDestroyed.store(true, std::memory_order_release);
                 wData.isDestroyed.notify_one();
             };
@@ -452,7 +447,7 @@ namespace PS_AGONY
                     const BodyIndex bodyIndexA = collisionData.bodyA;
                     const BodyIndex bodyIndexB = collisionData.bodyB;
 
-                    //
+                    // If body is used by previous stages, skip.
                     if (
                         solverResources.usedBodies[bodyIndexA] < currentStageIndex ||
                         solverResources.usedBodies[bodyIndexB] < currentStageIndex
@@ -462,17 +457,20 @@ namespace PS_AGONY
                         continue;
                     }
 
+                    // Mark bodies as used by current stage.
                     solverResources.usedBodies[bodyIndexA] = currentStageIndex;
                     solverResources.usedBodies[bodyIndexB] = currentStageIndex;
 
+                    // Push index to staging pass.
                     auto& stagingPass = solverResources.stagingPasses[currentStageIndex];
-
                     stagingPass.push_back(collisionIndex);
 
+                    // Remove index from remaining indices.
                     solverResources.remainingIndices[readPos] = solverResources.remainingIndices.back();
                     solverResources.remainingIndices.pop_back();
                     readSize--;
 
+                    // Advance to next stage or stop.
                     if (stagingPass.size() >= MAX_VALID_INDICES_PER_WORKER)
                     {
                         currentStageIndex++;
@@ -483,12 +481,24 @@ namespace PS_AGONY
                     }
                 }
 
+                // Count valid passes.
                 for (size_t i = 0; i <= workerCount; i++)
                 {
                     auto& stagingPass = solverResources.stagingPasses[i];
                     if (stagingPass.empty()) break;
                     workerEnableCount++;
                 }
+            }
+            if (workerEnableCount == 0) [[unlikely]]
+            {
+                for (size_t stageIndex = 1; stageIndex <= workerCount; stageIndex++)
+                {
+                    auto& wData = solverResources.workerData[stageIndex - 1];
+
+                    wData.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
+                    wData.workWave.notify_one();
+                }
+                break; // Exit main loop.
             }
 
             // Resolve collisions on main thread, while wave is being executed.
