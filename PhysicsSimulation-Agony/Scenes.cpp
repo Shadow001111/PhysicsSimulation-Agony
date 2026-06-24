@@ -11,8 +11,8 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 20.0f;
     constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 5'000;
-    constexpr int boxCount = 0;// 5'000;
+    constexpr int circleCount = 2'000;
+    constexpr int boxCount = 2'000;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -31,16 +31,20 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
 
     constexpr float spawnBoundary = boundary - 1.0f;
     {
-
         constexpr float halfThickness = thickness * 0.5f;
         constexpr float length = boundary * 2.0f + 2.0f;
+        const float angularVelocity = 0.2f;
 
         const float b = boundary + halfThickness;
 
-        simulation.createBox({ globalOffsetX - b, globalOffsetY }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
-        simulation.createBox({ globalOffsetX + b, globalOffsetY }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { thickness, length });
-        simulation.createBox({ globalOffsetX, globalOffsetY - b }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
-        simulation.createBox({ globalOffsetX, globalOffsetY + b }, { 0.0, 0.0 }, 0.0, 0.0, 0.0, { 0.0f, 0.0f }, material0Index, { length, thickness });
+        const PS_AGONY::Vec2 p1{ globalOffsetX - b, globalOffsetY };
+        const PS_AGONY::Vec2 p2{ globalOffsetX + b, globalOffsetY };
+        const PS_AGONY::Vec2 p3{ globalOffsetX, globalOffsetY - b };
+        const PS_AGONY::Vec2 p4{ globalOffsetX, globalOffsetY + b };
+        simulation.createBox(p1, { 0.0, 0.0 }, 0.0, angularVelocity, 0.0, -p1, material0Index, { thickness, length });
+        simulation.createBox(p2, { 0.0, 0.0 }, 0.0, angularVelocity, 0.0, -p2, material0Index, { thickness, length });
+        simulation.createBox(p3, { 0.0, 0.0 }, 0.0, angularVelocity, 0.0, -p3, material0Index, { length, thickness });
+        simulation.createBox(p4, { 0.0, 0.0 }, 0.0, angularVelocity, 0.0, -p4, material0Index, { length, thickness });
     }
     for (int i = 0; i < circleCount; i++)
     {
@@ -69,9 +73,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
 
     {
         constexpr float radius = 4.0f;
-        simulation.createCircle(
-            { globalOffsetX, globalOffsetY + boundary + thickness + radius + 0.5f },
-            { 0.0f, 0.0f }, 0.0f, 0.0f, 50.0f, { 0.0f, 0.0f }, material1Index, 4.0f, 1);
+        simulation.createCircle({ 0.0f, 0.0f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 100.0f, { 0.0f, 0.0f }, material1Index, radius, 1);
     }
 }
 
