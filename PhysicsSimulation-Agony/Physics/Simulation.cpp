@@ -6,8 +6,6 @@
 #include "EcstasyCore/Portablity.h"
 
 #include <iostream>
-#include <algorithm>
-#include <numeric>
 
 namespace PS_AGONY
 {
@@ -318,7 +316,7 @@ namespace PS_AGONY
     {
         if (mainBodyHolder.heldBody.has_value()) return;
 
-        constexpr Real MAX_GRAB_DISTANCE = 2.0;
+        constexpr Real MAX_GRAB_DISTANCE = 4.0;
         constexpr Real MAX_GRAB_DISTANCE_SQ = MAX_GRAB_DISTANCE * MAX_GRAB_DISTANCE;
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();

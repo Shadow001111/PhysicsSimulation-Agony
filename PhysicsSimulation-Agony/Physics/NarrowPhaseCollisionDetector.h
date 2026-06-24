@@ -3,8 +3,6 @@
 #include "BodySoAViewer.h"
 #include "SymmetricMatrix.h"
 
-#include <functional>
-
 namespace PS_AGONY
 {
 	struct BodyCollisionData
@@ -33,31 +31,13 @@ namespace PS_AGONY
 
 	class NarrowPhaseCollisionDetector
 	{
-		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(size_t, size_t, std::vector<BodyCollisionData>&);
+		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
+			const std::vector<BodyPair>&, std::vector<BodyCollisionData>&
+			);
 
-		struct alignas(64) CacheAlignedCollisionDataVector
-		{
-			std::vector<BodyCollisionData> vector;
-		};
-
-		struct TypeWork
-		{
-			size_t index;
-			size_t pairCount;
-			size_t chunkCount;
-			size_t chunkSize;
-			CollisionFunc func;
-		};
-		
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
 		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;
-
-		SymmetricMatrix<std::vector<BodyPair>, BODY_TYPE_COUNT> bodyPairVectorMatrix;
-
-		std::vector<TypeWork> workItems;
-		SymmetricMatrix<std::vector<CacheAlignedCollisionDataVector>, BODY_TYPE_COUNT> chunkedResults;
-		std::vector<std::function<std::vector<BodyCollisionData>&()>> collisionDataTasks;
 
 		std::vector<BodyCollisionData> allCollisionData;
 
@@ -85,14 +65,16 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 	private:
-		void findCollisionsSingleThreaded();
-		void findCollisionsMultiThreaded();
+		void findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs);
+		void findCollisionsMultiThreaded(const std::vector<BodyPair>& bodyPairs);
 
-		void collisionCircleCircle(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCircleBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCirclePolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxBox(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionPolygonPolygon(size_t startIndex, size_t endIndex, std::vector<BodyCollisionData>& outCollisionData);
+		void processPairs(const std::vector<BodyPair>& pairs, size_t start, size_t end, struct ThreadData& td);
+
+		void collisionCircleCircle(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCircleBox(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCirclePolygon(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxBox(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxPolygon(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionPolygonPolygon(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 	};
 }
