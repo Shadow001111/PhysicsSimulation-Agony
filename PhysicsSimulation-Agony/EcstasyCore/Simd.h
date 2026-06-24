@@ -19,9 +19,9 @@ namespace Ecstasy
     // Allowed element types
     template<typename T>
     concept SimdElement =
-        std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t> ||
+        std::is_same_v<T, int32_t>  || std::is_same_v<T, int64_t>  ||
         std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
-        std::is_same_v<T, float> || std::is_same_v<T, double>;
+        std::is_same_v<T, float>    || std::is_same_v<T, double>;
 
     // Register type trait
     template<typename T, size_t Bits> struct SimdReg;
@@ -52,45 +52,59 @@ namespace Ecstasy
         static_assert(Bits < 256, "256-bit SIMD requires AVX2");
         #endif
 
-        using value_type = T;
-        using reg_type = typename SimdReg<T, Bits>::type;
+        using ValueType = T;
+        using RegType = typename SimdReg<T, Bits>::type;
 
         static constexpr size_t bytes = Bits / 8;
         static constexpr size_t lanes = bytes / sizeof(T);
 
-        reg_type reg;
+        static constexpr bool IS_INT32 = std::is_same_v<T, int32_t>;
+        static constexpr bool IS_INT64 = std::is_same_v<T, int64_t>;
+        static constexpr bool IS_UINT32 = std::is_same_v<T, uint32_t>;
+        static constexpr bool IS_UINT64 = std::is_same_v<T, uint64_t>;
+        static constexpr bool IS_FLOAT = std::is_same_v<T, float>;
+        static constexpr bool IS_DOUBLE = std::is_same_v<T, double>;
 
-        // Construction
+        static constexpr bool IS_INTEGER = std::is_integral_v<T>;
+        static constexpr bool IS_UNSIGNED_INTEGER = std::is_unsigned_v<T>;
+        static constexpr bool IS_32BIT_INTEGER = IS_INT32 || IS_UINT32;
+        static constexpr bool IS_64BIT_INTEGER = IS_INT64 || IS_UINT64;
 
-        [[nodiscard]] static Simd fill_lanes_with_value(const T& val) noexcept
+        static constexpr bool IS_REAL = IS_FLOAT || IS_DOUBLE;
+
+        RegType reg;
+
+        // Construction.
+
+        [[nodiscard]] static Simd fillLanesWith(const T& val) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t>)
+            if constexpr (IS_INT32)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set1_epi32(static_cast<int32_t>(val));
                 else                       s.reg = _mm_set1_epi32(static_cast<int32_t>(val));
             }
-            else if constexpr (std::is_same_v<T, int64_t>)
+            else if constexpr (IS_INT64)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set1_epi64x(static_cast<int64_t>(val));
                 else                       s.reg = _mm_set1_epi64x(static_cast<int64_t>(val));
             }
-            else if constexpr (std::is_same_v<T, uint32_t>)
+            else if constexpr (IS_UINT32)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set1_epi32(static_cast<int32_t>(val));
                 else                       s.reg = _mm_set1_epi32(static_cast<int32_t>(val));
             }
-            else if constexpr (std::is_same_v<T, uint64_t>)
+            else if constexpr (IS_UINT64)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set1_epi64x(static_cast<int64_t>(val));
                 else                       s.reg = _mm_set1_epi64x(static_cast<int64_t>(val));
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set1_ps(static_cast<float>(val));
                 else                       s.reg = _mm_set1_ps(static_cast<float>(val));
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set1_pd(static_cast<double>(val));
                 else                       s.reg = _mm_set1_pd(static_cast<double>(val));
@@ -98,20 +112,20 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd fill_lanes_with_zero() noexcept
+        [[nodiscard]] static Simd fillLanesWithZero() noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>) // Integers only
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_setzero_si256();
                 else                       s.reg = _mm_setzero_si128();
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_setzero_ps();
                 else                       s.reg = _mm_setzero_ps();
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_setzero_pd();
                 else                       s.reg = _mm_setzero_pd();
@@ -119,87 +133,76 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd fill_lanes_with_full_value() noexcept
+        [[nodiscard]] static Simd fillLanesWithFullValue() noexcept
         {
-            if constexpr (std::is_integral_v<T>)
-                return fill_lanes_with_value(static_cast<T>(-1));
-            else if constexpr (std::is_same_v<T, float>)
-                return Simd<int32_t, Bits>::fill_lanes_with_value(-1).as_float();
-            else
-                return Simd<int64_t, Bits>::fill_lanes_with_value(-1).as_double();
+            if constexpr (IS_INTEGER)
+            {
+                return fillLanesWith(static_cast<T>(-1));
+            }
+            else if constexpr (IS_FLOAT)
+            {
+                return Simd<int32_t, Bits>::fillLanesWith(static_cast<int32_t>(-1)).template as<Simd<float, Bits>>();
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                return Simd<int64_t, Bits>::fillLanesWith(static_cast<int64_t>(-1)).template as<Simd<double, Bits>>();
+            }
         }
 
         Simd() = default;
 
-        Simd(const T& val) noexcept
+        explicit Simd(const T& val) noexcept
         {
-            *this = fill_lanes_with_value(val);
+            *this = fillLanesWith(val);
         }
 
-        // Loads in reverse order (first argument becomes highest lane)
+        // Loads in reverse order (first argument becomes highest lane).
         template<typename... Args>
         [[nodiscard]] static Simd set(Args... vals) noexcept
-            requires std::is_integral_v<T>
         {
             static_assert(sizeof...(vals) == lanes);
             static_assert((std::is_convertible_v<Args, T> && ...));
 
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set_epi32(static_cast<int32_t>(vals)...);
                 else                       s.reg = _mm_set_epi32(static_cast<int32_t>(vals)...);
             }
-            else // int64_t or uint64_t
+            else if constexpr (IS_64BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_set_epi64x(static_cast<int64_t>(vals)...);
                 else                       s.reg = _mm_set_epi64x(static_cast<int64_t>(vals)...);
             }
+            else if constexpr (IS_FLOAT)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_set_ps(static_cast<float>(vals)...);
+                else                       s.reg = _mm_set_ps(static_cast<float>(vals)...);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_set_pd(static_cast<double>(vals)...);
+                else                       s.reg = _mm_set_pd(static_cast<double>(vals)...);
+            }
             return s;
         }
 
-        template<typename... Args>
-        [[nodiscard]] static Simd set(Args... vals) noexcept
-            requires (std::is_same_v<T, float>)
-        {
-            static_assert(sizeof...(vals) == lanes);
-            static_assert((std::is_convertible_v<Args, T> && ...));
-
-            Simd s;
-            if constexpr (Bits == 256) s.reg = _mm256_set_ps(static_cast<T>(vals)...);
-            else                       s.reg = _mm_set_ps(static_cast<T>(vals)...);
-            return s;
-        }
-
-        template<typename... Args>
-        [[nodiscard]] static Simd set(Args... vals) noexcept
-            requires (std::is_same_v<T, double>)
-        {
-            static_assert(sizeof...(vals) == lanes);
-            static_assert((std::is_convertible_v<Args, T> && ...));
-
-            Simd s;
-            if constexpr (Bits == 256) s.reg = _mm256_set_pd(static_cast<T>(vals)...);
-            else                       s.reg = _mm_set_pd(static_cast<T>(vals)...);
-            return s;
-        }
-
-        // Load
+        // Load.
 
         [[nodiscard]] static Simd load(const T* ptr) noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_load_si256(reinterpret_cast<const __m256i*>(ptr));
                 else                       s.reg = _mm_load_si128(reinterpret_cast<const __m128i*>(ptr));
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_load_ps(ptr);
                 else                       s.reg = _mm_load_ps(ptr);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_load_pd(ptr);
                 else                       s.reg = _mm_load_pd(ptr);
@@ -210,17 +213,17 @@ namespace Ecstasy
         [[nodiscard]] static Simd loadu(const T* ptr) noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(ptr));
                 else                       s.reg = _mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr));
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_loadu_ps(ptr);
                 else                       s.reg = _mm_loadu_ps(ptr);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_loadu_pd(ptr);
                 else                       s.reg = _mm_loadu_pd(ptr);
@@ -228,21 +231,21 @@ namespace Ecstasy
             return s;
         }
 
-        // Store
+        // Store.
 
         void store(T* ptr) const noexcept
         {
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) _mm256_store_si256(reinterpret_cast<__m256i*>(ptr), reg);
                 else                       _mm_store_si128(reinterpret_cast<__m128i*>(ptr), reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) _mm256_store_ps(ptr, reg);
                 else                       _mm_store_ps(ptr, reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) _mm256_store_pd(ptr, reg);
                 else                       _mm_store_pd(ptr, reg);
@@ -251,52 +254,52 @@ namespace Ecstasy
 
         void storeu(T* ptr) const noexcept
         {
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) _mm256_storeu_si256(reinterpret_cast<__m256i*>(ptr), reg);
                 else                       _mm_storeu_si128(reinterpret_cast<__m128i*>(ptr), reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) _mm256_storeu_ps(ptr, reg);
                 else                       _mm_storeu_ps(ptr, reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) _mm256_storeu_pd(ptr, reg);
                 else                       _mm_storeu_pd(ptr, reg);
             }
         }
 
-        void store_lower_int_64(T* ptr) const noexcept
-            requires (std::is_same_v<T, int32_t>&& Bits == 128)
+        void storeLowerInt64(T* ptr) const noexcept
+            requires (IS_INT32 && Bits == 128)
         {
             _mm_storel_epi64(reinterpret_cast<__m128i*>(ptr), reg);
         }
 
-        // Get
-        int32_t get_least_significant_int_32() const noexcept
-            requires (std::is_same_v<T, int32_t>&& Bits == 128)
+        // Get.
+        int32_t getLeastSignificantInt32() const noexcept
+            requires (IS_INT32 && Bits == 128)
         {
             return _mm_cvtsi128_si32(reg);
         }
 
-        // Bitwise operations
+        // Bitwise operations.
 
-        [[nodiscard]] static Simd bitwise_and(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd bitwiseAnd(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_and_si256(a.reg, b.reg);
                 else                       s.reg = _mm_and_si128(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_and_ps(a.reg, b.reg);
                 else                       s.reg = _mm_and_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_and_pd(a.reg, b.reg);
                 else                       s.reg = _mm_and_pd(a.reg, b.reg);
@@ -304,20 +307,20 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd bitwise_or(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd bitwiseOr(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_or_si256(a.reg, b.reg);
                 else                       s.reg = _mm_or_si128(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_or_ps(a.reg, b.reg);
                 else                       s.reg = _mm_or_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_or_pd(a.reg, b.reg);
                 else                       s.reg = _mm_or_pd(a.reg, b.reg);
@@ -325,20 +328,20 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd bitwise_xor(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd bitwiseXor(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_xor_si256(a.reg, b.reg);
                 else                       s.reg = _mm_xor_si128(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_xor_ps(a.reg, b.reg);
                 else                       s.reg = _mm_xor_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_xor_pd(a.reg, b.reg);
                 else                       s.reg = _mm_xor_pd(a.reg, b.reg);
@@ -346,26 +349,26 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd bitwise_not(const Simd& a) noexcept
+        [[nodiscard]] static Simd bitwiseNot(const Simd& a) noexcept
         {
-            return bitwise_xor(a, fill_lanes_with_full_value());
+            return bitwiseXor(a, fillLanesWithFullValue());
         }
 
         // andnot(a, b) = (~a) & b
-        [[nodiscard]] static Simd bitwise_andnot(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd bitwiseAndnot(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_integral_v<T>)
+            if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_andnot_si256(a.reg, b.reg);
                 else                       s.reg = _mm_andnot_si128(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_andnot_ps(a.reg, b.reg);
                 else                       s.reg = _mm_andnot_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_andnot_pd(a.reg, b.reg);
                 else                       s.reg = _mm_andnot_pd(a.reg, b.reg);
@@ -373,16 +376,16 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd logical_shift_left(const Simd& a, int32_t count) noexcept
-            requires (std::is_integral_v<T>)
+        [[nodiscard]] static Simd logicalShiftLeft(const Simd& a, int count) noexcept
+            requires IS_INTEGER
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_slli_epi32(a.reg, count);
                 else                       s.reg = _mm_slli_epi32(a.reg, count);
             }
-            else // int64_t or uint64_t
+            else if constexpr (IS_64BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_slli_epi64(a.reg, count);
                 else                       s.reg = _mm_slli_epi64(a.reg, count);
@@ -390,16 +393,16 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd logical_shift_right(const Simd& a, int32_t count) noexcept
-            requires (std::is_integral_v<T>)
+        [[nodiscard]] static Simd logicalShiftRight(const Simd& a, int count) noexcept
+            requires IS_INTEGER
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_srli_epi32(a.reg, count);
                 else                       s.reg = _mm_srli_epi32(a.reg, count);
             }
-            else // int64_t
+            else if constexpr (IS_64BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_srli_epi64(a.reg, count);
                 else                       s.reg = _mm_srli_epi64(a.reg, count);
@@ -407,85 +410,85 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd arithmetic_shift_right(const Simd& a, int32_t count) noexcept
-            requires (std::is_integral_v<T>)
+        [[nodiscard]] static Simd arithmeticShiftRight(const Simd& a, int count) noexcept
+            requires IS_INTEGER
         {
-            if constexpr (std::is_unsigned_v<T>)
+            if constexpr (IS_UNSIGNED_INTEGER)
             {
-                // For unsigned, arithmetic right shift is same as logical shift
-                return logical_shift_right(a, count);
+                // For unsigned, arithmetic right shift is same as logical shift.
+                return logicalShiftRight(a, count);
             }
-            else // Signed
+            else // Signed.
             {
-                if constexpr (std::is_same_v<T, int32_t>)
+                if constexpr (IS_INT32)
                 {
                     Simd s;
                     if constexpr (Bits == 256) s.reg = _mm256_srai_epi32(a.reg, count);
                     else                       s.reg = _mm_srai_epi32(a.reg, count);
                     return s;
                 }
-                else // int64_t
+                else // int64_t.
                 {
-                    // No native 64-bit arithmetic shift; emulate via sign + logical shift
+                    // No native 64-bit arithmetic shift; emulate via sign + logical shift. (Appears only in avx512).
                     if (count == 0) return a;
-                    Simd sign = logical_shift_right(a, 63); // All ones if negative, else 0
-                    Simd logical = logical_shift_right(a, count);
-                    Simd high_mask = logical_shift_left(sign, 64 - count);
-                    return bitwise_or(logical, high_mask);
+                    Simd sign = logicalShiftRight(a, 63);
+                    Simd logical = logicalShiftRight(a, count);
+                    Simd high_mask = logicalShiftLeft(sign, 64 - count);
+                    return bitwiseOr(logical, high_mask);
                 }
             }
         }
 
-        [[nodiscard]] Simd operator&(const Simd& other) const noexcept { return bitwise_and(*this, other); }
-        [[nodiscard]] Simd operator|(const Simd& other) const noexcept { return bitwise_or(*this, other); }
-        [[nodiscard]] Simd operator^(const Simd& other) const noexcept { return bitwise_xor(*this, other); }
-        [[nodiscard]] Simd operator~()                  const noexcept { return bitwise_not(*this); }
-        [[nodiscard]] Simd operator<<(int32_t count) const noexcept
-            requires (std::is_integral_v<T>)
+        [[nodiscard]] Simd operator&(const Simd& other) const noexcept { return bitwiseAnd(*this, other); }
+        [[nodiscard]] Simd operator|(const Simd& other) const noexcept { return bitwiseOr(*this, other); }
+        [[nodiscard]] Simd operator^(const Simd& other) const noexcept { return bitwiseXor(*this, other); }
+        [[nodiscard]] Simd operator~()                  const noexcept { return bitwiseNot(*this); }
+        [[nodiscard]] Simd operator<<(int count) const noexcept
+            requires IS_INTEGER
         {
-            return logical_shift_left(*this, count);
+            return logicalShiftLeft(*this, count);
         }
-        [[nodiscard]] Simd operator>>(int32_t count) const noexcept
-            requires (std::is_integral_v<T>)
+        [[nodiscard]] Simd operator>>(int count) const noexcept
+            requires IS_INTEGER
         {
-            return logical_shift_right(*this, count);
+            return logicalShiftRight(*this, count);
         }
 
-        Simd& operator&=(const Simd& other) noexcept { *this = bitwise_and(*this, other); return *this; }
-        Simd& operator|=(const Simd& other) noexcept { *this = bitwise_or(*this, other);  return *this; }
-        Simd& operator^=(const Simd& other) noexcept { *this = bitwise_xor(*this, other); return *this; }
-        Simd& operator<<=(int32_t count) noexcept
-            requires (std::is_integral_v<T>)
+        Simd& operator&=(const Simd& other) noexcept { *this = bitwiseAnd(*this, other); return *this; }
+        Simd& operator|=(const Simd& other) noexcept { *this = bitwiseOr(*this, other);  return *this; }
+        Simd& operator^=(const Simd& other) noexcept { *this = bitwiseXor(*this, other); return *this; }
+        Simd& operator<<=(int count) noexcept
+            requires IS_INTEGER
         {
-            *this = logical_shift_left(*this, count);  return *this;
+            *this = logicalShiftLeft(*this, count);  return *this;
         }
         Simd& operator>>=(int32_t count) noexcept
-            requires (std::is_integral_v<T>)
+            requires IS_INTEGER
         {
-            *this = logical_shift_right(*this, count); return *this;
+            *this = logicalShiftRight(*this, count); return *this;
         }
 
-        // Arithmetic
+        // Arithmetic.
 
         [[nodiscard]] static Simd add(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_add_epi32(a.reg, b.reg);
                 else                       s.reg = _mm_add_epi32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>)
+            else if constexpr (IS_64BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_add_epi64(a.reg, b.reg);
                 else                       s.reg = _mm_add_epi64(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_add_ps(a.reg, b.reg);
                 else                       s.reg = _mm_add_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_add_pd(a.reg, b.reg);
                 else                       s.reg = _mm_add_pd(a.reg, b.reg);
@@ -496,22 +499,22 @@ namespace Ecstasy
         [[nodiscard]] static Simd sub(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_sub_epi32(a.reg, b.reg);
                 else                       s.reg = _mm_sub_epi32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>)
+            else if constexpr (IS_64BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_sub_epi64(a.reg, b.reg);
                 else                       s.reg = _mm_sub_epi64(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_sub_ps(a.reg, b.reg);
                 else                       s.reg = _mm_sub_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_sub_pd(a.reg, b.reg);
                 else                       s.reg = _mm_sub_pd(a.reg, b.reg);
@@ -520,21 +523,20 @@ namespace Ecstasy
         }
 
         [[nodiscard]] static Simd mul(const Simd& a, const Simd& b) noexcept
-            requires (!std::is_same_v<T, int64_t> && !std::is_same_v<T, uint64_t>)   // no 64-bit integer multiply in SSE/AVX2
+            requires (!IS_64BIT_INTEGER) // No 64-bit integer multiply in AVX2. Appears only in AVX512.
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
-                // mullo: low 32 Bits of each 32x32->64 product (wrapping)
                 if constexpr (Bits == 256) s.reg = _mm256_mullo_epi32(a.reg, b.reg);
                 else                       s.reg = _mm_mullo_epi32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_mul_ps(a.reg, b.reg);
                 else                       s.reg = _mm_mul_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_mul_pd(a.reg, b.reg);
                 else                       s.reg = _mm_mul_pd(a.reg, b.reg);
@@ -543,15 +545,15 @@ namespace Ecstasy
         }
 
         [[nodiscard]] static Simd div(const Simd& a, const Simd& b) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_div_ps(a.reg, b.reg);
                 else                       s.reg = _mm_div_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_div_pd(a.reg, b.reg);
                 else                       s.reg = _mm_div_pd(a.reg, b.reg);
@@ -560,16 +562,16 @@ namespace Ecstasy
         }
 
         // a * b + c
-        [[nodiscard]] static Simd mul_add(const Simd& a, const Simd& b, const Simd& c) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static Simd mulAdd(const Simd& a, const Simd& b, const Simd& c) noexcept
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fmadd_ps(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fmadd_ps(a.reg, b.reg, c.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fmadd_pd(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fmadd_pd(a.reg, b.reg, c.reg);
@@ -578,16 +580,16 @@ namespace Ecstasy
         }
 
         // a * b - c
-        [[nodiscard]] static Simd mul_sub(const Simd& a, const Simd& b, const Simd& c) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static Simd mulSub(const Simd& a, const Simd& b, const Simd& c) noexcept
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fmsub_ps(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fmsub_ps(a.reg, b.reg, c.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fmsub_pd(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fmsub_pd(a.reg, b.reg, c.reg);
@@ -596,16 +598,16 @@ namespace Ecstasy
         }
 
         // -(a * b) + c
-        [[nodiscard]] static Simd neg_mul_add(const Simd& a, const Simd& b, const Simd& c) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static Simd negMulAdd(const Simd& a, const Simd& b, const Simd& c) noexcept
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fnmadd_ps(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fnmadd_ps(a.reg, b.reg, c.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fnmadd_pd(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fnmadd_pd(a.reg, b.reg, c.reg);
@@ -614,16 +616,16 @@ namespace Ecstasy
         }
 
         // -(a * b) - c
-        [[nodiscard]] static Simd neg_mul_sub(const Simd& a, const Simd& b, const Simd& c) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static Simd negMulSub(const Simd& a, const Simd& b, const Simd& c) noexcept
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fnmsub_ps(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fnmsub_ps(a.reg, b.reg, c.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_fnmsub_pd(a.reg, b.reg, c.reg);
                 else                       s.reg = _mm_fnmsub_pd(a.reg, b.reg, c.reg);
@@ -633,30 +635,32 @@ namespace Ecstasy
 
         [[nodiscard]] static Simd negate(const Simd& a) noexcept
         {
-            if constexpr (std::is_integral_v<T>)
-                return sub(fill_lanes_with_zero(), a);
-            else if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_INTEGER)
             {
-                const Simd sign_mask = fill_lanes_with_value(-0.0);
-                return bitwise_xor(a, sign_mask);
+                return sub(fillLanesWithZero(), a);
             }
-            else
+            else if constexpr (IS_FLOAT)
             {
-                const Simd sign_mask = fill_lanes_with_value(-0.0);
-                return bitwise_xor(a, sign_mask);
+                const Simd signMask = fillLanesWith(-0.0);
+                return bitwiseXor(a, signMask);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                const Simd signMask = fillLanesWith(-0.0);
+                return bitwiseXor(a, signMask);
             }
         }
 
         [[nodiscard]] static Simd sqrt(const Simd& a) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_sqrt_ps(a.reg);
                 else                       s.reg = _mm_sqrt_ps(a.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_sqrt_pd(a.reg);
                 else                       s.reg = _mm_sqrt_pd(a.reg);
@@ -664,16 +668,16 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd get_abs_mask() noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static Simd getAbsMask() noexcept
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF));
                 else                       s.reg = _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF));
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(_mm256_set1_epi64x(0x7FFFFFFFFFFFFFFFll));
                 else                       s.reg = _mm_castsi128_pd(_mm_set1_epi64x(0x7FFFFFFFFFFFFFFFll));
@@ -685,7 +689,7 @@ namespace Ecstasy
         [[nodiscard]] Simd operator-(const Simd& other) const noexcept { return sub(*this, other); }
         [[nodiscard]] Simd operator*(const Simd& other) const noexcept { return mul(*this, other); }
         [[nodiscard]] Simd operator/(const Simd& other) const noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             return div(*this, other);
         }
@@ -695,24 +699,24 @@ namespace Ecstasy
         Simd& operator-=(const Simd& other) noexcept { *this = sub(*this, other); return *this; }
         Simd& operator*=(const Simd& other) noexcept { *this = mul(*this, other); return *this; }
         Simd& operator/=(const Simd& other) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             *this = div(*this, other); return *this;
         }
 
-        // Rounding
+        // Rounding.
 
         [[nodiscard]] static Simd round(const Simd& a) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             Simd s;
-            constexpr int kNearest = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC; // round to nearest, but don't raise exceptions on invalid input (e.g. NaN)
-            if constexpr (std::is_same_v<T, float>)
+            constexpr int kNearest = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC; // Round to nearest, but don't raise exceptions on invalid input (e.g. NaN).
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_round_ps(a.reg, kNearest);
                 else                       s.reg = _mm_round_ps(a.reg, kNearest);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_round_pd(a.reg, kNearest);
                 else                       s.reg = _mm_round_pd(a.reg, kNearest);
@@ -721,15 +725,15 @@ namespace Ecstasy
         }
 
         [[nodiscard]] static Simd floor(const Simd& a) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_floor_ps(a.reg);
                 else                       s.reg = _mm_floor_ps(a.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_floor_pd(a.reg);
                 else                       s.reg = _mm_floor_pd(a.reg);
@@ -738,15 +742,15 @@ namespace Ecstasy
         }
 
         [[nodiscard]] static Simd ceil(const Simd& a) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_ceil_ps(a.reg);
                 else                       s.reg = _mm_ceil_ps(a.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_ceil_pd(a.reg);
                 else                       s.reg = _mm_ceil_pd(a.reg);
@@ -754,27 +758,27 @@ namespace Ecstasy
             return s;
         }
 
-        // Comparisons - return a lane mask (0xFFFFFFFF... or 0x0 per lane)
+        // Comparisons - return a lane mask (0xFFFFFFFF... or 0x0 per lane).
 
-        [[nodiscard]] static Simd compare_equal(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd compareEqual(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t>)
+            if constexpr (IS_32BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmpeq_epi32(a.reg, b.reg);
                 else                       s.reg = _mm_cmpeq_epi32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t>)
+            else if constexpr (IS_64BIT_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmpeq_epi64(a.reg, b.reg);
                 else                       s.reg = _mm_cmpeq_epi64(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_EQ_OQ);
                 else                       s.reg = _mm_cmpeq_ps(a.reg, b.reg);
             }
-            else
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_EQ_OQ);
                 else                       s.reg = _mm_cmpeq_pd(a.reg, b.reg);
@@ -782,45 +786,44 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd compare_not_equal(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd compareNotEqual(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_NEQ_OQ);
                 else                       s.reg = _mm_cmpneq_ps(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_NEQ_OQ);
                 else                       s.reg = _mm_cmpneq_pd(a.reg, b.reg);
             }
-            else // Integers
+            else if constexpr (IS_INTEGER)
             {
-                Simd eq = compare_equal(a, b);
-                Simd ones = fill_lanes_with_full_value();
-                if constexpr (Bits == 256) s.reg = _mm256_xor_si256(eq.reg, ones.reg);
-                else                       s.reg = _mm_xor_si128(eq.reg, ones.reg);
+                Simd eq = compareEqual(a, b);
+                Simd full = fillLanesWithFullValue();
+                s = bitwiseXor(eq, full);
             }
             return s;
         }
 
-        [[nodiscard]] static Simd compare_less(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd compareLess(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
 
-            if constexpr (std::is_unsigned_v<T>)
+            if constexpr (IS_UNSIGNED_INTEGER)
             {
-                // a < b  ->  (a ^ signBit) < (b ^ signBit) as signed
+                // a < b  ->  (a ^ signBit) < (b ^ signBit) as signed.
                 constexpr T signBit = (T(1) << (sizeof(T) * 8 - 1));
-                Simd a_xor = Simd::bitwise_xor(a, Simd(signBit));
-                Simd b_xor = Simd::bitwise_xor(b, Simd(signBit));
-                if constexpr (std::is_same_v<T, uint32_t>)
+                Simd a_xor = Simd::bitwiseXor(a, Simd(signBit));
+                Simd b_xor = Simd::bitwiseXor(b, Simd(signBit));
+                if constexpr (IS_UINT32)
                 {
                     if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi32(b_xor.reg, a_xor.reg);
                     else                       s.reg = _mm_cmpgt_epi32(b_xor.reg, a_xor.reg);
                 }
-                else // uint64_t
+                else if constexpr (IS_UINT64)
                 {
                     if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi64(b_xor.reg, a_xor.reg);
                     else                       s.reg = _mm_cmpgt_epi64(b_xor.reg, a_xor.reg);
@@ -828,22 +831,22 @@ namespace Ecstasy
             }
             else
             {
-                if constexpr (std::is_same_v<T, int32_t>)
+                if constexpr (IS_INT32)
                 {
                     if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi32(b.reg, a.reg);
                     else                       s.reg = _mm_cmpgt_epi32(b.reg, a.reg);
                 }
-                else if constexpr (std::is_same_v<T, int64_t>)
+                else if constexpr (IS_INT64)
                 {
                     if constexpr (Bits == 256) s.reg = _mm256_cmpgt_epi64(b.reg, a.reg);
                     else                       s.reg = _mm_cmpgt_epi64(b.reg, a.reg);
                 }
-                else if constexpr (std::is_same_v<T, float>)
+                else if constexpr (IS_FLOAT)
                 {
                     if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_LT_OQ);
                     else                       s.reg = _mm_cmplt_ps(a.reg, b.reg);
                 }
-                else
+                else if constexpr (IS_DOUBLE)
                 {
                     if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_LT_OQ);
                     else                       s.reg = _mm_cmplt_pd(a.reg, b.reg);
@@ -852,99 +855,93 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static Simd compare_greater(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd compareGreater(const Simd& a, const Simd& b) noexcept
         {
-            return compare_less(b, a);
+            return compareLess(b, a);
         }
 
-        [[nodiscard]] static Simd compare_less_equal(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd compareLessEqual(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_LE_OQ);
                 else                       s.reg = _mm_cmple_ps(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_LE_OQ);
                 else                       s.reg = _mm_cmple_pd(a.reg, b.reg);
             }
-            else // Integers
+            else if constexpr (IS_INTEGER)
             {
-                Simd gt = compare_greater(a, b);
-                Simd ones = fill_lanes_with_full_value();
-                if constexpr (Bits == 256) s.reg = _mm256_xor_si256(gt.reg, ones.reg);
-                else                       s.reg = _mm_xor_si128(gt.reg, ones.reg);
+                Simd gt = compareGreater(a, b);
+                Simd full = fillLanesWithFullValue();
+                s = bitwiseXor(gt, full);
             }
             return s;
         }
 
-        [[nodiscard]] static Simd compare_greater_equal(const Simd& a, const Simd& b) noexcept
+        [[nodiscard]] static Simd compareGreaterEqual(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_ps(a.reg, b.reg, _CMP_GE_OQ);
                 else                       s.reg = _mm_cmpge_ps(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_cmp_pd(a.reg, b.reg, _CMP_GE_OQ);
                 else                       s.reg = _mm_cmpge_pd(a.reg, b.reg);
             }
-            else // integers (int32_t, int64_t)
+            else if constexpr (IS_INTEGER)
             {
-                Simd lt = compare_less(a, b);
-                Simd ones = fill_lanes_with_full_value();
-                if constexpr (Bits == 256) s.reg = _mm256_xor_si256(lt.reg, ones.reg);
-                else                       s.reg = _mm_xor_si128(lt.reg, ones.reg);
+                Simd lt = compareLess(a, b);
+                Simd full = fillLanesWithFullValue();
+                s = bitwiseXor(lt, full);
             }
             return s;
         }
 
-        [[nodiscard]] Simd operator==(const Simd& other) const noexcept { return compare_equal(*this, other); }
-        [[nodiscard]] Simd operator!=(const Simd& other) const noexcept { return compare_not_equal(*this, other); }
-        [[nodiscard]] Simd operator< (const Simd& other) const noexcept { return compare_less(*this, other); }
-        [[nodiscard]] Simd operator<=(const Simd& other) const noexcept { return compare_less_equal(*this, other); }
-        [[nodiscard]] Simd operator> (const Simd& other) const noexcept { return compare_greater(*this, other); }
-        [[nodiscard]] Simd operator>=(const Simd& other) const noexcept { return compare_greater_equal(*this, other); }
+        [[nodiscard]] Simd operator==(const Simd& other) const noexcept { return compareEqual(*this, other); }
+        [[nodiscard]] Simd operator!=(const Simd& other) const noexcept { return compareNotEqual(*this, other); }
+        [[nodiscard]] Simd operator< (const Simd& other) const noexcept { return compareLess(*this, other); }
+        [[nodiscard]] Simd operator<=(const Simd& other) const noexcept { return compareLessEqual(*this, other); }
+        [[nodiscard]] Simd operator> (const Simd& other) const noexcept { return compareGreater(*this, other); }
+        [[nodiscard]] Simd operator>=(const Simd& other) const noexcept { return compareGreaterEqual(*this, other); }
 
-        // Movemask
+        // Movemask. Returns most significant bits, packed in integer.
         [[nodiscard]] int movemask() const noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires IS_REAL
         {
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
-                if constexpr (Bits == 256)
-                    return _mm256_movemask_ps(reg);
-                else
-                    return _mm_movemask_ps(reg);
+                if constexpr (Bits == 256) return _mm256_movemask_ps(reg);
+                else                       return _mm_movemask_ps(reg);
             }
-            else
+            if constexpr (IS_DOUBLE)
             {
-                if constexpr (Bits == 256)
-                    return _mm256_movemask_pd(reg);
-                else
-                    return _mm_movemask_pd(reg);
+                if constexpr (Bits == 256) return _mm256_movemask_pd(reg);
+                else                       return _mm_movemask_pd(reg);
             }
         }
 
-        // Blend
+        // Blend. Value = mask ? b : a.
         [[nodiscard]] static Simd blendv(const Simd& a, const Simd& b, const Simd& mask) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, float>)
+            if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_blendv_ps(a.reg, b.reg, mask.reg);
                 else                       s.reg = _mm_blendv_ps(a.reg, b.reg, mask.reg);
             }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_blendv_pd(a.reg, b.reg, mask.reg);
                 else                       s.reg = _mm_blendv_pd(a.reg, b.reg, mask.reg);
             }
-            else // Integers
+            else if constexpr (IS_INTEGER)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_blendv_epi8(a.reg, b.reg, mask.reg);
                 else                       s.reg = _mm_blendv_epi8(a.reg, b.reg, mask.reg);
@@ -952,35 +949,34 @@ namespace Ecstasy
             return s;
         }
 
-        // Min / max / clamp
+        // Min / max / clamp.
 
         [[nodiscard]] static Simd min(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t>)
+            if constexpr (IS_INT32)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_min_epi32(a.reg, b.reg);
                 else                       s.reg = _mm_min_epi32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, uint32_t>)
+            else if constexpr (IS_UINT32)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_min_epu32(a.reg, b.reg);
                 else                       s.reg = _mm_min_epu32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_min_ps(a.reg, b.reg);
                 else                       s.reg = _mm_min_ps(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_min_pd(a.reg, b.reg);
                 else                       s.reg = _mm_min_pd(a.reg, b.reg);
             }
-            else // int64_t, uint64_t
+            else if constexpr (IS_64BIT_INTEGER) // Real instructions appear only in AVX512.
             {
-                Simd mask = compare_less(a, b);
-                return blendv(a, b, mask);
+                return blendv(b, a, a < b);
             }
             return s;
         }
@@ -988,48 +984,47 @@ namespace Ecstasy
         [[nodiscard]] static Simd max(const Simd& a, const Simd& b) noexcept
         {
             Simd s;
-            if constexpr (std::is_same_v<T, int32_t>)
+            if constexpr (IS_INT32)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_max_epi32(a.reg, b.reg);
                 else                       s.reg = _mm_max_epi32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, uint32_t>)
+            else if constexpr (IS_UINT32)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_max_epu32(a.reg, b.reg);
                 else                       s.reg = _mm_max_epu32(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, float>)
+            else if constexpr (IS_FLOAT)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_max_ps(a.reg, b.reg);
                 else                       s.reg = _mm_max_ps(a.reg, b.reg);
             }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (IS_DOUBLE)
             {
                 if constexpr (Bits == 256) s.reg = _mm256_max_pd(a.reg, b.reg);
                 else                       s.reg = _mm_max_pd(a.reg, b.reg);
             }
-            else // int64_t, uint64_t
+            else if constexpr (IS_64BIT_INTEGER) // Real instructions appear only in AVX512.
             {
-                Simd mask = compare_greater(a, b);
-                return blendv(a, b, mask);
+                return blendv(b, a, a > b);
             }
             return s;
         }
 
-        [[nodiscard]] static T horizontal_min(const Simd& a) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static T horizontalMin(const Simd& a) noexcept
+            requires IS_REAL
         {
             if constexpr (Bits == 128)
             {
-                if constexpr (std::is_same_v<T, float>)
+                if constexpr (IS_FLOAT)
                 {
                     __m128 v = a.reg;
                     v = _mm_min_ps(v, _mm_shuffle_ps(v, v, 0x4E));
                     v = _mm_min_ps(v, _mm_shuffle_ps(v, v, 0xB1));
                     return _mm_cvtss_f32(v);
                 }
-                else
-                { // double
+                else if constexpr(IS_DOUBLE)
+                {
                     __m128d v = a.reg;
                     v = _mm_min_pd(v, _mm_shuffle_pd(v, v, 1));
                     return _mm_cvtsd_f64(v);
@@ -1037,7 +1032,7 @@ namespace Ecstasy
             }
             else if constexpr (Bits == 256)
             {
-                if constexpr (std::is_same_v<T, float>)
+                if constexpr (IS_FLOAT)
                 {
                     __m256 v = a.reg;
                     __m128 lo = _mm256_castps256_ps128(v);
@@ -1047,8 +1042,8 @@ namespace Ecstasy
                     min128 = _mm_min_ps(min128, _mm_shuffle_ps(min128, min128, 0xB1));
                     return _mm_cvtss_f32(min128);
                 }
-                else
-                { // double
+                else if constexpr(IS_DOUBLE)
+                {
                     __m256d v = a.reg;
                     __m128d lo = _mm256_castpd256_pd128(v);
                     __m128d hi = _mm256_extractf128_pd(v, 1);
@@ -1059,19 +1054,20 @@ namespace Ecstasy
             }
         }
 
-        [[nodiscard]] static T horizontal_max(const Simd& a) noexcept
-            requires (std::is_same_v<T, float> || std::is_same_v<T, double>)
+        [[nodiscard]] static T horizontalMax(const Simd& a) noexcept
+            requires IS_REAL
         {
             if constexpr (Bits == 128)
             {
-                if constexpr (std::is_same_v<T, float>)
+                if constexpr (IS_FLOAT)
                 {
                     __m128 v = a.reg;
                     v = _mm_max_ps(v, _mm_shuffle_ps(v, v, 0x4E));
                     v = _mm_max_ps(v, _mm_shuffle_ps(v, v, 0xB1));
                     return _mm_cvtss_f32(v);
                 }
-                else { // double
+                else if constexpr (IS_DOUBLE)
+                {
                     __m128d v = a.reg;
                     v = _mm_max_pd(v, _mm_shuffle_pd(v, v, 1));
                     return _mm_cvtsd_f64(v);
@@ -1079,7 +1075,7 @@ namespace Ecstasy
             }
             else if constexpr (Bits == 256)
             {
-                if constexpr (std::is_same_v<T, float>)
+                if constexpr (IS_FLOAT)
                 {
                     __m256 v = a.reg;
                     __m128 lo = _mm256_castps256_ps128(v);
@@ -1089,8 +1085,8 @@ namespace Ecstasy
                     max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, 0xB1));
                     return _mm_cvtss_f32(max128);
                 }
-                else
-                { // double
+                else if constexpr (IS_DOUBLE)
+                {
                     __m256d v = a.reg;
                     __m128d lo = _mm256_castpd256_pd128(v);
                     __m128d hi = _mm256_extractf128_pd(v, 1);
@@ -1106,29 +1102,29 @@ namespace Ecstasy
             return min(maxBoundary, max(minBoundary, value));
         }
 
-        // Extract
+        // Extract.
 
         template<int Index>
-        [[nodiscard]] static Simd<T, 128> extract_int_128(const Simd& a) noexcept
-            requires (std::is_integral_v<T>&& Bits == 256)
+        [[nodiscard]] static Simd<T, 128> extractInt128(const Simd& a) noexcept
+            requires (IS_INTEGER && Bits == 256)
         {
             Simd<T, 128> s;
             s.reg = _mm256_extracti128_si256(a.reg, Index);
             return s;
         }
 
-        // Narrow-saturate (int32_t, 128-bit only)
+        // Narrow-saturate (int32_t, 128-bit only).
 
-        [[nodiscard]] static Simd<T, 128> narrow_saturate_16_to_8(const Simd& low, const Simd& high) noexcept
-            requires (std::is_same_v<T, int32_t>&& Bits == 128)
+        [[nodiscard]] static Simd<T, 128> narrowSaturate16To8(const Simd& low, const Simd& high) noexcept
+            requires (IS_INT32 && Bits == 128)
         {
             Simd<T, 128> s;
             s.reg = _mm_packs_epi16(low.reg, high.reg);
             return s;
         }
 
-        [[nodiscard]] static Simd<T, 128> narrow_saturate_32_to_16(const Simd& low, const Simd& high) noexcept
-            requires (std::is_same_v<T, int32_t>&& Bits == 128)
+        [[nodiscard]] static Simd<T, 128> narrowSaturate32To16(const Simd& low, const Simd& high) noexcept
+            requires (IS_INT32 && Bits == 128)
         {
             Simd<T, 128> s;
             s.reg = _mm_packs_epi32(low.reg, high.reg);
@@ -1139,7 +1135,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<int32_t, Bits>>&& std::is_same_v<T, float>
+            requires std::is_same_v<Target, Simd<int32_t, Bits>> && IS_FLOAT
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvttps_epi32(reg);
@@ -1149,7 +1145,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<int32_t, 128>>&& std::is_same_v<T, double>
+            requires std::is_same_v<Target, Simd<int32_t, 128>> && IS_DOUBLE
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvttpd_epi32(reg);
@@ -1159,7 +1155,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<uint32_t, Bits>>&& std::is_same_v<T, float>
+            requires std::is_same_v<Target, Simd<uint32_t, Bits>> && IS_FLOAT
         {
             Target s;
             if constexpr (Bits == 128)
@@ -1187,7 +1183,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<float, Bits>>&& std::is_same_v<T, int32_t>
+            requires std::is_same_v<Target, Simd<float, Bits>> && IS_INT32
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvtepi32_ps(reg);
@@ -1197,9 +1193,9 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<float, Bits>>&& std::is_same_v<T, uint32_t>
+            requires std::is_same_v<Target, Simd<float, Bits>> && IS_UINT32
         {
-            Simd<uint32_t, Bits> biased = bitwise_xor(*this, Simd<uint32_t, Bits>(0x80000000u));
+            Simd<uint32_t, Bits> biased = bitwiseXor(*this, Simd<uint32_t, Bits>(0x80000000u));
             Target as_signed_float;
             if constexpr (Bits == 256) as_signed_float.reg = _mm256_cvtepi32_ps(biased.reg);
             else                       as_signed_float.reg = _mm_cvtepi32_ps(biased.reg);
@@ -1212,18 +1208,17 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<int32_t, Bits>> &&
-        (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires std::is_same_v<Target, Simd<int32_t, Bits>> && IS_REAL
         {
             Target s;
             if constexpr (Bits == 256)
             {
-                if constexpr (std::is_same_v<T, float>) s.reg = _mm256_castps_si256(reg);
+                if constexpr (IS_FLOAT) s.reg = _mm256_castps_si256(reg);
                 else                                    s.reg = _mm256_castpd_si256(reg);
             }
             else
             {
-                if constexpr (std::is_same_v<T, float>) s.reg = _mm_castps_si128(reg);
+                if constexpr (IS_FLOAT) s.reg = _mm_castps_si128(reg);
                 else                                    s.reg = _mm_castpd_si128(reg);
             }
             return s;
@@ -1231,18 +1226,17 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<uint32_t, Bits>> &&
-        (std::is_same_v<T, float> || std::is_same_v<T, double>)
+            requires std::is_same_v<Target, Simd<uint32_t, Bits>> && IS_REAL
         {
             Target s;
             if constexpr (Bits == 256)
             {
-                if constexpr (std::is_same_v<T, float>) s.reg = _mm256_castps_si256(reg);
+                if constexpr (IS_FLOAT) s.reg = _mm256_castps_si256(reg);
                 else                                    s.reg = _mm256_castpd_si256(reg);
             }
             else
             {
-                if constexpr (std::is_same_v<T, float>) s.reg = _mm_castps_si128(reg);
+                if constexpr (IS_FLOAT) s.reg = _mm_castps_si128(reg);
                 else                                    s.reg = _mm_castpd_si128(reg);
             }
             return s;
@@ -1250,7 +1244,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<int64_t, Bits>>&& std::is_same_v<T, double>
+            requires std::is_same_v<Target, Simd<int64_t, Bits>> && IS_DOUBLE
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
@@ -1260,7 +1254,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<uint64_t, Bits>>&& std::is_same_v<T, double>
+            requires std::is_same_v<Target, Simd<uint64_t, Bits>> && IS_DOUBLE
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
@@ -1270,7 +1264,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<float, Bits>>&& std::is_integral_v<T>
+            requires std::is_same_v<Target, Simd<float, Bits>> && IS_INTEGER
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(reg);
@@ -1280,7 +1274,7 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<double, Bits>>&& std::is_integral_v<T>
+            requires std::is_same_v<Target, Simd<double, Bits>> && IS_INTEGER
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(reg);

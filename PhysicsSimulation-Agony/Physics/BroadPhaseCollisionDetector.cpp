@@ -46,11 +46,11 @@ namespace PS_AGONY
 
     static inline MortonU32Simd part1By1Simd(MortonU32Simd x)
     {
-        x &= 0x0000ffffu;
-        x = (x | (x << 8)) & 0x00FF00FFu;
-        x = (x | (x << 4)) & 0x0F0F0F0Fu;
-        x = (x | (x << 2)) & 0x33333333u;
-        x = (x | (x << 1)) & 0x55555555u;
+        x &= MortonU32Simd(0x0000ffffu);
+        x = (x | (x << 8)) & MortonU32Simd(0x00FF00FFu);
+        x = (x | (x << 4)) & MortonU32Simd(0x0F0F0F0Fu);
+        x = (x | (x << 2)) & MortonU32Simd(0x33333333u);
+        x = (x | (x << 1)) & MortonU32Simd(0x55555555u);
         return x;
     }
 
@@ -229,8 +229,8 @@ namespace PS_AGONY
             const RealSimd minY = RealSimd::load(aabbMinYPtr + i);
             const RealSimd maxY = RealSimd::load(aabbMaxYPtr + i);
 
-            const RealSimd tx = RealSimd::mul_sub(minX + maxX, halfScaleXV, scaledGlobalMinXV);
-            const RealSimd ty = RealSimd::mul_sub(minY + maxY, halfScaleYV, scaledGlobalMinYV);
+            const RealSimd tx = RealSimd::mulSub(minX + maxX, halfScaleXV, scaledGlobalMinXV);
+            const RealSimd ty = RealSimd::mulSub(minY + maxY, halfScaleYV, scaledGlobalMinYV);
 
             const RealSimd clampedX = RealSimd::clamp(tx, RealSimd(0), clampMaxV);
             const RealSimd clampedY = RealSimd::clamp(ty, RealSimd(0), clampMaxV);
