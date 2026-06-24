@@ -260,12 +260,16 @@ namespace PS_AGONY
         auto futures = threadPool.enqueueFutureBulk(collisionDataTasks);
 
         // Combine results from all types.
-        for (auto& fut : futures)
         {
-            auto& chunkResult = fut.get();
-            allCollisionData.insert(allCollisionData.end(),
-                std::make_move_iterator(chunkResult.begin()),
-                std::make_move_iterator(chunkResult.end()));
+            TRACY_SCOPE_N("Wait for workers to finish and combine data");
+            for (auto& fut : futures)
+            {
+                TRACY_SCOPE_N("Wait and combine data");
+                auto& chunkResult = fut.get();
+                allCollisionData.insert(allCollisionData.end(),
+                    std::make_move_iterator(chunkResult.begin()),
+                    std::make_move_iterator(chunkResult.end()));
+            }
         }
     }
 
