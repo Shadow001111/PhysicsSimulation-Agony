@@ -320,6 +320,8 @@ namespace PS_AGONY
         constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
         constexpr size_t MAX_VALID_INDICES_PER_WORKER = 256;
 
+        const bool DO_NOT_MARK_STATIC_BODIES_AS_USED = false;
+
         static_assert(MIN_COLLISION_COUNT_FOR_THREADING >= MAX_VALID_INDICES_PER_WORKER);
 
         // Single-threaded path.
@@ -419,6 +421,9 @@ namespace PS_AGONY
             threadPool.enqueue(workerFunc, i);
         }
 
+        // Get pointers.
+        const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
+
         // Main loop.
         while (true)
         {
@@ -457,8 +462,20 @@ namespace PS_AGONY
                     }
 
                     // Mark bodies as used by current stage.
-                    solverResources.usedBodies[bodyIndexA] = currentStageIndex;
-                    solverResources.usedBodies[bodyIndexB] = currentStageIndex;
+                    if constexpr (DO_NOT_MARK_STATIC_BODIES_AS_USED)
+                    {
+                        // If body is static, it won't get modified anyway, so there can't be any data race.
+                        const ResolveCollisionsThreadedResources::UsedSlot isStaticA = isStaticPtr[bodyIndexA];
+                        const ResolveCollisionsThreadedResources::UsedSlot isStaticB = isStaticPtr[bodyIndexB];
+
+                        solverResources.usedBodies[bodyIndexA] = (-isStaticA) | (currentStageIndex & (~isStaticA));
+                        solverResources.usedBodies[bodyIndexB] = (-isStaticB) | (currentStageIndex & (~isStaticB));
+                    }
+                    else
+                    {
+                        solverResources.usedBodies[bodyIndexA] = currentStageIndex;
+                        solverResources.usedBodies[bodyIndexB] = currentStageIndex;
+                    }
 
                     // Push index to staging pass.
                     auto& stagingPass = solverResources.stagingPasses[currentStageIndex];
