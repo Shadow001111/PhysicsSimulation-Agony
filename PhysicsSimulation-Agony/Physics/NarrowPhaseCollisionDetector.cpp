@@ -86,6 +86,8 @@ namespace PS_AGONY
         size_t total = sizeof(NarrowPhaseCollisionDetector);
         total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
 
+        total += PS_AGONY::getVectorMemoryUsage(chunks);
+
         for (const auto& chunkData : chunks)
         {
             for (const auto& vec : chunkData.pairs.getDirectAccess())

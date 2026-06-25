@@ -3,17 +3,18 @@
 
 #include "EcstasyCore/Portablity.h"
 #include "EcstasyCore/Simd.h"
+#include "EcstasyCore/TracyProfiler.h"
 
 #include <numeric>
 #include <bit>
 #include <algorithm>
 #include <array>
-#include <iostream>
 
 namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Simd<Real>;
     using MortonU32Simd = Ecstasy::Simd<uint32_t>;
+
 
     static constexpr uint64_t integralLog2(uint64_t n)
     {
@@ -85,6 +86,11 @@ namespace PS_AGONY
         return arr;
     }
 
+
+    constexpr uint32_t LANES = RealSimd::lanes;
+    constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+    constexpr auto maskArray = makeMaskArray<BroadPhaseCollisionDetector::BvhNode::KD_LEAF_SIZE, BroadPhaseCollisionDetector::BvhNode::KD_LEAF_SIZE / LANES>();
+    constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 256;
 
 
     void BroadPhaseCollisionDetector::setDataViewers(const AABBSoAViewer& aabbs)
@@ -172,12 +178,9 @@ namespace PS_AGONY
         total += getVectorMemoryUsage(queryPairsThreadedResources.workerData);
         for (const auto& wData : queryPairsThreadedResources.workerData)
         {
-            std::lock_guard lock(wData.mutex);
-            total += getVectorMemoryUsage(wData.incomingSelfTasks);
-            total += getVectorMemoryUsage(wData.incomingCrossTasks);
-            total += getVectorMemoryUsage(wData.localSelfTasks);
-            total += getVectorMemoryUsage(wData.localCrossTasks);
-            total += getVectorMemoryUsage(wData.outCollisionData);
+            total += getVectorMemoryUsage(wData.nodePairsToTraverse);
+            total += getVectorMemoryUsage(wData.leafPairsToTestCollisions);
+            total += getVectorMemoryUsage(wData.collisionData);
         }
 
         total += getVectorMemoryUsage(leafBodyAABBs.minX);
@@ -605,71 +608,290 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Query pairs (Threaded)");
 
-        // TODO: Scale worker count at runtime.
+        // Decide to use threaded version or not. (TODO). Scale worker count.
         auto& threadPool = Threading::getGlobalThreadPool();
-        queryPairsThreadedResources.workerCount = std::min<size_t>(4, threadPool.getThreadCount());
+        const size_t workerCount = threadPool.getThreadCount() - 1;
 
-        constexpr uint32_t LANES = RealSimd::lanes;
-        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
-        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
+        //
+        auto overlaps = [](const BvhNode& a, const BvhNode& b) noexcept -> bool
+            {
+                return
+                    a.minX < b.maxX && a.maxX > b.minX &&
+                    a.minY < b.maxY && a.maxY > b.minY;
+            };
 
+        // Clear.
+        bvhFunctionResources.nodePairsToTraverse.clear();
+        bvhFunctionResources.leafPairsToTestCollisions.clear();
+        bvhFunctionResources.leavesToTestCollisions.clear();
+
+        // Initial traverse to get independent sub-trees.
+        {
+            TRACY_SCOPE_N("Initial traverse");
+
+            constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+
+            if (bvhFunctionResources.nodes[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
+            {
+                bvhFunctionResources.leavesToTestCollisions.push_back(0);
+            }
+            else
+            {
+                uint32_t bvhNodeIndexStack[MAX_STACK_CAPACITY];
+                uint32_t stackSize = 0;
+                bvhNodeIndexStack[stackSize++] = { 0 }; // Root index.
+
+                while (stackSize > 0)
+                {
+                    const uint32_t nodeIndex = bvhNodeIndexStack[--stackSize];
+
+                    const BvhNode& node = bvhFunctionResources.nodes[nodeIndex];
+
+                    const uint32_t L = node.leftChildIndex;
+                    const uint32_t R = L + 1;
+
+                    const BvhNode& nodeL = bvhFunctionResources.nodes[L];
+                    const BvhNode& nodeR = bvhFunctionResources.nodes[R];
+
+                    const bool lLeaf = nodeL.leftChildIndex == BvhNode::INVALID_INDEX;
+                    const bool rLeaf = nodeR.leftChildIndex == BvhNode::INVALID_INDEX;
+
+
+                    if (rLeaf)
+                    {
+                        bvhFunctionResources.leavesToTestCollisions.push_back(R);
+                    }
+                    else
+                    {
+                        bvhNodeIndexStack[stackSize++] = { R };
+                    }
+                    if (lLeaf)
+                    {
+                        bvhFunctionResources.leavesToTestCollisions.push_back(L);
+                    }
+                    else
+                    {
+                        bvhNodeIndexStack[stackSize++] = { L };
+                    }
+
+                    // Prune L and R nodes.
+                    if (overlaps(nodeL, nodeR))
+                    {
+                        if (lLeaf && rLeaf)
+                        {
+                            bvhFunctionResources.leafPairsToTestCollisions.emplace_back(L, R);
+                        }
+                        else
+                        {
+                            bvhFunctionResources.nodePairsToTraverse.emplace_back(L, R);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Initialize workers.
+        queryPairsThreadedResources.workerData.resize(workerCount);
+
+        // Get pointers.
         const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
         const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
         const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
         const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
+        const BvhNode* ECSTASY_RESTRICT nodesPtr = bvhFunctionResources.nodes.data();
         const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
-        // Reset workers and their data.
-        queryPairsThreadedResources.workerData.resize(queryPairsThreadedResources.workerCount);
-        for (auto& wData : queryPairsThreadedResources.workerData)
+        // Launch workers to traverse independent sub-trees.
+        alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 0 };
+        alignas(64) std::atomic<uint32_t> workerTraverseTaskIndex{ 0 };
+        alignas(64) std::atomic<uint32_t> workerLeafSelfCrossTaskIndex{ 0 };
+        alignas(64) std::atomic<uint32_t> workerLeafPairsCrossTaskIndex{ 0 };
         {
-            std::lock_guard lock(wData.mutex);
-            wData.stopRequested = false;
-            wData.finished = false;
+            TRACY_SCOPE_N("Launch workers");
 
-            wData.incomingSelfTasks.clear();
-            wData.incomingCrossTasks.clear();
-            wData.localSelfTasks.clear();
-            wData.localCrossTasks.clear();
-            wData.outCollisionData.clear();
-        }
-
-        // Launch workers.
-        auto workerFunc = [&](size_t workerIndex)
-            {
-                auto& wData = queryPairsThreadedResources.workerData[workerIndex];
-                wData.running = false;
-                try
+            auto workerFunc = [&]()
                 {
+                    TRACY_SCOPE_N("Query pairs worker thread");
+
+                    constexpr size_t TASK_STEAL_RANGE = 10; // From main thread.
+
+                    const size_t maxPairsToTraverse = bvhFunctionResources.nodePairsToTraverse.size();
+                    const size_t maxLeavesToTest = bvhFunctionResources.leavesToTestCollisions.size();
+                    const size_t maxLeafPairsToTest = bvhFunctionResources.leafPairsToTestCollisions.size();
+
+                    // Worker data.
+                    const auto workerIndex = globalWorkerIndex.fetch_add(1, std::memory_order_relaxed);
+                    auto& wData = queryPairsThreadedResources.workerData[workerIndex];
+
+                    // Masks and stack.
                     std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
-                    while (true)
+
+                    BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+                    uint32_t localPushBufferSize = 0;
+
+                    auto flush = [&]
+                        {
+                            wData.collisionData.insert(wData.collisionData.end(), localPushBuffer, localPushBuffer + localPushBufferSize);
+                            localPushBufferSize = 0;
+                        };
+                    
+                    // Traverse.
                     {
-                        std::unique_lock lk(wData.mutex);
-                        wData.cv.wait(lk, [&]
-                            {
-                                return wData.stopRequested ||
-                                    !wData.incomingSelfTasks.empty() ||
-                                    !wData.incomingCrossTasks.empty();
-                            });
-
-                        if (wData.stopRequested &&
-                            wData.incomingSelfTasks.empty() &&
-                            wData.incomingCrossTasks.empty())
+                        TRACY_SCOPE_N("Traverse");
+                        while (true)
                         {
-                            break;
+                            const auto traverseIndex = workerTraverseTaskIndex.fetch_add(1, std::memory_order_relaxed);
+                            if (traverseIndex >= maxPairsToTraverse) break;
+
+                            wData.nodePairsToTraverse.clear();
+                            wData.nodePairsToTraverse.push_back(bvhFunctionResources.nodePairsToTraverse[traverseIndex]);
+                            while (wData.nodePairsToTraverse.size() > 0)
+                            {
+                                const BvhNodePair nodePair = wData.nodePairsToTraverse.back();
+                                wData.nodePairsToTraverse.pop_back();
+
+                                const BvhNode& nodeA = nodesPtr[nodePair.a];
+                                const BvhNode& nodeB = nodesPtr[nodePair.b];
+
+                                const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
+                                const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
+                                if (aLeaf && bLeaf)
+                                {
+                                    wData.leafPairsToTestCollisions.emplace_back(nodePair);
+                                    continue;
+                                }
+
+                                const Real nodeAreaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
+                                const Real nodeAreaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
+
+                                const bool splitB = aLeaf || (!bLeaf && (nodeAreaB > nodeAreaA));
+                                if (splitB)
+                                {
+                                    // Split node B: check overlap with each child before pushing.
+                                    const uint32_t leftChildB = nodeB.leftChildIndex;
+                                    const uint32_t rightChildB = leftChildB + 1;
+
+                                    const BvhNode& leftNodeB = nodesPtr[leftChildB];
+                                    const BvhNode& rightNodeB = nodesPtr[rightChildB];
+
+                                    if (overlaps(nodeA, leftNodeB))
+                                    {
+                                        wData.nodePairsToTraverse.emplace_back(nodePair.a, leftChildB);
+                                    }
+
+                                    if (overlaps(nodeA, rightNodeB))
+                                    {
+                                        wData.nodePairsToTraverse.emplace_back(nodePair.a, rightChildB);
+                                    }
+                                }
+                                else
+                                {
+                                    // Split node A: check overlap with each child before pushing.
+                                    const uint32_t leftChildA = nodeA.leftChildIndex;
+                                    const uint32_t rightChildA = leftChildA + 1;
+
+                                    const BvhNode& leftNodeA = nodesPtr[leftChildA];
+                                    const BvhNode& rightNodeA = nodesPtr[rightChildA];
+
+                                    if (overlaps(leftNodeA, nodeB))
+                                    {
+                                        wData.nodePairsToTraverse.emplace_back(leftChildA, nodePair.b);
+                                    }
+
+                                    if (overlaps(rightNodeA, nodeB))
+                                    {
+                                        wData.nodePairsToTraverse.emplace_back(rightChildA, nodePair.b);
+                                    }
+                                }
+                            }
                         }
+                    }
 
-                        wData.running = true;
-                        wData.localSelfTasks.swap(wData.incomingSelfTasks);
-                        wData.localCrossTasks.swap(wData.incomingCrossTasks);
-                        lk.unlock();
+                    // Test collisions.
+                    if (!wData.leafPairsToTestCollisions.empty())
+                    {
+                        TRACY_SCOPE_N("Test collisions");
 
-                        // Execute tasks.
+                        for (auto [nodeIndexA, nodeIndexB] : wData.leafPairsToTestCollisions)
                         {
-                            TRACY_SCOPE_NC("Execute tasks", Ecstasy::Color::Wheat);
-                            for (const uint32_t nodeIdx : wData.localSelfTasks)
+                            const BvhNode& nodeA = nodesPtr[nodeIndexA];
+                            const BvhNode& nodeB = nodesPtr[nodeIndexB];
+                            const uint32_t countA = nodeA.end - nodeA.start;
+
+                            const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
+                            const Real* leafAMinX = leafMinXPtr + srcIndexA;
+                            const Real* leafAMaxX = leafMaxXPtr + srcIndexA;
+                            const Real* leafAMinY = leafMinYPtr + srcIndexA;
+                            const Real* leafAMaxY = leafMaxYPtr + srcIndexA;
+
+                            const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
+                            const Real* leafBMinX = leafMinXPtr + srcIndexB;
+                            const Real* leafBMaxX = leafMaxXPtr + srcIndexB;
+                            const Real* leafBMinY = leafMinYPtr + srcIndexB;
+                            const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
+
+                            for (uint32_t i = 0; i < countA; i++)
                             {
-                                const BvhNode& node = bvhFunctionResources.nodes[nodeIdx];
+                                const RealSimd vMinXi(leafAMinX[i]);
+                                const RealSimd vMaxXi(leafAMaxX[i]);
+                                const RealSimd vMinYi(leafAMinY[i]);
+                                const RealSimd vMaxYi(leafAMaxY[i]);
+
+                                uint32_t mask = 0;
+                                for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+                                {
+                                    const RealSimd vMinXj = RealSimd::load(leafBMinX + j);
+                                    const RealSimd vMaxXj = RealSimd::load(leafBMaxX + j);
+                                    const RealSimd vMinYj = RealSimd::load(leafBMinY + j);
+                                    const RealSimd vMaxYj = RealSimd::load(leafBMaxY + j);
+
+                                    const RealSimd overlap =
+                                        (vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+                                        (vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+                                    mask |= overlap.movemask() << j;
+                                }
+                                masks[i] = mask;
+                            }
+                            for (uint32_t i = 0; i < countA; i++)
+                            {
+                                uint32_t mask = masks[i];
+                                while (mask)
+                                {
+                                    const uint32_t lane = std::countr_zero(mask);
+                                    mask &= mask - 1;
+                                    localPushBuffer[localPushBufferSize++] = {
+                                        indicesPtr[nodeA.start + i],
+                                        indicesPtr[nodeB.start + lane]
+                                    };
+                                    if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
+                                }
+                            }
+                        }
+                        wData.leafPairsToTestCollisions.clear();
+
+                        // Last flush.
+                        if (localPushBufferSize > 0) flush();
+                    }
+
+                    // Test initial leaf self cross collisions.
+                    if (maxLeavesToTest > 0)
+                    {
+                        TRACY_SCOPE_N("Test initial leaf self cross collisions");
+
+                        while (true)
+                        {
+                            const auto taskStartIndex = workerLeafSelfCrossTaskIndex.fetch_add(TASK_STEAL_RANGE, std::memory_order_relaxed);
+                            if (taskStartIndex >= maxLeavesToTest) break;
+
+                            const size_t start = taskStartIndex;
+                            const size_t end = std::min<size_t>(taskStartIndex + TASK_STEAL_RANGE, maxLeavesToTest);
+
+                            for (size_t taskIndex = start; taskIndex < end; taskIndex++)
+                            {
+                                auto nodeIndex = bvhFunctionResources.leavesToTestCollisions[taskIndex];
+
+                                const BvhNode& node = bvhFunctionResources.nodes[nodeIndex];
                                 const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
                                 const Real* leafMinX = leafMinXPtr + srcIndex;
                                 const Real* leafMaxX = leafMaxXPtr + srcIndex;
@@ -684,9 +906,9 @@ namespace PS_AGONY
                                     const RealSimd vMinYi(leafMinY[i]);
                                     const RealSimd vMaxYi(leafMaxY[i]);
 
+                                    // Note: "jStart = i & LANES_UPPER_MASK" slows everything down.
                                     auto maskRow = maskArray[i];
                                     uint32_t mask = 0;
-
                                     for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
                                     {
                                         const RealSimd vMinXj = RealSimd::load(leafMinX + j);
@@ -710,21 +932,36 @@ namespace PS_AGONY
                                     {
                                         const uint32_t lane = std::countr_zero(mask);
                                         mask &= mask - 1;
-                                        wData.outCollisionData.emplace_back(
+                                        localPushBuffer[localPushBufferSize++] = {
                                             indicesPtr[node.start + i],
                                             indicesPtr[node.start + lane]
-                                        );
+                                        };
+                                        if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
                                     }
                                 }
                             }
-                            for (const BvhNodePair nodePair : wData.localCrossTasks)
+                        }
+                    }
+
+                    // Test initial leaf pair cross collisions.
+                    if (maxLeafPairsToTest > 0)
+                    {
+                        TRACY_SCOPE_N("Test initial leaf pair cross collisions");
+
+                        while (true)
+                        {
+                            const auto taskStartIndex = workerLeafPairsCrossTaskIndex.fetch_add(TASK_STEAL_RANGE, std::memory_order_relaxed);
+                            if (taskStartIndex >= maxLeafPairsToTest) break;
+
+                            const size_t start = taskStartIndex;
+                            const size_t end = std::min<size_t>(taskStartIndex + TASK_STEAL_RANGE, maxLeafPairsToTest);
+
+                            for (size_t taskIndex = start; taskIndex < end; taskIndex++)
                             {
-                                // Note: Swapping nodes, so nodeA will have smaller range, doesn't speed up things.
-                                // Although it matters only when leaves aren't full. Maybe that's why.
-                                const uint32_t nodeAIdx = nodePair.a;
-                                const uint32_t nodeBIdx = nodePair.b;
-                                const BvhNode& nodeA = bvhFunctionResources.nodes[nodeAIdx];
-                                const BvhNode& nodeB = bvhFunctionResources.nodes[nodeBIdx];
+                                auto [nodeIndexA, nodeIndexB] = bvhFunctionResources.leafPairsToTestCollisions[taskIndex];
+
+                                const BvhNode& nodeA = nodesPtr[nodeIndexA];
+                                const BvhNode& nodeB = nodesPtr[nodeIndexB];
                                 const uint32_t countA = nodeA.end - nodeA.start;
 
                                 const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
@@ -769,68 +1006,57 @@ namespace PS_AGONY
                                     {
                                         const uint32_t lane = std::countr_zero(mask);
                                         mask &= mask - 1;
-                                        wData.outCollisionData.emplace_back(
+                                        localPushBuffer[localPushBufferSize++] = {
                                             indicesPtr[nodeA.start + i],
                                             indicesPtr[nodeB.start + lane]
-                                        );
+                                        };
+                                        if (localPushBufferSize == PUSH_BUFFER_MAX_CAPACITY) flush();
                                     }
                                 }
                             }
                         }
-
-                        wData.localSelfTasks.clear();
-                        wData.localCrossTasks.clear();
-
-                        lk.lock();
-                        wData.running = false;
-                        wData.cv.notify_one();
                     }
-                }
-                catch (...)
-                {
-                    throw;
-                }
-                {
-                    std::lock_guard lk(wData.mutex);
-                    wData.finished = true;
-                }
-                wData.cv.notify_one();
-            };
 
-        for (size_t i = 0; i < queryPairsThreadedResources.workerCount; i++)
-        {
-            threadPool.enqueue(workerFunc, i);
+                    // Last flush.
+                    if (localPushBufferSize > 0) flush();
+
+                    // Done.
+                    wData.isDone.store(true, std::memory_order_release);
+                    wData.isDone.notify_one();
+                };
+
+            // Init workers.
+            for (auto& wData : queryPairsThreadedResources.workerData)
+            {
+                wData.nodePairsToTraverse.clear();
+                wData.leafPairsToTestCollisions.clear();
+                wData.collisionData.clear();
+                wData.isDone = false;
+            }
+
+            // Launch workers.
+            std::vector<Ecstasy::Threading::Task> tasks;
+            tasks.reserve(workerCount);
+
+            for (size_t i = 0; i < workerCount; i++)
+            {
+                tasks.emplace_back(workerFunc);
+            }
+            threadPool.enqueueBulk(tasks);
         }
 
-        traverseNodesToGetOverlappingLeafPairsThreaded();
-
-        // Wait for workers to finish and stop them. Combine data.
+        // Wait for workers to finish and combine their data.
         {
-            TRACY_SCOPE_NC("Wait for workers to finish and combine data", Ecstasy::Color::Brown);
+            TRACY_SCOPE_N("Wait for workers to finish and combine data");
             for (auto& wData : queryPairsThreadedResources.workerData)
             {
+                wData.isDone.wait(false, std::memory_order_acquire);
                 {
-                    std::unique_lock lk(wData.mutex);
-                    wData.stopRequested = true;
-                }
-                wData.cv.notify_one();
-            }
-            for (auto& wData : queryPairsThreadedResources.workerData)
-            {
-                {
-                    TRACY_SCOPE_N("Wait");
-                    std::unique_lock lk(wData.mutex);
-                    wData.cv.wait(lk, [&]
-                        {
-                            return wData.finished;
-                        });
-                }
-                {
-                    TRACY_SCOPE_N("Combine data");
+                    TRACY_SCOPE_N("Combine");
                     collisionData.insert(
                         collisionData.end(),
-                        wData.outCollisionData.begin(),
-                        wData.outCollisionData.end()
+                        wData.collisionData.begin(),
+                        wData.collisionData.end()
                     );
                 }
             }
@@ -981,246 +1207,9 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::traverseNodesToGetOverlappingLeafPairsThreaded()
-    {
-        // Note: Swapping two nodes, so first one will have less range, results in faster leaf task execeution speed
-        // because it does less iterations. But it slows down traversing because of branch misprediction.
-
-        auto overlaps = [](const BvhNode& a, const BvhNode& b) noexcept -> bool
-            {
-                return
-                    a.minX < b.maxX && a.maxX > b.minX &&
-                    a.minY < b.maxY && a.maxY > b.minY;
-            };
-
-        bvhFunctionResources.nodePairsToTraverse.clear();
-
-        constexpr size_t MAX_TRAVERSE_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
-
-        // Task stacks.
-        constexpr size_t TASK_STACK_CAPACITY = 256;
-
-        uint32_t selfTaskStack[TASK_STACK_CAPACITY];
-        size_t selfTaskStackSize = 0;
-
-        BvhNodePair crossTaskStack[TASK_STACK_CAPACITY];
-        size_t crossTaskStackSize = 0;
-
-        auto flushSelfTaskStack = [&]()
-            {
-                if (selfTaskStackSize == 0) return;
-
-                TRACY_SCOPE_N("Flush self task stack");
-
-                const size_t workerCount = queryPairsThreadedResources.workerCount;
-
-                const size_t totalTasks = selfTaskStackSize;
-                const size_t base = totalTasks / workerCount;
-                const size_t remainder = totalTasks - workerCount * base;
-
-                size_t offset = 0;
-                for (size_t i = 0; i < workerCount; i++)
-                {
-                    const size_t chunkSize = base + (i < remainder ? 1 : 0);
-                    if (chunkSize > 0)
-                    {
-                        queryPairsThreadedResources.workerData[i].pushSelfTasks(
-                            selfTaskStack + offset, chunkSize);
-                    }
-                    offset += chunkSize;
-                }
-
-                selfTaskStackSize = 0;
-            };
-
-        auto pushSelfTask = [&](uint32_t task)
-            {
-                selfTaskStack[selfTaskStackSize++] = task;
-                if (selfTaskStackSize >= TASK_STACK_CAPACITY)
-                {
-                    flushSelfTaskStack();
-                }
-            };
-
-        auto flushCrossTaskStack = [&]()
-            {
-                if (crossTaskStackSize == 0) return;
-
-                TRACY_SCOPE_N("Flush cross task stack");
-
-                const size_t workerCount = queryPairsThreadedResources.workerCount;
-
-                const size_t totalTasks = crossTaskStackSize;
-                const size_t base = totalTasks / workerCount;
-                const size_t remainder = totalTasks - workerCount * base;
-
-                size_t offset = 0;
-                for (size_t i = 0; i < workerCount; i++)
-                {
-                    const size_t chunkSize = base + (i < remainder ? 1 : 0);
-                    if (chunkSize > 0)
-                    {
-                        queryPairsThreadedResources.workerData[i].pushCrossTasks(
-                            crossTaskStack + offset, chunkSize);
-                    }
-                    offset += chunkSize;
-                }
-
-                crossTaskStackSize = 0;
-            };
-
-        auto pushCrossTask = [&](BvhNodePair task)
-            {
-                crossTaskStack[crossTaskStackSize++] = task;
-                if (crossTaskStackSize >= TASK_STACK_CAPACITY)
-                {
-                    flushCrossTaskStack();
-                }
-            };
-
-        // Traverse 1.
-        {
-            TRACY_SCOPE_N("Traverse 1");
-
-            if (bvhFunctionResources.nodes[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
-            {
-                pushSelfTask(0);
-            }
-            else
-            {
-                uint32_t bvhNodeIndexStack[MAX_TRAVERSE_STACK_CAPACITY];
-                uint32_t stackSize = 0;
-                bvhNodeIndexStack[stackSize++] = { 0 }; // Root index.
-
-                while (stackSize > 0)
-                {
-                    const uint32_t nodeIndex = bvhNodeIndexStack[--stackSize];
-
-                    const BvhNode& node = bvhFunctionResources.nodes[nodeIndex];
-
-                    const uint32_t L = node.leftChildIndex;
-                    const uint32_t R = L + 1;
-
-                    const BvhNode& nodeL = bvhFunctionResources.nodes[L];
-                    const BvhNode& nodeR = bvhFunctionResources.nodes[R];
-
-                    const bool lLeaf = nodeL.leftChildIndex == BvhNode::INVALID_INDEX;
-                    const bool rLeaf = nodeR.leftChildIndex == BvhNode::INVALID_INDEX;
-
-
-                    if (rLeaf)
-                    {
-                        pushSelfTask(R);
-                    }
-                    else
-                    {
-                        bvhNodeIndexStack[stackSize++] = { R };
-                    }
-                    if (lLeaf)
-                    {
-                        pushSelfTask(L);
-                    }
-                    else
-                    {
-                        bvhNodeIndexStack[stackSize++] = { L };
-                    }
-
-                    // Prune L and R nodes.
-                    if (overlaps(nodeL, nodeR))
-                    {
-                        if (lLeaf && rLeaf)
-                        {
-                            pushCrossTask({ L, R });
-                        }
-                        else
-                        {
-                            bvhFunctionResources.nodePairsToTraverse.emplace_back(L, R);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Flush remaining self tasks.
-        flushSelfTaskStack();
-
-        // Traverse 2.
-        {
-            TRACY_SCOPE_N("Traverse 2");
-
-            while (bvhFunctionResources.nodePairsToTraverse.size() > 0)
-            {
-                const BvhNodePair nodePair = bvhFunctionResources.nodePairsToTraverse.back();
-                bvhFunctionResources.nodePairsToTraverse.pop_back();
-
-                const BvhNode& nodeA = bvhFunctionResources.nodes[nodePair.a];
-                const BvhNode& nodeB = bvhFunctionResources.nodes[nodePair.b];
-
-                const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
-                const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
-                if (aLeaf && bLeaf)
-                {
-                    pushCrossTask(nodePair);
-                    continue;
-                }
-
-                const Real nodeAreaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
-                const Real nodeAreaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
-
-                const bool splitB = aLeaf || (!bLeaf && (nodeAreaB > nodeAreaA));
-                if (splitB)
-                {
-                    // Split node B: check overlap with each child before pushing.
-                    const uint32_t leftChildB = nodeB.leftChildIndex;
-                    const uint32_t rightChildB = leftChildB + 1;
-
-                    const BvhNode& leftNodeB = bvhFunctionResources.nodes[leftChildB];
-                    const BvhNode& rightNodeB = bvhFunctionResources.nodes[rightChildB];
-
-                    if (overlaps(nodeA, leftNodeB))
-                    {
-                        bvhFunctionResources.nodePairsToTraverse.emplace_back(nodePair.a, leftChildB);
-                    }
-
-                    if (overlaps(nodeA, rightNodeB))
-                    {
-                        bvhFunctionResources.nodePairsToTraverse.emplace_back(nodePair.a, rightChildB);
-                    }
-                }
-                else
-                {
-                    // Split node A: check overlap with each child before pushing.
-                    const uint32_t leftChildA = nodeA.leftChildIndex;
-                    const uint32_t rightChildA = leftChildA + 1;
-
-                    const BvhNode& leftNodeA = bvhFunctionResources.nodes[leftChildA];
-                    const BvhNode& rightNodeA = bvhFunctionResources.nodes[rightChildA];
-
-                    if (overlaps(leftNodeA, nodeB))
-                    {
-                        bvhFunctionResources.nodePairsToTraverse.emplace_back(leftChildA, nodePair.b);
-                    }
-
-                    if (overlaps(rightNodeA, nodeB))
-                    {
-                        bvhFunctionResources.nodePairsToTraverse.emplace_back(rightChildA, nodePair.b);
-                    }
-                }
-            }
-        }
-
-        // Flush remaining cross tasks.
-        flushCrossTaskStack();
-    }
-
     void BroadPhaseCollisionDetector::testCollisionsInLeaves()
     {
         TRACY_SCOPE_N("Test collisions in leaves");
-
-        constexpr uint32_t LANES = RealSimd::lanes;
-        constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
-        constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
-        constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 256;
 
         // Get pointers.
         const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
