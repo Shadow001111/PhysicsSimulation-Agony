@@ -3,6 +3,8 @@
 #include "BodySoAViewer.h"
 #include "SymmetricMatrix.h"
 
+#include <atomic>
+
 namespace PS_AGONY
 {
 	struct BodyCollisionData
@@ -33,10 +35,37 @@ namespace PS_AGONY
 	{
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
-		struct ChunkData
+		struct alignas(64) ChunkData
 		{
+			size_t start = 0, end = 0;
 			SymmetricMatrix<std::vector<BodyPair>, BODY_TYPE_COUNT> pairs;
 			std::vector<BodyCollisionData> results;
+			alignas(64) std::atomic<bool> finished{ false };
+
+			ChunkData() = default;
+			~ChunkData() = default;
+			ChunkData(const ChunkData&) = delete;
+			ChunkData& operator=(const ChunkData&) = delete;
+
+			ChunkData(ChunkData&& other) noexcept
+			{
+				start = other.start;
+				end = other.end;
+				pairs = std::move(other.pairs);
+				results = std::move(other.results);
+			}
+
+			ChunkData& operator=(ChunkData&& other) noexcept
+			{
+				if (this != &other)
+				{
+					start = other.start;
+					end = other.end;
+					pairs = std::move(other.pairs);
+					results = std::move(other.results);
+				}
+				return *this;
+			}
 
 			void clear()
 			{
@@ -82,7 +111,7 @@ namespace PS_AGONY
 		void findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs);
 		void findCollisionsMultiThreaded(const std::vector<BodyPair>& bodyPairs);
 
-		void processPairs(const std::vector<BodyPair>& pairs, size_t start, size_t end, ChunkData& chunkData);
+		void processPairs(const std::vector<BodyPair>& pairs, ChunkData& chunkData);
 
 		void collisionCircleCircle(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);

@@ -17,6 +17,31 @@ class SymmetricMatrix
 public:
     static constexpr size_t size = N;
 
+    SymmetricMatrix() = default;
+    ~SymmetricMatrix() = default;
+    SymmetricMatrix(const SymmetricMatrix&) = default;
+    SymmetricMatrix& operator=(const SymmetricMatrix&) = default;
+
+    SymmetricMatrix(SymmetricMatrix&& other) noexcept
+    {
+        for (size_t i = 0; i < STORED_COUNT; i++)
+        {
+            mData[i] = std::move(other.mData[i]);
+        }
+    }
+
+    SymmetricMatrix& operator=(SymmetricMatrix&& other) noexcept
+    {
+        if (this != &other)
+        {
+            for (size_t i = 0; i < STORED_COUNT; i++)
+            {
+                mData[i] = std::move(other.mData[i]);
+            }
+        }
+        return *this;
+    }
+
     constexpr T& operator()(size_t r, size_t c) noexcept
     {
         return mData[index(r, c)];
