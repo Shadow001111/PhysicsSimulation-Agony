@@ -158,7 +158,6 @@ namespace PS_AGONY
 		void queryBvhPairsThreaded();
 
 		void traverseNodesToGetOverlappingLeafPairs();
-
 		void testCollisionsInLeaves();
 	};
 }
