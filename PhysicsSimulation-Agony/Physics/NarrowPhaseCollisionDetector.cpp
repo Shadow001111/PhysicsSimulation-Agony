@@ -104,8 +104,10 @@ namespace PS_AGONY
 
         chunks.resize(1);
         ChunkData& cd = chunks[0];
+        cd.start = 0;
+        cd.end = bodyPairs.size();
         cd.clear();
-        processPairs(bodyPairs, 0, bodyPairs.size(), cd);
+        processPairs(bodyPairs, cd);
         allCollisionData.swap(cd.results);
     }
 
@@ -114,50 +116,81 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
         constexpr size_t LOAD_BALANCING_FACTOR = 4;
+
         auto& threadPool = Threading::getGlobalThreadPool();
+        const size_t workerCount = threadPool.getThreadCount();
 
         auto [chunkCount, chunkSize] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
             threadPool, bodyPairs.size(), LOAD_BALANCING_FACTOR);
 
         chunks.resize(chunkCount);
 
-        std::vector<std::future<void>> futures;
-        futures.reserve(chunkCount);
-
-        size_t chunkIndex = 0;
-        for (size_t start = 0; start < bodyPairs.size(); start += chunkSize)
+        for (size_t i = 0; i < chunkCount; i++)
         {
-            size_t end = std::min(start + chunkSize, bodyPairs.size());
-            ChunkData& cd = chunks[chunkIndex];
-            futures.emplace_back(threadPool.enqueueFuture([this, &bodyPairs, start, end, &cd]()
-                {
-                    cd.clear();
-                    processPairs(bodyPairs, start, end, cd);
-                }));
-            chunkIndex++;
+            ChunkData& cd = chunks[i];
+            cd.start = i * chunkSize;
+            cd.end = std::min(chunks[i].start + chunkSize, bodyPairs.size());
+            cd.finished = false;
         }
 
-        {
-            TRACY_SCOPE_N("Wait for workers and combine");
+        std::vector<Ecstasy::Threading::Task> tasks;
+        tasks.reserve(workerCount);
 
+        alignas(64) std::atomic<uint32_t> workerChunkIndex{ 0 };
+        alignas(64) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
+
+        auto workerFunc = [&]()
+            {
+                while (true)
+                {
+                    const uint32_t chunkIndex = workerChunkIndex.fetch_add(1, std::memory_order_relaxed);
+                    if (chunkIndex >= chunkCount) break;
+
+                    ChunkData& cd = chunks[chunkIndex];
+                    cd.clear();
+                    processPairs(bodyPairs, cd);
+
+                    cd.finished.store(true, std::memory_order_release);
+                    cd.finished.notify_one();
+                }
+                destroyedWorkerCount.fetch_add(1, std::memory_order_release);
+                destroyedWorkerCount.notify_one();
+            };
+
+        for (size_t i = 0; i < workerCount; i++)
+        {
+            tasks.emplace_back(workerFunc);
+        }
+        threadPool.enqueueBulk(tasks);
+
+        {
+            TRACY_SCOPE_N("Wait for workers to finish and combine data");
             for (size_t i = 0; i < chunkCount; i++)
             {
-                futures[i].get();
-
+                const auto& cd = chunks[i];
+                cd.finished.wait(false, std::memory_order_acquire);
                 {
-                    const auto& results = chunks[i].results;
                     TRACY_SCOPE_N("Combine");
                     allCollisionData.insert(
                         allCollisionData.end(),
-                        results.begin(),
-                        results.end()
+                        cd.results.begin(),
+                        cd.results.end()
                     );
                 }
             }
         }
+        {
+            TRACY_SCOPE_N("Wait for workers to get destroyed");
+            while (true)
+            {
+                const auto value = destroyedWorkerCount.load(std::memory_order_acquire);
+                if (value == workerCount) break;
+                destroyedWorkerCount.wait(value, std::memory_order_acquire);
+            }
+        }
     }
 
-    void NarrowPhaseCollisionDetector::processPairs(const std::vector<BodyPair>& pairs, size_t start, size_t end, ChunkData& chunkData)
+    void NarrowPhaseCollisionDetector::processPairs(const std::vector<BodyPair>& pairs, ChunkData& chunkData)
     {
         TRACY_SCOPE_N("Process pair range");
 
@@ -167,7 +200,7 @@ namespace PS_AGONY
         // Partition the given range into type-specific vectors.
         {
             TRACY_SCOPE_N("Partition");
-            for (size_t i = start; i < end; i++)
+            for (size_t i = chunkData.start; i < chunkData.end; i++)
             {
                 auto [bodyIndexA, bodyIndexB] = pairs[i];
                 if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
@@ -436,7 +469,7 @@ namespace PS_AGONY
 
             auto sat = [&](Real radiusSum, Real centerDeltaOnAxis, Vec2 axis, SATAxis axisType) -> bool
                 {
-                    const Real overlap = radiusSum - std::fabsf(centerDeltaOnAxis);
+                    const Real overlap = radiusSum - std::fabs(centerDeltaOnAxis);
                     if (overlap < Real(0)) return false;
                     if (overlap < depth)
                     {
