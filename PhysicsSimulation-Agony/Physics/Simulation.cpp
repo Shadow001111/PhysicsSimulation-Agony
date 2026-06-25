@@ -606,11 +606,6 @@ namespace PS_AGONY
             aabbMinYPtr[bodyIndex] = y - radius;
             aabbMaxXPtr[bodyIndex] = x + radius;
             aabbMaxYPtr[bodyIndex] = y + radius;
-
-            if (x + radius < -10000.0f)
-            {
-                std::cout << x << " " << radius << "\n";
-            }
         }
     }
 

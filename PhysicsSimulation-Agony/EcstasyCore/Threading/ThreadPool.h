@@ -300,5 +300,6 @@ namespace Ecstasy::Threading
         size_t getChunkCount() const noexcept { return chunkCount; }
 
         static std::pair<size_t, size_t> getChunkCountAndSize(ThreadPool& pool, size_t taskRange, size_t loadBalancingFactor);
+        static std::pair<size_t, size_t> getChunkCountAndSize(size_t threadCount, size_t taskRange, size_t loadBalancingFactor);
     };
 }

@@ -336,8 +336,13 @@ namespace Ecstasy::Threading
 
     std::pair<size_t, size_t> ParallelForRangeExecutor::getChunkCountAndSize(ThreadPool& pool, size_t taskRange, size_t loadBalancingFactor)
     {
-        const size_t numWorkers = pool.getThreadCount();
-        const size_t maxChunkCount = numWorkers * loadBalancingFactor;
+        const size_t threadCount = pool.getThreadCount();
+        return getChunkCountAndSize(threadCount, taskRange, loadBalancingFactor);
+    }
+
+    std::pair<size_t, size_t> ParallelForRangeExecutor::getChunkCountAndSize(size_t threadCount, size_t taskRange, size_t loadBalancingFactor)
+    {
+        const size_t maxChunkCount = threadCount * loadBalancingFactor;
 
         const size_t chunkSize = (taskRange + maxChunkCount - 1) / maxChunkCount;
         const size_t chunkCount = (taskRange + chunkSize - 1) / chunkSize;
