@@ -158,7 +158,7 @@ namespace Ecstasy::Threading
         void enqueueBulk(std::vector<Task>& tasks);
 
         template<typename ResultType>
-        inline std::vector<std::future<ResultType>> ThreadPool::enqueueFutureBulk(std::vector<std::function<ResultType()>> funcs);
+        inline std::vector<std::future<ResultType>> enqueueFutureBulk(std::vector<std::function<ResultType()>> funcs);
 
         void shutdown();
         size_t getThreadCount() const noexcept { return workers.getThreadCount(); }

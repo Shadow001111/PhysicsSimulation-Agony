@@ -1,17 +1,15 @@
 #pragma once
 #include "BodySoAViewer.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-
 #include <vector>
-#include <mutex>
-#include <condition_variable>
+#include <atomic>
 
 namespace PS_AGONY
 {
 	class BroadPhaseCollisionDetector
 	{
 		// Note: Splitting on cold and hot didn't help.
+	public:
 		struct BvhNode
 		{
 			// Max KD_LEAF_SIZE is 32. Larger size will fuck up bitwise mask.
@@ -34,7 +32,7 @@ namespace PS_AGONY
 				start(start), end(end)
 			{}
 		};
-
+	private:
 		struct BvhNodePair
 		{
 			uint32_t a, b;
@@ -75,22 +73,11 @@ namespace PS_AGONY
 		{
 			struct alignas(64) WorkerData
 			{
-				//mutable TracyLockableN(std::mutex, mutex, "Worker mutex");
-				mutable std::mutex mutex;
-				std::condition_variable_any cv;
+				std::vector<BvhNodePair> nodePairsToTraverse;
+				std::vector<BvhNodePair> leafPairsToTestCollisions;
+				std::vector<BodyPair> collisionData;
 
-				bool stopRequested = false;
-				bool finished = true;
-				bool running = false;
-
-				std::vector<uint32_t> incomingSelfTasks;
-				std::vector<BvhNodePair> incomingCrossTasks;
-
-				std::vector<uint32_t> localSelfTasks;
-				std::vector<BvhNodePair> localCrossTasks;
-
-				std::vector<BodyPair> outCollisionData;
-
+				std::atomic<bool> isDone{ false };
 
 				WorkerData() = default;
 				~WorkerData() = default;
@@ -99,72 +86,23 @@ namespace PS_AGONY
 
 				WorkerData(WorkerData&& other) noexcept
 				{
-					stopRequested = std::exchange(stopRequested, true);
-					finished = std::exchange(finished, true);
-					running = std::exchange(running, false);
-
-					incomingSelfTasks  = std::move(other.incomingSelfTasks);
-					incomingCrossTasks = std::move(other.incomingCrossTasks);
-					localSelfTasks	   = std::move(other.localSelfTasks);
-					localCrossTasks    = std::move(other.localCrossTasks);
-					outCollisionData   = std::move(other.outCollisionData);
+					nodePairsToTraverse = std::move(other.nodePairsToTraverse);
+					leafPairsToTestCollisions = std::move(other.leafPairsToTestCollisions);
+					collisionData = std::move(other.collisionData);
 				}
-
 				WorkerData& operator=(WorkerData&& other) noexcept
 				{
 					if (this != &other)
 					{
-						stopRequested = std::exchange(stopRequested, true);
-						finished = std::exchange(finished, true);
-						running = std::exchange(running, false);
-
-						incomingSelfTasks = std::move(other.incomingSelfTasks);
-						incomingCrossTasks = std::move(other.incomingCrossTasks);
-						localSelfTasks = std::move(other.localSelfTasks);
-						localCrossTasks = std::move(other.localCrossTasks);
-						outCollisionData = std::move(other.outCollisionData);
+						nodePairsToTraverse = std::move(other.nodePairsToTraverse);
+						leafPairsToTestCollisions = std::move(other.leafPairsToTestCollisions);
+						collisionData = std::move(other.collisionData);
 					}
 					return *this;
-				}
-
-
-				void pushSelfTasks(const uint32_t* taskSource, size_t taskCount)
-				{
-					bool needNotify = false;
-					{
-						std::lock_guard lock(mutex);
-						incomingSelfTasks.insert(
-							incomingSelfTasks.end(),
-							taskSource, taskSource + taskCount
-						);
-						needNotify = !running;
-					}
-					if (needNotify)
-					{
-						cv.notify_one();
-					}
-				}
-
-				void pushCrossTasks(const BvhNodePair* taskSource, size_t taskCount)
-				{
-					bool needNotify = false;
-					{
-						std::lock_guard lock(mutex);
-						incomingCrossTasks.insert(
-							incomingCrossTasks.end(),
-							taskSource, taskSource + taskCount
-						);
-						needNotify = !running;
-					}
-					if (needNotify)
-					{
-						cv.notify_one();
-					}
 				}
 			};
 
 			std::vector<WorkerData> workerData;
-			size_t workerCount = 0;
 		};
 
 		struct LeafBodyAABBSoA
@@ -220,7 +158,6 @@ namespace PS_AGONY
 		void queryBvhPairsThreaded();
 
 		void traverseNodesToGetOverlappingLeafPairs();
-		void traverseNodesToGetOverlappingLeafPairsThreaded();
 
 		void testCollisionsInLeaves();
 	};
