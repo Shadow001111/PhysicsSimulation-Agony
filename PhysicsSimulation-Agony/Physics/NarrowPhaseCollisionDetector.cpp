@@ -113,7 +113,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
-        constexpr size_t LOAD_BALANCING_FACTOR = 2;
+        constexpr size_t LOAD_BALANCING_FACTOR = 4;
         auto& threadPool = Threading::getGlobalThreadPool();
 
         auto [chunkCount, chunkSize] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
@@ -125,7 +125,7 @@ namespace PS_AGONY
         futures.reserve(chunkCount);
 
         size_t chunkIndex = 0;
-        for (size_t start = 0; start < bodyPairs.size(); start += chunkSize, ++chunkIndex)
+        for (size_t start = 0; start < bodyPairs.size(); start += chunkSize)
         {
             size_t end = std::min(start + chunkSize, bodyPairs.size());
             ChunkData& cd = chunks[chunkIndex];
@@ -134,6 +134,7 @@ namespace PS_AGONY
                     cd.clear();
                     processPairs(bodyPairs, start, end, cd);
                 }));
+            chunkIndex++;
         }
 
         {
