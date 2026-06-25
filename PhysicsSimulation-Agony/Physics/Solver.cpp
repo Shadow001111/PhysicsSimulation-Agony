@@ -368,7 +368,7 @@ namespace PS_AGONY
         }
 
         //
-        solverResources.stagingPasses.resize(workerCount + 1);
+        solverResources.stagingPasses.resize(workerCount);
         for (auto& pass : solverResources.stagingPasses)
         {
             pass.clear();
@@ -420,7 +420,6 @@ namespace PS_AGONY
         }
 
         // Main loop.
-        auto& mainThreadPass = solverResources.stagingPasses[0];
         while (true)
         {
             // Clear body-using history.
@@ -474,7 +473,7 @@ namespace PS_AGONY
                     if (stagingPass.size() >= MAX_VALID_INDICES_PER_WORKER)
                     {
                         currentStageIndex++;
-                        if (currentStageIndex >= workerCount + 1)
+                        if (currentStageIndex >= workerCount)
                         {
                             break;
                         }
@@ -482,7 +481,7 @@ namespace PS_AGONY
                 }
 
                 // Count valid passes.
-                for (size_t i = 0; i <= workerCount; i++)
+                for (size_t i = 0; i < workerCount; i++)
                 {
                     auto& stagingPass = solverResources.stagingPasses[i];
                     if (stagingPass.empty()) break;
@@ -491,9 +490,9 @@ namespace PS_AGONY
             }
             if (workerEnableCount == 0) [[unlikely]]
             {
-                for (size_t stageIndex = 1; stageIndex <= workerCount; stageIndex++)
+                for (size_t stageIndex = 0; stageIndex < workerCount; stageIndex++)
                 {
-                    auto& wData = solverResources.workerData[stageIndex - 1];
+                    auto& wData = solverResources.workerData[stageIndex];
 
                     wData.workWave.store(ResolveCollisionsThreadedResources::STOP_WAVE, std::memory_order_release);
                     wData.workWave.notify_one();
@@ -518,12 +517,12 @@ namespace PS_AGONY
             {
                 TRACY_SCOPE_NC("Push staging passes", Ecstasy::Color::Gold);
 
-                solverResources.workNotDone.fetch_add(workerEnableCount - 1, std::memory_order_release);
+                solverResources.workNotDone.fetch_add(workerEnableCount, std::memory_order_release);
                 if (stop)
                 {
-                    for (size_t stageIndex = 1; stageIndex <= workerCount; stageIndex++)
+                    for (size_t stageIndex = 0; stageIndex < workerCount; stageIndex++)
                     {
-                        auto& wData = solverResources.workerData[stageIndex - 1];
+                        auto& wData = solverResources.workerData[stageIndex];
                         auto& stagingPass = solverResources.stagingPasses[stageIndex];
                         wData.indices.swap(stagingPass);
 
@@ -533,9 +532,9 @@ namespace PS_AGONY
                 }
                 else
                 {
-                    for (size_t stageIndex = 1; stageIndex < workerEnableCount; stageIndex++)
+                    for (size_t stageIndex = 0; stageIndex < workerEnableCount; stageIndex++)
                     {
-                        auto& wData = solverResources.workerData[stageIndex - 1];
+                        auto& wData = solverResources.workerData[stageIndex];
                         auto& stagingPass = solverResources.stagingPasses[stageIndex];
                         wData.indices.swap(stagingPass); // Staging pass is cleared in worker thread.
 
@@ -544,10 +543,6 @@ namespace PS_AGONY
                     }
                 }
             }
-
-            // Resolve collisions on main thread, while wave is being executed.
-            resolveCollisionsIndirect(narrowPhaseCollisions, mainThreadPass);
-            mainThreadPass.clear();
             if (stop) break;
         }
 
