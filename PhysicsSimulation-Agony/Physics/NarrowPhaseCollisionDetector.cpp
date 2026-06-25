@@ -12,20 +12,17 @@ namespace PS_AGONY
         Real squaredDistance;
     };
 
-    static __forceinline void flip_sign_if_negative(glm::vec2& v, const float& sign)
+    static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
     {
-        constexpr uint32_t signBit = 1u << 31;
-        const uint32_t sign_mask = reinterpret_cast<const uint32_t&>(sign) & signBit;
-        reinterpret_cast<uint32_t&>(v.x) ^= sign_mask;
-        reinterpret_cast<uint32_t&>(v.y) ^= sign_mask;
-    }
+        using Int = std::conditional_t<sizeof(Real) == 8,
+            uint64_t,
+            uint32_t>;
 
-    static __forceinline void flip_sign_if_negative(glm::dvec2& v, const double& sign)
-    {
-        constexpr uint64_t signBit = 1ull << 63;
-        const uint64_t sign_mask = reinterpret_cast<const uint64_t&>(sign) & signBit;
-        reinterpret_cast<uint64_t&>(v.x) ^= sign_mask;
-        reinterpret_cast<uint64_t&>(v.y) ^= sign_mask;
+        constexpr Int signBit = 1ull << (sizeof(Real) * 8 - 1);
+
+        const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
+        reinterpret_cast<Int&>(v.x) ^= signMask;
+        reinterpret_cast<Int&>(v.y) ^= signMask;
     }
 
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
@@ -141,17 +138,20 @@ namespace PS_AGONY
 
         {
             TRACY_SCOPE_N("Wait for workers and combine");
-            for (auto& fut : futures)
-                fut.get();
 
-            for (auto& cd : chunks)
+            for (size_t i = 0; i < chunkCount; i++)
             {
-                TRACY_SCOPE_N("Combine");
-                allCollisionData.insert(
-                    allCollisionData.end(),
-                    cd.results.begin(),
-                    cd.results.end()
-                );
+                futures[i].get();
+
+                {
+                    const auto& results = chunks[i].results;
+                    TRACY_SCOPE_N("Combine");
+                    allCollisionData.insert(
+                        allCollisionData.end(),
+                        results.begin(),
+                        results.end()
+                    );
+                }
             }
         }
     }
@@ -441,7 +441,7 @@ namespace PS_AGONY
                     {
                         depth = overlap;
                         normal = axis;
-                        flip_sign_if_negative(normal, centerDeltaOnAxis);
+                        flipSignIfNegative(normal, centerDeltaOnAxis);
                         bestAxis = axisType;
                     }
                     return true;
