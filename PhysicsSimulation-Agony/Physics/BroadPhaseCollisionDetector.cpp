@@ -625,13 +625,21 @@ namespace PS_AGONY
         bvhFunctionResources.leafPairsToTestCollisions.clear();
         bvhFunctionResources.leavesToTestCollisions.clear();
 
+        // Get pointers.
+        const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
+        const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
+        const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
+        const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
+        const BvhNode* ECSTASY_RESTRICT nodesPtr = bvhFunctionResources.nodes.data();
+        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+
         // Initial traverse to get independent sub-trees.
         {
             TRACY_SCOPE_N("Initial traverse");
 
             constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
 
-            if (bvhFunctionResources.nodes[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
+            if (nodesPtr[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
             {
                 bvhFunctionResources.leavesToTestCollisions.push_back(0);
             }
@@ -645,13 +653,13 @@ namespace PS_AGONY
                 {
                     const uint32_t nodeIndex = bvhNodeIndexStack[--stackSize];
 
-                    const BvhNode& node = bvhFunctionResources.nodes[nodeIndex];
+                    const BvhNode& node = nodesPtr[nodeIndex];
 
                     const uint32_t L = node.leftChildIndex;
                     const uint32_t R = L + 1;
 
-                    const BvhNode& nodeL = bvhFunctionResources.nodes[L];
-                    const BvhNode& nodeR = bvhFunctionResources.nodes[R];
+                    const BvhNode& nodeL = nodesPtr[L];
+                    const BvhNode& nodeR = nodesPtr[R];
 
                     const bool lLeaf = nodeL.leftChildIndex == BvhNode::INVALID_INDEX;
                     const bool rLeaf = nodeR.leftChildIndex == BvhNode::INVALID_INDEX;
@@ -692,14 +700,6 @@ namespace PS_AGONY
 
         // Initialize workers.
         queryPairsThreadedResources.workerData.resize(workerCount);
-
-        // Get pointers.
-        const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
-        const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
-        const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
-        const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
-        const BvhNode* ECSTASY_RESTRICT nodesPtr = bvhFunctionResources.nodes.data();
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         // Launch workers to traverse independent sub-trees.
         alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 0 };

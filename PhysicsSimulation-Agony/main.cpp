@@ -296,7 +296,7 @@ static int gameFunc()
 
         // Smooth debug data.
         {
-            constexpr float targetAlpha = 0.5f;
+            constexpr float targetAlpha = 0.8f;
 
             float oneMinusAlpha = pow(1.0 - targetAlpha, deltaTime * 60.0);
             float alpha = 1.0 - oneMinusAlpha;
