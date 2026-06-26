@@ -44,13 +44,15 @@ namespace PS_AGONY
 
 			// Environment.
 			Real timeScale = 1.0;
-			Vec2 gravity{ 0.0, -9.81 };
+			//Vec2 gravity{ 0.0, -9.81 };
+			Vec2 gravity{ 0.0, 0.0 };
 		};
 
 		enum class BenchmarkDensity
         {
 			NoTouching,
 			Touching,
+			AllTouching,
 			COUNT
         };
 
@@ -102,6 +104,7 @@ namespace PS_AGONY
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
 
 		void runBroadPhaseBenchmark(uint32_t minBodies, uint32_t maxBodies, uint32_t step, uint32_t sampleCount);
+		void runNarrowPhaseBenchmark(uint32_t minBodies, uint32_t maxBodies, uint32_t step, uint32_t sampleCount);
 
 		void getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }

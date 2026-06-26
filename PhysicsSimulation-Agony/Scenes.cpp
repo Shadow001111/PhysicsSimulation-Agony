@@ -11,8 +11,8 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 20.0f;
     constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 0'000;// 2'500;
-    constexpr int boxCount = 20;// 2'500;
+    constexpr int circleCount = 2'500;
+    constexpr int boxCount = 0;// 2'500;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -333,6 +333,31 @@ void load_BalancerSwing(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gener
     }
 }
 
+void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    constexpr int rowCount = 100;
+    constexpr int columnCount = 100;
+
+    PS_AGONY::Material material0 = {
+            .elasticity = 0.0,
+            .staticFriction = 0.0,
+            .dynamicFriction = 0.0
+    };
+
+    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
+
+    for (int ix = 0; ix < rowCount; ix++)
+    for (int iy = 0; iy < columnCount; iy++)
+    {
+        const float x = ix * 2.1f;
+        const float y = iy * 2.1f;
+
+        simulation.createCircle({ x, y }, { 0.0, 0.0 }, 0.0f, 0.0f, 1.0f, { 0.0f, 0.0f }, material0Index, 1.0f);
+    }
+
+    simulation.createCircle({ -5.0f, 0.0f }, { 0.0f, 0.0f }, 0.0f, 0.0f, 1000.0f, { 0.0f, 0.0f }, material0Index, 4.0f, 1);
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Random::Generator rvg; // Random value generator.
@@ -359,5 +384,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 4)
     {
         load_BalancerSwing(simulation, rvg);
+    }
+    else if (scene == 5)
+    {
+        load_ALotOfNotTouching(simulation, rvg);
     }
 }

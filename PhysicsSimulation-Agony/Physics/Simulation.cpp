@@ -480,11 +480,15 @@ namespace PS_AGONY
                 case BenchmarkDensity::NoTouching:
                 default:
                     choosenBodyOffset = ballRadius * 2.0;
-                    densityString = "Perfect";
+                    densityString = "NoTouching";
                     break;
                 case BenchmarkDensity::Touching:
                     choosenBodyOffset = ballRadius * 2.0 * (0.95);
-                    densityString = "Touch";
+                    densityString = "Touching";
+                    break;
+                case BenchmarkDensity::AllTouching:
+                    choosenBodyOffset = 0.0;
+                    densityString = "AllTouching";
                     break;
                 }
 
@@ -505,7 +509,10 @@ namespace PS_AGONY
                 buildBodyAABBs();
 
                 // Warm-up run.
-                broadPhaseCollisionDetector.findCollisions(true, useThreading);
+                const auto executionPolicy = useThreading ?
+                    BroadPhaseCollisionDetector::ExecutionPolicy::ForceMultiThreaded :
+                    BroadPhaseCollisionDetector::ExecutionPolicy::ForceSingleThreaded;
+                broadPhaseCollisionDetector.findCollisions(true, executionPolicy);
 
                 // Measure individual samples.
                 std::vector<double> sampleTimesUs;
@@ -514,8 +521,154 @@ namespace PS_AGONY
                 for (uint32_t s = 0; s < sampleCount; s++)
                 {
                     const auto startTime = std::chrono::steady_clock::now();
-                    volatile const auto& pairs = broadPhaseCollisionDetector.findCollisions(false, useThreading);
+                    volatile const auto& pairs = broadPhaseCollisionDetector.findCollisions(false, executionPolicy);
                     (void)pairs;
+                    const auto endTime = std::chrono::steady_clock::now();
+
+                    const double durationUs =
+                        static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count());
+
+                    sampleTimesUs.push_back(durationUs);
+                }
+
+                double meanUs = 0.0;
+                double medianUs = 0.0;
+                double p90Us = 0.0;
+                double p99Us = 0.0;
+                double minUs = 0.0;
+                double maxUs = 0.0;
+                double stdDevUs = 0.0;
+
+                computeStats(sampleTimesUs, meanUs, medianUs, p90Us, p99Us, minUs, maxUs, stdDevUs);
+
+                outFile << count << ","
+                    << densityString << ","
+                    << (useThreading ? "Threaded" : "Single") << ","
+                    << meanUs << ","
+                    << medianUs << ","
+                    << p90Us << ","
+                    << p99Us << ","
+                    << minUs << ","
+                    << maxUs << ","
+                    << stdDevUs << "\n";
+            };
+
+        size_t totalTests = 0;
+        for (uint32_t count = minBodies; count <= maxBodies; count += step)
+        {
+            totalTests += size_t(BenchmarkDensity::COUNT) * 2;
+        }
+
+        size_t completedTests = 0;
+        for (bool useThreading : { false, true })
+        {
+            for (size_t densityIndex = 0; densityIndex < size_t(BenchmarkDensity::COUNT); densityIndex++)
+            {
+                const auto density = BenchmarkDensity(densityIndex);
+                for (uint32_t count = minBodies; count <= maxBodies; count += step)
+                {
+                    runTestConfig(count, density, useThreading);
+                    completedTests++;
+
+                    if ((completedTests & 15) == 0)
+                    {
+                        const float percent = static_cast<float>(completedTests) / static_cast<float>(totalTests) * 100.0f;
+
+                        std::cout << "Benchmark completed: " << percent << "%\n";
+                    }
+                }
+            }
+        }
+
+        outFile.close();
+    }
+
+    void Simulation::runNarrowPhaseBenchmark(uint32_t minBodies, uint32_t maxBodies, uint32_t step, uint32_t sampleCount)
+    {
+        std::filesystem::path dirPath = "output/Benchmarks";
+        std::filesystem::create_directories(dirPath);
+
+        std::filesystem::path filePath = dirPath / "narrow_phase_benchmark.csv";
+        std::ofstream outFile(filePath);
+
+        if (!outFile.is_open())
+        {
+            std::cerr << "[AGONY][Simulation::runNarrowPhaseBenchmark]: Failed to create or open file: " << filePath << "\n";
+            return;
+        }
+
+        // CSV header for plotting mean + percentiles cleanly.
+        outFile << "BodyCount,Density,Threading,Mean_us,Median_us,P90_us,P99_us,Min_us,Max_us,StdDev_us\n";
+
+        auto runTestConfig = [&](uint32_t count, BenchmarkDensity density, bool useThreading)
+            {
+                // Reset state.
+                while (bodies.getCount() > 0)
+                {
+                    destroyBody(0);
+                }
+
+                // Create bodies.
+                constexpr Real ballRadius = 1.0;
+
+                Real choosenBodyOffset;
+                std::string densityString;
+                switch (density)
+                {
+                case BenchmarkDensity::NoTouching:
+                default:
+                    choosenBodyOffset = ballRadius * 2.0;
+                    densityString = "NoTouching";
+                    break;
+                case BenchmarkDensity::Touching:
+                    choosenBodyOffset = ballRadius * 2.0 * (0.95);
+                    densityString = "Touching";
+                    break;
+                case BenchmarkDensity::AllTouching:
+                    choosenBodyOffset = 0.0;
+                    densityString = "AllTouching";
+                    break;
+                }
+
+                uint32_t gridSide = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<float>(count))));
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    Vec2 position{ 0.0f, 0.0f };
+                    Real x = i % gridSide;
+                    Real y = i / gridSide;
+                    position = Vec2(x, y) * choosenBodyOffset;
+
+                    createCircle(position, Vec2(0.0f, 0.0f), 0.0f, 0.0f, 1.0f, Vec2(0.0f, 0.0f), 0, ballRadius);
+                }
+
+                // Prepare.
+                const auto executionPolicy = useThreading ?
+                    NarrowPhaseCollisionDetector::ExecutionPolicy::ForceMultiThreaded :
+                    NarrowPhaseCollisionDetector::ExecutionPolicy::ForceSingleThreaded;
+
+                computeTruePositions();
+                buildBodyAABBs();
+                broadPhaseCollisionDetector.setDataViewers(AABBSoAViewer(bodies.aabb));
+                const auto& broadCollisions = broadPhaseCollisionDetector.findCollisions(true);
+
+                narrowPhaseCollisionDetector.setDataViewers(
+                    BodySoAViewer(bodies),
+                    CircleSoAViewer(circles),
+                    BoxSoAViewer(boxes)
+                );
+
+                // Warm-up run.
+                narrowPhaseCollisionDetector.findCollisions(broadCollisions, executionPolicy);
+
+                // Measure individual samples.
+                std::vector<double> sampleTimesUs;
+                sampleTimesUs.reserve(sampleCount);
+
+                for (uint32_t s = 0; s < sampleCount; s++)
+                {
+                    const auto startTime = std::chrono::steady_clock::now();
+                    volatile const auto& collisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisions, executionPolicy);
+                    (void)collisionData;
                     const auto endTime = std::chrono::steady_clock::now();
 
                     const double durationUs =
@@ -750,7 +903,7 @@ namespace PS_AGONY
             buildBodyAABBs();
 
             // Broad phase.
-            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(i == 0, true);
+            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(i == 0);
             if (broadCollisionData.empty()) break;
 
             // Narrow phase.

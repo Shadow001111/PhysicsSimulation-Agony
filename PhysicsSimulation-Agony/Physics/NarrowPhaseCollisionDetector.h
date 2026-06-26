@@ -89,6 +89,13 @@ namespace PS_AGONY
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 	public:
+		enum class ExecutionPolicy
+		{
+			Standard,
+			ForceSingleThreaded,
+			ForceMultiThreaded
+		};
+
 		NarrowPhaseCollisionDetector();
 		~NarrowPhaseCollisionDetector() = default;
 		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = delete;
@@ -102,7 +109,7 @@ namespace PS_AGONY
 			const BoxSoAViewer& boxes
 		);
 
-		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs);
+		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 

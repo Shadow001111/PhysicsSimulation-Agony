@@ -32,6 +32,13 @@ namespace PS_AGONY
 				start(start), end(end)
 			{}
 		};
+
+		enum class ExecutionPolicy
+		{
+			Standard,
+			ForceSingleThreaded,
+			ForceMultiThreaded
+		};
 	private:
 		struct BvhNodePair
 		{
@@ -137,7 +144,7 @@ namespace PS_AGONY
 			const AABBSoAViewer& aabbs
 		);
 
-		const std::vector<BodyPair>& findCollisions(bool rebuild, bool useThreading);
+		const std::vector<BodyPair>& findCollisions(bool rebuild, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
