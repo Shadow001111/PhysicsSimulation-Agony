@@ -255,32 +255,32 @@ namespace PS_AGONY
             }
 
             // Apply friction impulses.
-            //{
-            //    const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-            //    {
-            //        const Vec2 linearVelocityChangeA = impulseSum * invMassA;
-            //        velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
-            //        velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
-            //
-            //        const Real angularVelocityChangeA = (
-            //            glm::dot(rAPerpArray[0], impulseArray[0]) +
-            //            glm::dot(rAPerpArray[1], impulseArray[1])
-            //            ) * invInertiaA;
-            //        angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
-            //    }
-            //
-            //    {
-            //        const Vec2 linearVelocityChangeB = impulseSum * invMassB;
-            //        velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
-            //        velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
-            //
-            //        const Real angularVelocityChangeB = (
-            //            glm::dot(rBPerpArray[0], impulseArray[0]) +
-            //            glm::dot(rBPerpArray[1], impulseArray[1])
-            //            ) * invInertiaB;
-            //        angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
-            //    }
-            //}
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                {
+                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
+                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
+                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
+            
+                    const Real angularVelocityChangeA = (
+                        glm::dot(rAPerpArray[0], impulseArray[0]) +
+                        glm::dot(rAPerpArray[1], impulseArray[1])
+                        ) * invInertiaA;
+                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
+                }
+            
+                {
+                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
+                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
+                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
+            
+                    const Real angularVelocityChangeB = (
+                        glm::dot(rBPerpArray[0], impulseArray[0]) +
+                        glm::dot(rBPerpArray[1], impulseArray[1])
+                        ) * invInertiaB;
+                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
+                }
+            }
 
             // Position and velocity correction.
             const Real invTotalInvMass_x_Depth = depth / totalInvMass;
