@@ -192,17 +192,12 @@ static int gameFunc()
     TextRenderer::setCurrentFont("RusEngMinecraft");
     TextRenderer::setGlyphInstanceBatchSize(1024);
 
-    // Input settings.
-    //glfwSetInputMode(wnd.getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
     // Simulation
     PS_AGONY::Simulation simulation{};
-    simulation.runBroadPhaseBenchmark(10, 5'000, 50, 500);
-    return 0;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    //loadScene(simulation, 0);
+    loadScene(simulation, 5);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();

@@ -4,6 +4,8 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
     struct Vector2AndSqDistance
@@ -55,7 +57,10 @@ namespace PS_AGONY
         this->boxes = boxes;
     }
 
-    const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(const std::vector<BodyPair>& bodyPairs)
+    const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(
+        const std::vector<BodyPair>& bodyPairs,
+        ExecutionPolicy executionPolicy
+    )
     {
         TRACY_SCOPE_N("Narrow phase");
 
@@ -68,7 +73,21 @@ namespace PS_AGONY
 
         allCollisionData.reserve(bodyPairs.size());
 
-        const bool useThreading = true;
+        bool useThreading = false;
+        
+        if (executionPolicy == ExecutionPolicy::ForceMultiThreaded)
+        {
+            useThreading = true;
+        }
+        else if (executionPolicy == ExecutionPolicy::ForceSingleThreaded)
+        {
+            useThreading = false;
+        }
+        else
+        {
+            useThreading = bodyPairs.size() > 635;
+        }
+        
         if (useThreading)
         {
             findCollisionsMultiThreaded(bodyPairs);

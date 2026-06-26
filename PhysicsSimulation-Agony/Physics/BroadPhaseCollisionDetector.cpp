@@ -9,6 +9,7 @@
 #include <bit>
 #include <algorithm>
 #include <array>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -98,7 +99,7 @@ namespace PS_AGONY
         bodiesAABB = aabbs;
     }
 
-    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild, bool useThreading)
+    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild, ExecutionPolicy executionPolicy)
     {
         TRACY_SCOPE_N("Broad phase");
 
@@ -114,7 +115,7 @@ namespace PS_AGONY
             auto& nodes = bvhFunctionResources.nodes;
             auto& indices = bvhFunctionResources.mainBodyIndices;
             nodes.clear();
-            nodes.reserve(2 * bodyCount);
+            nodes.reserve(bodyCount / 4);
 
             indices.resize(bodyCount);
             std::iota(indices.begin(), indices.end(), 0);
@@ -128,8 +129,21 @@ namespace PS_AGONY
             fitBvhNodeAABBs();
         }
 
-        // TODO: Decide at runtime. Use threading when body count > 635.
-        //const bool useThreading = true;
+        bool useThreading = false;
+
+        if (executionPolicy == ExecutionPolicy::ForceMultiThreaded)
+        {
+            useThreading = true;
+        }
+        else if (executionPolicy == ExecutionPolicy::ForceSingleThreaded)
+        {
+            useThreading = false;
+        }
+        else
+        {
+            useThreading = bvhFunctionResources.nodes.size() > 120;
+        }
+
         if (useThreading)
         {
             queryBvhPairsThreaded();
