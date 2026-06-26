@@ -156,6 +156,7 @@ namespace Ecstasy::Threading
             {
                 try
                 {
+                    TracyMessage("Task", 4);
                     task();
                 }
                 catch (const std::exception& e)
@@ -177,6 +178,7 @@ namespace Ecstasy::Threading
                     {
                         try
                         {
+                            TracyMessage("Task", 4);
                             task();
                         }
                         catch (const std::exception& e)
