@@ -6,6 +6,10 @@
 #include "EcstasyCore/Portablity.h"
 
 #include <iostream>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <numeric>
 
 namespace PS_AGONY
 {
@@ -34,6 +38,63 @@ namespace PS_AGONY
     static __forceinline Vec2 rotate2D(Vec2 point, Real angle)
     {
         return rotate2D(point, std::cos(angle), std::sin(angle));
+    }
+
+
+    static double percentileFromSorted(const std::vector<double>& sorted, double p)
+    {
+        if (sorted.empty()) return 0.0;
+
+        // Nearest-rank style percentile, clamped.
+        const double rank = p * (static_cast<double>(sorted.size()) - 1.0);
+        const size_t idx = static_cast<size_t>(std::round(rank));
+        return sorted[std::min(idx, sorted.size() - 1)];
+    }
+
+    static void computeStats(const std::vector<double>& samples,
+        double& meanOut,
+        double& medianOut,
+        double& p90Out,
+        double& p99Out,
+        double& minOut,
+        double& maxOut,
+        double& stdDevOut)
+    {
+        if (samples.empty())
+        {
+            meanOut = medianOut = p90Out = p99Out = minOut = maxOut = stdDevOut = 0.0;
+            return;
+        }
+
+        std::vector<double> sorted = samples;
+        std::sort(sorted.begin(), sorted.end());
+
+        const double sum = std::accumulate(sorted.begin(), sorted.end(), 0.0);
+        meanOut = sum / static_cast<double>(sorted.size());
+
+        if (sorted.size() % 2 == 0)
+        {
+            const size_t mid = sorted.size() / 2;
+            medianOut = (sorted[mid - 1] + sorted[mid]) * 0.5;
+        }
+        else
+        {
+            medianOut = sorted[sorted.size() / 2];
+        }
+
+        p90Out = percentileFromSorted(sorted, 0.90);
+        p99Out = percentileFromSorted(sorted, 0.99);
+        minOut = sorted.front();
+        maxOut = sorted.back();
+
+        double variance = 0.0;
+        for (double v : sorted)
+        {
+            const double d = v - meanOut;
+            variance += d * d;
+        }
+        variance /= static_cast<double>(sorted.size());
+        stdDevOut = std::sqrt(variance);
     }
     
 
@@ -384,6 +445,137 @@ namespace PS_AGONY
         bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
     }
 
+    void Simulation::runBroadPhaseBenchmark(uint32_t minBodies, uint32_t maxBodies, uint32_t step, uint32_t sampleCount)
+    {
+        std::filesystem::path dirPath = "output/Benchmarks";
+        std::filesystem::create_directories(dirPath);
+
+        std::filesystem::path filePath = dirPath / "broad_phase_benchmark.csv";
+        std::ofstream outFile(filePath);
+
+        if (!outFile.is_open())
+        {
+            std::cerr << "[AGONY][Simulation::runBroadPhaseBenchmark]: Failed to create or open file: " << filePath << "\n";
+            return;
+        }
+
+        // CSV header for plotting mean + percentiles cleanly.
+        outFile << "BodyCount,Density,Threading,Mean_us,Median_us,P90_us,P99_us,Min_us,Max_us,StdDev_us\n";
+
+        auto runTestConfig = [&](uint32_t count, BenchmarkDensity density, bool useThreading)
+            {
+                // Reset state.
+                while (bodies.getCount() > 0)
+                {
+                    destroyBody(0);
+                }
+
+                // Create bodies.
+                constexpr Real ballRadius = 1.0;
+
+                Real choosenBodyOffset;
+                std::string densityString;
+                switch (density)
+                {
+                case BenchmarkDensity::NoTouching:
+                default:
+                    choosenBodyOffset = ballRadius * 2.0;
+                    densityString = "Perfect";
+                    break;
+                case BenchmarkDensity::Touching:
+                    choosenBodyOffset = ballRadius * 2.0 * (0.95);
+                    densityString = "Touch";
+                    break;
+                }
+
+                uint32_t gridSide = static_cast<uint32_t>(std::ceil(std::sqrt(static_cast<float>(count))));
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    Vec2 position{ 0.0f, 0.0f };
+                    Real x = i % gridSide;
+                    Real y = i / gridSide;
+                    position = Vec2(x, y) * choosenBodyOffset;
+
+                    createCircle(position, Vec2(0.0f, 0.0f), 0.0f, 0.0f, 1.0f, Vec2(0.0f, 0.0f), 0, ballRadius);
+                }
+
+                // Prepare.
+                broadPhaseCollisionDetector.setDataViewers(AABBSoAViewer(bodies.aabb));
+                computeTruePositions();
+                buildBodyAABBs();
+
+                // Warm-up run.
+                broadPhaseCollisionDetector.findCollisions(true, useThreading);
+
+                // Measure individual samples.
+                std::vector<double> sampleTimesUs;
+                sampleTimesUs.reserve(sampleCount);
+
+                for (uint32_t s = 0; s < sampleCount; s++)
+                {
+                    const auto startTime = std::chrono::steady_clock::now();
+                    volatile const auto& pairs = broadPhaseCollisionDetector.findCollisions(false, useThreading);
+                    (void)pairs;
+                    const auto endTime = std::chrono::steady_clock::now();
+
+                    const double durationUs =
+                        static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count());
+
+                    sampleTimesUs.push_back(durationUs);
+                }
+
+                double meanUs = 0.0;
+                double medianUs = 0.0;
+                double p90Us = 0.0;
+                double p99Us = 0.0;
+                double minUs = 0.0;
+                double maxUs = 0.0;
+                double stdDevUs = 0.0;
+
+                computeStats(sampleTimesUs, meanUs, medianUs, p90Us, p99Us, minUs, maxUs, stdDevUs);
+
+                outFile << count << ","
+                    << densityString << ","
+                    << (useThreading ? "Threaded" : "Single") << ","
+                    << meanUs << ","
+                    << medianUs << ","
+                    << p90Us << ","
+                    << p99Us << ","
+                    << minUs << ","
+                    << maxUs << ","
+                    << stdDevUs << "\n";
+            };
+
+        size_t totalTests = 0;
+        for (uint32_t count = minBodies; count <= maxBodies; count += step)
+        {
+            totalTests += size_t(BenchmarkDensity::COUNT) * 2;
+        }
+
+        size_t completedTests = 0;
+        for (bool useThreading : { false, true })
+        {
+            for (size_t densityIndex = 0; densityIndex < size_t(BenchmarkDensity::COUNT); densityIndex++)
+            {
+                const auto density = BenchmarkDensity(densityIndex);
+                for (uint32_t count = minBodies; count <= maxBodies; count += step)
+                {
+                    runTestConfig(count, density, useThreading);
+                    completedTests++;
+
+                    if ((completedTests & 15) == 0)
+                    {
+                        const float percent = static_cast<float>(completedTests) / static_cast<float>(totalTests) * 100.0f;
+
+                        std::cout << "Benchmark completed: " << percent << "%\n";
+                    }
+                }
+            }
+        }
+
+        outFile.close();
+    }
+
     void Simulation::getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
     {
 		broadPhaseCollisionDetector.fetchAABBs(outAABBs);
@@ -558,7 +750,7 @@ namespace PS_AGONY
             buildBodyAABBs();
 
             // Broad phase.
-            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(i == 0);
+            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(i == 0, true);
             if (broadCollisionData.empty()) break;
 
             // Narrow phase.

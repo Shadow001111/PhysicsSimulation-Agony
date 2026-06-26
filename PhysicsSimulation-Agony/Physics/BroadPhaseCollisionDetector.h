@@ -137,7 +137,7 @@ namespace PS_AGONY
 			const AABBSoAViewer& aabbs
 		);
 
-		const std::vector<BodyPair>& findCollisions(bool rebuild);
+		const std::vector<BodyPair>& findCollisions(bool rebuild, bool useThreading);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 

@@ -197,10 +197,12 @@ static int gameFunc()
 
     // Simulation
     PS_AGONY::Simulation simulation{};
+    simulation.runBroadPhaseBenchmark(10, 5'000, 50, 500);
+    return 0;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 0);
+    //loadScene(simulation, 0);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
