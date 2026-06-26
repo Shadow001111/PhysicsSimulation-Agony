@@ -717,7 +717,6 @@ namespace PS_AGONY
 
         // Launch workers to traverse independent sub-trees.
         alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 0 };
-        alignas(64) std::atomic<uint32_t> workerTraverseTaskIndex{ 0 };
         alignas(64) std::atomic<uint32_t> workerLeafSelfCrossTaskIndex{ 0 };
         alignas(64) std::atomic<uint32_t> workerLeafPairsCrossTaskIndex{ 0 };
         {
@@ -752,13 +751,12 @@ namespace PS_AGONY
                     // Traverse.
                     {
                         TRACY_SCOPE_N("Traverse");
-                        while (true)
-                        {
-                            const auto traverseIndex = workerTraverseTaskIndex.fetch_add(1, std::memory_order_relaxed);
-                            if (traverseIndex >= maxPairsToTraverse) break;
 
+                        size_t traverseTaskIndex = workerIndex;
+                        while (traverseTaskIndex < maxPairsToTraverse)
+                        {
                             wData.nodePairsToTraverse.clear();
-                            wData.nodePairsToTraverse.push_back(bvhFunctionResources.nodePairsToTraverse[traverseIndex]);
+                            wData.nodePairsToTraverse.push_back(bvhFunctionResources.nodePairsToTraverse[traverseTaskIndex]);
                             while (wData.nodePairsToTraverse.size() > 0)
                             {
                                 const BvhNodePair nodePair = wData.nodePairsToTraverse.back();
@@ -818,6 +816,8 @@ namespace PS_AGONY
                                     }
                                 }
                             }
+
+                            traverseTaskIndex += workerCount;
                         }
                     }
 
