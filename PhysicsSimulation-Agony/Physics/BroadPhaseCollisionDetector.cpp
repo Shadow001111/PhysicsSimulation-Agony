@@ -98,7 +98,7 @@ namespace PS_AGONY
         bodiesAABB = aabbs;
     }
 
-    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild)
+    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild, bool useThreading)
     {
         TRACY_SCOPE_N("Broad phase");
 
@@ -128,8 +128,8 @@ namespace PS_AGONY
             fitBvhNodeAABBs();
         }
 
-        // TODO: Decide at runtime.
-        const bool useThreading = true;
+        // TODO: Decide at runtime. Use threading when body count > 635.
+        //const bool useThreading = true;
         if (useThreading)
         {
             queryBvhPairsThreaded();

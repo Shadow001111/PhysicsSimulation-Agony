@@ -309,6 +309,9 @@
     <ClInclude Include="Physics\Solver.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="BenchmarkViewer.py" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

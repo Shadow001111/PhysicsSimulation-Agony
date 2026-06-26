@@ -47,6 +47,13 @@ namespace PS_AGONY
 			Vec2 gravity{ 0.0, -9.81 };
 		};
 
+		enum class BenchmarkDensity
+        {
+			NoTouching,
+			Touching,
+			COUNT
+        };
+
 		// Bodies SoA.
 		BodySoA bodies;
 		CircleSoA circles;
@@ -93,6 +100,8 @@ namespace PS_AGONY
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
+
+		void runBroadPhaseBenchmark(uint32_t minBodies, uint32_t maxBodies, uint32_t step, uint32_t sampleCount);
 
 		void getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }

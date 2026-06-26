@@ -231,4 +231,7 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="BenchmarkViewer.py" />
+  </ItemGroup>
 </Project>
