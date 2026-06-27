@@ -96,4 +96,9 @@ namespace Ecstasy::Threading
 
         return pcoreMask;
     }
+
+    void setThreadPriorityToHighest()
+    {
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+    }
 }
