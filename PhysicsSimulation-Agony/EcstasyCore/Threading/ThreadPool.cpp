@@ -72,21 +72,24 @@ namespace Ecstasy::Threading
         size_t taskOffset = 0; // Current position in the input tasks array
 
         // Assign contiguous blocks to workers in round-robin order starting from startWorkerOffset.
-        for (size_t i = 0; i < workerCount; i++)
         {
-            const size_t workerIdx = (startWorkerOffset + i) % workerCount;
-            const size_t count = base + (i < remainder ? 1 : 0);
-            if (count == 0) continue;
+            TRACY_SCOPE_N("Push tasks");
+            for (size_t i = 0; i < workerCount; i++)
+            {
+                const size_t workerIdx = (startWorkerOffset + i) % workerCount;
+                const size_t count = base + (i < remainder ? 1 : 0);
+                if (count == 0) continue;
 
-            WorkerThread& worker = workers[workerIdx];
+                WorkerThread& worker = workers[workerIdx];
 
-            if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
-                throw std::runtime_error("enqueueBulk on stopped ThreadPool");
+                if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
+                    throw std::runtime_error("enqueueBulk on stopped ThreadPool");
 
-            // Push.
-            worker.tasks.bulk_push(taskSource + taskOffset, count);
+                // Push.
+                worker.tasks.bulk_push(taskSource + taskOffset, count);
 
-            taskOffset += count;
+                taskOffset += count;
+            }
         }
 
         // Update global counters and notify waiting threads.
@@ -94,7 +97,10 @@ namespace Ecstasy::Threading
         unfinishedTaskCount.fetch_add(taskCount, std::memory_order_release);
 
         workVersion.fetch_add(1, std::memory_order_release);
-        workVersion.notify_all();
+        {
+            TRACY_SCOPE_N("Notify");
+            workVersion.notify_all();
+        }
     }
 
     void ThreadPool::shutdown()
@@ -160,13 +166,24 @@ namespace Ecstasy::Threading
         while (!stop.load(std::memory_order_relaxed))
         {
             // Possibly sleep now, so it won't sleep during executing task.
-            std::this_thread::yield();
+            // This still sucks, but the cause sucks more, probably scheduler.
+            // TODO: Fix.
+            {
+                //TRACY_SCOPE_NC("Thread yield", Ecstasy::Color::Chocolate);
+                std::this_thread::yield();
+            }
 
             // Try to get task from queue.
-            Task task = tasks.steal();
+            Task task;
+            {
+                //TRACY_SCOPE_NC("Try pop", Ecstasy::Color::Gray);
+                task = tasks.steal();
+            }
             if (task)
             {
                 pool->onTaskClaimed();
+
+                //TRACY_SCOPE_NC("Execute task", Ecstasy::Color::NavajoWhite);
                 try
                 {
                     task();
@@ -181,32 +198,42 @@ namespace Ecstasy::Threading
 
             // Try stealing from other threads.
             {
-                for (size_t i = 1; i < workerCount; i++)
+                bool taskStolen = false;
                 {
-                    size_t victimIdx = (threadId + i) % workerCount;
-                    ChaseLevQueue& victimQueue = pool->getWorkerQueue(victimIdx);
-                    task = victimQueue.steal();
-                    if (task)
+                    //TRACY_SCOPE_NC("Try steal", Ecstasy::Color::Gray);
+                    for (size_t i = 1; i < workerCount; i++)
                     {
-                        pool->onTaskClaimed();
-                        try
+                        size_t victimIdx = (threadId + i) % workerCount;
+                        ChaseLevQueue& victimQueue = pool->getWorkerQueue(victimIdx);
+                        task = victimQueue.steal();
+                        if (task)
                         {
-                            task();
+                            pool->onTaskClaimed();
+                            taskStolen = true;
+                            break;
                         }
-                        catch (const std::exception& e)
-                        {
-                            std::cerr << "Worker thread exception: " << e.what() << "\n";
-                        }
-                        pool->onTaskComplete();
-                        break;
                     }
+                }
+                if (taskStolen)
+                {
+                    //TRACY_SCOPE_NC("Execute task", Ecstasy::Color::NavajoWhite);
+                    try
+                    {
+                        task();
+                    }
+                    catch (const std::exception& e)
+                    {
+                        std::cerr << "Worker thread exception: " << e.what() << "\n";
+                    }
+                    pool->onTaskComplete();
+                    continue;
                 }
             }
 
             // No work found.
             if (!task)
             {
-                TRACY_SCOPE_NC("Thread spin/sleep", Ecstasy::Color::Black);
+                //TRACY_SCOPE_NC("Thread spin/sleep", Ecstasy::Color::Black);
 
                 // Spin.
                 bool returnToStart = false;
