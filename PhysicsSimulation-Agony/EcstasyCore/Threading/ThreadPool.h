@@ -129,9 +129,14 @@ namespace Ecstasy::Threading
         alignas(64) std::atomic<uint32_t> workVersion{ 0 };
         alignas(64) WorkerThreadContainer workers;
         alignas(64) std::atomic<size_t> nextWorker{ 0 };
-        alignas(64) std::atomic<size_t> pendingTaskCount{ 0 };
 
+        // Tasks that are still sitting in queues and can be stolen/picked up.
+        alignas(64) std::atomic<size_t> queuedTaskCount{ 0 };
 
+        // Tasks that have not finished yet (queued + running).
+        alignas(64) std::atomic<size_t> unfinishedTaskCount{ 0 };
+
+        void onTaskClaimed();
         void onTaskComplete();
 
         ChaseLevQueue& getWorkerQueue(size_t idx) { return workers[idx].tasks; }
@@ -162,7 +167,8 @@ namespace Ecstasy::Threading
 
         void shutdown();
         size_t getThreadCount() const noexcept { return workers.getThreadCount(); }
-        size_t getPendingTasks() const noexcept { return pendingTaskCount.load(std::memory_order_relaxed); }
+        size_t getQueuedTasks() const noexcept { return queuedTaskCount.load(std::memory_order_relaxed); }
+        size_t getPendingTasks() const noexcept { return unfinishedTaskCount.load(std::memory_order_relaxed); }
     };
 
     template<class F, class... Args>
@@ -185,7 +191,9 @@ namespace Ecstasy::Threading
         // Push task.
         worker.tasks.push(std::move(task));
 
-        pendingTaskCount.fetch_add(1, std::memory_order_relaxed);
+        queuedTaskCount.fetch_add(1, std::memory_order_release);
+        unfinishedTaskCount.fetch_add(1, std::memory_order_release);
+
         workVersion.fetch_add(1, std::memory_order_release);
         workVersion.notify_one();
     }
@@ -213,7 +221,8 @@ namespace Ecstasy::Threading
         // Push task.
         worker.tasks.push(std::move(task));
 
-        pendingTaskCount.fetch_add(1, std::memory_order_relaxed);
+        queuedTaskCount.fetch_add(1, std::memory_order_release);
+        unfinishedTaskCount.fetch_add(1, std::memory_order_release);
         
         workVersion.fetch_add(1, std::memory_order_release);
         workVersion.notify_one();
@@ -233,8 +242,6 @@ namespace Ecstasy::Threading
         if (workerCount == 0)
             throw std::runtime_error("enqueueFutureBulk on ThreadPool with no workers");
 
-        const size_t startOffset = nextWorker.fetch_add(1, std::memory_order_relaxed) % workerCount;
-
         // Build packaged tasks first and harvest all futures before any moves occur.
         std::vector<std::packaged_task<ResultType()>> packagedTasks;
         std::vector<std::future<ResultType>> futures;
@@ -249,6 +256,8 @@ namespace Ecstasy::Threading
         // Distribute contiguous blocks to worker queues in round-robin order.
         const size_t base = taskCount / workerCount;
         const size_t remainder = taskCount % workerCount;
+
+        const size_t startOffset = nextWorker.fetch_add(remainder, std::memory_order_relaxed) % workerCount;
 
         size_t taskOffset = 0;
         for (size_t i = 0; i < workerCount; i++)
@@ -277,7 +286,9 @@ namespace Ecstasy::Threading
             taskOffset += count;
         }
 
-        pendingTaskCount.fetch_add(taskCount, std::memory_order_release);
+        queuedTaskCount.fetch_add(taskCount, std::memory_order_release);
+        unfinishedTaskCount.fetch_add(taskCount, std::memory_order_release);
+
         workVersion.fetch_add(1, std::memory_order_release);
         workVersion.notify_all();
 

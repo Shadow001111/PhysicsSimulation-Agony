@@ -7,6 +7,7 @@ namespace Ecstasy
     enum class Color : uint32_t
     {
         White             = 0xFFFFFF,
+        Black             = 0x010000,
         Red               = 0xFF0000,
         Green             = 0x00FF00,
         Blue              = 0x0000FF,
