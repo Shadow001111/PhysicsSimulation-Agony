@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <bit>
+#include <immintrin.h>
 
 namespace Ecstasy::Threading
 {
@@ -63,10 +64,10 @@ namespace Ecstasy::Threading
             throw std::runtime_error("enqueueBulk on ThreadPool with no workers");
 
         // Rotate the starting worker for load balancing across multiple bulk calls.
-        const size_t startWorkerOffset = nextWorker.fetch_add(1, std::memory_order_relaxed) % workerCount;
-
         const size_t base = taskCount / workerCount;
         const size_t remainder = taskCount % workerCount;
+
+        const size_t startWorkerOffset = nextWorker.fetch_add(remainder, std::memory_order_relaxed) % workerCount;
 
         size_t taskOffset = 0; // Current position in the input tasks array
 
@@ -89,7 +90,9 @@ namespace Ecstasy::Threading
         }
 
         // Update global counters and notify waiting threads.
-        pendingTaskCount.fetch_add(taskCount, std::memory_order_release);
+        queuedTaskCount.fetch_add(taskCount, std::memory_order_release);
+        unfinishedTaskCount.fetch_add(taskCount, std::memory_order_release);
+
         workVersion.fetch_add(1, std::memory_order_release);
         workVersion.notify_all();
     }
@@ -98,9 +101,13 @@ namespace Ecstasy::Threading
     {
         // Wait for all pending tasks to complete.
         {
-            size_t count;
-            while ((count = pendingTaskCount.load(std::memory_order_acquire)) != 0)
-                pendingTaskCount.wait(count, std::memory_order_acquire);
+            size_t unfinishedCount;
+            while (true)
+            {
+                unfinishedCount = unfinishedTaskCount.load(std::memory_order_acquire);
+                if (unfinishedTaskCount == 0) break;
+                unfinishedTaskCount.wait(unfinishedCount, std::memory_order_acquire);
+            }
         }
 
         // Signal all workers to stop.
@@ -126,12 +133,17 @@ namespace Ecstasy::Threading
         workers.destroy();
     }
 
+    void ThreadPool::onTaskClaimed()
+    {
+        queuedTaskCount.fetch_sub(1, std::memory_order_acq_rel);
+    }
+
     void ThreadPool::onTaskComplete()
     {
-        const size_t remaining = pendingTaskCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        const size_t remaining = unfinishedTaskCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
         if (remaining == 0)
         {
-            pendingTaskCount.notify_all();
+            unfinishedTaskCount.notify_all();
         }
     }
 
@@ -154,9 +166,9 @@ namespace Ecstasy::Threading
             Task task = tasks.steal();
             if (task)
             {
+                pool->onTaskClaimed();
                 try
                 {
-                    TracyMessage("Task", 4);
                     task();
                 }
                 catch (const std::exception& e)
@@ -176,9 +188,9 @@ namespace Ecstasy::Threading
                     task = victimQueue.steal();
                     if (task)
                     {
+                        pool->onTaskClaimed();
                         try
                         {
-                            TracyMessage("Task", 4);
                             task();
                         }
                         catch (const std::exception& e)
@@ -194,31 +206,33 @@ namespace Ecstasy::Threading
             // No work found.
             if (!task)
             {
+                TRACY_SCOPE_NC("Thread spin/sleep", Ecstasy::Color::Black);
+
                 // Spin.
-                //TracyMessage("Spin", 4);
                 bool returnToStart = false;
-                for (int spin = 0; spin < MAX_SPIN_COUNT; spin++)
                 {
-                    if (pool->getPendingTasks() > 0 || stop.load(std::memory_order_relaxed))
+                    for (int spin = 0; spin < MAX_SPIN_COUNT; spin++)
                     {
-                        returnToStart = true;
-                        break;
+                        _mm_pause();
+                        if (pool->getQueuedTasks() > 0 || stop.load(std::memory_order_relaxed))
+                        {
+                            returnToStart = true;
+                            break;
+                        }
                     }
-                    std::this_thread::yield();
                 }
                 if (returnToStart) [[likely]] continue;
 
-                //TracyMessage("Sleep", 5);
-
-                //Wait for new tasks (or stop).
-                uint32_t currentVersion = pool->workVersion.load(std::memory_order_acquire);
-                do
+                // Wait for new tasks (or stop).
                 {
-                    // Wait until 'workVersion' != 'currentVersion'.
-                    pool->workVersion.wait(currentVersion, std::memory_order_acquire);
-                    currentVersion = pool->workVersion.load(std::memory_order_acquire);
-                } while (!stop.load(std::memory_order_relaxed) && pool->getPendingTasks() == 0);
-                //TracyMessage("Awake", 5);
+                    uint32_t currentVersion = pool->workVersion.load(std::memory_order_acquire);
+                    do
+                    {
+                        // Wait until 'workVersion' != 'currentVersion'.
+                        pool->workVersion.wait(currentVersion, std::memory_order_acquire);
+                        currentVersion = pool->workVersion.load(std::memory_order_acquire);
+                    } while (pool->getQueuedTasks() == 0 && !stop.load(std::memory_order_relaxed));
+                }
             }
         }
     }

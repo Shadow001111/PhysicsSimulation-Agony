@@ -4,7 +4,6 @@
 #include "../TracyProfiler.h"
 
 #include <atomic>
-#include <cstddef>
 #include <utility>
 #include <thread>
 
@@ -192,7 +191,7 @@ namespace Ecstasy::Threading
                 }
 
                 if (mTop.compare_exchange_strong(top, top + 1,
-                    std::memory_order_seq_cst,
+                    std::memory_order_acq_rel,
                     std::memory_order_relaxed))
                 {
                     // Get task.

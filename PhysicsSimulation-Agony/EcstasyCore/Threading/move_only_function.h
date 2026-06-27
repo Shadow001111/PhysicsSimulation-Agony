@@ -12,7 +12,7 @@ namespace Ecstasy::Threading
     template <class R, class... Args>
     class move_only_function<R(Args...)>
     {
-        static constexpr size_t SBO_SIZE = 4 * sizeof(void*);
+        static constexpr size_t SBO_SIZE = 8 * sizeof(void*);
         static constexpr size_t SBO_ALIGN = alignof(std::max_align_t);
 
         struct base
