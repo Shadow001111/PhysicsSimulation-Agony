@@ -872,7 +872,7 @@ namespace PS_AGONY
         integrate(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
-        //iterativeCollisionSolving(deltaTime);
+        iterativeCollisionSolving(deltaTime);
     }
 
     void Simulation::postUpdate()
@@ -934,55 +934,40 @@ namespace PS_AGONY
 
         const RealSimd deltaTimeV{ deltaTime };
 
-        // Position.
+        // Position and rotatiob.
         {
             Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
             Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+            Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
+
             const Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
             const Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
+            const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
 
-            // Note: having single loop (x and y interleaved) is a very-little faster than doing two separate passes.
             size_t i = 0;
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
             {
-                const RealSimd velX = RealSimd::load(velocityXPtr + i);
-                const RealSimd velY = RealSimd::load(velocityYPtr + i);
+                const RealSimd velX   = RealSimd::load(velocityXPtr + i);
+                const RealSimd velY   = RealSimd::load(velocityYPtr + i);
+                const RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
 
                 RealSimd posX = RealSimd::load(positionXPtr + i);
                 RealSimd posY = RealSimd::load(positionYPtr + i);
+                RealSimd rot  = RealSimd::load(rotationPtr + i);
 
-                posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
-                posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
+                posX = RealSimd::mulAdd(velX,   deltaTimeV, posX);
+                posY = RealSimd::mulAdd(velY,   deltaTimeV, posY);
+                rot  = RealSimd::mulAdd(angVel, deltaTimeV, rot);
 
                 posX.store(positionXPtr + i);
                 posY.store(positionYPtr + i);
-            }
-            for (; i < bodyCount; i++)
-            {
-                positionXPtr[i] += velocityXPtr[i] * deltaTime;
-                positionYPtr[i] += velocityYPtr[i] * deltaTime;
-            }
-        }
-
-        // Rotation.
-        {
-            Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
-            const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
-        
-            size_t i = 0;
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            {
-                const RealSimd angularVel = RealSimd::load(angularVelocityPtr + i);
-                
-                RealSimd rot = RealSimd::load(rotationPtr + i);
-                
-                rot = RealSimd::mulAdd(angularVel, deltaTimeV, rot);
-                
                 rot.store(rotationPtr + i);
             }
             for (; i < bodyCount; i++)
             {
-                rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
+                positionXPtr[i] += velocityXPtr[i]       * deltaTime;
+                positionYPtr[i] += velocityYPtr[i]       * deltaTime;
+                rotationPtr[i]  += angularVelocityPtr[i] * deltaTime;
             }
         }
     }
