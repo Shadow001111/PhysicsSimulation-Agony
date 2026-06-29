@@ -154,7 +154,7 @@ namespace PS_AGONY
 
 	struct CircleSoA
 	{
-		std::vector<BodyIndex> bodyIndices;
+		SimdAlignedVector<BodyIndex> bodyIndices;
 
 		SimdAlignedVector<Real> radius;
 
@@ -179,7 +179,7 @@ namespace PS_AGONY
 
 	struct BoxSoA
 	{
-		std::vector<BodyIndex> bodyIndices;
+		SimdAlignedVector<BodyIndex> bodyIndices;
 
 		std::vector<Real> halfWidth;
 		std::vector<Real> halfHeight;
@@ -251,7 +251,7 @@ namespace PS_AGONY
 
 	struct PolygonSoA
 	{
-		std::vector<BodyIndex> bodyIndices;
+		SimdAlignedVector<BodyIndex> bodyIndices;
 		std::vector<VerticesContainer> localVertices;
 
 		void append(

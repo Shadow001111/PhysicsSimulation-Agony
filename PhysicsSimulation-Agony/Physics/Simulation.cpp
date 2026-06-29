@@ -872,7 +872,7 @@ namespace PS_AGONY
         integrate(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
-        iterativeCollisionSolving(deltaTime);
+        //iterativeCollisionSolving(deltaTime);
     }
 
     void Simulation::postUpdate()
@@ -1050,6 +1050,9 @@ namespace PS_AGONY
         const size_t count = circles.getCount();
         if (count == 0) return;
 
+        using RealSimd = Ecstasy::Simd<Real>;
+        using IndexSimd = Ecstasy::Simd<int32_t>;
+
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
 
@@ -1061,7 +1064,59 @@ namespace PS_AGONY
         Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
 
-        for (size_t i = 0; i < count; i++)
+        alignas(RealSimd::bytes) Real xBatch[RealSimd::lanes];
+        alignas(RealSimd::bytes) Real yBatch[RealSimd::lanes];
+        alignas(IndexSimd::bytes) BodyIndex bodyIndexBatch[RealSimd::lanes];
+
+        alignas(RealSimd::bytes) Real minXBatch[RealSimd::lanes];
+        alignas(RealSimd::bytes) Real minYBatch[RealSimd::lanes];
+        alignas(RealSimd::bytes) Real maxXBatch[RealSimd::lanes];
+        alignas(RealSimd::bytes) Real maxYBatch[RealSimd::lanes];
+
+        size_t i = 0;
+        for (; i + RealSimd::lanes <= count; i += RealSimd::lanes)
+        {
+            std::memcpy(bodyIndexBatch, bodyIndexPtr + i, IndexSimd::bytes);
+
+            RealSimd x;
+            RealSimd y;
+
+            if constexpr (RealSimd::isGatherAvailable())
+            {
+                const auto indices = IndexSimd::load((const int32_t*)bodyIndexPtr + i);
+                x = RealSimd::gather(positionXPtr, indices);
+                y = RealSimd::gather(positionYPtr, indices);
+            }
+            else
+            {
+                for (size_t j = 0; j < RealSimd::lanes; j++)
+                {
+                    const BodyIndex bodyIndex = bodyIndexBatch[j];
+                    xBatch[j] = positionXPtr[bodyIndex];
+                    yBatch[j] = positionYPtr[bodyIndex];
+                }
+                x = RealSimd::load(xBatch);
+                y = RealSimd::load(yBatch);
+            }
+
+            const RealSimd radius = RealSimd::load(radiusPtr + i);
+
+            (x - radius).store(minXBatch);
+            (y - radius).store(minYBatch);
+            (x + radius).store(maxXBatch);
+            (y + radius).store(maxYBatch);
+
+            for (size_t j = 0; j < RealSimd::lanes; j++)
+            {
+                const BodyIndex bodyIndex = bodyIndexBatch[j];
+            
+                aabbMinXPtr[bodyIndex] = minXBatch[j];
+                aabbMinYPtr[bodyIndex] = minYBatch[j];
+                aabbMaxXPtr[bodyIndex] = maxXBatch[j];
+                aabbMaxYPtr[bodyIndex] = maxYBatch[j];
+            }
+        }
+        for (; i < count; i++)
         {
             const BodyIndex bodyIndex = bodyIndexPtr[i];
             const Real radius = radiusPtr[i];
