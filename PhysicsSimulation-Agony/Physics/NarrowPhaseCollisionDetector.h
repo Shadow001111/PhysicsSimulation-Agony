@@ -88,6 +88,7 @@ namespace PS_AGONY
 		BodySoAViewer bodies;
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
+		PolygonSoAViewer polygons;
 	public:
 		enum class ExecutionPolicy
 		{
@@ -106,7 +107,8 @@ namespace PS_AGONY
 		void setDataViewers(
 			const BodySoAViewer& bodies,
 			const CircleSoAViewer& circles,
-			const BoxSoAViewer& boxes
+			const BoxSoAViewer& boxes,
+			const PolygonSoAViewer& polygons
 		);
 
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);

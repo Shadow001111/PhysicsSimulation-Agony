@@ -49,12 +49,14 @@ namespace PS_AGONY
     void NarrowPhaseCollisionDetector::setDataViewers(
         const BodySoAViewer& bodies,
         const CircleSoAViewer& circles,
-        const BoxSoAViewer& boxes
+        const BoxSoAViewer& boxes,
+        const PolygonSoAViewer& polygons
     )
     {
         this->bodies = bodies;
         this->circles = circles;
         this->boxes = boxes;
+        this->polygons = polygons;
     }
 
     const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(
@@ -634,6 +636,291 @@ namespace PS_AGONY
         const std::vector<BodyPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
+        TRACY_SCOPE_N("Box-polygon collision");
+
+        enum class SATAxis : uint32_t
+        {
+            BOX_RIGHT,
+            BOX_UP,
+            POLY_EDGE
+        };
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
+        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+
+        const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
+
+        const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
+
+        auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
+            {
+                minOut =  std::numeric_limits<Real>::max();
+                maxOut = -std::numeric_limits<Real>::max();
+
+                for (const Vec2& v : vertices)
+                {
+                    const Real p = glm::dot(v, axis);
+                    minOut = std::min(minOut, p);
+                    maxOut = std::max(maxOut, p);
+                }
+            };
+
+        auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
+            {
+                const Real d1 = glm::dot(p1 - planePoint, planeNormal);
+                const Real d2 = glm::dot(p2 - planePoint, planeNormal);
+
+                if (d1 >= 0 && d2 >= 0) return false; // both inside
+                if (d1 < 0 && d2 < 0) return true;    // both outside
+
+                const Vec2 dir = p2 - p1;
+                const Real t = d1 / (d1 - d2);
+                const Vec2 intersect = p1 + dir * t;
+
+                if (d1 >= 0) p2 = intersect;
+                else         p1 = intersect;
+
+                return false;
+            };
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            // A = box, B = polygon
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const Real cosA = rotationCosPtr[indexA];
+            const Real sinA = rotationSinPtr[indexA];
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const BodyIndex shapeA = shapeIndexPtr[indexA];
+            const BodyIndex shapeB = shapeIndexPtr[indexB];
+
+            const Real halfWidthA = halfWidthPtr[shapeA];
+            const Real halfHeightA = halfHeightPtr[shapeA];
+
+            const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
+            const Vec2* localVerts = localPolygonVertices.data();
+            const size_t vertexCount = localPolygonVertices.size();
+            if (vertexCount < 3) continue;
+
+            const Vec2 rightA = { cosA,  sinA };
+            const Vec2 upA = { -sinA, cosA };
+            const Vec2 rightB = { cosB,  sinB };
+            const Vec2 upB = { -sinB, cosB };
+
+            std::vector<Vec2> polyWorldVerts;
+            polyWorldVerts.reserve(vertexCount);
+
+            for (size_t i = 0; i < vertexCount; ++i)
+            {
+                const Vec2 v = localVerts[i];
+                polyWorldVerts.push_back(positionB + rightB * v.x + upB * v.y);
+            }
+
+            // Determine polygon winding so edge normals are consistent.
+            Real signedArea = Real(0);
+            for (size_t i = 0; i < vertexCount; ++i)
+            {
+                const Vec2& a = localVerts[i];
+                const Vec2& b = localVerts[(i + 1) % vertexCount];
+                signedArea += a.x * b.y - a.y * b.x;
+            }
+            const Real windingSign = (signedArea >= Real(0)) ? Real(1) : Real(-1);
+
+            auto polygonEdgeNormal = [&](uint32_t edgeIndex) -> Vec2
+                {
+                    const Vec2 p0 = polyWorldVerts[edgeIndex];
+                    const Vec2 p1 = polyWorldVerts[(edgeIndex + 1) % uint32_t(vertexCount)];
+                    const Vec2 edge = p1 - p0;
+
+                    // Consistent outward normal based on winding.
+                    Vec2 n = windingSign * Vec2{ edge.y, -edge.x };
+                    const Real len2 = glm::dot(n, n);
+                    if (len2 > Real(1e-12))
+                        n *= Real(1) / std::sqrt(len2);
+                    return n;
+                };
+
+            const Vec2 centerDelta = positionB - positionA;
+
+            Vec2 normal;
+            Real depth = std::numeric_limits<Real>::max();
+            SATAxis bestAxis = SATAxis::BOX_RIGHT;
+            uint32_t bestAxisIndex = 0;
+
+            auto testAxis = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
+                {
+                    const Real axisLen2 = glm::dot(axis, axis);
+                    if (axisLen2 <= Real(1e-12)) return true;
+
+                    axis *= Real(1) / std::sqrt(axisLen2);
+
+                    const Real boxRadius =
+                        halfWidthA * std::fabs(glm::dot(axis, rightA)) +
+                        halfHeightA * std::fabs(glm::dot(axis, upA));
+
+                    Real polyMin, polyMax;
+                    projectVerticesOnAxis(polyWorldVerts, axis, polyMin, polyMax);
+
+                    const Real boxCenterProj = glm::dot(positionA, axis);
+                    const Real boxMin = boxCenterProj - boxRadius;
+                    const Real boxMax = boxCenterProj + boxRadius;
+
+                    const Real overlap = std::min(boxMax, polyMax) - std::max(boxMin, polyMin);
+                    if (overlap < Real(0)) return false;
+
+                    if (overlap < depth)
+                    {
+                        depth = overlap;
+                        normal = axis;
+                        if (glm::dot(centerDelta, normal) < Real(0))
+                            normal = -normal;
+
+                        bestAxis = axisType;
+                        bestAxisIndex = axisIndex;
+                    }
+
+                    return true;
+                };
+
+            if (!testAxis(rightA, SATAxis::BOX_RIGHT, 0)) continue;
+            if (!testAxis(upA, SATAxis::BOX_UP, 0)) continue;
+
+            for (uint32_t i = 0; i < uint32_t(vertexCount); ++i)
+            {
+                Vec2 axis = polygonEdgeNormal(i);
+                if (!testAxis(axis, SATAxis::POLY_EDGE, i)) continue;
+            }
+
+            const bool refIsBox = bestAxis != SATAxis::POLY_EDGE;
+
+            Vec2 refNormal;
+            Vec2 refFaceCenter;
+            Vec2 sideDir;
+            Vec2 refEdgeStart;
+            Vec2 refEdgeEnd;
+
+            if (refIsBox)
+            {
+                refNormal = normal;
+
+                const Real dotX = glm::dot(refNormal, rightA);
+                const Real dotY = glm::dot(refNormal, upA);
+                const bool useX = std::fabs(dotX) > std::fabs(dotY);
+                const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
+
+                if (useX)
+                {
+                    refFaceCenter = positionA + rightA * (sign * halfWidthA);
+                    sideDir = upA;
+                }
+                else
+                {
+                    refFaceCenter = positionA + upA * (sign * halfHeightA);
+                    sideDir = rightA;
+                }
+
+                const Vec2 edgeOffset = sideDir * (useX ? halfHeightA : halfWidthA);
+                refEdgeStart = refFaceCenter + edgeOffset;
+                refEdgeEnd = refFaceCenter - edgeOffset;
+            }
+            else
+            {
+                refNormal = -normal;
+
+                const uint32_t i0 = bestAxisIndex;
+                const uint32_t i1 = (i0 + 1) % uint32_t(vertexCount);
+
+                refEdgeStart = polyWorldVerts[i0];
+                refEdgeEnd = polyWorldVerts[i1];
+                refFaceCenter = (refEdgeStart + refEdgeEnd) * Real(0.5);
+
+                const Vec2 edge = refEdgeEnd - refEdgeStart;
+                const Real edgeLen = std::sqrt(glm::dot(edge, edge));
+                if (edgeLen <= Real(1e-12)) continue;
+
+                sideDir = edge / edgeLen;
+            }
+
+            Vec2 incEdgeStart, incEdgeEnd;
+
+            if (refIsBox)
+            {
+                // Incident edge is the polygon edge whose normal is most opposite the reference normal.
+                uint32_t incidentEdge = 0;
+                Real minDot = std::numeric_limits<Real>::max();
+
+                for (uint32_t i = 0; i < uint32_t(vertexCount); ++i)
+                {
+                    const Vec2 n = polygonEdgeNormal(i);
+                    const Real d = glm::dot(refNormal, n);
+                    if (d < minDot)
+                    {
+                        minDot = d;
+                        incidentEdge = i;
+                    }
+                }
+
+                incEdgeStart = polyWorldVerts[incidentEdge];
+                incEdgeEnd = polyWorldVerts[(incidentEdge + 1) % uint32_t(vertexCount)];
+            }
+            else
+            {
+                // Incident edge is the box face opposite the reference normal.
+                const Real dotX = glm::dot(refNormal, rightA);
+                const Real dotY = glm::dot(refNormal, upA);
+                const bool useX = std::fabs(dotX) > std::fabs(dotY);
+                const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
+
+                Vec2 faceCenter, edgeOffset;
+                if (useX)
+                {
+                    faceCenter = positionA + rightA * (sign * halfWidthA);
+                    edgeOffset = upA * halfHeightA;
+                }
+                else
+                {
+                    faceCenter = positionA + upA * (sign * halfHeightA);
+                    edgeOffset = rightA * halfWidthA;
+                }
+
+                incEdgeStart = faceCenter + edgeOffset;
+                incEdgeEnd = faceCenter - edgeOffset;
+            }
+
+            Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
+            if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
+            if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
+
+            Vec2 contacts[2];
+            uint32_t contactCount = 0;
+            const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
+
+            for (uint32_t i = 0; i < 2; ++i)
+            {
+                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + Real(1e-5))
+                    contacts[contactCount++] = clipped[i];
+            }
+
+            if (contactCount == 0) continue;
+            if (contactCount == 1)
+                contacts[1] = contacts[0];
+
+            outCollisionData.emplace_back(
+                indexA, indexB,
+                normal,
+                depth,
+                contacts[0],
+                contacts[1],
+                contactCount
+            );
+        }
     }
 
     void NarrowPhaseCollisionDetector::collisionPolygonPolygon(

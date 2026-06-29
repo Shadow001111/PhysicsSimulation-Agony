@@ -27,6 +27,87 @@ namespace PS_AGONY
         return mass * (div * (width * width + height * height) + deltaSquared);
     }
 
+    static Real calculatePolygonInertia(Real mass, const Vec2* vertices, size_t verticesCount, Vec2 centerOfMass)
+    {
+        if (verticesCount < 3) return Real(0);
+
+        Real signedArea = Real(0);
+        Real xx = Real(0);
+        Real yy = Real(0);
+
+        for (size_t i = 0; i < verticesCount; i++)
+        {
+            const Vec2& p0 = vertices[i];
+            const Vec2& p1 = vertices[(i + 1) % verticesCount];
+
+            Real cross = p0.x * p1.y - p1.x * p0.y;
+            signedArea += cross;
+
+            // Area moments about local origin.
+            xx += (p0.y * p0.y + p0.y * p1.y + p1.y * p1.y) * cross;
+            yy += (p0.x * p0.x + p0.x * p1.x + p1.x * p1.x) * cross;
+        }
+
+        signedArea *= Real(0.5);
+        Real area = std::fabs(signedArea);
+        if (area < std::numeric_limits<Real>::epsilon()) return Real(0);
+
+        xx /= Real(12);
+        yy /= Real(12);
+
+        // Local polar moment of area, then scaled to mass moment.
+        Real iLocal = (mass / area) * (xx + yy);
+
+        // Shift to world origin (parallel axis theorem).
+        Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
+        return iLocal + mass * deltaSquared;
+    }
+
+    static std::pair<Real, Vec2> calculatePolygonInertiaAndCOM(Real mass, const Vec2* vertices, size_t verticesCount)
+    {
+        if (verticesCount < 3) return { Real(0), Vec2(Real(0)) };
+
+        Real signedArea = Real(0);
+        Real cx = Real(0);
+        Real cy = Real(0);
+        Real xx = Real(0);
+        Real yy = Real(0);
+
+        for (size_t i = 0; i < verticesCount; i++)
+        {
+            const Vec2& p0 = vertices[i];
+            const Vec2& p1 = vertices[(i + 1) % verticesCount];
+
+            Real cross = p0.x * p1.y - p1.x * p0.y;
+            signedArea += cross;
+
+            // Centroid numerators.
+            cx += (p0.x + p1.x) * cross;
+            cy += (p0.y + p1.y) * cross;
+
+            // Area moments about world origin.
+            xx += (p0.y * p0.y + p0.y * p1.y + p1.y * p1.y) * cross;
+            yy += (p0.x * p0.x + p0.x * p1.x + p1.x * p1.x) * cross;
+        }
+
+        signedArea *= Real(0.5);
+        Real area = std::abs(signedArea);
+        if (area < std::numeric_limits<Real>::epsilon()) return { Real(0), Vec2(Real(0)) };
+
+        Vec2 centerOfMass(
+            cx / (Real(6) * signedArea),
+            cy / (Real(6) * signedArea)
+        );
+
+        xx /= Real(12);
+        yy /= Real(12);
+
+        // World inertia = (mass/area) * polar area moment about the origin.
+        Real worldInertia = (mass / area) * (xx + yy);
+
+        return { worldInertia, centerOfMass };
+    }
+
 
     static __forceinline Vec2 rotate2D(Vec2 point, Real cos, Real sin)
     {
@@ -199,8 +280,8 @@ namespace PS_AGONY
         const BodyIndex newShapeIndex = boxes.getCount();
 
         const Real mass = std::fmax(Real(0), params.base.mass);
-        const Real width = std::fmax(Real(0.0), params.size.x);
-        const Real height = std::fmax(Real(0.0), params.size.y);
+        const Real width = std::fmax(Real(0), params.size.x);
+        const Real height = std::fmax(Real(0), params.size.y);
         const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
@@ -227,6 +308,57 @@ namespace PS_AGONY
             newBodyIndex,
             width  * Real(0.5),
             height * Real(0.5)
+        );
+    }
+
+    void Simulation::createPolygon(const PolygonCreateParams& params)
+    {
+        if (params.localVertices == nullptr || params.verticesCount < 3)
+        {
+            return;
+        }
+
+        const BodyIndex newBodyIndex = bodies.getCount();
+        const BodyIndex newShapeIndex = polygons.getCount();
+
+        const Real mass = std::fmax(Real(0), params.base.mass);
+        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
+
+        Real inertia;
+        Vec2 centerOfMass;
+        if (params.base.centerOfMass.has_value())
+        {
+            centerOfMass = params.base.centerOfMass.value();
+            inertia = calculatePolygonInertia(mass, params.localVertices, params.verticesCount, centerOfMass);
+        }
+        else
+        {
+            auto iCOM = calculatePolygonInertiaAndCOM(mass, params.localVertices, params.verticesCount);
+            inertia = iCOM.first;
+            centerOfMass = iCOM.second;
+        }
+
+        const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
+        const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
+
+        bodies.append(
+            params.base.position,
+            params.base.velocity,
+            params.base.rotation,
+            params.base.angularVelocity,
+            mass, invMass,
+            inertia, invInertia,
+            centerOfMass,
+            materialIndex,
+            BodyType::Polygon,
+            newShapeIndex,
+            params.base.textureId
+        );
+
+        polygons.append(
+            newBodyIndex,
+            params.localVertices,
+            params.verticesCount
         );
     }
 
@@ -651,7 +783,8 @@ namespace PS_AGONY
                 narrowPhaseCollisionDetector.setDataViewers(
                     BodySoAViewer(bodies),
                     CircleSoAViewer(circles),
-                    BoxSoAViewer(boxes)
+                    BoxSoAViewer(boxes),
+                    PolygonSoAViewer(polygons)
                 );
 
                 // Warm-up run.
@@ -881,7 +1014,8 @@ namespace PS_AGONY
         narrowPhaseCollisionDetector.setDataViewers(
             BodySoAViewer(bodies),
             CircleSoAViewer(circles),
-            BoxSoAViewer(boxes)
+            BoxSoAViewer(boxes),
+            PolygonSoAViewer(polygons)
         );
 
         solver.setDataViewers(
@@ -918,6 +1052,7 @@ namespace PS_AGONY
         TRACY_SCOPE_NC("Build body AABBs", Ecstasy::Color::Green);
         buildCircleAABBs();
         buildBoxAABBs();
+        buildPolygonAABBs();
     }
 
     void Simulation::buildCircleAABBs()
@@ -991,6 +1126,56 @@ namespace PS_AGONY
             aabbMinYPtr[bodyIndex] = y - ey;
             aabbMaxXPtr[bodyIndex] = x + ex;
             aabbMaxYPtr[bodyIndex] = y + ey;
+        }
+    }
+
+    void Simulation::buildPolygonAABBs()
+    {
+        const size_t count = polygons.getCount();
+        if (count == 0) return;
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices.data();
+        const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices.data();
+
+        Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const Real x = positionXPtr[bodyIndex];
+            const Real y = positionYPtr[bodyIndex];
+            const Real cos = rotationCosPtr[bodyIndex];
+            const Real sin = rotationSinPtr[bodyIndex];
+
+            const Vec2* verts = localVertsPtr[i].data();
+            const size_t vertCount = localVertsPtr[i].size();
+
+            Real minX = std::numeric_limits<Real>::max();
+            Real minY = std::numeric_limits<Real>::max();
+            Real maxX = -std::numeric_limits<Real>::max();
+            Real maxY = -std::numeric_limits<Real>::max();
+
+            for (size_t v = 0; v < vertCount; v++)
+            {
+                const Real wx = cos * verts[v].x - sin * verts[v].y;
+                const Real wy = sin * verts[v].x + cos * verts[v].y;
+                minX = std::fmin(minX, wx);
+                maxX = std::fmax(maxX, wx);
+                minY = std::fmin(minY, wy);
+                maxY = std::fmax(maxY, wy);
+            }
+
+            aabbMinXPtr[bodyIndex] = x + minX;
+            aabbMinYPtr[bodyIndex] = y + minY;
+            aabbMaxXPtr[bodyIndex] = x + maxX;
+            aabbMaxYPtr[bodyIndex] = y + maxY;
         }
     }
 

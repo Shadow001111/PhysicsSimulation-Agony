@@ -6,13 +6,73 @@
 
 #include <cmath>
 
+
+static PS_AGONY::Real cross(const PS_AGONY::Vec2& a,
+    const PS_AGONY::Vec2& b,
+    const PS_AGONY::Vec2& c)
+{
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Random::Generator& rvg, size_t targetVertices, float radius)
+{
+    const size_t sampleCount = std::max<size_t>(targetVertices * 4, 12);
+
+    std::vector<PS_AGONY::Vec2> pts;
+    pts.reserve(sampleCount);
+
+    for (size_t i = 0; i < sampleCount; ++i) {
+        const float a = rvg.real<float>(0.0f, 6.28318530718f);
+        const float r = rvg.real<float>(0.25f * radius, radius);
+        pts.push_back({ r * std::cos(a), r * std::sin(a) });
+    }
+
+    std::sort(pts.begin(), pts.end(), [](const auto& p1, const auto& p2)
+        {
+        return (p1.x < p2.x) || (p1.x == p2.x && p1.y < p2.y);
+        });
+
+    std::vector<PS_AGONY::Vec2> hull;
+    hull.reserve(pts.size() * 2);
+
+    for (const auto& p : pts)
+    {
+        while (hull.size() >= 2 &&
+            cross(hull[hull.size() - 2], hull[hull.size() - 1], p) <= 0.0f)
+        {
+            hull.pop_back();
+        }
+        hull.push_back(p);
+    }
+
+    const size_t lowerSize = hull.size();
+
+    for (auto it = pts.rbegin() + 1; it != pts.rend(); ++it)
+    {
+        while (hull.size() > lowerSize &&
+            cross(hull[hull.size() - 2], hull[hull.size() - 1], *it) <= 0.0f)
+        {
+            hull.pop_back();
+        }
+        hull.push_back(*it);
+    }
+
+    if (!hull.empty())
+        hull.pop_back();
+
+    return hull;
+}
+
+
+
 void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg, float globalOffsetX, float globalOffsetY)
 {
     constexpr float boundary = 20.0f;
     constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 2'500;
+    constexpr int circleCount = 0;// 2'500;
     constexpr int boxCount = 0;// 2'500;
+    constexpr int polygonCount = 10;// 2'500;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -116,6 +176,31 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
             .base.materialIndex = material0Index,
             .size = { width, height }
         });
+    }
+    for (int i = 0; i < polygonCount; i++)
+    {
+        const float x = globalOffsetX + rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
+        const float vx = rvg.real<float>(-2.0f, 2.0f);
+        const float vy = rvg.real<float>(-2.0f, 2.0f);
+        const float rotation = rvg.real<float>(0.0f, 6.28f);
+        const float r = rvg.real<float>(0.1f, 0.15f) * 2.0f;
+        const float mass = 1.0f;
+
+        constexpr size_t maxVerticesCount = 10;
+        const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
+
+        auto localVertices = makeConvexPolygon(rvg, verticesCount, r);
+
+        simulation.createPolygon({
+            .base.position = { x, y },
+            .base.velocity = { vx, vy},
+            .base.rotation = rotation,
+            .base.mass = mass,
+            .base.materialIndex = material0Index,
+            .localVertices = localVertices.data(),
+            .verticesCount = verticesCount
+            });
     }
 
     {

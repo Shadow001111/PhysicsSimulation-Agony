@@ -72,6 +72,7 @@ namespace PS_AGONY
 		BodySoA bodies;
 		CircleSoA circles;
 		BoxSoA boxes;
+		PolygonSoA polygons;
 
 		// Materials.
 		std::vector<Material> materials;
@@ -107,6 +108,13 @@ namespace PS_AGONY
 			Vec2 size{ 0 };
 		};
 
+		struct PolygonCreateParams
+		{
+			BodyCreateParams base;
+			Vec2* localVertices = nullptr;
+			size_t verticesCount = 0;
+		};
+
 		Simulation();
 		~Simulation() = default;
 		Simulation(const Simulation&) = delete;
@@ -118,6 +126,7 @@ namespace PS_AGONY
 
 		void createCircle(const CircleCreateParams& params);
 		void createBox(const BoxCreateParams& params);
+		void createPolygon(const PolygonCreateParams& params);
 
 		void destroyBody(BodyIndex bodyIndex);
 
@@ -137,6 +146,7 @@ namespace PS_AGONY
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
 		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(boxes); }
+		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(polygons); }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 	private:
@@ -153,6 +163,7 @@ namespace PS_AGONY
 		void buildBodyAABBs();
 		void buildCircleAABBs();
 		void buildBoxAABBs();
+		void buildPolygonAABBs();
 
 		void wrapRotation();
 
