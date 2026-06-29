@@ -35,6 +35,7 @@ namespace PS_AGONY
         bodies = simulation.getBodies();
         circles = simulation.getCircles();
         boxes = simulation.getBoxes();
+        polygons = simulation.getPolygons();
 
         // Camera.
         const Mat4 viewMatrix = camera.getViewMatrix();
@@ -67,6 +68,15 @@ namespace PS_AGONY
             };
 
             boxResources.shader.create(sources);
+        }
+
+        // Polygon.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER,   "res/Shaders/Bodies/Polygon/polygon.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/Polygon/polygon.frag" }
+            };
+            polygonResources.shader.create(sources);
         }
 
         // AABB.
@@ -125,6 +135,12 @@ namespace PS_AGONY
             ensureBoxInstanceVboCapacity(64);
         }
 
+        // Polygon - VAO only; buffers are grown on first use.
+        {
+            polygonResources.vao.create();
+            ensurePolygonBufferCapacity(256, 64);
+        }
+
         // AABB.
         {
             const float vertices[] =
@@ -153,11 +169,12 @@ namespace PS_AGONY
     {
         renderCircleBodies(viewProjectionMatrix);
         renderBoxBodies(viewProjectionMatrix);
+        renderPolygonBodies(viewProjectionMatrix);
 
 		//renderBodyCentersOfMass(viewProjectionMatrix);
         //renderBodyPositions(viewProjectionMatrix);
         //renderBodyTruePositions(viewProjectionMatrix);
-		//renderBodyAABBs(viewProjectionMatrix);
+		renderBodyAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -336,6 +353,73 @@ namespace PS_AGONY
         renderBoxShapes(viewProjectionMatrix);
     }
 
+    void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix)
+    {
+        const size_t count = polygons.getCount();
+        if (count == 0) return;
+
+        // Body SoA pointers.
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+        const BodyTextureId* ECSTASY_RESTRICT textureIdPtr = bodies.textureId;
+
+        // Polygon SoA pointers.
+        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices;
+        const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices;
+
+        // Count total vertices needed this frame.
+        size_t totalVertices = 0;
+        for (size_t i = 0; i < count; i++)
+            totalVertices += localVertsPtr[i].size();
+
+        ensurePolygonBufferCapacity(totalVertices, count);
+
+        // Build CPU-side data.
+        polygonResources.vertexData.resize(totalVertices);
+        polygonResources.instanceData.resize(count);
+        polygonResources.drawCommands.resize(count);
+
+        glm::vec2* ECSTASY_RESTRICT verts = polygonResources.vertexData.data();
+        PolygonInstanceData* ECSTASY_RESTRICT instData = polygonResources.instanceData.data();
+        DrawArraysIndirectCommand* ECSTASY_RESTRICT cmds = polygonResources.drawCommands.data();
+
+        uint32_t vertexOffset = 0;
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const BodyIndex         bodyIndex = bodyIndexPtr[i];
+            const VerticesContainer& vc = localVertsPtr[i];
+            const uint32_t           vertCount = static_cast<uint32_t>(vc.size());
+            const Vec2* src = vc.data();
+
+            for (uint32_t v = 0; v < vertCount; v++)
+            {
+                verts[vertexOffset + v].x = src[v].x;
+                verts[vertexOffset + v].y = src[v].y;
+            }
+
+            instData[i].positionX = positionXPtr[bodyIndex];
+            instData[i].positionY = positionYPtr[bodyIndex];
+            instData[i].localCOMX = localCOMXPtr[bodyIndex];
+            instData[i].localCOMY = localCOMYPtr[bodyIndex];
+            instData[i].rotation = rotationPtr[bodyIndex];
+            instData[i].color = 0xFFFFFF;
+            instData[i].textureId = textureIdPtr[bodyIndex];
+
+            cmds[i].count = vertCount;
+            cmds[i].instanceCount = 1;
+            cmds[i].first = vertexOffset;
+            cmds[i].baseInstance = 0;
+
+            vertexOffset += vertCount;
+        }
+
+        renderPolygonShapes(viewProjectionMatrix);
+    }
+
     void SimulationRenderer::renderBodyAABBs(const Mat4& viewProjectionMatrix)
     {
         const size_t bodyCount = bodies.getCount();
@@ -455,6 +539,34 @@ namespace PS_AGONY
         glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, count);
     }
 
+    void SimulationRenderer::renderPolygonShapes(const Mat4& viewProjectionMatrix)
+    {
+        const size_t polygonCount = polygonResources.drawCommands.size();
+        if (polygonCount == 0) return;
+
+        const size_t vertexBytes = polygonResources.vertexData.size() * sizeof(glm::vec2);
+        const size_t instanceBytes = polygonCount * sizeof(PolygonInstanceData);
+        const size_t cmdBytes = polygonCount * sizeof(DrawArraysIndirectCommand);
+
+        // Upload vertex positions.
+        polygonResources.vertexVbo.write(polygonResources.vertexData.data(), vertexBytes);
+
+        // Upload per-polygon transforms.
+        polygonResources.instanceVbo.write(polygonResources.instanceData.data(), instanceBytes);
+
+        // Upload indirect draw commands.
+        polygonResources.indirectBuf.write(polygonResources.drawCommands.data(), cmdBytes);
+
+        // Bind and draw.
+        polygonResources.shader.use();
+        polygonResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        polygonResources.vao.bind();
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, polygonResources.indirectBuf.getID());
+
+        glMultiDrawArraysIndirect(GL_TRIANGLE_FAN, nullptr, static_cast<GLsizei>(polygonCount), 0);
+    }
+
     void SimulationRenderer::renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix)
     {
         const size_t count = aabbResources.instanceData.size();
@@ -563,6 +675,51 @@ namespace PS_AGONY
         vao.enableAttribute(6);
         vao.setIntAttribute(6, 1, sizeof(float) * 8, 1);
         vao.setAttributeDivisor(6, 1);
+    }
+
+    void SimulationRenderer::ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount)
+    {
+        constexpr size_t SIZEOF_VERTEX = sizeof(glm::vec2);
+        constexpr size_t SIZEOF_INSTANCE = sizeof(PolygonInstanceData);
+        constexpr size_t SIZEOF_CMD = sizeof(DrawArraysIndirectCommand);
+
+        auto& vao = polygonResources.vao;
+        auto& vertexVbo = polygonResources.vertexVbo;
+        auto& instanceVbo = polygonResources.instanceVbo;
+        auto& indirectBuf = polygonResources.indirectBuf;
+
+        const size_t neededVertexBytes = vertexCount * SIZEOF_VERTEX;
+        if (neededVertexBytes > vertexVbo.getCapacity())
+        {
+            const size_t newCapacity = neededVertexBytes + (neededVertexBytes >> 1);
+
+            vertexVbo.create();
+            vertexVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+            vao.bindVertexBuffer(0, vertexVbo.getID(), 0, SIZEOF_VERTEX);
+            vao.enableAttribute(0);
+            vao.setFloatAttribute(0, 2, 0, 0);
+        }
+
+        const size_t neededInstanceBytes = polygonCount * SIZEOF_INSTANCE;
+        if (neededInstanceBytes > instanceVbo.getCapacity())
+        {
+            const size_t newCapacity = neededInstanceBytes + (neededInstanceBytes >> 1);
+
+            instanceVbo.create();
+            instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, instanceVbo.getID());
+        }
+
+        const size_t neededCmdBytes = polygonCount * SIZEOF_CMD;
+        if (neededCmdBytes > indirectBuf.getCapacity())
+        {
+            const size_t newCapacity = neededCmdBytes + (neededCmdBytes >> 1);
+
+            indirectBuf.create();
+            indirectBuf.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+        }
     }
 
     void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)

@@ -1,5 +1,4 @@
 #pragma once
-
 #include "BodySoA.h"
 
 namespace PS_AGONY
@@ -137,6 +136,25 @@ namespace PS_AGONY
             bodyIndices(data.bodyIndices.data()),
             halfWidth(data.halfWidth.data()),
             halfHeight(data.halfHeight.data())
+        {
+        }
+
+        size_t getCount() const noexcept { return count; }
+    };
+
+    class PolygonSoAViewer
+    {
+        size_t count = 0;
+    public:
+        const BodyIndex* bodyIndices = nullptr;
+        const VerticesContainer* localVertices = nullptr;
+
+        PolygonSoAViewer() = default;
+
+        explicit PolygonSoAViewer(const PolygonSoA& data) :
+            count(data.getCount()),
+            bodyIndices(data.bodyIndices.data()),
+            localVertices(data.localVertices.data())
         {
         }
 

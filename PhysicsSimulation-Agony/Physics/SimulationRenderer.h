@@ -61,9 +61,40 @@ namespace PS_AGONY
 			std::vector<AABB> instanceData;
 		};
 
+		struct DrawArraysIndirectCommand
+		{
+			uint32_t count;        
+			uint32_t instanceCount;
+			uint32_t first;        
+			uint32_t baseInstance; 
+		};
+
+		struct PolygonInstanceData
+		{
+			float positionX, positionY;
+			float localCOMX, localCOMY;
+			float rotation;
+			uint32_t color;
+			uint32_t textureId;
+		};
+
+		struct PolygonRenderResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vertexVbo;   // Packed local vertex positions for all polygons.
+			ImmutableBuffer instanceVbo; // Per-polygon transform data.
+			ImmutableBuffer indirectBuf; // DrawArraysIndirectCommand array.
+			Shader shader;
+			std::vector<glm::vec2>               vertexData;
+			std::vector<PolygonInstanceData>     instanceData;
+			std::vector<DrawArraysIndirectCommand> drawCommands;
+		};
+
 		// Resources.
 		CircleRenderResources circleResources;
 		BoxRenderResources boxResources;
+		PolygonRenderResources polygonResources;
+
 		AABBResources aabbResources;
 
 		// Camera.
@@ -71,8 +102,10 @@ namespace PS_AGONY
 
 		// Simulation references.
 		BodySoAViewer bodies;
+
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
+		PolygonSoAViewer polygons;
 
 		// Delete.
 		Texture hardcodedTexture;
@@ -98,8 +131,10 @@ namespace PS_AGONY
 		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix);
 		void renderBodyPositions(const Mat4& viewProjectionMatrix);
 		void renderBodyTruePositions(const Mat4& viewProjectionMatrix);
+		
 		void renderCircleBodies(const Mat4& viewProjectionMatrix);
 		void renderBoxBodies(const Mat4& viewProjectionMatrix);
+		void renderPolygonBodies(const Mat4& viewProjectionMatrix);
 
 		void renderBodyAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
@@ -109,12 +144,16 @@ namespace PS_AGONY
 
 		void renderCircleShapes(const Mat4& viewProjectionMatrix);
 		void renderBoxShapes(const Mat4& viewProjectionMatrix);
+		void renderPolygonShapes(const Mat4& viewProjectionMatrix);
+		
 		void renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix);
 
 		// Buffer helpers.
 
 		void ensureCircleInstanceVboCapacity(size_t count);
 		void ensureBoxInstanceVboCapacity(size_t count);
+		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);
+
 		void ensureAABBInstanceVboCapacity(size_t count);
 	};
 }
