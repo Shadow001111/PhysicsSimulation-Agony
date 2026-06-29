@@ -424,6 +424,120 @@ namespace PS_AGONY
         const std::vector<BodyPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
+        TRACY_SCOPE_N("Circle-polygon collision");
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
+        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+
+        const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
+        const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const BodyIndex shapeA = shapeIndexPtr[indexA];
+            const BodyIndex shapeB = shapeIndexPtr[indexB];
+
+            const Real radiusA = radiusPtr[shapeA];
+
+            const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
+            const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
+            const size_t vertexCount = localPolygonVertices.size();
+            if (vertexCount < 3) [[unlikely]] continue;
+
+            const Vec2 rightB = { cosB,  sinB };
+            const Vec2 upB = { -sinB, cosB };
+
+            const Vec2 circleLocal = {
+                glm::dot(positionA - positionB, rightB),
+                glm::dot(positionA - positionB, upB)
+            };
+
+            auto edgeOutwardNormal = [&](uint32_t edgeIndex) -> Vec2
+                {
+                    const Vec2 v0 = localVerts[edgeIndex];
+                    const Vec2 v1 = localVerts[(edgeIndex + 1) % uint32_t(vertexCount)];
+                    const Vec2 edge = v1 - v0;
+
+                    Vec2 n = Vec2{ edge.y, -edge.x };
+                    const Real len2 = glm::dot(n, n);
+                    if (len2 > Real(1e-12))
+                        n *= Real(1) / std::sqrt(len2);
+                    return n;
+                };
+
+            auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
+                {
+                    const Vec2 ab = b - a;
+                    const Real denom = glm::dot(ab, ab);
+                    if (denom <= Real(1e-12)) return a;
+                    const Real t = glm::dot(p - a, ab) / denom;
+                    return a + ab * glm::clamp(t, Real(0), Real(1));
+                };
+
+            Real bestDist2 = std::numeric_limits<Real>::max();
+            Vec2 bestPointLocal;
+            uint32_t bestEdgeIndex = 0;
+
+            for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
+            {
+                const Vec2 a = localVerts[i];
+                const Vec2 b = localVerts[(i + 1) % uint32_t(vertexCount)];
+                const Vec2 q = closestPointOnSegment(circleLocal, a, b);
+                const Vec2 d = q - circleLocal;
+                const Real dist2 = glm::dot(d, d);
+
+                if (dist2 < bestDist2)
+                {
+                    bestDist2 = dist2;
+                    bestPointLocal = q;
+                    bestEdgeIndex = i;
+                }
+            }
+
+            if (bestDist2 >= radiusA * radiusA) continue;
+
+            Vec2 normalLocal;
+            if (bestDist2 > Real(1e-8))
+            {
+                const Real invDist = Real(1) / std::sqrt(bestDist2);
+                normalLocal = (bestPointLocal - circleLocal) * invDist;
+            }
+            else
+            {
+                normalLocal = edgeOutwardNormal(bestEdgeIndex);
+                if (glm::dot(circleLocal - bestPointLocal, normalLocal) < Real(0))
+                    normalLocal = -normalLocal;
+            }
+
+            Vec2 normal = {
+                rightB.x * normalLocal.x + upB.x * normalLocal.y,
+                rightB.y * normalLocal.x + upB.y * normalLocal.y
+            };
+
+            if (glm::dot(positionB - positionA, normal) < Real(0))
+                normal = -normal;
+
+            const Real depth = radiusA - std::sqrt(bestDist2);
+            const Vec2 contactOnCircle = positionA + normal * radiusA;
+
+            outCollisionData.emplace_back(
+                indexA, indexB,
+                normal,
+                depth,
+                contactOnCircle,
+                Vec2(),
+                1
+            );
+        }
     }
 
     void NarrowPhaseCollisionDetector::collisionBoxBox(
@@ -789,7 +903,7 @@ namespace PS_AGONY
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
                 Vec2 axis = polygonEdgeNormal(i);
-                if (!testAxis(axis, SATAxis::POLY_EDGE, i)) continue;
+                if (!testAxis(axis, SATAxis::POLY_EDGE, i)) goto nextPair;
             }
 
             const bool refIsBox = bestAxis != SATAxis::POLY_EDGE;
@@ -914,6 +1028,9 @@ namespace PS_AGONY
                 contacts[1],
                 contactCount
             );
+
+        nextPair:
+            continue;
         }
     }
 
@@ -921,5 +1038,292 @@ namespace PS_AGONY
         const std::vector<BodyPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
+        TRACY_SCOPE_N("Polygon-polygon collision");
+
+        enum class SATAxis : uint32_t
+        {
+            A_EDGE,
+            B_EDGE
+        };
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
+        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+
+        const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
+
+        auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
+            {
+                const Real d1 = glm::dot(p1 - planePoint, planeNormal);
+                const Real d2 = glm::dot(p2 - planePoint, planeNormal);
+
+                if (d1 >= 0 && d2 >= 0) return false; // both inside
+                if (d1 < 0 && d2 < 0) return true;    // both outside
+
+                const Vec2 dir = p2 - p1;
+                const Real t = d1 / (d1 - d2);
+                const Vec2 intersect = p1 + dir * t;
+
+                if (d1 >= 0) p2 = intersect;
+                else         p1 = intersect;
+
+                return false;
+            };
+
+        auto dedupePush = [](std::vector<Vec2>& pts, const Vec2& p)
+            {
+                constexpr Real eps2 = Real(1e-10);
+                for (const Vec2& q : pts)
+                {
+                    const Vec2 d = p - q;
+                    if (glm::dot(d, d) <= eps2) return;
+                }
+                pts.push_back(p);
+            };
+
+        static thread_local std::vector<Vec2> worldVertsA;
+        static thread_local std::vector<Vec2> worldVertsB;
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const Real cosA = rotationCosPtr[indexA];
+            const Real sinA = rotationSinPtr[indexA];
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const BodyIndex shapeA = shapeIndexPtr[indexA];
+            const BodyIndex shapeB = shapeIndexPtr[indexB];
+
+            const VerticesContainer& localVertsAContainer = polyLocalVerticesPtr[shapeA];
+            const VerticesContainer& localVertsBContainer = polyLocalVerticesPtr[shapeB];
+
+            const Vec2* localVertsA = localVertsAContainer.data();
+            const Vec2* localVertsB = localVertsBContainer.data();
+
+            const size_t countA = localVertsAContainer.size();
+            const size_t countB = localVertsBContainer.size();
+            if (countA < 3 || countB < 3) [[unlikely]] continue;
+
+            const Vec2 rightA = { cosA,  sinA };
+            const Vec2 upA = { -sinA, cosA };
+            const Vec2 rightB = { cosB,  sinB };
+            const Vec2 upB = { -sinB, cosB };
+
+            worldVertsA.clear();
+            worldVertsB.clear();
+            worldVertsA.resize(countA);
+            worldVertsB.resize(countB);
+
+            for (size_t i = 0; i < countA; i++)
+            {
+                const Vec2 v = localVertsA[i];
+                worldVertsA[i] = positionA + rightA * v.x + upA * v.y;
+            }
+
+            for (size_t i = 0; i < countB; i++)
+            {
+                const Vec2 v = localVertsB[i];
+                worldVertsB[i] = positionB + rightB * v.x + upB * v.y;
+            }
+
+            auto edgeOutwardNormal = [](const std::vector<Vec2>& verts, uint32_t edgeIndex) -> Vec2
+                {
+                    const Vec2 p0 = verts[edgeIndex];
+                    const Vec2 p1 = verts[(edgeIndex + 1) % uint32_t(verts.size())];
+                    const Vec2 edge = p1 - p0;
+
+                    Vec2 n = Vec2{ edge.y, -edge.x };
+                    const Real len2 = glm::dot(n, n);
+                    if (len2 > Real(1e-12))
+                        n *= Real(1) / std::sqrt(len2);
+                    return n;
+                };
+
+            auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2& axis, Real& minOut, Real& maxOut)
+                {
+                    minOut = std::numeric_limits<Real>::max();
+                    maxOut = -std::numeric_limits<Real>::max();
+
+                    for (const Vec2& v : vertices)
+                    {
+                        const Real p = glm::dot(v, axis);
+                        minOut = std::min(minOut, p);
+                        maxOut = std::max(maxOut, p);
+                    }
+                };
+
+            const Vec2 centerDelta = positionB - positionA;
+
+            Vec2 normal;
+            Real depth = std::numeric_limits<Real>::max();
+            SATAxis bestAxisType = SATAxis::A_EDGE;
+            uint32_t bestAxisIndex = 0;
+
+            auto sat = [&](const std::vector<Vec2>& vertsA, const std::vector<Vec2>& vertsB,
+                Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
+                {
+                    const Real axisLen2 = glm::dot(axis, axis);
+                    if (axisLen2 <= Real(1e-12)) return true;
+
+                    axis *= Real(1) / std::sqrt(axisLen2);
+
+                    Real minA, maxA;
+                    Real minB, maxB;
+                    projectVerticesOnAxis(vertsA, axis, minA, maxA);
+                    projectVerticesOnAxis(vertsB, axis, minB, maxB);
+
+                    const Real overlap = std::min(maxA, maxB) - std::max(minA, minB);
+                    if (overlap < Real(0)) return false;
+
+                    if (overlap < depth)
+                    {
+                        depth = overlap;
+                        normal = axis;
+                        if (glm::dot(centerDelta, normal) < Real(0))
+                            normal = -normal;
+
+                        bestAxisType = axisType;
+                        bestAxisIndex = axisIndex;
+                    }
+
+                    return true;
+                };
+
+            for (uint32_t i = 0; i < uint32_t(countA); i++)
+            {
+                Vec2 axis = edgeOutwardNormal(worldVertsA, i);
+                if (!sat(worldVertsA, worldVertsB, axis, SATAxis::A_EDGE, i))
+                    goto nextPair;
+            }
+
+            for (uint32_t i = 0; i < uint32_t(countB); i++)
+            {
+                Vec2 axis = edgeOutwardNormal(worldVertsB, i);
+                if (!sat(worldVertsA, worldVertsB, axis, SATAxis::B_EDGE, i))
+                    goto nextPair;
+            }
+
+            {
+                const bool refIsA = bestAxisType == SATAxis::A_EDGE;
+
+                const std::vector<Vec2>& refVerts = refIsA ? worldVertsA : worldVertsB;
+                const std::vector<Vec2>& incVerts = refIsA ? worldVertsB : worldVertsA;
+
+                Vec2 refNormal = refIsA ? normal : -normal;
+                Vec2 refEdgeStart, refEdgeEnd, refFaceCenter, sideDir;
+
+                {
+                    const uint32_t i0 = bestAxisIndex;
+                    const uint32_t i1 = (i0 + 1) % uint32_t(refVerts.size());
+
+                    refEdgeStart = refVerts[i0];
+                    refEdgeEnd = refVerts[i1];
+                    refFaceCenter = (refEdgeStart + refEdgeEnd) * Real(0.5);
+
+                    const Vec2 edge = refEdgeEnd - refEdgeStart;
+                    const Real edgeLen = std::sqrt(glm::dot(edge, edge));
+                    if (edgeLen <= Real(1e-12)) goto nextPair;
+
+                    sideDir = edge / edgeLen;
+
+                    const Vec2 expectedOutward = Vec2{ edge.y, -edge.x };
+                    if (glm::dot(expectedOutward, refNormal) < Real(0))
+                    {
+                        std::swap(refEdgeStart, refEdgeEnd);
+                        sideDir = -sideDir;
+                    }
+                }
+
+                // Incident edge: pick the edge whose outward normal is most anti-parallel to the reference normal.
+                uint32_t incidentEdgeIndex = 0;
+                Real minDot = std::numeric_limits<Real>::max();
+
+                for (uint32_t i = 0; i < uint32_t(incVerts.size()); i++)
+                {
+                    const Vec2 p0 = incVerts[i];
+                    const Vec2 p1 = incVerts[(i + 1) % uint32_t(incVerts.size())];
+                    const Vec2 edge = p1 - p0;
+                    Vec2 n = Vec2{ edge.y, -edge.x };
+                    const Real len2 = glm::dot(n, n);
+                    if (len2 <= Real(1e-12)) continue;
+                    n *= Real(1) / std::sqrt(len2);
+
+                    const Real d = glm::dot(refNormal, n);
+                    if (d < minDot)
+                    {
+                        minDot = d;
+                        incidentEdgeIndex = i;
+                    }
+                }
+
+                Vec2 incEdgeStart = incVerts[incidentEdgeIndex];
+                Vec2 incEdgeEnd = incVerts[(incidentEdgeIndex + 1) % uint32_t(incVerts.size())];
+
+                Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
+                if (clipSegment(clipped[0], clipped[1], refEdgeStart, sideDir)) goto nextPair;
+                if (clipSegment(clipped[0], clipped[1], refEdgeEnd, -sideDir)) goto nextPair;
+
+                const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
+                const Real eps = Real(1e-5);
+
+                std::vector<Vec2> contacts;
+                contacts.reserve(2);
+
+                for (uint32_t i = 0; i < 2; ++i)
+                {
+                    if (glm::dot(clipped[i], refNormal) <= refPlaneDist + eps)
+                        dedupePush(contacts, clipped[i]);
+                }
+
+                if (contacts.empty()) goto nextPair;
+
+                Vec2 contact0 = contacts[0];
+                Vec2 contact1 = contacts[0];
+
+                if (contacts.size() > 1)
+                {
+                    Vec2 sideAxis = sideDir;
+                    Real minProj = glm::dot(contacts[0], sideAxis);
+                    Real maxProj = minProj;
+                    for (size_t i = 1; i < contacts.size(); i++)
+                    {
+                        const Real proj = glm::dot(contacts[i], sideAxis);
+                        if (proj < minProj)
+                        {
+                            minProj = proj;
+                            contact0 = contacts[i];
+                        }
+                        if (proj > maxProj)
+                        {
+                            maxProj = proj;
+                            contact1 = contacts[i];
+                        }
+                    }
+                }
+                else
+                {
+                    contact1 = contact0;
+                }
+
+                uint32_t contactCount = (glm::dot(contact0 - contact1, contact0 - contact1) > Real(1e-10)) ? 2u : 1u;
+
+                outCollisionData.emplace_back(
+                    indexA, indexB,
+                    normal,
+                    depth,
+                    contact0,
+                    contact1,
+                    contactCount
+                );
+            }
+
+        nextPair:
+            continue;
+        }
     }
 }
