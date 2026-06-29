@@ -27,45 +27,17 @@ namespace PS_AGONY
         return mass * (div * (width * width + height * height) + deltaSquared);
     }
 
-    static Real calculatePolygonInertia(Real mass, const Vec2* vertices, size_t verticesCount, Vec2 centerOfMass)
+    static std::pair<Real, Vec2> calculatePolygonInertia(
+        Real mass,
+        VerticesContainer& verticesContainer,
+        std::optional<Vec2> centerOfMass = std::nullopt
+    )
     {
-        if (verticesCount < 3) return Real(0);
-
-        Real signedArea = Real(0);
-        Real xx = Real(0);
-        Real yy = Real(0);
-
-        for (size_t i = 0; i < verticesCount; i++)
+        const size_t verticesCount = verticesContainer.size();
+        if (verticesCount < 3)
         {
-            const Vec2& p0 = vertices[i];
-            const Vec2& p1 = vertices[(i + 1) % verticesCount];
-
-            Real cross = p0.x * p1.y - p1.x * p0.y;
-            signedArea += cross;
-
-            // Area moments about local origin.
-            xx += (p0.y * p0.y + p0.y * p1.y + p1.y * p1.y) * cross;
-            yy += (p0.x * p0.x + p0.x * p1.x + p1.x * p1.x) * cross;
+            return { Real(0), centerOfMass.value_or(Vec2(Real(0))) };
         }
-
-        signedArea *= Real(0.5);
-        Real area = std::fabs(signedArea);
-        if (area < std::numeric_limits<Real>::epsilon()) return Real(0);
-
-        xx /= Real(12);
-        yy /= Real(12);
-
-        // Local polar moment of area, then scaled to mass moment.
-        Real iLocal = (mass / area) * (xx + yy);
-
-        // Shift to world origin (parallel axis theorem).
-        Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
-        return iLocal + mass * deltaSquared;
-    }
-
-    static std::pair<Real, Vec2> calculatePolygonInertiaAndCOM(Real mass, const Vec2* vertices, size_t verticesCount)
-    {
-        if (verticesCount < 3) return { Real(0), Vec2(Real(0)) };
 
         Real signedArea = Real(0);
         Real cx = Real(0);
@@ -73,52 +45,79 @@ namespace PS_AGONY
         Real xx = Real(0);
         Real yy = Real(0);
 
+        const bool computeCOM = !centerOfMass.has_value();
+        const Vec2* verticesPtr = verticesContainer.data();
+
         for (size_t i = 0; i < verticesCount; i++)
         {
-            const Vec2& p0 = vertices[i];
-            const Vec2& p1 = vertices[(i + 1) % verticesCount];
+            const Vec2& p0 = verticesPtr[i];
+            const Vec2& p1 = verticesPtr[(i + 1) % verticesCount];
 
             Real cross = p0.x * p1.y - p1.x * p0.y;
             signedArea += cross;
 
-            // Centroid numerators.
-            cx += (p0.x + p1.x) * cross;
-            cy += (p0.y + p1.y) * cross;
+            if (computeCOM)
+            {
+                cx += (p0.x + p1.x) * cross;
+                cy += (p0.y + p1.y) * cross;
+            }
 
-            // Area moments about world origin.
+            // Area moments about origin.
             xx += (p0.y * p0.y + p0.y * p1.y + p1.y * p1.y) * cross;
             yy += (p0.x * p0.x + p0.x * p1.x + p1.x * p1.x) * cross;
         }
 
-        signedArea *= Real(0.5);
-        Real area = std::abs(signedArea);
-        if (area < std::numeric_limits<Real>::epsilon()) return { Real(0), Vec2(Real(0)) };
+        // If winding order is clockwise, reverse the container to make it counter-clockwise.
+        // Since all accumulated values are linear with respect to 'cross', we can just negate them.
+        if (signedArea < Real(0))
+        {
+            std::reverse(verticesContainer.begin(), verticesContainer.end());
+            signedArea = -signedArea;
+            xx = -xx;
+            yy = -yy;
+            if (computeCOM)
+            {
+                cx = -cx;
+                cy = -cy;
+            }
+        }
 
-        Vec2 centerOfMass(
-            cx / (Real(6) * signedArea),
-            cy / (Real(6) * signedArea)
-        );
+        signedArea *= Real(0.5);
+        const Real absoluteArea = signedArea;
+        if (absoluteArea < std::numeric_limits<Real>::epsilon())
+        {
+            return { Real(0), centerOfMass.value_or(Vec2(Real(0))) };
+        }
+
+        // Determine final Center of Mass.
+        Vec2 finalCOM;
+        if (computeCOM)
+        {
+            finalCOM = Vec2(
+                cx / (Real(6) * signedArea),
+                cy / (Real(6) * signedArea)
+            );
+        }
+        else
+        {
+            finalCOM = centerOfMass.value();
+        }
 
         xx /= Real(12);
         yy /= Real(12);
 
-        // World inertia = (mass/area) * polar area moment about the origin.
-        Real worldInertia = (mass / area) * (xx + yy);
+        // Local/World polar moment of area scaled to mass moment
+        Real inertia = (mass / absoluteArea) * (xx + yy);
 
-        return { worldInertia, centerOfMass };
-    }
+        // If COM was explicitly provided, treat vertices as local space 
+        // and shift to world origin via the parallel axis theorem.
+        if (!computeCOM)
+        {
+            Real deltaSquared = glm::dot(finalCOM, finalCOM);
+            inertia += mass * deltaSquared;
+        }
 
-
-    static __forceinline Vec2 rotate2D(Vec2 point, Real cos, Real sin)
-    {
-        const float nx = point.x * cos - point.y * sin;
-        const float ny = point.x * sin + point.y * cos;
-        return { nx, ny };
-    }
-
-    static __forceinline Vec2 rotate2D(Vec2 point, Real angle)
-    {
-        return rotate2D(point, std::cos(angle), std::sin(angle));
+        return { inertia, finalCOM };
     }
 
 
@@ -324,19 +323,11 @@ namespace PS_AGONY
         const Real mass = std::fmax(Real(0), params.base.mass);
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
-        Real inertia;
-        Vec2 centerOfMass;
-        if (params.base.centerOfMass.has_value())
-        {
-            centerOfMass = params.base.centerOfMass.value();
-            inertia = calculatePolygonInertia(mass, params.localVertices, params.verticesCount, centerOfMass);
-        }
-        else
-        {
-            auto iCOM = calculatePolygonInertiaAndCOM(mass, params.localVertices, params.verticesCount);
-            inertia = iCOM.first;
-            centerOfMass = iCOM.second;
-        }
+        VerticesContainer vertices{ params.localVertices, params.verticesCount };
+
+        auto iCOM = calculatePolygonInertia(mass, vertices, params.base.centerOfMass);
+        const Real inertia = iCOM.first;
+        const Vec2 centerOfMass = iCOM.second;
 
         const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
         const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
@@ -357,8 +348,7 @@ namespace PS_AGONY
 
         polygons.append(
             newBodyIndex,
-            params.localVertices,
-            params.verticesCount
+            std::move(vertices)
         );
     }
 
