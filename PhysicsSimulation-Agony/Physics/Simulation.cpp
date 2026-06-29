@@ -158,38 +158,33 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::createCircle(
-        Vec2 position,
-        Vec2 velocity,
-        Real rotation,
-        Real angularVelocity,
-        Real mass,
-        Vec2 centerOfMass,
-        MaterialIndex materialIndex,
-        Real radius,
-        BodyTextureId textureId
-    )
+    void Simulation::createCircle(const CircleCreateParams& params)
     {
-        mass = std::fmax(Real(0.0), mass);
-        radius = std::fmax(Real(0.0), radius);
-
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = circles.getCount();
 
+        const Real mass   = std::fmax(Real(0), params.base.mass);
+        const Real radius = std::fmax(Real(0), params.radius);
+        const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
+        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
+
         const Real inertia = calculateCircleInertia(mass, radius, centerOfMass);
 
+        const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
+        const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
+
         bodies.append(
-            position,
-            velocity,
-            rotation,
-            angularVelocity,
-            mass, mass == 0.0 ? 0.0 : 1.0 / mass,
-            inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
+            params.base.position,
+            params.base.velocity,
+            params.base.rotation,
+            params.base.angularVelocity,
+            mass,    invMass,
+            inertia, invInertia,
 			centerOfMass,
-            materialIndex < materials.size() ? materialIndex : 0,
+            materialIndex,
             BodyType::Circle,
             newShapeIndex,
-            textureId
+            params.base.textureId
 		);
 
         circles.append(
@@ -198,48 +193,40 @@ namespace PS_AGONY
 		);
     }
 
-    void Simulation::createBox(
-        Vec2 position,
-        Vec2 velocity,
-        Real rotation,
-        Real angularVelocity,
-        Real mass,
-        Vec2 centerOfMass,
-        MaterialIndex materialIndex,
-        Vec2 size,
-        BodyTextureId textureId
-    )
+    void Simulation::createBox(const BoxCreateParams& params)
     {
-        mass = std::fmax(Real(0.0), mass);
-        const Real width = std::fmax(Real(0.0), size.x);
-        const Real height = std::fmax(Real(0.0), size.y);
-
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = boxes.getCount();
 
+        const Real mass = std::fmax(Real(0), params.base.mass);
+        const Real width = std::fmax(Real(0.0), params.size.x);
+        const Real height = std::fmax(Real(0.0), params.size.y);
+        const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
+        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
+
         const Real inertia = calculateBoxInertia(mass, width, height, centerOfMass);
 
+        const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
+        const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
+
         bodies.append(
-            position,
-            velocity,
-            rotation,
-            angularVelocity,
-            mass, mass == 0.0 ? 0.0 : 1.0 / mass,
-            inertia, inertia == 0.0 ? 0.0 : 1.0 / inertia,
-            centerOfMass,
-            materialIndex < materials.size() ? materialIndex : 0,
+            params.base.position,
+            params.base.velocity,
+            params.base.rotation,
+            params.base.angularVelocity,
+            mass,    invMass,
+            inertia, invInertia,
+			centerOfMass,
+            materialIndex,
             BodyType::Box,
             newShapeIndex,
-            textureId
+            params.base.textureId
         );
-
-        const Real halfWidth = width * Real(0.5);
-        const Real halfHeight = height * Real(0.5);
 
         boxes.append(
             newBodyIndex,
-            halfWidth,
-            halfHeight
+            width  * Real(0.5),
+            height * Real(0.5)
         );
     }
 
@@ -500,7 +487,12 @@ namespace PS_AGONY
                     Real y = i / gridSide;
                     position = Vec2(x, y) * choosenBodyOffset;
 
-                    createCircle(position, Vec2(0.0f, 0.0f), 0.0f, 0.0f, 1.0f, Vec2(0.0f, 0.0f), 0, ballRadius);
+                    createCircle({
+                        .base.position = position,
+                        .base.mass = 1,
+                        .base.materialIndex = 0,
+                        .radius = ballRadius
+                        });
                 }
 
                 // Prepare.
@@ -638,7 +630,12 @@ namespace PS_AGONY
                     Real y = i / gridSide;
                     position = Vec2(x, y) * choosenBodyOffset;
 
-                    createCircle(position, Vec2(0.0f, 0.0f), 0.0f, 0.0f, 1.0f, Vec2(0.0f, 0.0f), 0, ballRadius);
+                    createCircle({
+                        .base.position = position,
+                        .base.mass = 1,
+                        .base.materialIndex = 0,
+                        .radius = ballRadius
+                        });
                 }
 
                 // Prepare.
