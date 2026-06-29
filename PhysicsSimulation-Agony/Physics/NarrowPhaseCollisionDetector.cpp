@@ -487,7 +487,7 @@ namespace PS_AGONY
             const Real projectedRadiusAOnUpB = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
 
             Vec2 normal;
-            Real depth = FLT_MAX;
+            Real depth = std::numeric_limits<Real>::max();
             SATAxis bestAxis;
 
             auto sat = [&](Real radiusSum, Real centerDeltaOnAxis, Vec2 axis, SATAxis axisType) -> bool
@@ -664,8 +664,8 @@ namespace PS_AGONY
                 for (const Vec2& v : vertices)
                 {
                     const Real p = glm::dot(v, axis);
-                    minOut = std::min(minOut, p);
-                    maxOut = std::max(maxOut, p);
+                    minOut = std::fmin(minOut, p);
+                    maxOut = std::fmax(maxOut, p);
                 }
             };
 
@@ -674,8 +674,8 @@ namespace PS_AGONY
                 const Real d1 = glm::dot(p1 - planePoint, planeNormal);
                 const Real d2 = glm::dot(p2 - planePoint, planeNormal);
 
-                if (d1 >= 0 && d2 >= 0) return false; // both inside
-                if (d1 < 0 && d2 < 0) return true;    // both outside
+                if (d1 >= 0 && d2 >= 0) return false; // Both inside.
+                if (d1 < 0 && d2 < 0) return true;    // Both outside.
 
                 const Vec2 dir = p2 - p1;
                 const Real t = d1 / (d1 - d2);
@@ -687,9 +687,10 @@ namespace PS_AGONY
                 return false;
             };
 
+        static thread_local std::vector<Vec2> polyWorldVerts;
+
         for (auto [indexA, indexB] : pairs)
         {
-            // A = box, B = polygon
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
@@ -707,31 +708,23 @@ namespace PS_AGONY
             const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
             const Vec2* localVerts = localPolygonVertices.data();
             const size_t vertexCount = localPolygonVertices.size();
-            if (vertexCount < 3) continue;
+            if (vertexCount < 3) [[unlikely]] continue;
 
-            const Vec2 rightA = { cosA,  sinA };
-            const Vec2 upA = { -sinA, cosA };
-            const Vec2 rightB = { cosB,  sinB };
-            const Vec2 upB = { -sinB, cosB };
+            const Vec2 rightA = {  cosA, sinA };
+            const Vec2 upA    = { -sinA, cosA };
+            const Vec2 rightB = {  cosB, sinB };
+            const Vec2 upB    = { -sinB, cosB };
 
-            std::vector<Vec2> polyWorldVerts;
-            polyWorldVerts.reserve(vertexCount);
+            polyWorldVerts.clear();
+            polyWorldVerts.resize(vertexCount);
 
-            for (size_t i = 0; i < vertexCount; ++i)
+            for (size_t i = 0; i < vertexCount; i++)
             {
                 const Vec2 v = localVerts[i];
-                polyWorldVerts.push_back(positionB + rightB * v.x + upB * v.y);
+                polyWorldVerts[i] = positionB + rightB * v.x + upB * v.y;
             }
 
-            // Determine polygon winding so edge normals are consistent.
-            Real signedArea = Real(0);
-            for (size_t i = 0; i < vertexCount; ++i)
-            {
-                const Vec2& a = localVerts[i];
-                const Vec2& b = localVerts[(i + 1) % vertexCount];
-                signedArea += a.x * b.y - a.y * b.x;
-            }
-            const Real windingSign = (signedArea >= Real(0)) ? Real(1) : Real(-1);
+            // Winding is consistent.
 
             auto polygonEdgeNormal = [&](uint32_t edgeIndex) -> Vec2
                 {
@@ -739,11 +732,12 @@ namespace PS_AGONY
                     const Vec2 p1 = polyWorldVerts[(edgeIndex + 1) % uint32_t(vertexCount)];
                     const Vec2 edge = p1 - p0;
 
-                    // Consistent outward normal based on winding.
-                    Vec2 n = windingSign * Vec2{ edge.y, -edge.x };
+                    Vec2 n = Vec2{ edge.y, -edge.x };
                     const Real len2 = glm::dot(n, n);
                     if (len2 > Real(1e-12))
+                    {
                         n *= Real(1) / std::sqrt(len2);
+                    }
                     return n;
                 };
 
@@ -756,10 +750,10 @@ namespace PS_AGONY
 
             auto testAxis = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
                 {
-                    const Real axisLen2 = glm::dot(axis, axis);
-                    if (axisLen2 <= Real(1e-12)) return true;
+                    const Real axisLenSquared = glm::dot(axis, axis);
+                    if (axisLenSquared <= Real(1e-12)) return true;
 
-                    axis *= Real(1) / std::sqrt(axisLen2);
+                    axis *= Real(1) / std::sqrt(axisLenSquared);
 
                     const Real boxRadius =
                         halfWidthA * std::fabs(glm::dot(axis, rightA)) +
@@ -772,7 +766,7 @@ namespace PS_AGONY
                     const Real boxMin = boxCenterProj - boxRadius;
                     const Real boxMax = boxCenterProj + boxRadius;
 
-                    const Real overlap = std::min(boxMax, polyMax) - std::max(boxMin, polyMin);
+                    const Real overlap = std::fmin(boxMax, polyMax) - std::fmax(boxMin, polyMin);
                     if (overlap < Real(0)) return false;
 
                     if (overlap < depth)
@@ -792,7 +786,7 @@ namespace PS_AGONY
             if (!testAxis(rightA, SATAxis::BOX_RIGHT, 0)) continue;
             if (!testAxis(upA, SATAxis::BOX_UP, 0)) continue;
 
-            for (uint32_t i = 0; i < uint32_t(vertexCount); ++i)
+            for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
                 Vec2 axis = polygonEdgeNormal(i);
                 if (!testAxis(axis, SATAxis::POLY_EDGE, i)) continue;
@@ -856,7 +850,7 @@ namespace PS_AGONY
                 uint32_t incidentEdge = 0;
                 Real minDot = std::numeric_limits<Real>::max();
 
-                for (uint32_t i = 0; i < uint32_t(vertexCount); ++i)
+                for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
                 {
                     const Vec2 n = polygonEdgeNormal(i);
                     const Real d = glm::dot(refNormal, n);
@@ -902,15 +896,15 @@ namespace PS_AGONY
             uint32_t contactCount = 0;
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
 
-            for (uint32_t i = 0; i < 2; ++i)
+            for (uint32_t i = 0; i < 2; i++)
             {
                 if (glm::dot(clipped[i], refNormal) <= refPlaneDist + Real(1e-5))
+                {
                     contacts[contactCount++] = clipped[i];
+                }
             }
 
             if (contactCount == 0) continue;
-            if (contactCount == 1)
-                contacts[1] = contacts[0];
 
             outCollisionData.emplace_back(
                 indexA, indexB,

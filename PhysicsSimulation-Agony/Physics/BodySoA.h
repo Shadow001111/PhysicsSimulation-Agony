@@ -243,6 +243,9 @@ namespace PS_AGONY
 		const Vec2* data() const noexcept { return dataPtr.get(); }
 		size_t size() const noexcept { return verticesCount; }
 
+		Vec2* begin() noexcept { return dataPtr.get(); }
+		Vec2* end() noexcept { return dataPtr.get() + verticesCount; }
+
 		size_t getMemoryUsage() const noexcept { return verticesCount * sizeof(Vec2); }
 	};
 
@@ -253,12 +256,11 @@ namespace PS_AGONY
 
 		void append(
 			BodyIndex bodyIndex,
-			const Vec2* localVertices,
-			size_t verticesCount
+			VerticesContainer&& vertices
 		)
 		{
 			this->bodyIndices.push_back(bodyIndex);
-			this->localVertices.emplace_back(localVertices, verticesCount);
+			this->localVertices.emplace_back(std::move(vertices));
 		}
 
 		size_t getCount() const noexcept { return bodyIndices.size(); }
