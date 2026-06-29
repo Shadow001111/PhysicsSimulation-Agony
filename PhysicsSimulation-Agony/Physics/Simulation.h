@@ -11,6 +11,7 @@
 #include "Interactivity/BodyHolder.h"
 
 #include <vector>
+#include <optional>
 
 namespace PS_AGONY
 {
@@ -37,7 +38,6 @@ namespace PS_AGONY
 	private:
 		struct SimulationSettings
 		{
-			//
 			Real updateInterval = 1 / 300.0;
 			uint32_t collisionSolvingIterations = 6;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
@@ -55,6 +55,18 @@ namespace PS_AGONY
 			AllTouching,
 			COUNT
         };
+
+		struct BodyCreateParams
+		{
+			Vec2 position{};
+			Vec2 velocity{};
+			Real rotation{ 0 };
+			Real angularVelocity{ 0 };
+			Real mass{ 0 };
+			std::optional<Vec2> centerOfMass = std::nullopt;
+			MaterialIndex materialIndex{ 0 };
+			BodyTextureId textureId{ 0 };
+		};
 
 		// Bodies SoA.
 		BodySoA bodies;
@@ -83,6 +95,18 @@ namespace PS_AGONY
 		// Interactivity.
 		Interactivity::BodyHolder mainBodyHolder;
 	public:
+		struct CircleCreateParams
+		{
+			BodyCreateParams base; // Would better to just inherit, but field initializer can't work like this :c. For now.
+			Real radius{ 0 };
+		};
+
+		struct BoxCreateParams
+		{
+			BodyCreateParams base;
+			Vec2 size{ 0 };
+		};
+
 		Simulation();
 		~Simulation() = default;
 		Simulation(const Simulation&) = delete;
@@ -92,8 +116,8 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		void createCircle(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, Vec2 centerOfMass, MaterialIndex materialIndex, Real radius, BodyTextureId textureId = 0);
-		void createBox(Vec2 position, Vec2 velocity, Real rotation, Real angularVelocity, Real mass, Vec2 centerOfMass, MaterialIndex materialIndex, Vec2 size, BodyTextureId textureId = 0);
+		void createCircle(const CircleCreateParams& params);
+		void createBox(const BoxCreateParams& params);
 
 		void destroyBody(BodyIndex bodyIndex);
 
