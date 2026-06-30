@@ -1,9 +1,7 @@
 #version 460 core
 
-// Per-vertex: local polygon vertex position.
 layout(location = 0) in vec2 localPos;
 
-// Per-polygon transform, indexed by gl_DrawID.
 struct PolygonInstance
 {
     float positionX, positionY;
@@ -12,6 +10,7 @@ struct PolygonInstance
     uint  color;
     uint  textureId;
 };
+
 layout(std430, binding = 0) readonly buffer InstanceBuffer
 {
     PolygonInstance instances[];
@@ -19,7 +18,8 @@ layout(std430, binding = 0) readonly buffer InstanceBuffer
 
 uniform mat4 viewProjectionMatrix;
 
-out vec3 vColor;
+out vec2 uv;
+out flat vec3 vColor;
 
 void main()
 {
@@ -35,12 +35,13 @@ void main()
 
     vec2 worldPos = rotated + localCOM + vec2(inst.positionX, inst.positionY);
 
-    // Unpack RGB from packed uint.
     vColor = vec3(
         float((inst.color >> 16u) & 0xFFu) / 255.0,
         float((inst.color >>  8u) & 0xFFu) / 255.0,
         float( inst.color         & 0xFFu) / 255.0
     );
+
+    uv = centered;
 
     gl_Position = viewProjectionMatrix * vec4(worldPos, 0.0, 1.0);
 }

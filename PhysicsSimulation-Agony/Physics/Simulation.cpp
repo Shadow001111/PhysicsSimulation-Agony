@@ -922,7 +922,7 @@ namespace PS_AGONY
         const RealSimd zeros = RealSimd(Real(0));
 
         size_t i = 0;
-        if constexpr (false)
+        if constexpr (true)
         {
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
             {
