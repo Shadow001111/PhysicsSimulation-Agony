@@ -728,7 +728,7 @@ namespace PS_AGONY
             Vec2 contacts[2];
             uint32_t contactCount = 0;
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
-            for (uint32_t i = 0; i < 2; ++i)
+            for (uint32_t i = 0; i < 2; i++)
             {
                 if (glm::dot(clipped[i], refNormal) <= refPlaneDist + Real(1e-5))
                     contacts[contactCount++] = clipped[i];
@@ -1072,17 +1072,6 @@ namespace PS_AGONY
                 return false;
             };
 
-        auto dedupePush = [](std::vector<Vec2>& pts, const Vec2& p)
-            {
-                constexpr Real eps2 = Real(1e-10);
-                for (const Vec2& q : pts)
-                {
-                    const Vec2 d = p - q;
-                    if (glm::dot(d, d) <= eps2) return;
-                }
-                pts.push_back(p);
-            };
-
         static thread_local std::vector<Vec2> worldVertsA;
         static thread_local std::vector<Vec2> worldVertsB;
 
@@ -1146,7 +1135,7 @@ namespace PS_AGONY
 
             auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2& axis, Real& minOut, Real& maxOut)
                 {
-                    minOut = std::numeric_limits<Real>::max();
+                    minOut =  std::numeric_limits<Real>::max();
                     maxOut = -std::numeric_limits<Real>::max();
 
                     for (const Vec2& v : vertices)
@@ -1266,62 +1255,33 @@ namespace PS_AGONY
 
                 Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
                 if (clipSegment(clipped[0], clipped[1], refEdgeStart, sideDir)) goto nextPair;
-                if (clipSegment(clipped[0], clipped[1], refEdgeEnd, -sideDir)) goto nextPair;
+                if (clipSegment(clipped[0], clipped[1], refEdgeEnd,  -sideDir)) goto nextPair;
 
                 const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
                 const Real eps = Real(1e-5);
 
-                std::vector<Vec2> contacts;
-                contacts.reserve(2);
+                std::array<Vec2, 2> contacts;
+                uint32_t contactCount = 0;
 
-                for (uint32_t i = 0; i < 2; ++i)
+                for (uint32_t i = 0; i < 2; i++)
                 {
                     if (glm::dot(clipped[i], refNormal) <= refPlaneDist + eps)
-                        dedupePush(contacts, clipped[i]);
-                }
-
-                if (contacts.empty()) goto nextPair;
-
-                Vec2 contact0 = contacts[0];
-                Vec2 contact1 = contacts[0];
-
-                if (contacts.size() > 1)
-                {
-                    Vec2 sideAxis = sideDir;
-                    Real minProj = glm::dot(contacts[0], sideAxis);
-                    Real maxProj = minProj;
-                    for (size_t i = 1; i < contacts.size(); i++)
                     {
-                        const Real proj = glm::dot(contacts[i], sideAxis);
-                        if (proj < minProj)
-                        {
-                            minProj = proj;
-                            contact0 = contacts[i];
-                        }
-                        if (proj > maxProj)
-                        {
-                            maxProj = proj;
-                            contact1 = contacts[i];
-                        }
+                        contacts[contactCount++] = clipped[i];
                     }
                 }
-                else
-                {
-                    contact1 = contact0;
-                }
 
-                uint32_t contactCount = (glm::dot(contact0 - contact1, contact0 - contact1) > Real(1e-10)) ? 2u : 1u;
+                if (contactCount == 0) continue;
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
                     normal,
                     depth,
-                    contact0,
-                    contact1,
+                    contacts[0],
+                    contacts[1],
                     contactCount
                 );
             }
-
         nextPair:
             continue;
         }

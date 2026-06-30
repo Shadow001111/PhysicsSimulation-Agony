@@ -888,6 +888,8 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
 
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
         const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
@@ -899,30 +901,85 @@ namespace PS_AGONY
         const RealSimd zeros = RealSimd(Real(0));
 
         size_t i = 0;
-        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+        if constexpr (true)
         {
-            RealSimd velX = RealSimd::load(velocityXPtr + i);
-            RealSimd velY = RealSimd::load(velocityYPtr + i);
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                RealSimd velX = RealSimd::load(velocityXPtr + i);
+                RealSimd velY = RealSimd::load(velocityYPtr + i);
 
-            const RealSimd invMassV = RealSimd::load(invMassPtr + i);
-            const auto movableMask = invMassV != zeros;
+                const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+                const auto movableMask = invMassV != zeros;
 
-            RealSimd newVelX = velX + gravityDeltaXV;
-            RealSimd newVelY = velY + gravityDeltaYV;
+                RealSimd newVelX = velX + gravityDeltaXV;
+                RealSimd newVelY = velY + gravityDeltaYV;
 
-            velX = RealSimd::blendv(velX, newVelX, movableMask);
-            velY = RealSimd::blendv(velY, newVelY, movableMask);
+                velX = RealSimd::blendv(velX, newVelX, movableMask);
+                velY = RealSimd::blendv(velY, newVelY, movableMask);
 
-            velX.store(velocityXPtr + i);
-            velY.store(velocityYPtr + i);
+                velX.store(velocityXPtr + i);
+                velY.store(velocityYPtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                const Real invMass = invMassPtr[i];
+                const Real movableMask = invMass != Real(0.0);
+
+                velocityXPtr[i] += gravityDelta.x * movableMask;
+                velocityYPtr[i] += gravityDelta.y * movableMask;
+            }
         }
-        for (; i < bodyCount; i++)
+        else
         {
-            const Real invMass = invMassPtr[i];
-            const Real movableMask = invMass != Real(0.0);
-        
-            velocityXPtr[i] += gravityDelta.x * movableMask;
-            velocityYPtr[i] += gravityDelta.y * movableMask;
+            constexpr Real softSq = 1;
+
+            const Real G = Real(5000);
+            const RealSimd Gv = RealSimd(G);
+            const RealSimd softSqV = RealSimd(Real(softSq));
+
+            size_t i = 0;
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                RealSimd velX = RealSimd::load(velocityXPtr + i);
+                RealSimd velY = RealSimd::load(velocityYPtr + i);
+                const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+                const auto movableMask = invMassV != zeros;
+
+                RealSimd posX = RealSimd::load(positionXPtr + i);
+                RealSimd posY = RealSimd::load(positionYPtr + i);
+
+                RealSimd r2 = posX * posX + posY * posY + softSqV;
+
+                RealSimd accX = -Gv * posX / r2;
+                RealSimd accY = -Gv * posY / r2;
+
+                RealSimd deltaVX = accX * RealSimd(deltaTime);
+                RealSimd deltaVY = accY * RealSimd(deltaTime);
+
+                RealSimd newVelX = velX + deltaVX;
+                RealSimd newVelY = velY + deltaVY;
+                velX = RealSimd::blendv(velX, newVelX, movableMask);
+                velY = RealSimd::blendv(velY, newVelY, movableMask);
+
+                velX.store(velocityXPtr + i);
+                velY.store(velocityYPtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                const Real invMass = invMassPtr[i];
+                if (invMass == Real(0.0))
+                    continue;
+
+                Real posX = positionXPtr[i];
+                Real posY = positionYPtr[i];
+                Real r2 = posX * posX + posY * posY + Real(softSq);
+
+                Real accX = -G * posX / r2;
+                Real accY = -G * posY / r2;
+
+                velocityXPtr[i] += accX * deltaTime;
+                velocityYPtr[i] += accY * deltaTime;
+            }
         }
     }
 
