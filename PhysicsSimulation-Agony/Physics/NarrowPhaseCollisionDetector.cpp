@@ -829,7 +829,6 @@ namespace PS_AGONY
             const Vec2 rightB = {  cosB, sinB };
             const Vec2 upB    = { -sinB, cosB };
 
-            polyWorldVerts.clear();
             polyWorldVerts.resize(vertexCount);
 
             for (size_t i = 0; i < vertexCount; i++)
@@ -953,7 +952,7 @@ namespace PS_AGONY
                 const Real edgeLen = std::sqrt(glm::dot(edge, edge));
                 if (edgeLen <= Real(1e-12)) continue;
 
-                sideDir = edge / edgeLen;
+                sideDir = -edge / edgeLen;
             }
 
             Vec2 incEdgeStart, incEdgeEnd;
@@ -1103,8 +1102,6 @@ namespace PS_AGONY
             const Vec2 rightB = { cosB,  sinB };
             const Vec2 upB = { -sinB, cosB };
 
-            worldVertsA.clear();
-            worldVertsB.clear();
             worldVertsA.resize(countA);
             worldVertsB.resize(countB);
 
