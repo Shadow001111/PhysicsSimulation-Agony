@@ -72,7 +72,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
 
     constexpr int circleCount = 0;// 2'500;
     constexpr int boxCount = 0;// 2'500;
-    constexpr int polygonCount = 0;// 2'500;
+    constexpr int polygonCount = 500;// 2'500;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -503,13 +503,13 @@ void load_Planet(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& r
 
 void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
-    constexpr int rowCount = 100;
-    constexpr int columnCount = 100;
+    constexpr int rowCount = 20;
+    constexpr int columnCount = 20;
 
     PS_AGONY::Material material0 = {
-            .elasticity = 0.0,
-            .staticFriction = 0.0,
-            .dynamicFriction = 0.0
+            .elasticity = 0.7,
+            .staticFriction = 1.0,
+            .dynamicFriction = 1.0
     };
 
     PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
@@ -529,6 +529,19 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
             .base.materialIndex = material0Index,
             .radius = 1
         });
+
+        //constexpr size_t maxVerticesCount = 10;
+        //const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
+        //auto localVertices = makeConvexPolygon(rvg, verticesCount, 1);
+        //simulation.createPolygon({
+        //    .base.position = { x, y },
+        //    .base.velocity = { 0, 0 },
+        //    .base.rotation = 0,
+        //    .base.mass = 1,
+        //    .base.materialIndex = material0Index,
+        //    .localVertices = localVertices.data(),
+        //    .verticesCount = verticesCount
+        //});
     }
 
     simulation.createCircle({
@@ -536,7 +549,7 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
             .base.velocity = {  0, 0 },
             .base.rotation = 0,
             .base.angularVelocity = 0,
-            .base.mass = 1000,
+            .base.mass = 20,
             .base.materialIndex = material0Index,
             .base.textureId = 1,
             .radius = 4
