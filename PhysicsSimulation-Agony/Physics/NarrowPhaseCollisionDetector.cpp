@@ -4,8 +4,6 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
-#include <iostream>
-
 namespace PS_AGONY
 {
     struct Vector2AndSqDistance
@@ -227,7 +225,9 @@ namespace PS_AGONY
             {
                 auto [bodyIndexA, bodyIndexB] = pairs[i];
                 if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
+                {
                     continue;
+                }
 
                 BodyType typeA = bodyTypePtr[bodyIndexA];
                 BodyType typeB = bodyTypePtr[bodyIndexB];
@@ -243,16 +243,17 @@ namespace PS_AGONY
         }
 
         // Dispatch each non-empty type group.
-        for (size_t i = 0; i < BODY_TYPE_COUNT; i++)
+        const auto& pairsDA = chunkData.pairs.getDirectAccess();
+        const auto& collisionFuncsDA = collisionFuncs.getDirectAccess();
+
+        constexpr size_t count = chunkData.pairs.STORED_COUNT;
+        for (size_t i = 0; i < count; i++)
         {
-            for (size_t j = i; j < BODY_TYPE_COUNT; j++)
+            auto& vec = pairsDA[i];
+            if (!vec.empty())
             {
-                auto& vec = chunkData.pairs(i, j);
-                if (!vec.empty())
-                {
-                    CollisionFunc func = collisionFuncs(i, j);
-                    (this->*func)(vec, chunkData.results);
-                }
+                CollisionFunc func = collisionFuncsDA[i];
+                (this->*func)(vec, chunkData.results);
             }
         }
     }
@@ -514,8 +515,7 @@ namespace PS_AGONY
             else
             {
                 normalLocal = edgeOutwardNormal(bestEdgeIndex);
-                if (glm::dot(circleLocal - bestPointLocal, normalLocal) < Real(0))
-                    normalLocal = -normalLocal;
+                flipSignIfNegative(normalLocal, glm::dot(circleLocal - bestPointLocal, normalLocal));
             }
 
             Vec2 normal = {
@@ -523,8 +523,7 @@ namespace PS_AGONY
                 rightB.y * normalLocal.x + upB.y * normalLocal.y
             };
 
-            if (glm::dot(positionB - positionA, normal) < Real(0))
-                normal = -normal;
+            flipSignIfNegative(normal, glm::dot(positionB - positionA, normal));
 
             const Real depth = radiusA - std::sqrt(bestDist2);
             const Vec2 contactOnCircle = positionA + normal * radiusA;
@@ -886,8 +885,7 @@ namespace PS_AGONY
                     {
                         depth = overlap;
                         normal = axis;
-                        if (glm::dot(centerDelta, normal) < Real(0))
-                            normal = -normal;
+                        flipSignIfNegative(normal, glm::dot(centerDelta, normal));
 
                         bestAxis = axisType;
                         bestAxisIndex = axisIndex;
@@ -1170,8 +1168,7 @@ namespace PS_AGONY
                     {
                         depth = overlap;
                         normal = axis;
-                        if (glm::dot(centerDelta, normal) < Real(0))
-                            normal = -normal;
+                        flipSignIfNegative(normal, glm::dot(centerDelta, normal));
 
                         bestAxisType = axisType;
                         bestAxisIndex = axisIndex;
