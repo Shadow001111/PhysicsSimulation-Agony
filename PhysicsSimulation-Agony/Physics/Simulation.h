@@ -44,8 +44,8 @@ namespace PS_AGONY
 
 			// Environment.
 			Real timeScale = 1.0;
-			//Vec2 gravity{ 0.0, -9.81 };
-			Vec2 gravity{ 0.0, 0.0 };
+			Vec2 gravity{ 0.0, -9.81 };
+			//Vec2 gravity{ 0.0, 0.0 };
 		};
 
 		enum class BenchmarkDensity
