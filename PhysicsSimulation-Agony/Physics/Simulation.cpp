@@ -312,10 +312,22 @@ namespace PS_AGONY
 
     void Simulation::createPolygon(const PolygonCreateParams& params)
     {
-        if (params.localVertices == nullptr || params.verticesCount < 3)
+        if (params.localVertices == nullptr)
         {
+            std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices container is nullptr.\n";
             return;
         }
+        if (params.verticesCount < 3)
+        {
+            std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices count is less than three.\n";
+            return;
+        }
+        //if (params.base.centerOfMass.has_value())
+        //{
+        //    // I just don't know how to make it work with my 'true positions' and other stuff.
+        //    std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Custom center of mass is not supported.\n";
+        //    return;
+        //}
 
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = polygons.getCount();
@@ -325,9 +337,18 @@ namespace PS_AGONY
 
         VerticesContainer vertices{ params.localVertices, params.verticesCount };
 
-        auto iCOM = calculatePolygonInertia(mass, vertices, params.base.centerOfMass);
+        auto iCOM = calculatePolygonInertia(mass, vertices, std::nullopt);
         const Real inertia = iCOM.first;
-        const Vec2 centerOfMass = iCOM.second;
+        Vec2 trueCenterOfMass = iCOM.second;
+        Vec2 neededCenterOfMass = params.base.centerOfMass.value_or(trueCenterOfMass);
+
+        // This makes: position == true position == world COM.
+        // TODO: This probably invalidates inertia. Need second pass.
+        for (Vec2& v : vertices)
+        {
+            v -= trueCenterOfMass;
+        }
+        neededCenterOfMass -= trueCenterOfMass;
 
         const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
         const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
@@ -339,7 +360,7 @@ namespace PS_AGONY
             params.base.angularVelocity,
             mass, invMass,
             inertia, invInertia,
-            centerOfMass,
+            neededCenterOfMass,
             materialIndex,
             BodyType::Polygon,
             newShapeIndex,
@@ -888,8 +909,8 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
         const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
@@ -901,7 +922,7 @@ namespace PS_AGONY
         const RealSimd zeros = RealSimd(Real(0));
 
         size_t i = 0;
-        if constexpr (true)
+        if constexpr (false)
         {
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
             {
@@ -931,51 +952,70 @@ namespace PS_AGONY
         }
         else
         {
-            constexpr Real softSq = 1;
+            constexpr Real PLANET_RADIUS = 10;
+            constexpr Real PLANET_RADIUS_SQUARED = PLANET_RADIUS * PLANET_RADIUS;
+            const Real G = 1000;
 
-            const Real G = Real(5000);
-            const RealSimd Gv = RealSimd(G);
-            const RealSimd softSqV = RealSimd(Real(softSq));
+            const RealSimd gV(G);
+            const RealSimd planetRadiusV(PLANET_RADIUS);
+            const RealSimd planetRadiusSquaredV(PLANET_RADIUS_SQUARED);
 
             size_t i = 0;
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            {
-                RealSimd velX = RealSimd::load(velocityXPtr + i);
-                RealSimd velY = RealSimd::load(velocityYPtr + i);
-                const RealSimd invMassV = RealSimd::load(invMassPtr + i);
-                const auto movableMask = invMassV != zeros;
-
-                RealSimd posX = RealSimd::load(positionXPtr + i);
-                RealSimd posY = RealSimd::load(positionYPtr + i);
-
-                RealSimd r2 = posX * posX + posY * posY + softSqV;
-
-                RealSimd accX = -Gv * posX / r2;
-                RealSimd accY = -Gv * posY / r2;
-
-                RealSimd deltaVX = accX * RealSimd(deltaTime);
-                RealSimd deltaVY = accY * RealSimd(deltaTime);
-
-                RealSimd newVelX = velX + deltaVX;
-                RealSimd newVelY = velY + deltaVY;
-                velX = RealSimd::blendv(velX, newVelX, movableMask);
-                velY = RealSimd::blendv(velY, newVelY, movableMask);
-
-                velX.store(velocityXPtr + i);
-                velY.store(velocityYPtr + i);
-            }
+            //for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            //{
+            //    RealSimd velX = RealSimd::load(velocityXPtr + i);
+            //    RealSimd velY = RealSimd::load(velocityYPtr + i);
+            //    const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+            //    const auto movableMask = invMassV != zeros;
+            //
+            //    RealSimd posX = RealSimd::load(positionXPtr + i);
+            //    RealSimd posY = RealSimd::load(positionYPtr + i);
+            //
+            //    RealSimd r2 = posX * posX + posY * posY + softSqV;
+            //
+            //    RealSimd accX = -Gv * posX / r2;
+            //    RealSimd accY = -Gv * posY / r2;
+            //
+            //    RealSimd deltaVX = accX * RealSimd(deltaTime);
+            //    RealSimd deltaVY = accY * RealSimd(deltaTime);
+            //
+            //    RealSimd newVelX = velX + deltaVX;
+            //    RealSimd newVelY = velY + deltaVY;
+            //    velX = RealSimd::blendv(velX, newVelX, movableMask);
+            //    velY = RealSimd::blendv(velY, newVelY, movableMask);
+            //
+            //    velX.store(velocityXPtr + i);
+            //    velY.store(velocityYPtr + i);
+            //}
             for (; i < bodyCount; i++)
             {
                 const Real invMass = invMassPtr[i];
-                if (invMass == Real(0.0))
-                    continue;
+                if (invMass == Real(0.0)) continue;
 
-                Real posX = positionXPtr[i];
-                Real posY = positionYPtr[i];
-                Real r2 = posX * posX + posY * posY + Real(softSq);
+                const Real posX = positionXPtr[i];
+                const Real posY = positionYPtr[i];
+                const Real distanceSquared = posX * posX + posY * posY;
 
-                Real accX = -G * posX / r2;
-                Real accY = -G * posY / r2;
+                Real accX, accY;
+                if (distanceSquared < PLANET_RADIUS_SQUARED)
+                {
+                    accX = posX / PLANET_RADIUS;
+                    accY = posY / PLANET_RADIUS;
+                }
+                else
+                {
+                    const Real distance = std::sqrt(distanceSquared);
+
+                    const Real normalX = posX / distance;
+                    const Real normalY = posY / distance;
+
+                    const Real radiusRatioSquared = PLANET_RADIUS_SQUARED / distanceSquared;
+
+                    accX = normalX * radiusRatioSquared;
+                    accY = normalY * radiusRatioSquared;
+                }
+                accX *= -G;
+                accY *= -G;
 
                 velocityXPtr[i] += accX * deltaTime;
                 velocityYPtr[i] += accY * deltaTime;

@@ -171,9 +171,9 @@ namespace PS_AGONY
         renderBoxBodies(viewProjectionMatrix);
         renderPolygonBodies(viewProjectionMatrix);
 
-		//renderBodyCentersOfMass(viewProjectionMatrix);
-        //renderBodyPositions(viewProjectionMatrix);
-        //renderBodyTruePositions(viewProjectionMatrix);
+		//renderBodyCentersOfMass(viewProjectionMatrix); // Red.
+        //renderBodyTruePositions(viewProjectionMatrix); // Green.
+        //renderBodyPositions(viewProjectionMatrix); // Blue.
 		//renderBodyAABBs(viewProjectionMatrix);
     }
 
@@ -209,6 +209,7 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.785f;
             renderDataPtr[i].radius = 0.03f;
 			renderDataPtr[i].color = 0xFF0000;
+            renderDataPtr[i].textureId = 0;
         }
 
         // Render.
@@ -238,6 +239,7 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.0f;
             renderDataPtr[i].radius = 0.03f;
             renderDataPtr[i].color = 0x0000FF;
+            renderDataPtr[i].textureId = 0;
         }
 
         // Render.
@@ -267,6 +269,7 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.0f;
             renderDataPtr[i].radius = 0.03f;
             renderDataPtr[i].color = 0x00FF00;
+            renderDataPtr[i].textureId = 0;
         }
 
         // Render.

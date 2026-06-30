@@ -71,7 +71,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float thickness = 5.0f;
 
     constexpr int circleCount = 100;// 2'500;
-    constexpr int boxCount = 100;// 2'500;
+    constexpr int boxCount = 0;// 2'500;
     constexpr int polygonCount = 100;// 2'500;
 
     PS_AGONY::Material material0 = {
@@ -183,7 +183,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
         const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
-        const float rotation = rvg.real<float>(0.0f, 6.28f);
+        const float rotation = 0;
         const float r = rvg.real<float>(0.1f, 0.15f) * 2.0f;
         const float mass = 1.0f;
 
@@ -503,8 +503,8 @@ void load_Planet(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& r
 
 void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
-    constexpr int rowCount = 20;
-    constexpr int columnCount = 20;
+    constexpr int rowCount = 40;
+    constexpr int columnCount = 40;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.7,
@@ -520,28 +520,28 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
         const float x = ix * 2.1f;
         const float y = iy * 2.1f;
 
-        simulation.createCircle({
-            .base.position = { x, y },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = 1,
-            .base.materialIndex = material0Index,
-            .radius = 1
-        });
-
-        //constexpr size_t maxVerticesCount = 10;
-        //const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
-        //auto localVertices = makeConvexPolygon(rvg, verticesCount, 1);
-        //simulation.createPolygon({
+        //simulation.createCircle({
         //    .base.position = { x, y },
         //    .base.velocity = { 0, 0 },
         //    .base.rotation = 0,
+        //    .base.angularVelocity = 0,
         //    .base.mass = 1,
         //    .base.materialIndex = material0Index,
-        //    .localVertices = localVertices.data(),
-        //    .verticesCount = verticesCount
+        //    .radius = 1
         //});
+
+        constexpr size_t maxVerticesCount = 10;
+        const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
+        auto localVertices = makeConvexPolygon(rvg, verticesCount, 1);
+        simulation.createPolygon({
+            .base.position = { x, y },
+            .base.velocity = { 0, 0 },
+            .base.rotation = 0,
+            .base.mass = 1,
+            .base.materialIndex = material0Index,
+            .localVertices = localVertices.data(),
+            .verticesCount = verticesCount
+        });
     }
 
     simulation.createCircle({
