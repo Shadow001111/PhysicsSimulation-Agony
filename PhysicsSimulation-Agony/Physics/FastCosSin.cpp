@@ -41,7 +41,7 @@ namespace PS_AGONY::FastCosSin
 		{
 			RealSimd x = RealSimd::load(inAngleArray + i);
 
-			IntSimd quadrantIndex = (x * invHalfPiV).to<IntSimd>();
+			IntSimd quadrantIndex = (x * invHalfPiV).realToSmallNonNegativeInteger();
 
 			RealSimd u = RealSimd::negMulAdd(quadrantIndex.to<RealSimd>(), halfPiV, x);
 

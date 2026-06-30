@@ -70,9 +70,9 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 20.0f;
     constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 100;// 2'500;
-    constexpr int boxCount = 100;// 2'500;
-    constexpr int polygonCount = 100;// 2'500;
+    constexpr int circleCount = 300;// 2'500;
+    constexpr int boxCount = 300;// 2'500;
+    constexpr int polygonCount = 300;// 2'500;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,

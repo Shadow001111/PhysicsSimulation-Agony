@@ -1051,6 +1051,32 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
+        auto edgeOutwardNormal = [](const std::vector<Vec2>& verts, uint32_t edgeIndex) -> Vec2
+            {
+                const Vec2 p0 = verts[edgeIndex];
+                const Vec2 p1 = verts[(edgeIndex + 1) % uint32_t(verts.size())];
+                const Vec2 edge = p1 - p0;
+
+                Vec2 n = Vec2{ edge.y, -edge.x };
+                const Real len2 = glm::dot(n, n);
+                if (len2 > Real(1e-12))
+                    n *= Real(1) / std::sqrt(len2);
+                return n;
+            };
+
+        auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2& axis, Real& minOut, Real& maxOut)
+            {
+                minOut = std::numeric_limits<Real>::max();
+                maxOut = -std::numeric_limits<Real>::max();
+
+                for (const Vec2& v : vertices)
+                {
+                    const Real p = glm::dot(v, axis);
+                    minOut = std::fmin(minOut, p);
+                    maxOut = std::fmax(maxOut, p);
+                }
+            };
+
         auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
             {
                 const Real d1 = glm::dot(p1 - planePoint, planeNormal);
@@ -1088,12 +1114,12 @@ namespace PS_AGONY
             const VerticesContainer& localVertsAContainer = polyLocalVerticesPtr[shapeA];
             const VerticesContainer& localVertsBContainer = polyLocalVerticesPtr[shapeB];
 
-            const Vec2* localVertsA = localVertsAContainer.data();
-            const Vec2* localVertsB = localVertsBContainer.data();
-
             const size_t countA = localVertsAContainer.size();
             const size_t countB = localVertsBContainer.size();
             if (countA < 3 || countB < 3) [[unlikely]] continue;
+
+            const Vec2* localVertsA = localVertsAContainer.data();
+            const Vec2* localVertsB = localVertsBContainer.data();
 
             const Vec2 rightA = { cosA,  sinA };
             const Vec2 upA = { -sinA, cosA };
@@ -1115,32 +1141,6 @@ namespace PS_AGONY
                 worldVertsB[i] = positionB + rightB * v.x + upB * v.y;
             }
 
-            auto edgeOutwardNormal = [](const std::vector<Vec2>& verts, uint32_t edgeIndex) -> Vec2
-                {
-                    const Vec2 p0 = verts[edgeIndex];
-                    const Vec2 p1 = verts[(edgeIndex + 1) % uint32_t(verts.size())];
-                    const Vec2 edge = p1 - p0;
-
-                    Vec2 n = Vec2{ edge.y, -edge.x };
-                    const Real len2 = glm::dot(n, n);
-                    if (len2 > Real(1e-12))
-                        n *= Real(1) / std::sqrt(len2);
-                    return n;
-                };
-
-            auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2& axis, Real& minOut, Real& maxOut)
-                {
-                    minOut =  std::numeric_limits<Real>::max();
-                    maxOut = -std::numeric_limits<Real>::max();
-
-                    for (const Vec2& v : vertices)
-                    {
-                        const Real p = glm::dot(v, axis);
-                        minOut = std::min(minOut, p);
-                        maxOut = std::max(maxOut, p);
-                    }
-                };
-
             const Vec2 centerDelta = positionB - positionA;
 
             Vec2 normal;
@@ -1148,34 +1148,35 @@ namespace PS_AGONY
             SATAxis bestAxisType = SATAxis::A_EDGE;
             uint32_t bestAxisIndex = 0;
 
-            auto sat = [&](const std::vector<Vec2>& vertsA, const std::vector<Vec2>& vertsB,
+            auto sat = [&](
+                const std::vector<Vec2>& vertsA, const std::vector<Vec2>& vertsB,
                 Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
+            {
+                const Real axisLenSquared = glm::dot(axis, axis);
+                if (axisLenSquared <= Real(1e-12)) return true;
+
+                axis *= Real(1) / std::sqrt(axisLenSquared);
+
+                Real minA, maxA;
+                Real minB, maxB;
+                projectVerticesOnAxis(vertsA, axis, minA, maxA);
+                projectVerticesOnAxis(vertsB, axis, minB, maxB);
+
+                const Real overlap = std::fmin(maxA, maxB) - std::fmax(minA, minB);
+                if (overlap < Real(0)) return false;
+
+                if (overlap < depth)
                 {
-                    const Real axisLen2 = glm::dot(axis, axis);
-                    if (axisLen2 <= Real(1e-12)) return true;
+                    depth = overlap;
+                    normal = axis;
+                    flipSignIfNegative(normal, glm::dot(centerDelta, normal));
 
-                    axis *= Real(1) / std::sqrt(axisLen2);
+                    bestAxisType = axisType;
+                    bestAxisIndex = axisIndex;
+                }
 
-                    Real minA, maxA;
-                    Real minB, maxB;
-                    projectVerticesOnAxis(vertsA, axis, minA, maxA);
-                    projectVerticesOnAxis(vertsB, axis, minB, maxB);
-
-                    const Real overlap = std::min(maxA, maxB) - std::max(minA, minB);
-                    if (overlap < Real(0)) return false;
-
-                    if (overlap < depth)
-                    {
-                        depth = overlap;
-                        normal = axis;
-                        flipSignIfNegative(normal, glm::dot(centerDelta, normal));
-
-                        bestAxisType = axisType;
-                        bestAxisIndex = axisIndex;
-                    }
-
-                    return true;
-                };
+                return true;
+            };
 
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
