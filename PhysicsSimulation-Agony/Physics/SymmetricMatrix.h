@@ -6,7 +6,9 @@
 template <class T, size_t N>
 class SymmetricMatrix
 {
+public:
     static constexpr size_t STORED_COUNT = N * (N + 1) / 2;
+private:
     std::array<T, STORED_COUNT> mData{};
 
     static constexpr size_t index(size_t r, size_t c) noexcept
