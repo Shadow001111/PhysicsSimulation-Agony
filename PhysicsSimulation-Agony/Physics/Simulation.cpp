@@ -1309,7 +1309,6 @@ namespace PS_AGONY
     void Simulation::wrapRotation()
     {
         using RealSimd = Ecstasy::Simd<Real>;
-        using IntSimd = Ecstasy::Simd<int>;
 
         constexpr size_t LANES = RealSimd::lanes;
 
@@ -1327,7 +1326,7 @@ namespace PS_AGONY
         {
             RealSimd rot = RealSimd::load(rotationPtr + i);
 
-            RealSimd q = (rot * invTwoPIV).to<IntSimd>().to<RealSimd>();
+            RealSimd q = RealSimd::roundTowardsZero(rot * invTwoPIV);
             rot = rot - q * twoPIV;
 
             RealSimd isRotNegativeMask = rot < RealSimd(0);
