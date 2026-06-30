@@ -70,9 +70,9 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
     constexpr float boundary = 20.0f;
     constexpr float thickness = 5.0f;
 
-    constexpr int circleCount = 0;// 2'500;
-    constexpr int boxCount = 0;// 2'500;
-    constexpr int polygonCount = 500;// 2'500;
+    constexpr int circleCount = 100;// 2'500;
+    constexpr int boxCount = 100;// 2'500;
+    constexpr int polygonCount = 100;// 2'500;
 
     PS_AGONY::Material material0 = {
             .elasticity = 0.9,
@@ -164,7 +164,7 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
         const float vx = rvg.real<float>(-2.0f, 2.0f);
         const float vy = rvg.real<float>(-2.0f, 2.0f);
         const float rotation = rvg.real<float>(0.0f, 6.28f);
-        const float width = rvg.real<float>(0.2f, 0.4f) * 5.0f;
+        const float width = rvg.real<float>(0.2f, 0.4f);
         const float height = rvg.real<float>(0.2f, 0.4f);
         const float mass = width * height;
 
