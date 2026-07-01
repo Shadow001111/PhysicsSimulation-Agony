@@ -47,12 +47,12 @@ namespace PS_AGONY
 
         size_t count = 0;
     public:
-        const Real* positionX = nullptr;
-        const Real* positionY = nullptr;
+        const Real* offsetX = nullptr;
+        const Real* offsetY = nullptr;
         const Real* localCenterOfMassX = nullptr;
         const Real* localCenterOfMassY = nullptr;
-        const Real* truePositionX = nullptr;
-        const Real* truePositionY = nullptr;
+        const Real* worldCenterX = nullptr;
+        const Real* worldCenterY = nullptr;
         const Real* velocityX = nullptr;
         const Real* velocityY = nullptr;
         const Real* rotation = nullptr;
@@ -76,12 +76,12 @@ namespace PS_AGONY
 
         explicit BodySoAViewer(const BodySoA& data) noexcept :
             count(data.getCount()),
-            positionX(data.positionX.data()),
-            positionY(data.positionY.data()),
+            offsetX(data.offsetX.data()),
+            offsetY(data.offsetY.data()),
             localCenterOfMassX(data.localCenterOfMassX.data()),
             localCenterOfMassY(data.localCenterOfMassY.data()),
-            truePositionX(data.truePositionX.data()),
-            truePositionY(data.truePositionY.data()),
+            worldCenterX(data.worldCenterX.data()),
+            worldCenterY(data.worldCenterY.data()),
             velocityX(data.velocityX.data()),
             velocityY(data.velocityY.data()),
             rotation(data.rotation.data()),

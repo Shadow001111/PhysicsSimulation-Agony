@@ -44,7 +44,7 @@ namespace PS_AGONY
 
         // Render.
         renderBodies(viewProjectionMatrix);
-		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+		renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         //renderContactPoints(simulation, viewProjectionMatrix);
     }
 
@@ -174,7 +174,7 @@ namespace PS_AGONY
 		//renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
         //renderBodyPositions(viewProjectionMatrix); // Blue.
-		//renderBodyAABBs(viewProjectionMatrix);
+		renderBodyAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -186,8 +186,8 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-		const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
-		const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+		const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+		const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT centerYPtr = bodies.localCenterOfMassY;
 
@@ -225,8 +225,8 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
@@ -255,8 +255,8 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.worldCenterY;
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
@@ -285,8 +285,8 @@ namespace PS_AGONY
 		circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
@@ -324,8 +324,8 @@ namespace PS_AGONY
         boxResources.instanceData.resize(count);
 
         // Prepare instance data.
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
@@ -362,8 +362,8 @@ namespace PS_AGONY
         if (count == 0) return;
 
         // Body SoA pointers.
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
@@ -437,7 +437,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT maxXPtr = bodies.aabb.maxX;
         const Real* ECSTASY_RESTRICT maxYPtr = bodies.aabb.maxY;
 
-        AABB* ECSTASY_RESTRICT renderDataPtr = aabbResources.instanceData.data();
+        FloatAABB* ECSTASY_RESTRICT renderDataPtr = aabbResources.instanceData.data();
 
         for (size_t i = 0; i < bodyCount; i++)
         {
@@ -453,12 +453,27 @@ namespace PS_AGONY
     void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix)
     {
         // Fetch AABBs.
-		aabbResources.instanceData.clear();
-        simulation.getBroadPhaseAABBs(aabbResources.instanceData);
-        if (aabbResources.instanceData.empty()) return;
+        aabbResources.aabbs.clear();
+        aabbResources.instanceData.clear();
+
+        simulation.getBroadPhaseAABBs(aabbResources.aabbs);
+
+        if (aabbResources.aabbs.empty()) return;
+
+        // Allocate space for instance data
+        aabbResources.instanceData.resize(aabbResources.aabbs.size());
+
+        // Copy and cast values. 
+        for (size_t i = 0; i < aabbResources.aabbs.size(); ++i)
+        {
+            aabbResources.instanceData[i].minX = static_cast<float>(aabbResources.aabbs[i].minX);
+            aabbResources.instanceData[i].minY = static_cast<float>(aabbResources.aabbs[i].minY);
+            aabbResources.instanceData[i].maxX = static_cast<float>(aabbResources.aabbs[i].maxX);
+            aabbResources.instanceData[i].maxY = static_cast<float>(aabbResources.aabbs[i].maxY);
+        }
 
         // Render.
-		renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
+        renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix)

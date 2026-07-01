@@ -169,7 +169,7 @@ namespace PS_AGONY
 
 		void computeRotationCosSin();
 
-		void computeTruePositions();
+		void computeWorldCenters();
 
 		void applyConstraints();
 

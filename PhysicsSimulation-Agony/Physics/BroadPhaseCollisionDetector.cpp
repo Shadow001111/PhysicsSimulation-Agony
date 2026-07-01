@@ -165,7 +165,7 @@ namespace PS_AGONY
         {
             if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf check.
             {
-                outAABBs.push_back({ node.minX, node.minY, node.maxX, node.maxY });
+                outAABBs.emplace_back(node.minX, node.minY, node.maxX, node.maxY);
             }
         }
     }
