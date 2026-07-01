@@ -1301,155 +1301,31 @@ namespace Ecstasy
         [[nodiscard]] Target to() const noexcept
             requires std::is_same_v<Target, Simd<double, Bits>> && IS_INT64
         {
-            Target s;
-
-            //const Target magic(0x0018000000000000);
-            //const Simd biased = (*this) + magic.template as<Simd>();
-            //s = biased.as<Target>() - magic;
-
-            if constexpr (Bits == 256)
-            {
-                // Range: [-2^51, 2^51].
-                //x = _mm_add_epi64(x,  _mm_castpd_si128(_mm_set1_pd(0x0018000000000000)));
-                //return _mm_sub_pd(_mm_castsi128_pd(x), _mm_set1_pd(0x0018000000000000));
-                //
-                // magic = double(0x0018000000000000);
-                // x = x + as<i64>(magic);
-                // return as<double>(x) - magic;
-            
-                // Range: full.
-                //__m128i xH = _mm_srai_epi32(x, 16);
-                //xH = _mm_blend_epi16(xH, _mm_setzero_si128(), 0x33);
-                //xH = _mm_add_epi64(xH, _mm_castpd_si128(_mm_set1_pd(442721857769029238784.)));              //  3*2^67
-                //__m128i xL = _mm_blend_epi16(x, _mm_castpd_si128(_mm_set1_pd(0x0010000000000000)), 0x88);   //  2^52
-                //__m128d f = _mm_sub_pd(_mm_castsi128_pd(xH), _mm_set1_pd(442726361368656609280.));          //  3*2^67 + 2^52
-                //return _mm_add_pd(f, _mm_castsi128_pd(xL));
-            
-            
-                const __m256i hiIdx = _mm256_setr_epi32(1, 3, 5, 7, 1, 3, 5, 7);
-                const __m256i loIdx = _mm256_setr_epi32(0, 2, 4, 6, 0, 2, 4, 6);
-            
-                const __m128i hi32 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(reg, hiIdx)); // Signed.
-                const __m128i lo32 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(reg, loIdx)); // Unsigned.
-            
-                const __m256d hiScaled = _mm256_mul_pd(_mm256_cvtepi32_pd(hi32), _mm256_set1_pd(4294967296.0)); // *2^52, exact.
-            
-                const __m256i lo64 = _mm256_cvtepu32_epi64(lo32); // Zero-extend.
-                const __m256i magicBits = _mm256_set1_epi64x(0x4330000000000000LL); // 2^52.
-                const __m256d loD = _mm256_sub_pd(_mm256_castsi256_pd(_mm256_or_si256(lo64, magicBits)), _mm256_set1_pd(4503599627370496.0));
-            
-                s.reg = _mm256_add_pd(hiScaled, loD);
-            }
-            else
-            {
-                const __m128i hi32shuf = _mm_shuffle_epi32(reg, _MM_SHUFFLE(3, 1, 3, 1)); // Signed.
-                const __m128i lo32shuf = _mm_shuffle_epi32(reg, _MM_SHUFFLE(2, 0, 2, 0)); // Unsigned.
-            
-                const __m128d hiScaled = _mm_mul_pd(_mm_cvtepi32_pd(hi32shuf), _mm_set1_pd(4294967296.0));
-            
-                const __m128i lo64 = _mm_cvtepu32_epi64(lo32shuf); // Zero-extend (SSE4.1).
-                const __m128i magicBits = _mm_set1_epi64x(0x4330000000000000LL);
-                const __m128d loD = _mm_sub_pd(_mm_castsi128_pd(_mm_or_si128(lo64, magicBits)), _mm_set1_pd(4503599627370496.0));
-            
-                s.reg = _mm_add_pd(hiScaled, loD);
-            }
-            return s;
+            const Target magic(0x0018000000000000);
+            const Simd biased = (*this) + magic.template as<Simd>();
+            return biased.as<Target>() - magic;
         }
 
-        // double -> int64_t, truncating (matches CVTTSD2SI semantics, incl. INT64_MIN
-        // for NaN/overflow), since hardware only gets a direct instruction for this
-        // with AVX512DQ+VL. Branchless bit-trick verified against _mm_cvttsd_si64
-        // across millions of random and edge-case values (no mismatches).
-        //template<typename Target>
-        //[[nodiscard]] Target to() const noexcept
-        //    requires std::is_same_v<Target, Simd<int64_t, Bits>> && IS_DOUBLE
-        //{
-        //    Target s;
-        //    #if defined(SIMD_AVX2)
-        //    if constexpr (Bits == 256)
-        //    {
-        //        const __m256i xi = _mm256_castpd_si256(reg);
-        //        const __m256i zero = _mm256_setzero_si256();
-        //        const __m256i signMask = _mm256_cmpgt_epi64(zero, xi); // all-1 if negative
-        //
-        //        const __m256i biasedExp = _mm256_and_si256(_mm256_srli_epi64(xi, 52), _mm256_set1_epi64x(0x7FF));
-        //        const __m256i mantissa = _mm256_or_si256(
-        //            _mm256_and_si256(xi, _mm256_set1_epi64x(0x000FFFFFFFFFFFFFLL)),
-        //            _mm256_set1_epi64x(0x0010000000000000LL));
-        //
-        //        const __m256i bias = _mm256_set1_epi64x(1075);
-        //        const __m256i rshift = _mm256_sub_epi64(bias, biasedExp);
-        //        const __m256i lshift = _mm256_sub_epi64(biasedExp, bias);
-        //
-        //        // Out-of-[0,63] shift counts (incl. "negative" ones, which wrap to huge
-        //        // unsigned values) zero the lane, so exactly one of magR/magL contributes.
-        //        const __m256i magR = _mm256_srlv_epi64(mantissa, rshift);
-        //        const __m256i magL = _mm256_sllv_epi64(mantissa, lshift);
-        //        const __m256i mag = _mm256_or_si256(magR, magL);
-        //
-        //        __m256i result = _mm256_sub_epi64(_mm256_xor_si256(mag, signMask), signMask);
-        //
-        //        const __m256d max64 = _mm256_set1_pd(9223372036854775808.0);  // 2^63
-        //        const __m256d min64 = _mm256_set1_pd(-9223372036854775808.0); // -2^63
-        //        const __m256d badMask = _mm256_or_pd(
-        //            _mm256_or_pd(_mm256_cmp_pd(reg, max64, _CMP_GE_OQ), _mm256_cmp_pd(reg, min64, _CMP_LT_OQ)),
-        //            _mm256_cmp_pd(reg, reg, _CMP_UNORD_Q));
-        //
-        //        const __m256i indefinite = _mm256_set1_epi64x((long long)0x8000000000000000ULL);
-        //        s.reg = _mm256_blendv_epi8(result, indefinite, _mm256_castpd_si256(badMask));
-        //    }
-        //    else
-        //    {
-        //        const __m128i xi = _mm_castpd_si128(reg);
-        //        const __m128i zero = _mm_setzero_si128();
-        //        const __m128i signMask = _mm_cmpgt_epi64(zero, xi);
-        //
-        //        const __m128i biasedExp = _mm_and_si128(_mm_srli_epi64(xi, 52), _mm_set1_epi64x(0x7FF));
-        //        const __m128i mantissa = _mm_or_si128(
-        //            _mm_and_si128(xi, _mm_set1_epi64x(0x000FFFFFFFFFFFFFLL)),
-        //            _mm_set1_epi64x(0x0010000000000000LL));
-        //
-        //        const __m128i bias = _mm_set1_epi64x(1075);
-        //        const __m128i rshift = _mm_sub_epi64(bias, biasedExp);
-        //        const __m128i lshift = _mm_sub_epi64(biasedExp, bias);
-        //
-        //        const __m128i magR = _mm_srlv_epi64(mantissa, rshift);
-        //        const __m128i magL = _mm_sllv_epi64(mantissa, lshift);
-        //        const __m128i mag = _mm_or_si128(magR, magL);
-        //
-        //        __m128i result = _mm_sub_epi64(_mm_xor_si128(mag, signMask), signMask);
-        //
-        //        const __m128d max64 = _mm_set1_pd(9223372036854775808.0);
-        //        const __m128d min64 = _mm_set1_pd(-9223372036854775808.0);
-        //        const __m128d badMask = _mm_or_pd(
-        //            _mm_or_pd(_mm_cmp_pd(reg, max64, _CMP_GE_OQ), _mm_cmp_pd(reg, min64, _CMP_LT_OQ)),
-        //            _mm_cmp_pd(reg, reg, _CMP_UNORD_Q));
-        //
-        //        const __m128i indefinite = _mm_set1_epi64x((long long)0x8000000000000000ULL);
-        //        s.reg = _mm_blendv_epi8(result, indefinite, _mm_castpd_si128(badMask));
-        //    }
-        //    #else
-        //    // No AVX2 (no variable-shift instructions available): fall back to the
-        //    // scalar CVTTSD2SI instruction per lane, which is plain SSE2.
-        //    const double lo = _mm_cvtsd_f64(reg);
-        //    const double hi = _mm_cvtsd_f64(_mm_unpackhi_pd(reg, reg));
-        //    s.reg = _mm_set_epi64x(_mm_cvttsd_si64(_mm_set_sd(hi)), _mm_cvttsd_si64(_mm_set_sd(lo)));
-        //    #endif
-        //    return s;
-        //}
+        template<typename Target>
+        [[nodiscard]] Target to() const noexcept
+            requires std::is_same_v<Target, Simd<double, Bits>> && IS_UINT64
+        {
+            const Target magic(0x0010000000000000);
+            const Simd united = (*this) | magic.template as<Simd>();
+            return united.as<Target>() - magic;
+        }
 
         [[nodiscard]] Simd<int64_t, Bits> realToSmallNonNegativeInteger() const noexcept
             requires IS_DOUBLE
         {
             using Target = Simd<int64_t, Bits>;
-            Target s;
-            const Target magicBits = Target::fillLanesWith(0x4330000000000000LL); // Bit pattern of 2^52.
 
+            const Target magicBits = Target::fillLanesWith(0x4330000000000000LL);
+            const Simd magic(4503599627370496.0);
+            
             const Simd truncated = Simd::roundTowardsZero(*this);
-            const Simd magic(4503599627370496.0); // 2^52
-            const Target biased = (truncated + magic).as<Target>();
-            s = biased - magicBits;
-            return s;
+            const Target biased = (truncated + magic).template as<Target>();
+            return biased - magicBits;
         }
 
         // This one uses built-in conversion.
