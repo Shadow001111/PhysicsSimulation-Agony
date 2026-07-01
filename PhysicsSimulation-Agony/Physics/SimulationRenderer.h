@@ -52,13 +52,20 @@ namespace PS_AGONY
 			std::vector<BoxInstanceData> instanceData;
 		};
 
+		struct FloatAABB
+		{
+			Real minX, minY;
+			Real maxX, maxY;
+		};
+
 		struct AABBResources
 		{
 			VertexArray vao;
 			ImmutableBuffer vbo;
 			ImmutableBuffer instanceVbo;
 			Shader shader;
-			std::vector<AABB> instanceData;
+			std::vector<AABB> aabbs;
+			std::vector<FloatAABB> instanceData;
 		};
 
 		struct DrawArraysIndirectCommand

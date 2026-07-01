@@ -264,8 +264,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
@@ -320,8 +320,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-box collision");
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
@@ -427,8 +427,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-polygon collision");
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
@@ -553,8 +553,8 @@ namespace PS_AGONY
             B_UP
         };
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
@@ -758,8 +758,8 @@ namespace PS_AGONY
             POLY_EDGE
         };
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
@@ -1043,8 +1043,8 @@ namespace PS_AGONY
             B_EDGE
         };
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
         const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;

@@ -43,8 +43,8 @@ namespace PS_AGONY
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
         // Get pointers.
-        Real* ECSTASY_RESTRICT positionXPtr = bodies->positionX.data();
-        Real* ECSTASY_RESTRICT positionYPtr = bodies->positionY.data();
+        Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
 
         const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
         const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();

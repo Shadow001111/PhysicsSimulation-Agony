@@ -55,12 +55,12 @@ namespace PS_AGONY
 
 	struct BodySoA
 	{
-		SimdAlignedVector<Real> positionX;
-		SimdAlignedVector<Real> positionY;
+		SimdAlignedVector<Real> offsetX;
+		SimdAlignedVector<Real> offsetY;
 		SimdAlignedVector<Real> localCenterOfMassX;
 		SimdAlignedVector<Real> localCenterOfMassY;
-		SimdAlignedVector<Real> truePositionX;
-		SimdAlignedVector<Real> truePositionY;
+		SimdAlignedVector<Real> worldCenterX;
+		SimdAlignedVector<Real> worldCenterY;
 
 		SimdAlignedVector<Real> velocityX;
 		SimdAlignedVector<Real> velocityY;
@@ -95,12 +95,12 @@ namespace PS_AGONY
 			BodyTextureId textureId
 		)
 		{
-			this->positionX.push_back(pos.x);
-			this->positionY.push_back(pos.y);
+			this->offsetX.push_back(pos.x);
+			this->offsetY.push_back(pos.y);
 			this->localCenterOfMassX.push_back(localCenterOfMass.x);
 			this->localCenterOfMassY.push_back(localCenterOfMass.y);
-			this->truePositionX.push_back(0);
-			this->truePositionY.push_back(0);
+			this->worldCenterX.push_back(0);
+			this->worldCenterY.push_back(0);
 			this->velocityX.push_back(vel.x);
 			this->velocityY.push_back(vel.y);
 			this->rotation.push_back(rot);
@@ -122,17 +122,17 @@ namespace PS_AGONY
 			this->textureId.push_back(textureId);
 		}
 
-		size_t getCount() const noexcept { return positionX.size(); }
+		size_t getCount() const noexcept { return offsetX.size(); }
 
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY::getVectorMemoryUsage(positionX) +
-				PS_AGONY::getVectorMemoryUsage(positionY) +
+				PS_AGONY::getVectorMemoryUsage(offsetX) +
+				PS_AGONY::getVectorMemoryUsage(offsetY) +
 				PS_AGONY::getVectorMemoryUsage(localCenterOfMassX) +
 				PS_AGONY::getVectorMemoryUsage(localCenterOfMassY) +
-				PS_AGONY::getVectorMemoryUsage(truePositionX) +
-				PS_AGONY::getVectorMemoryUsage(truePositionY) +
+				PS_AGONY::getVectorMemoryUsage(worldCenterX) +
+				PS_AGONY::getVectorMemoryUsage(worldCenterY) +
 				PS_AGONY::getVectorMemoryUsage(velocityX) +
 				PS_AGONY::getVectorMemoryUsage(velocityY) +
 				PS_AGONY::getVectorMemoryUsage(rotation) +

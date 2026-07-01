@@ -3,7 +3,7 @@
 
 namespace PS_AGONY
 {
-	using Real = float;
+	using Real = double;
 	using BodyIndex = uint32_t;
 	using MaterialIndex = uint32_t;
 	using BodyTextureId = uint32_t;

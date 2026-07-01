@@ -426,12 +426,12 @@ namespace PS_AGONY
         if (bodyIndex != bodyCount - 1)
         {
             // Swap all vectors in BodySoA.
-            std::swap(bodies.positionX[bodyIndex], bodies.positionX.back());
-            std::swap(bodies.positionY[bodyIndex], bodies.positionY.back());
+            std::swap(bodies.offsetX[bodyIndex], bodies.offsetX.back());
+            std::swap(bodies.offsetY[bodyIndex], bodies.offsetY.back());
             std::swap(bodies.localCenterOfMassX[bodyIndex], bodies.localCenterOfMassX.back());
             std::swap(bodies.localCenterOfMassY[bodyIndex], bodies.localCenterOfMassY.back());
-            std::swap(bodies.truePositionX[bodyIndex], bodies.truePositionX.back());
-            std::swap(bodies.truePositionY[bodyIndex], bodies.truePositionY.back());
+            std::swap(bodies.worldCenterX[bodyIndex], bodies.worldCenterX.back());
+            std::swap(bodies.worldCenterY[bodyIndex], bodies.worldCenterY.back());
             std::swap(bodies.velocityX[bodyIndex], bodies.velocityX.back());
             std::swap(bodies.velocityY[bodyIndex], bodies.velocityY.back());
             std::swap(bodies.rotation[bodyIndex], bodies.rotation.back());
@@ -469,12 +469,12 @@ namespace PS_AGONY
         }
 
         // Pop back all BodySoA vectors.
-        bodies.positionX.pop_back();
-        bodies.positionY.pop_back();
+        bodies.offsetX.pop_back();
+        bodies.offsetY.pop_back();
         bodies.localCenterOfMassX.pop_back();
         bodies.localCenterOfMassY.pop_back();
-        bodies.truePositionX.pop_back();
-        bodies.truePositionY.pop_back();
+        bodies.worldCenterX.pop_back();
+        bodies.worldCenterY.pop_back();
         bodies.velocityX.pop_back();
         bodies.velocityY.pop_back();
         bodies.rotation.pop_back();
@@ -510,10 +510,10 @@ namespace PS_AGONY
         constexpr Real MAX_GRAB_DISTANCE = 4.0;
         constexpr Real MAX_GRAB_DISTANCE_SQ = MAX_GRAB_DISTANCE * MAX_GRAB_DISTANCE;
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
-        const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.truePositionX.data();
-        const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
+        const Real* ECSTASY_RESTRICT worldCenterXPtr = bodies.worldCenterX.data();
+        const Real* ECSTASY_RESTRICT worldCenterYPtr = bodies.worldCenterY.data();
         const Real* ECSTASY_RESTRICT massPtr = bodies.mass.data();
 
         Real minSqDistance = FLT_MAX;
@@ -525,7 +525,7 @@ namespace PS_AGONY
         {
             if (massPtr[i] == 0) continue;
 
-            const Vec2 bodyTruePosition = { truePositionXPtr[i], truePositionYPtr[i] };
+            const Vec2 bodyTruePosition = { worldCenterXPtr[i], worldCenterYPtr[i] };
 
             const Vec2 delta = bodyTruePosition - grabPosition;
 
@@ -640,7 +640,7 @@ namespace PS_AGONY
 
                 // Prepare.
                 broadPhaseCollisionDetector.setDataViewers(AABBSoAViewer(bodies.aabb));
-                computeTruePositions();
+                computeWorldCenters();
                 buildBodyAABBs();
 
                 // Warm-up run.
@@ -786,7 +786,7 @@ namespace PS_AGONY
                     NarrowPhaseCollisionDetector::ExecutionPolicy::ForceMultiThreaded :
                     NarrowPhaseCollisionDetector::ExecutionPolicy::ForceSingleThreaded;
 
-                computeTruePositions();
+                computeWorldCenters();
                 buildBodyAABBs();
                 broadPhaseCollisionDetector.setDataViewers(AABBSoAViewer(bodies.aabb));
                 const auto& broadCollisions = broadPhaseCollisionDetector.findCollisions(true);
@@ -899,7 +899,7 @@ namespace PS_AGONY
     void Simulation::postUpdate()
     {
         // That's for renderer to have actual information.
-        computeTruePositions();
+        computeWorldCenters();
         buildBodyAABBs();
     }
 
@@ -909,8 +909,8 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
         const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
@@ -1033,8 +1033,8 @@ namespace PS_AGONY
 
         // Position and rotatiob.
         {
-            Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
-            Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+            Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
+            Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
             Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
             const Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
@@ -1100,7 +1100,7 @@ namespace PS_AGONY
         for (;i < simulationSettings.collisionSolvingIterations; i++)
         {
             // Compute true position for all bodies.
-            computeTruePositions();
+            computeWorldCenters();
 
             // Rebuild AABBs.
             buildBodyAABBs();
@@ -1135,8 +1135,8 @@ namespace PS_AGONY
         using RealSimd = Ecstasy::Simd<Real>;
         using IndexSimd = Ecstasy::Simd<int32_t>;
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
 
         const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius.data();
@@ -1218,8 +1218,8 @@ namespace PS_AGONY
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
@@ -1261,8 +1261,8 @@ namespace PS_AGONY
         const size_t count = polygons.getCount();
         if (count == 0) return;
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.truePositionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.truePositionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
         const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices.data();
@@ -1362,21 +1362,21 @@ namespace PS_AGONY
         //}
     }
 
-    void Simulation::computeTruePositions()
+    void Simulation::computeWorldCenters()
     {
         using RealSimd = Ecstasy::Simd<Real>;
 
         TRACY_SCOPE_NC("Compute true positions", Ecstasy::Color::Magenta);
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
         const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies.localCenterOfMassX.data();
         const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies.localCenterOfMassY.data();
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
-        Real* ECSTASY_RESTRICT truePositionXPtr = bodies.truePositionX.data();
-        Real* ECSTASY_RESTRICT truePositionYPtr = bodies.truePositionY.data();
+        Real* ECSTASY_RESTRICT worldCenterXPtr = bodies.worldCenterX.data();
+        Real* ECSTASY_RESTRICT worldCenterYPtr = bodies.worldCenterY.data();
 
         const size_t bodyCount = bodies.getCount();
 
@@ -1395,8 +1395,8 @@ namespace PS_AGONY
             const RealSimd truePositionX = RealSimd::negMulAdd(localCenterOfMassX, cosRot,     RealSimd::mulAdd(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
             const RealSimd truePositionY = RealSimd::negMulAdd(localCenterOfMassX, sinRot, RealSimd::negMulAdd(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
         
-            truePositionX.store(truePositionXPtr + i);
-            truePositionY.store(truePositionYPtr + i);
+            truePositionX.store(worldCenterXPtr + i);
+            truePositionY.store(worldCenterYPtr + i);
         }
         for (; i < bodyCount; i++)
         {
@@ -1406,8 +1406,8 @@ namespace PS_AGONY
             const Real localCenterOfMassY = localCenterOfMassYPtr[i];
             const Real cosRot = rotationCosPtr[i];
             const Real sinRot = rotationSinPtr[i];
-            truePositionXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
-            truePositionYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
+            worldCenterXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
+            worldCenterYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
         }
     }
 
@@ -1421,8 +1421,8 @@ namespace PS_AGONY
         const Vec2 newBodyPosition = mainBodyHolder.getPosition() + mainBodyHolder.bodyOffset;
         const Vec2 newBodyVelocity = mainBodyHolder.getVelocity();
 
-        Real* ECSTASY_RESTRICT positionXPtr = bodies.positionX.data();
-        Real* ECSTASY_RESTRICT positionYPtr = bodies.positionY.data();
+        Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
 

@@ -1302,33 +1302,55 @@ namespace Ecstasy
             requires std::is_same_v<Target, Simd<double, Bits>> && IS_INT64
         {
             Target s;
+
+            //const Target magic(0x0018000000000000);
+            //const Simd biased = (*this) + magic.template as<Simd>();
+            //s = biased.as<Target>() - magic;
+
             if constexpr (Bits == 256)
             {
+                // Range: [-2^51, 2^51].
+                //x = _mm_add_epi64(x,  _mm_castpd_si128(_mm_set1_pd(0x0018000000000000)));
+                //return _mm_sub_pd(_mm_castsi128_pd(x), _mm_set1_pd(0x0018000000000000));
+                //
+                // magic = double(0x0018000000000000);
+                // x = x + as<i64>(magic);
+                // return as<double>(x) - magic;
+            
+                // Range: full.
+                //__m128i xH = _mm_srai_epi32(x, 16);
+                //xH = _mm_blend_epi16(xH, _mm_setzero_si128(), 0x33);
+                //xH = _mm_add_epi64(xH, _mm_castpd_si128(_mm_set1_pd(442721857769029238784.)));              //  3*2^67
+                //__m128i xL = _mm_blend_epi16(x, _mm_castpd_si128(_mm_set1_pd(0x0010000000000000)), 0x88);   //  2^52
+                //__m128d f = _mm_sub_pd(_mm_castsi128_pd(xH), _mm_set1_pd(442726361368656609280.));          //  3*2^67 + 2^52
+                //return _mm_add_pd(f, _mm_castsi128_pd(xL));
+            
+            
                 const __m256i hiIdx = _mm256_setr_epi32(1, 3, 5, 7, 1, 3, 5, 7);
                 const __m256i loIdx = _mm256_setr_epi32(0, 2, 4, 6, 0, 2, 4, 6);
-
+            
                 const __m128i hi32 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(reg, hiIdx)); // Signed.
                 const __m128i lo32 = _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(reg, loIdx)); // Unsigned.
-
+            
                 const __m256d hiScaled = _mm256_mul_pd(_mm256_cvtepi32_pd(hi32), _mm256_set1_pd(4294967296.0)); // *2^52, exact.
-
+            
                 const __m256i lo64 = _mm256_cvtepu32_epi64(lo32); // Zero-extend.
                 const __m256i magicBits = _mm256_set1_epi64x(0x4330000000000000LL); // 2^52.
                 const __m256d loD = _mm256_sub_pd(_mm256_castsi256_pd(_mm256_or_si256(lo64, magicBits)), _mm256_set1_pd(4503599627370496.0));
-
+            
                 s.reg = _mm256_add_pd(hiScaled, loD);
             }
             else
             {
                 const __m128i hi32shuf = _mm_shuffle_epi32(reg, _MM_SHUFFLE(3, 1, 3, 1)); // Signed.
                 const __m128i lo32shuf = _mm_shuffle_epi32(reg, _MM_SHUFFLE(2, 0, 2, 0)); // Unsigned.
-
+            
                 const __m128d hiScaled = _mm_mul_pd(_mm_cvtepi32_pd(hi32shuf), _mm_set1_pd(4294967296.0));
-
+            
                 const __m128i lo64 = _mm_cvtepu32_epi64(lo32shuf); // Zero-extend (SSE4.1).
                 const __m128i magicBits = _mm_set1_epi64x(0x4330000000000000LL);
                 const __m128d loD = _mm_sub_pd(_mm_castsi128_pd(_mm_or_si128(lo64, magicBits)), _mm_set1_pd(4503599627370496.0));
-
+            
                 s.reg = _mm_add_pd(hiScaled, loD);
             }
             return s;
