@@ -9,12 +9,26 @@
 #include <bit>
 #include <algorithm>
 #include <array>
+#include <type_traits>
 #include <iostream>
 
 namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Simd<Real>;
-    using MortonU32Simd = Ecstasy::Simd<uint32_t>;
+
+    static_assert(Ecstasy::Simd<uint32_t>::lanes == 8, "Double works with morton codes only when AVX enabled");
+
+    using MortonU32Simd = std::conditional_t<
+        std::is_same_v<Real, float>,
+        Ecstasy::Simd<uint32_t>,
+        Ecstasy::Simd<uint32_t, 128> // Double.
+    >;
+
+    using MortonI32Simd = std::conditional_t<
+        std::is_same_v<Real, float>,
+        Ecstasy::Simd<int32_t>,
+        Ecstasy::Simd<int32_t, 128> // Double.
+    >;
 
 
     static constexpr uint64_t integralLog2(uint64_t n)
@@ -286,15 +300,28 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Compute morton codes");
 
         size_t i = 0;
-        if constexpr (TRealSimd::lanes == MortonU32Simd::lanes)
-        {   // SIMD PATH.
+        if constexpr (std::is_same_v<Real, float>)
+        {
             for (; i + RealSimd::lanes <= bodyCount; i += TRealSimd::lanes)
             {
-                const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).to<MortonU32Simd>();
-                const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).to<MortonU32Simd>();
-
+                const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).template to<MortonU32Simd>();
+                const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).template to<MortonU32Simd>();
+            
                 const MortonU32Simd code = morton2DSimd(qx, qy);
-
+            
+                code.store(mortonCodePtr + i);
+            }
+        }
+        else
+        {
+            for (; i + RealSimd::lanes <= bodyCount; i += TRealSimd::lanes)
+            {
+                // Cx/cy are in range [0; 2^16]
+                const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).template to<MortonI32Simd>().template as<MortonU32Simd>();
+                const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).template to<MortonI32Simd>().template as<MortonU32Simd>();
+            
+                const MortonU32Simd code = morton2DSimd(qx, qy);
+            
                 code.store(mortonCodePtr + i);
             }
         }

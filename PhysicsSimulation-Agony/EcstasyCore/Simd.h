@@ -1238,11 +1238,12 @@ namespace Ecstasy
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<int32_t, 128>> && IS_DOUBLE
+            requires (std::is_same_v<Target, Simd<int32_t, 128>> && IS_DOUBLE && Bits == 256)
         {
             Target s;
-            if constexpr (Bits == 256) s.reg = _mm256_cvttpd_epi32(reg);
-            else                       s.reg = _mm_cvttpd_epi32(reg);
+            s.reg = _mm256_cvttpd_epi32(reg);
+            //if constexpr (Bits == 256) s.reg = _mm256_cvttpd_epi32(reg);
+            //else                       s.reg = _mm_cvttpd_epi32(reg);
             return s;
         }
 
@@ -1346,12 +1347,12 @@ namespace Ecstasy
             if constexpr (Bits == 256)
             {
                 if constexpr (IS_FLOAT) s.reg = _mm256_castps_si256(reg);
-                else                                    s.reg = _mm256_castpd_si256(reg);
+                else                    s.reg = _mm256_castpd_si256(reg);
             }
             else
             {
                 if constexpr (IS_FLOAT) s.reg = _mm_castps_si128(reg);
-                else                                    s.reg = _mm_castpd_si128(reg);
+                else                    s.reg = _mm_castpd_si128(reg);
             }
             return s;
         }
@@ -1412,6 +1413,19 @@ namespace Ecstasy
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(reg);
             else                       s.reg = _mm_castsi128_pd(reg);
             return s;
+        }
+
+        template<typename Target>
+        [[nodiscard]] Target as() const noexcept
+            requires (
+                (std::is_same_v<Target, Simd<uint32_t, Bits>> && IS_INT32) ||
+                (std::is_same_v<Target, Simd<int32_t, Bits>> && IS_UINT32) ||
+                (std::is_same_v<Target, Simd<uint64_t, Bits>> && IS_INT64) ||
+                (std::is_same_v<Target, Simd<int64_t, Bits>> && IS_UINT64)
+            )
+        {
+            Target s;
+            s.reg = reg;
         }
     };
 
