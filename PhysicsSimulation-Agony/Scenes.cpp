@@ -556,6 +556,157 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
         });
 }
 
+void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    // === CONFIGURATION VARIABLES ===
+    constexpr float worldWidth = 400.0f; // Configurable overall width of the scene
+    constexpr float terrainSegmentWidth = 8.0f;   // Width of each individual landscape chunk
+    constexpr float wallThickness = 5.0f;
+    constexpr float wallHeight = 60.0f;
+    constexpr float terrainBaseY = -20.0f; // Bottom floor depth for the landscape polygons
+
+    // Configurable object counts
+    constexpr int circleCount = 0;
+    constexpr int boxCount = 0;
+    constexpr int polygonCount = 20;
+
+    // === 1. MATERIAL SETUP ===
+    PS_AGONY::Material worldMaterial = {
+        .elasticity = 0.4f,
+        .staticFriction = 0.7f,
+        .dynamicFriction = 0.6f
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(worldMaterial);
+
+    // === 2. HIGH BOUNDS (SIDE WALLS) ===
+    // Left Bounding Wall
+    simulation.createBox({
+        .base.position = { -worldWidth * 0.5f - wallThickness * 0.5f, wallHeight * 0.5f + terrainBaseY },
+        .base.mass = 0, // Static
+        .base.materialIndex = materialIdx,
+        .size = { wallThickness, wallHeight }
+        });
+
+    // Right Bounding Wall
+    simulation.createBox({
+        .base.position = { worldWidth * 0.5f + wallThickness * 0.5f, wallHeight * 0.5f + terrainBaseY },
+        .base.mass = 0, // Static
+        .base.materialIndex = materialIdx,
+        .size = { wallThickness, wallHeight }
+        });
+
+    // === 3. JOINED POLYGON LANDSCAPE (LOCAL COORDINATES) ===
+    const int terrainSegments = static_cast<int>(worldWidth / terrainSegmentWidth);
+    std::vector<float> heights(terrainSegments + 1);
+    float currentHeight = 0.0f;
+
+    // Pre-calculate heights using a random walk to create continuous terrain hills
+    for (int i = 0; i <= terrainSegments; ++i) {
+        heights[i] = currentHeight;
+        currentHeight += rvg.real<float>(-2.0f, 2.0f);
+        currentHeight = std::max(-6.0f, std::min(currentHeight, 18.0f)); // Clamp terrain elevations safely
+    }
+
+    // Build contiguous 4-vertex convex blocks across the world width
+    constexpr float halfSegmentWidth = terrainSegmentWidth * 0.5f;
+    for (int i = 0; i < terrainSegments; ++i) {
+        float x1 = -worldWidth * 0.5f + i * terrainSegmentWidth;
+        float y1 = heights[i];
+        float y2 = heights[i + 1];
+
+        // Define the explicit anchor position for this segment (midpoint base)
+        float posX = x1 + halfSegmentWidth;
+        float posY = terrainBaseY;
+
+        // Define vertices locally relative to `.base.position` in Counter-Clockwise order
+        PS_AGONY::Vec2 localVertices[4] = {
+            { -halfSegmentWidth, 0.0f },             // Bottom-Left
+            {  halfSegmentWidth, 0.0f },             // Bottom-Right
+            {  halfSegmentWidth, y2 - terrainBaseY }, // Top-Right
+            { -halfSegmentWidth, y1 - terrainBaseY }  // Top-Left
+        };
+
+        simulation.createPolygon({
+            .base.position = { posX, posY },
+            .base.mass = 0,
+            .base.materialIndex = materialIdx,
+            .localVertices = localVertices,
+            .verticesCount = 4
+            });
+    }
+
+    // === 4. EVENLY SPREAD DYNAMIC OBJECTS ===
+    const float spawnBufferX = worldWidth * 0.45f; // Keep spawns slightly away from outer edge walls
+    constexpr float spawnMinY = 25.0f;
+    constexpr float spawnMaxY = 50.0f;
+
+    // Spawn Circles
+    for (int i = 0; i < circleCount; ++i) {
+        float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
+        float y = rvg.real<float>(spawnMinY, spawnMaxY);
+        float vx = rvg.real<float>(-1.5f, 1.5f);
+        float vy = rvg.real<float>(-1.0f, 0.0f);
+        float r = rvg.real<float>(0.15f, 0.5f);
+        float mass = 3.14159f * r * r;
+
+        simulation.createCircle({
+            .base.position = { x, y },
+            .base.velocity = { vx, vy },
+            .base.rotation = 0.0f,
+            .base.angularVelocity = 0.0f,
+            .base.mass = mass,
+            .base.materialIndex = materialIdx,
+            .radius = r
+            });
+    }
+
+    // Spawn Boxes
+    for (int i = 0; i < boxCount; ++i) {
+        float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
+        float y = rvg.real<float>(spawnMinY, spawnMaxY);
+        float vx = rvg.real<float>(-1.5f, 1.5f);
+        float vy = rvg.real<float>(-1.0f, 0.0f);
+        float rotation = rvg.real<float>(0.0f, 6.28f);
+        float width = rvg.real<float>(0.3f, 0.8f);
+        float height = rvg.real<float>(0.3f, 0.8f);
+        float mass = width * height;
+
+        simulation.createBox({
+            .base.position = { x, y },
+            .base.velocity = { vx, vy },
+            .base.rotation = rotation,
+            .base.mass = mass,
+            .base.materialIndex = materialIdx,
+            .size = { width, height }
+            });
+    }
+
+    // Spawn Random Convex Polygons
+    for (int i = 0; i < polygonCount; ++i) {
+        float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
+        float y = rvg.real<float>(spawnMinY, spawnMaxY);
+        float vx = rvg.real<float>(-1.5f, 1.5f);
+        float vy = rvg.real<float>(-1.0f, 0.0f);
+        float rotation = rvg.real<float>(0.0f, 6.28f);
+        float radius = rvg.real<float>(0.25f, 0.6f);
+        float mass = 1.2f;
+
+        constexpr size_t maxVerticesCount = 8;
+        size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
+        auto localVertices = makeConvexPolygon(rvg, verticesCount, radius);
+
+        simulation.createPolygon({
+            .base.position = { x, y },
+            .base.velocity = { vx, vy },
+            .base.rotation = rotation,
+            .base.mass = mass,
+            .base.materialIndex = materialIdx,
+            .localVertices = localVertices.data(),
+            .verticesCount = verticesCount
+            });
+    }
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Random::Generator rvg; // Random value generator.
@@ -582,5 +733,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 4)
     {
         load_ALotOfNotTouching(simulation, rvg);
+    }
+    else if (scene == 5)
+    {
+        load_LargeWorld(simulation, rvg);
     }
 }

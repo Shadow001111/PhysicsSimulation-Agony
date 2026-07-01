@@ -354,7 +354,7 @@ namespace PS_AGONY
         const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
 
         bodies.append(
-            params.base.position,
+            params.base.position + trueCenterOfMass,
             params.base.velocity,
             params.base.rotation,
             params.base.angularVelocity,
