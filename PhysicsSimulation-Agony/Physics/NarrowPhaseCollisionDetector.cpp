@@ -246,7 +246,12 @@ namespace PS_AGONY
     }
 
 
-    /* COLLISION METHODS.*/
+    /*===COLLISION METHODS===*/
+
+    // TODO: Maybe change threshold values for double Real.
+    constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
+    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
+    constexpr Real SAT_EPSILON = 1e-4;
 
     static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
     {
@@ -261,10 +266,51 @@ namespace PS_AGONY
         reinterpret_cast<Int&>(v.y) ^= signMask;
     }
 
-    // TODO: Maybe change  thresholds for double Real.
-    constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
-    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
-    constexpr Real SAT_EPSILON = 1e-4;
+    [[nodiscard]] static bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
+    {
+        const Real d1 = glm::dot(p1 - planePoint, planeNormal);
+        const Real d2 = glm::dot(p2 - planePoint, planeNormal);
+
+        if (d1 >= 0 && d2 >= 0) return false; // Both inside.
+        if (d1  < 0 && d2  < 0) return true;  // Both outside.
+
+        const Real t = d1 / (d1 - d2);
+        const Vec2 dir = p2 - p1;
+        const Vec2 intersect = p1 + dir * t;
+
+        if (d1 >= 0) p2 = intersect;
+        else         p1 = intersect;
+
+        return false;
+    };
+
+    static void projectVerticesOnAxis(const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
+    {
+        minOut = std::numeric_limits<Real>::max();
+        maxOut = -std::numeric_limits<Real>::max();
+
+        for (const Vec2& v : vertices)
+        {
+            const Real proj = glm::dot(v, axis);
+            minOut = std::fmin(minOut, proj);
+            maxOut = std::fmax(maxOut, proj);
+        }
+    };
+
+    [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
+    {
+        const Vec2 p0 = vertsPtr[edgeIndex];
+        const Vec2 p1 = vertsPtr[(edgeIndex + 1) % verticesCount];
+        const Vec2 edge = p1 - p0;
+
+        Vec2 n = Vec2{ edge.y, -edge.x };
+        const Real len2 = glm::dot(n, n);
+        if (len2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
+        {
+            n *= Real(1) / std::sqrt(len2);
+        }
+        return n;
+    };
 
     void NarrowPhaseCollisionDetector::collisionCircleCircle(
         const std::vector<BodyPair>& pairs,
@@ -466,21 +512,6 @@ namespace PS_AGONY
                 glm::dot(positionA - positionB, upB)
             };
 
-            auto edgeOutwardNormal = [&](uint32_t edgeIndex) -> Vec2
-                {
-                    const Vec2 v0 = localVerts[edgeIndex];
-                    const Vec2 v1 = localVerts[(edgeIndex + 1) % uint32_t(vertexCount)];
-                    const Vec2 edge = v1 - v0;
-
-                    Vec2 n = Vec2{ edge.y, -edge.x };
-                    const Real lenSquared = glm::dot(n, n);
-                    if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
-                    {
-                        n *= Real(1) / std::sqrt(lenSquared);
-                    }
-                    return n;
-                };
-
             auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
                 {
                     const Vec2 ab = b - a;
@@ -520,7 +551,7 @@ namespace PS_AGONY
             }
             else
             {
-                normalLocal = edgeOutwardNormal(bestEdgeIndex);
+                normalLocal = edgeOutwardNormal(localVerts, vertexCount, bestEdgeIndex);
                 flipSignIfNegative(normalLocal, glm::dot(circleLocal - bestPointLocal, normalLocal));
             }
 
@@ -712,20 +743,6 @@ namespace PS_AGONY
                 incEdgeEnd = faceCenter - edgeOffset;
             }
 
-            auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
-                {
-                    const Real d1 = glm::dot(p1 - planePoint, planeNormal);
-                    const Real d2 = glm::dot(p2 - planePoint, planeNormal);
-                    if (d1 >= 0 && d2 >= 0) return false; // both inside
-                    if (d1 < 0 && d2 < 0) return true;    // both outside
-                    const Vec2 dir = p2 - p1;
-                    const Real t = d1 / (d1 - d2);
-                    const Vec2 intersect = p1 + dir * t;
-                    if (d1 >= 0) p2 = intersect;
-                    else         p1 = intersect;
-                    return false;
-                };
-
             Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
             if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
             if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
@@ -775,37 +792,6 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
-            {
-                minOut =  std::numeric_limits<Real>::max();
-                maxOut = -std::numeric_limits<Real>::max();
-
-                for (const Vec2& v : vertices)
-                {
-                    const Real p = glm::dot(v, axis);
-                    minOut = std::fmin(minOut, p);
-                    maxOut = std::fmax(maxOut, p);
-                }
-            };
-
-        auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
-            {
-                const Real d1 = glm::dot(p1 - planePoint, planeNormal);
-                const Real d2 = glm::dot(p2 - planePoint, planeNormal);
-
-                if (d1 >= 0 && d2 >= 0) return false; // Both inside.
-                if (d1 < 0 && d2 < 0) return true;    // Both outside.
-
-                const Vec2 dir = p2 - p1;
-                const Real t = d1 / (d1 - d2);
-                const Vec2 intersect = p1 + dir * t;
-
-                if (d1 >= 0) p2 = intersect;
-                else         p1 = intersect;
-
-                return false;
-            };
-
         static thread_local std::vector<Vec2> polyWorldVerts;
 
         for (auto [indexA, indexB] : pairs)
@@ -841,21 +827,6 @@ namespace PS_AGONY
                 const Vec2 v = localVerts[i];
                 polyWorldVerts[i] = positionB + rightB * v.x + upB * v.y;
             }
-
-            auto polygonEdgeNormal = [&](uint32_t edgeIndex) -> Vec2
-                {
-                    const Vec2 p0 = polyWorldVerts[edgeIndex];
-                    const Vec2 p1 = polyWorldVerts[(edgeIndex + 1) % uint32_t(vertexCount)];
-                    const Vec2 edge = p1 - p0;
-
-                    Vec2 n = Vec2{ edge.y, -edge.x };
-                    const Real len2 = glm::dot(n, n);
-                    if (len2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
-                    {
-                        n *= Real(1) / std::sqrt(len2);
-                    }
-                    return n;
-                };
 
             const Vec2 centerDelta = positionB - positionA;
 
@@ -903,7 +874,7 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
-                Vec2 axis = polygonEdgeNormal(i);
+                Vec2 axis = edgeOutwardNormal(polyWorldVerts.data(), vertexCount, i);
                 if (!testAxis(axis, SATAxis::POLY_EDGE, i)) goto nextPair;
             }
 
@@ -967,7 +938,7 @@ namespace PS_AGONY
 
                 for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
                 {
-                    const Vec2 n = polygonEdgeNormal(i);
+                    const Vec2 n = edgeOutwardNormal(polyWorldVerts.data(), vertexCount, i);
                     const Real d = glm::dot(refNormal, n);
                     if (d < minDot)
                     {
@@ -1055,52 +1026,6 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        auto edgeOutwardNormal = [](const std::vector<Vec2>& verts, uint32_t edgeIndex) -> Vec2
-            {
-                const Vec2 p0 = verts[edgeIndex];
-                const Vec2 p1 = verts[(edgeIndex + 1) % uint32_t(verts.size())];
-                const Vec2 edge = p1 - p0;
-
-                Vec2 n = Vec2{ edge.y, -edge.x };
-                const Real len2 = glm::dot(n, n);
-                if (len2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
-                {
-                    n *= Real(1) / std::sqrt(len2);
-                }
-                return n;
-            };
-
-        auto projectVerticesOnAxis = [](const std::vector<Vec2>& vertices, const Vec2& axis, Real& minOut, Real& maxOut)
-            {
-                minOut = std::numeric_limits<Real>::max();
-                maxOut = -std::numeric_limits<Real>::max();
-
-                for (const Vec2& v : vertices)
-                {
-                    const Real p = glm::dot(v, axis);
-                    minOut = std::fmin(minOut, p);
-                    maxOut = std::fmax(maxOut, p);
-                }
-            };
-
-        auto clipSegment = [](Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal) -> bool
-            {
-                const Real d1 = glm::dot(p1 - planePoint, planeNormal);
-                const Real d2 = glm::dot(p2 - planePoint, planeNormal);
-
-                if (d1 >= 0 && d2 >= 0) return false; // both inside
-                if (d1 < 0 && d2 < 0) return true;    // both outside
-
-                const Vec2 dir = p2 - p1;
-                const Real t = d1 / (d1 - d2);
-                const Vec2 intersect = p1 + dir * t;
-
-                if (d1 >= 0) p2 = intersect;
-                else         p1 = intersect;
-
-                return false;
-            };
-
         static thread_local std::vector<Vec2> worldVertsA;
         static thread_local std::vector<Vec2> worldVertsB;
 
@@ -1186,14 +1111,14 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
-                Vec2 axis = edgeOutwardNormal(worldVertsA, i);
+                Vec2 axis = edgeOutwardNormal(worldVertsA.data(), countA, i);
                 if (!sat(worldVertsA, worldVertsB, axis, SATAxis::A_EDGE, i))
                     goto nextPair;
             }
 
             for (uint32_t i = 0; i < uint32_t(countB); i++)
             {
-                Vec2 axis = edgeOutwardNormal(worldVertsB, i);
+                Vec2 axis = edgeOutwardNormal(worldVertsB.data(), countB, i);
                 if (!sat(worldVertsA, worldVertsB, axis, SATAxis::B_EDGE, i))
                     goto nextPair;
             }
