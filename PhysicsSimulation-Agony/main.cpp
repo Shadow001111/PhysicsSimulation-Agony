@@ -194,6 +194,7 @@ static int gameFunc()
 
     // Simulation
     PS_AGONY::Simulation simulation{};
+    bool pauseSimulation = false;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
@@ -235,18 +236,20 @@ static int gameFunc()
             const PS_AGONY::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
 			const PS_AGONY::Real zoomSpeed = 2.0 * deltaTime;
 
-            if (wnd.isKeyPressed(GLFW_KEY_W))
+            if (windowInputManager.isKeyPressed(GLFW_KEY_W))
                 camera.position.y += cameraSpeed;
-            if (wnd.isKeyPressed(GLFW_KEY_S))
+            if (windowInputManager.isKeyPressed(GLFW_KEY_S))
                 camera.position.y -= cameraSpeed;
-            if (wnd.isKeyPressed(GLFW_KEY_A))
+            if (windowInputManager.isKeyPressed(GLFW_KEY_A))
                 camera.position.x -= cameraSpeed;
-            if (wnd.isKeyPressed(GLFW_KEY_D))
+            if (windowInputManager.isKeyPressed(GLFW_KEY_D))
                 camera.position.x += cameraSpeed;
-            if (wnd.isKeyPressed(GLFW_KEY_Q))
+            if (windowInputManager.isKeyPressed(GLFW_KEY_Q))
                 camera.setViewRangeH(camera.viewRange * (1.0 + zoomSpeed), wnd.getAspectRatio());
-            if (wnd.isKeyPressed(GLFW_KEY_E))
+            if (windowInputManager.isKeyPressed(GLFW_KEY_E))
 				camera.setViewRangeH(camera.viewRange / (1.0 + zoomSpeed), wnd.getAspectRatio());
+
+            pauseSimulation ^= windowInputManager.isKeyJustPressed(GLFW_KEY_P);
         }
         {
             PS_AGONY::Vec2 mouseWorldPosition;
@@ -288,8 +291,11 @@ static int gameFunc()
         }
 
         // Simulation.
-        simulation.update(deltaTime);
-        debugData.simulationDebugData = simulation.getDebugData();
+        if (!pauseSimulation)
+        {
+            simulation.update(deltaTime);
+            debugData.simulationDebugData = simulation.getDebugData();
+        }
 
         // Smooth debug data.
         {
