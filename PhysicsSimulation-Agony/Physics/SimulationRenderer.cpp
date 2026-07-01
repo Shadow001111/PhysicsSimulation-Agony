@@ -44,8 +44,8 @@ namespace PS_AGONY
 
         // Render.
         renderBodies(viewProjectionMatrix);
-		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
-        //renderContactPoints(simulation, viewProjectionMatrix);
+		renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+        renderContactPoints(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
@@ -173,7 +173,7 @@ namespace PS_AGONY
 
 		renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         renderBodyTruePositions(viewProjectionMatrix); // Green.
-        renderBodyPositions(viewProjectionMatrix); // Blue.
+        //renderBodyPositions(viewProjectionMatrix); // Blue.
 		//renderBodyAABBs(viewProjectionMatrix);
     }
 

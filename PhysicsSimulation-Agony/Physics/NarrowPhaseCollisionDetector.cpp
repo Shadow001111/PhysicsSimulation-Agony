@@ -294,8 +294,7 @@ namespace PS_AGONY
             Vec2 normal;
             if (distance == Real(0)) [[unlikely]]
             {
-                normal.x = 1.0;
-                normal.y = 0.0;
+                normal = { 1.0, 0.0 };
             }
             else
             {
@@ -836,8 +835,6 @@ namespace PS_AGONY
                 polyWorldVerts[i] = positionB + rightB * v.x + upB * v.y;
             }
 
-            // Winding is consistent.
-
             auto polygonEdgeNormal = [&](uint32_t edgeIndex) -> Vec2
                 {
                     const Vec2 p0 = polyWorldVerts[edgeIndex];
@@ -950,7 +947,7 @@ namespace PS_AGONY
                 const Real edgeLen = std::sqrt(glm::dot(edge, edge));
                 if (edgeLen <= Real(1e-12)) continue;
 
-                sideDir = -edge / edgeLen;
+                sideDir = edge / -edgeLen;
             }
 
             Vec2 incEdgeStart, incEdgeEnd;
