@@ -54,8 +54,8 @@ namespace PS_AGONY
 
 		struct FloatAABB
 		{
-			Real minX, minY;
-			Real maxX, maxY;
+			float minX, minY;
+			float maxX, maxY;
 		};
 
 		struct AABBResources

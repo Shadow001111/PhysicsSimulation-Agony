@@ -44,7 +44,7 @@ namespace PS_AGONY
 
         // Render.
         renderBodies(viewProjectionMatrix);
-		renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         //renderContactPoints(simulation, viewProjectionMatrix);
     }
 
@@ -464,7 +464,7 @@ namespace PS_AGONY
         aabbResources.instanceData.resize(aabbResources.aabbs.size());
 
         // Copy and cast values. 
-        for (size_t i = 0; i < aabbResources.aabbs.size(); ++i)
+        for (size_t i = 0; i < aabbResources.aabbs.size(); i++)
         {
             aabbResources.instanceData[i].minX = static_cast<float>(aabbResources.aabbs[i].minX);
             aabbResources.instanceData[i].minY = static_cast<float>(aabbResources.aabbs[i].minY);
@@ -594,7 +594,7 @@ namespace PS_AGONY
 		ensureAABBInstanceVboCapacity(count);
 
         // Move data to gpu.
-        aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(AABB));
+        aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(FloatAABB));
 
         // Bind things, set uniforms.
         aabbResources.shader.use();
@@ -742,7 +742,7 @@ namespace PS_AGONY
 
     void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)
     {
-        constexpr size_t SIZEOF_INSTANCE = sizeof(AABB);
+        constexpr size_t SIZEOF_INSTANCE = sizeof(FloatAABB);
 
         auto& vao = aabbResources.vao;
         auto& instanceVbo = aabbResources.instanceVbo;
