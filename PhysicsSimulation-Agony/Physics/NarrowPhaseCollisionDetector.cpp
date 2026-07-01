@@ -12,19 +12,6 @@ namespace PS_AGONY
         Real squaredDistance;
     };
 
-    static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
-    {
-        using Int = std::conditional_t<sizeof(Real) == 8,
-            uint64_t,
-            uint32_t>;
-
-        constexpr Int signBit = 1ull << (sizeof(Real) * 8 - 1);
-
-        const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
-        reinterpret_cast<Int&>(v.x) ^= signMask;
-        reinterpret_cast<Int&>(v.y) ^= signMask;
-    }
-
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
         SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> mat;
@@ -258,6 +245,27 @@ namespace PS_AGONY
         }
     }
 
+
+    /* COLLISION METHODS.*/
+
+    static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
+    {
+        using Int = std::conditional_t<sizeof(Real) == 8,
+            uint64_t,
+            uint32_t>;
+
+        constexpr Int signBit = 1ull << (sizeof(Real) * 8 - 1);
+
+        const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
+        reinterpret_cast<Int&>(v.x) ^= signMask;
+        reinterpret_cast<Int&>(v.y) ^= signMask;
+    }
+
+    // TODO: Maybe change  thresholds for double Real.
+    constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
+    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
+    constexpr Real SAT_EPSILON = 1e-4;
+
     void NarrowPhaseCollisionDetector::collisionCircleCircle(
         const std::vector<BodyPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
@@ -285,14 +293,13 @@ namespace PS_AGONY
             const Real radiusSum = radiusA + radiusB;
             const Real squaredDistance = glm::dot(deltaPosition, deltaPosition);
 
-            if (squaredDistance >= radiusSum * radiusSum)
-                continue;
+            if (squaredDistance >= radiusSum * radiusSum) continue;
 
             const Real distance = std::sqrt(squaredDistance);
             const Real depth = radiusSum - distance;
 
             Vec2 normal;
-            if (distance == Real(0)) [[unlikely]]
+            if (distance < ZERO_DIVISION_BOUNDARY) [[unlikely]]
             {
                 normal = { 1.0, 0.0 };
             }
@@ -363,7 +370,7 @@ namespace PS_AGONY
 
             if (squaredDistance >= radiusA * radiusA) continue;
 
-            if (squaredDistance > Real(1e-8))
+            if (squaredDistance >= ZERO_DIVISION_BOUNDARY_SQUARED)
             {
                 const Real distance = std::sqrt(squaredDistance);
                 const Real invDistance = Real(1) / distance;
@@ -397,10 +404,8 @@ namespace PS_AGONY
             const Real sy = std::copysign(Real(1), circleLocalPosition.y);
 
             Vec2 normalLocal;
-            if (useX)
-                normalLocal = Vec2(sx, Real(0));
-            else
-                normalLocal = Vec2(Real(0), sy);
+            if (useX) normalLocal = Vec2(sx, Real(0));
+            else      normalLocal = Vec2(Real(0), sy);
 
             const Vec2 normal = -Vec2{
                 cosB * normalLocal.x - sinB * normalLocal.y,
@@ -468,9 +473,11 @@ namespace PS_AGONY
                     const Vec2 edge = v1 - v0;
 
                     Vec2 n = Vec2{ edge.y, -edge.x };
-                    const Real len2 = glm::dot(n, n);
-                    if (len2 > Real(1e-12))
-                        n *= Real(1) / std::sqrt(len2);
+                    const Real lenSquared = glm::dot(n, n);
+                    if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
+                    {
+                        n *= Real(1) / std::sqrt(lenSquared);
+                    }
                     return n;
                 };
 
@@ -478,7 +485,7 @@ namespace PS_AGONY
                 {
                     const Vec2 ab = b - a;
                     const Real denom = glm::dot(ab, ab);
-                    if (denom <= Real(1e-12)) return a;
+                    if (denom < ZERO_DIVISION_BOUNDARY) return a;
                     const Real t = glm::dot(p - a, ab) / denom;
                     return a + ab * glm::clamp(t, Real(0), Real(1));
                 };
@@ -506,7 +513,7 @@ namespace PS_AGONY
             if (bestDist2 >= radiusA * radiusA) continue;
 
             Vec2 normalLocal;
-            if (bestDist2 > Real(1e-8))
+            if (bestDist2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
             {
                 const Real invDist = Real(1) / std::sqrt(bestDist2);
                 normalLocal = (bestPointLocal - circleLocal) * invDist;
@@ -728,7 +735,7 @@ namespace PS_AGONY
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
             for (uint32_t i = 0; i < 2; i++)
             {
-                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + Real(1e-5))
+                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
                     contacts[contactCount++] = clipped[i];
             }
             if (contactCount == 0) continue;
@@ -843,7 +850,7 @@ namespace PS_AGONY
 
                     Vec2 n = Vec2{ edge.y, -edge.x };
                     const Real len2 = glm::dot(n, n);
-                    if (len2 > Real(1e-12))
+                    if (len2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
                     {
                         n *= Real(1) / std::sqrt(len2);
                     }
@@ -860,7 +867,7 @@ namespace PS_AGONY
             auto testAxis = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
                 {
                     const Real axisLenSquared = glm::dot(axis, axis);
-                    if (axisLenSquared <= Real(1e-12)) return true;
+                    if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
 
                     axis *= Real(1) / std::sqrt(axisLenSquared);
 
@@ -945,7 +952,7 @@ namespace PS_AGONY
 
                 const Vec2 edge = refEdgeEnd - refEdgeStart;
                 const Real edgeLen = std::sqrt(glm::dot(edge, edge));
-                if (edgeLen <= Real(1e-12)) continue;
+                if (edgeLen < ZERO_DIVISION_BOUNDARY) continue;
 
                 sideDir = edge / -edgeLen;
             }
@@ -1006,7 +1013,7 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < 2; i++)
             {
-                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + Real(1e-5))
+                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
                 {
                     contacts[contactCount++] = clipped[i];
                 }
@@ -1056,8 +1063,10 @@ namespace PS_AGONY
 
                 Vec2 n = Vec2{ edge.y, -edge.x };
                 const Real len2 = glm::dot(n, n);
-                if (len2 > Real(1e-12))
+                if (len2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
+                {
                     n *= Real(1) / std::sqrt(len2);
+                }
                 return n;
             };
 
@@ -1150,7 +1159,7 @@ namespace PS_AGONY
                 Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
             {
                 const Real axisLenSquared = glm::dot(axis, axis);
-                if (axisLenSquared <= Real(1e-12)) return true;
+                if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
 
                 axis *= Real(1) / std::sqrt(axisLenSquared);
 
@@ -1208,7 +1217,7 @@ namespace PS_AGONY
 
                     const Vec2 edge = refEdgeEnd - refEdgeStart;
                     const Real edgeLen = std::sqrt(glm::dot(edge, edge));
-                    if (edgeLen <= Real(1e-12)) goto nextPair;
+                    if (edgeLen < ZERO_DIVISION_BOUNDARY) goto nextPair;
 
                     sideDir = edge / edgeLen;
 
@@ -1231,7 +1240,7 @@ namespace PS_AGONY
                     const Vec2 edge = p1 - p0;
                     Vec2 n = Vec2{ edge.y, -edge.x };
                     const Real len2 = glm::dot(n, n);
-                    if (len2 <= Real(1e-12)) continue;
+                    if (len2 < ZERO_DIVISION_BOUNDARY_SQUARED) continue;
                     n *= Real(1) / std::sqrt(len2);
 
                     const Real d = glm::dot(refNormal, n);
@@ -1250,14 +1259,13 @@ namespace PS_AGONY
                 if (clipSegment(clipped[0], clipped[1], refEdgeEnd,  -sideDir)) goto nextPair;
 
                 const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
-                const Real eps = Real(1e-5);
 
                 std::array<Vec2, 2> contacts;
                 uint32_t contactCount = 0;
 
                 for (uint32_t i = 0; i < 2; i++)
                 {
-                    if (glm::dot(clipped[i], refNormal) <= refPlaneDist + eps)
+                    if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
                     {
                         contacts[contactCount++] = clipped[i];
                     }
