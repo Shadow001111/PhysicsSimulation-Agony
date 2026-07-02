@@ -39,13 +39,12 @@ namespace PS_AGONY
 		struct SimulationSettings
 		{
 			Real updateInterval = 1.0 / 300.0;
-			uint32_t collisionSolvingIterations = 6;
+			uint32_t collisionSolvingIterations = 3;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.
 			Real timeScale = 1.0;
 			Vec2 gravity{ 0.0, -9.81 };
-			//Vec2 gravity{ 0.0, 0.0 };
 		};
 
 		enum class BenchmarkDensity
