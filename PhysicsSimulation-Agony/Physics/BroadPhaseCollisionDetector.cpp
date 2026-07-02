@@ -138,8 +138,6 @@ namespace PS_AGONY
         }
         else
         {
-            TRACY_SCOPE_N("Refit tree");
-
             fitBvhNodeAABBs(false);
         }
 
@@ -549,20 +547,18 @@ namespace PS_AGONY
                 bvhFunctionResources.nodes.emplace_back(mid, nodeEnd);
             }
         }
-        {
-            TRACY_SCOPE_N("Compute bvh node and leaf AABBs");
 
-            leafBodyAABBs.minX.resize(leafCount);
-            leafBodyAABBs.maxX.resize(leafCount);
-            leafBodyAABBs.minY.resize(leafCount);
-            leafBodyAABBs.maxY.resize(leafCount);
-
-            fitBvhNodeAABBs(true);
-        }
+        leafBodyAABBs.minX.resize(leafCount);
+        leafBodyAABBs.maxX.resize(leafCount);
+        leafBodyAABBs.minY.resize(leafCount);
+        leafBodyAABBs.maxY.resize(leafCount);
+        fitBvhNodeAABBs(true);
     }
 
     void BroadPhaseCollisionDetector::fitBvhNodeAABBs(bool isRebuild)
     {
+        TRACY_SCOPE_N("Fit bvh nodes");
+
         // InternalRealSimd must hold exactly 4 Reals.
         using InternalRealSimd = std::conditional_t<
             std::is_same_v<Real, float>,
@@ -587,6 +583,16 @@ namespace PS_AGONY
 
         const size_t nodeCount = bvhFunctionResources.nodes.size();
 
+        constexpr Real DEAD_MIN = std::numeric_limits<Real>::max();
+        constexpr Real DEAD_MAX = -DEAD_MIN;
+        if (isRebuild)
+        {
+            std::fill(leafBodyAABBs.minX.front().data.begin(), leafBodyAABBs.minX.back().data.end(), DEAD_MIN);
+            std::fill(leafBodyAABBs.maxX.front().data.begin(), leafBodyAABBs.maxX.back().data.end(), DEAD_MAX);
+            std::fill(leafBodyAABBs.minY.front().data.begin(), leafBodyAABBs.minY.back().data.end(), DEAD_MIN);
+            std::fill(leafBodyAABBs.maxY.front().data.begin(), leafBodyAABBs.maxY.back().data.end(), DEAD_MAX);
+        }
+
         for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
         {
             BvhNode& node = bvhFunctionResources.nodes[idx];
@@ -606,9 +612,6 @@ namespace PS_AGONY
             }
 
             // Leaf: compute AABB from its bodies.
-            constexpr Real DEAD_MAX = -std::numeric_limits<Real>::max();
-            constexpr Real DEAD_MIN =  std::numeric_limits<Real>::max();
-
             const uint32_t leafIndex = node.leafIndex;
             Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data() + leafIndex);
             Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data() + leafIndex);
@@ -643,16 +646,6 @@ namespace PS_AGONY
                 maxY = std::fmax(maxY, bodyMaxY);
 
             }
-            if (isRebuild)
-            {
-                for (uint32_t leafBodyIndex = nodeRange; leafBodyIndex < BvhNode::KD_LEAF_SIZE; leafBodyIndex++)
-                {
-                    leafMinXPtr[leafBodyIndex] = DEAD_MIN;
-                    leafMaxXPtr[leafBodyIndex] = DEAD_MAX;
-                    leafMinYPtr[leafBodyIndex] = DEAD_MIN;
-                    leafMaxYPtr[leafBodyIndex] = DEAD_MAX;
-                }
-            }
             node.minX = minX; node.maxX = maxX;
             node.minY = minY; node.maxY = maxY;
         }
@@ -670,7 +663,6 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Query pairs (Threaded)");
 
-        // Decide to use threaded version or not. (TODO). Scale worker count.
         auto& threadPool = Threading::getGlobalThreadPool();
         const size_t workerCount = threadPool.getThreadCount() - 1;
 
