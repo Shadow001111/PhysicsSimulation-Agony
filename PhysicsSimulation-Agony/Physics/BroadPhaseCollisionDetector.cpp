@@ -343,7 +343,7 @@ namespace PS_AGONY
         constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
         constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
 
-        const uint32_t* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
+        uint32_t* ECSTASY_RESTRICT mortonCodePtr = bvhFunctionResources.mortonCodes.data();
 
         // Build packed key/index array once.
         bvhFunctionResources.tempPackedBodyIndicesToSort.resize(bodyCount);
@@ -352,17 +352,15 @@ namespace PS_AGONY
         PackedBodyIndex* ECSTASY_RESTRICT packedA = bvhFunctionResources.tempPackedBodyIndicesToSort.data();
         PackedBodyIndex* ECSTASY_RESTRICT packedB = bvhFunctionResources.tempPackedBodyIndicesToSort2.data();
 
+        // Pack.
+        for (uint32_t i = 0; i < bodyCount; i++)
         {
-            TRACY_SCOPE_N("Pack");
-
-            for (uint32_t i = 0; i < bodyCount; i++)
-            {
-                packedA[i].key = mortonCodePtr[i];
-                packedA[i].index = i;
-            }
+            PackedBodyIndex& pbi = packedA[i];
+            pbi.key = mortonCodePtr[i];
+            pbi.index = i;
         }
-
-        //
+        
+        // Sort.
         alignas(64) std::array<uint32_t, RADIX_SIZE> count;
 
         auto radixPass = [&](
@@ -376,7 +374,8 @@ namespace PS_AGONY
                 // Count buckets.
                 for (uint32_t i = 0; i < bodyCount; i++)
                 {
-                    const uint32_t key = (src[i].key >> shift) & RADIX_MASK;
+                    const auto inKey = src[i].key;
+                    const uint32_t key = (inKey >> shift) & RADIX_MASK;
                     count[key]++;
                 }
 
@@ -407,16 +406,13 @@ namespace PS_AGONY
             radixPass(24, packedB, packedA);
         }
 
+        // Write sorted indices and keys(codes) back.
+        BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
+        for (uint32_t i = 0; i < bodyCount; i++)
         {
-            TRACY_SCOPE_N("Write vack");
-
-            BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
-
-            // Write sorted indices back.
-            for (uint32_t i = 0; i < bodyCount; i++)
-            {
-                indexPtr[i] = packedA[i].index;
-            }
+            const PackedBodyIndex item = packedA[i];
+            indexPtr[i] = item.index;
+            mortonCodePtr[i] = item.key;
         }
     }
 
@@ -507,10 +503,11 @@ namespace PS_AGONY
                     continue;
                 }
 
-                // Find the split position.
-                const uint32_t mcFirst = mortonCodePtr[bodyIndicesPtr[nodeStart]];
-                const uint32_t mcLast = mortonCodePtr[bodyIndicesPtr[nodeEnd - 1]];
+                // Find morton codes
+                const uint32_t mcFirst = mortonCodePtr[nodeStart];
+                const uint32_t mcLast = mortonCodePtr[nodeEnd - 1];
 
+                // Find the split position.
                 uint32_t mid;
                 if (mcFirst == mcLast) [[unlikely]]
                 {
@@ -530,7 +527,7 @@ namespace PS_AGONY
                     while (lo < hi)
                     {
                         const uint32_t m = (lo + hi) >> 1;
-                        if ((mortonCodePtr[bodyIndicesPtr[m]] & splitBit) == 0u)
+                        if ((mortonCodePtr[m] & splitBit) == 0u)
                             lo = m + 1;
                         else
                             hi = m;
