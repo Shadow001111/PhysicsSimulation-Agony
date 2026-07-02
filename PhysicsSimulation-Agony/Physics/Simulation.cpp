@@ -1133,7 +1133,12 @@ namespace PS_AGONY
         if (count == 0) return;
 
         using RealSimd = Ecstasy::Simd<Real>;
-        using IndexSimd = Ecstasy::Simd<int32_t>;
+
+        using IndexSimd = std::conditional_t<
+            std::is_same_v<Real, float>,
+            Ecstasy::Simd<int32_t, 256>,
+            Ecstasy::Simd<int32_t, 128>
+        >;
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
@@ -1148,7 +1153,7 @@ namespace PS_AGONY
 
         alignas(RealSimd::bytes) Real xBatch[RealSimd::lanes];
         alignas(RealSimd::bytes) Real yBatch[RealSimd::lanes];
-        alignas(IndexSimd::bytes) BodyIndex bodyIndexBatch[RealSimd::lanes];
+        alignas(IndexSimd::bytes) BodyIndex bodyIndexBatch[IndexSimd::lanes];
 
         alignas(RealSimd::bytes) Real minXBatch[RealSimd::lanes];
         alignas(RealSimd::bytes) Real minYBatch[RealSimd::lanes];
@@ -1165,7 +1170,7 @@ namespace PS_AGONY
 
             if constexpr (RealSimd::isGatherAvailable())
             {
-                const auto indices = IndexSimd::load((const int32_t*)bodyIndexPtr + i);
+                const auto indices = IndexSimd::load((const int32_t*)(bodyIndexPtr + i));
                 x = RealSimd::gather(positionXPtr, indices);
                 y = RealSimd::gather(positionYPtr, indices);
             }

@@ -18,6 +18,7 @@ namespace PS_AGONY
 
 			static constexpr uint32_t INVALID_INDEX = -1;
 
+			// AABB data must stay first.
 			Real minX, maxX, minY, maxY; // Merged AABB of all bodies in this subtree.
 			uint32_t leftChildIndex = INVALID_INDEX; // INVALID_INDEX for leaves.
 			// rightChildIndex = leftChildIndex + 1.
