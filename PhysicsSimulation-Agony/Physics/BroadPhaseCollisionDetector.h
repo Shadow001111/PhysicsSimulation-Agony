@@ -159,7 +159,7 @@ namespace PS_AGONY
 
 		void buildBvhTree(const uint32_t bodyCount);
 
-		void fitBvhNodeAABBs();
+		void fitBvhNodeAABBs(bool isRebuild);
 
 		void queryBvhPairs();
 		void queryBvhPairsThreaded();
