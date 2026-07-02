@@ -4,6 +4,8 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
     struct Vector2AndSqDistance
@@ -286,7 +288,7 @@ namespace PS_AGONY
 
     static void projectVerticesOnAxis(const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
     {
-        minOut = std::numeric_limits<Real>::max();
+        minOut =  std::numeric_limits<Real>::max();
         maxOut = -std::numeric_limits<Real>::max();
 
         for (const Vec2& v : vertices)
@@ -304,10 +306,10 @@ namespace PS_AGONY
         const Vec2 edge = p1 - p0;
 
         Vec2 n = Vec2{ edge.y, -edge.x };
-        const Real len2 = glm::dot(n, n);
-        if (len2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
+        const Real lenSquared = glm::dot(n, n);
+        if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
         {
-            n *= Real(1) / std::sqrt(len2);
+            n *= Real(1) / std::sqrt(lenSquared);
         }
         return n;
     };
@@ -832,13 +834,14 @@ namespace PS_AGONY
 
             Vec2 normal;
             Real depth = std::numeric_limits<Real>::max();
-            SATAxis bestAxis = SATAxis::BOX_RIGHT;
+            SATAxis bestAxisType = SATAxis::BOX_RIGHT;
             uint32_t bestAxisIndex = 0;
+            Real bestAxisFacing = std::numeric_limits<Real>::max();
 
             auto testAxis = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
                 {
                     const Real axisLenSquared = glm::dot(axis, axis);
-                    if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
+                    if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]] return true;
 
                     axis *= Real(1) / std::sqrt(axisLenSquared);
 
@@ -856,14 +859,20 @@ namespace PS_AGONY
                     const Real overlap = std::fmin(boxMax, polyMax) - std::fmax(boxMin, polyMin);
                     if (overlap < Real(0)) return false;
 
-                    if (overlap < depth)
+                    const Real axisFacing = glm::dot(axis, centerDelta);
+
+                    const bool strictlyBetter = overlap < depth;
+                    const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
+
+                    if (strictlyBetter || tiedButBetterFacing)
                     {
                         depth = overlap;
                         normal = axis;
                         flipSignIfNegative(normal, glm::dot(centerDelta, normal));
 
-                        bestAxis = axisType;
+                        bestAxisType = axisType;
                         bestAxisIndex = axisIndex;
+                        bestAxisFacing = axisFacing;
                     }
 
                     return true;
@@ -878,7 +887,7 @@ namespace PS_AGONY
                 if (!testAxis(axis, SATAxis::POLY_EDGE, i)) goto nextPair;
             }
 
-            const bool refIsBox = bestAxis != SATAxis::POLY_EDGE;
+            const bool refIsBox = bestAxisType != SATAxis::POLY_EDGE;
 
             Vec2 refNormal;
             Vec2 refFaceCenter;
@@ -1049,27 +1058,29 @@ namespace PS_AGONY
             const size_t countB = localVertsBContainer.size();
             if (countA < 3 || countB < 3) [[unlikely]] continue;
 
-            const Vec2* localVertsA = localVertsAContainer.data();
-            const Vec2* localVertsB = localVertsBContainer.data();
+            const Vec2 rightA = {  cosA, sinA };
+            const Vec2 upA =    { -sinA, cosA };
+            const Vec2 rightB = {  cosB, sinB };
+            const Vec2 upB =    { -sinB, cosB };
 
-            const Vec2 rightA = { cosA,  sinA };
-            const Vec2 upA = { -sinA, cosA };
-            const Vec2 rightB = { cosB,  sinB };
-            const Vec2 upB = { -sinB, cosB };
-
-            worldVertsA.resize(countA);
-            worldVertsB.resize(countB);
-
-            for (size_t i = 0; i < countA; i++)
             {
-                const Vec2 v = localVertsA[i];
-                worldVertsA[i] = positionA + rightA * v.x + upA * v.y;
-            }
+                const Vec2* localVertsA = localVertsAContainer.data();
+                const Vec2* localVertsB = localVertsBContainer.data();
 
-            for (size_t i = 0; i < countB; i++)
-            {
-                const Vec2 v = localVertsB[i];
-                worldVertsB[i] = positionB + rightB * v.x + upB * v.y;
+                worldVertsA.resize(countA);
+                worldVertsB.resize(countB);
+
+                for (size_t i = 0; i < countA; i++)
+                {
+                    const Vec2 v = localVertsA[i];
+                    worldVertsA[i] = positionA + rightA * v.x + upA * v.y;
+                }
+
+                for (size_t i = 0; i < countB; i++)
+                {
+                    const Vec2 v = localVertsB[i];
+                    worldVertsB[i] = positionB + rightB * v.x + upB * v.y;
+                }
             }
 
             const Vec2 centerDelta = positionB - positionA;
@@ -1078,10 +1089,9 @@ namespace PS_AGONY
             Real depth = std::numeric_limits<Real>::max();
             SATAxis bestAxisType = SATAxis::A_EDGE;
             uint32_t bestAxisIndex = 0;
+            Real bestAxisFacing = std::numeric_limits<Real>::max();
 
-            auto sat = [&](
-                const std::vector<Vec2>& vertsA, const std::vector<Vec2>& vertsB,
-                Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
+            auto sat = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
             {
                 const Real axisLenSquared = glm::dot(axis, axis);
                 if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
@@ -1090,13 +1100,19 @@ namespace PS_AGONY
 
                 Real minA, maxA;
                 Real minB, maxB;
-                projectVerticesOnAxis(vertsA, axis, minA, maxA);
-                projectVerticesOnAxis(vertsB, axis, minB, maxB);
+                projectVerticesOnAxis(worldVertsA, axis, minA, maxA);
+                projectVerticesOnAxis(worldVertsB, axis, minB, maxB);
 
                 const Real overlap = std::fmin(maxA, maxB) - std::fmax(minA, minB);
                 if (overlap < Real(0)) return false;
 
-                if (overlap < depth)
+                const Real facingSign = Real(axisType == SATAxis::B_EDGE) * Real(2) - Real(1); // A = -1, B = 1.
+                const Real axisFacing = facingSign * glm::dot(axis, centerDelta);
+
+                const bool strictlyBetter = overlap < depth;
+                const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
+
+                if (strictlyBetter || tiedButBetterFacing)
                 {
                     depth = overlap;
                     normal = axis;
@@ -1104,6 +1120,7 @@ namespace PS_AGONY
 
                     bestAxisType = axisType;
                     bestAxisIndex = axisIndex;
+                    bestAxisFacing = axisFacing;
                 }
 
                 return true;
@@ -1112,14 +1129,14 @@ namespace PS_AGONY
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
                 Vec2 axis = edgeOutwardNormal(worldVertsA.data(), countA, i);
-                if (!sat(worldVertsA, worldVertsB, axis, SATAxis::A_EDGE, i))
+                if (!sat(axis, SATAxis::A_EDGE, i))
                     goto nextPair;
             }
 
             for (uint32_t i = 0; i < uint32_t(countB); i++)
             {
                 Vec2 axis = edgeOutwardNormal(worldVertsB.data(), countB, i);
-                if (!sat(worldVertsA, worldVertsB, axis, SATAxis::B_EDGE, i))
+                if (!sat(axis, SATAxis::B_EDGE, i))
                     goto nextPair;
             }
 
