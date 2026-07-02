@@ -1424,9 +1424,8 @@ namespace Ecstasy
                 (std::is_same_v<Target, Simd<int64_t, Bits>> && IS_UINT64)
             )
         {
-            Target s;
-            s.reg = reg;
-            return s;
+            // Dummy function. Simd doesn't care if int is signed or unsigned.
+            return *this;
         }
     };
 

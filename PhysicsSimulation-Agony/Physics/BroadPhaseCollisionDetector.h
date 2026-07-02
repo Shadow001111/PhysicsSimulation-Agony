@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <atomic>
+#include <array>
 
 namespace PS_AGONY
 {
@@ -117,7 +118,7 @@ namespace PS_AGONY
 		{
 			struct LeafData
 			{
-				Real data[BvhNode::KD_LEAF_SIZE];
+				std::array<Real, BvhNode::KD_LEAF_SIZE> data;
 			};
 
 			RealSimdAlignedVector<LeafData> minX;
