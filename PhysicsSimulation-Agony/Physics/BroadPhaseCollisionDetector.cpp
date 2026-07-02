@@ -361,30 +361,33 @@ namespace PS_AGONY
         }
         
         // Sort.
-        alignas(64) std::array<uint32_t, RADIX_SIZE> count;
+        alignas(64) uint32_t count[4][RADIX_SIZE] = {};
+
+        {
+            TRACY_SCOPE_N("Counting pass");
+            for (uint32_t i = 0; i < bodyCount; i++)
+            {
+                const uint32_t k = mortonCodePtr[i];
+                count[0][k & 0xFF]++;
+                count[1][(k >> 8) & 0xFF]++;
+                count[2][(k >> 16) & 0xFF]++;
+                count[3][(k >> 24) & 0xFF]++;
+            }
+        }
 
         auto radixPass = [&](
             uint32_t shift,
             const PackedBodyIndex* ECSTASY_RESTRICT src,
-            PackedBodyIndex* ECSTASY_RESTRICT dst
+            PackedBodyIndex* ECSTASY_RESTRICT dst,
+            uint32_t* ECSTASY_RESTRICT countSegment
             )
             {
-                count.fill(0);
-
-                // Count buckets.
-                for (uint32_t i = 0; i < bodyCount; i++)
-                {
-                    const auto inKey = src[i].key;
-                    const uint32_t key = (inKey >> shift) & RADIX_MASK;
-                    count[key]++;
-                }
-
                 // Exclusive prefix sum.
                 uint32_t sum = 0;
                 for (uint32_t i = 0; i < RADIX_SIZE; i++)
                 {
-                    const uint32_t c = count[i];
-                    count[i] = sum;
+                    const uint32_t c = countSegment[i];
+                    countSegment[i] = sum;
                     sum += c;
                 }
 
@@ -393,17 +396,17 @@ namespace PS_AGONY
                 {
                     const PackedBodyIndex item = src[i];
                     const uint32_t key = (item.key >> shift) & RADIX_MASK;
-                    dst[count[key]++] = item;
+                    dst[countSegment[key]++] = item;
                 }
             };
 
         {
             TRACY_SCOPE_N("Sort");
 
-            radixPass(0,  packedA, packedB);
-            radixPass(8,  packedB, packedA);
-            radixPass(16, packedA, packedB);
-            radixPass(24, packedB, packedA);
+            radixPass(0,  packedA, packedB, count[0]);
+            radixPass(8,  packedB, packedA, count[1]);
+            radixPass(16, packedA, packedB, count[2]);
+            radixPass(24, packedB, packedA, count[3]);
         }
 
         // Write sorted indices and keys(codes) back.
