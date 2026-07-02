@@ -566,9 +566,9 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     constexpr float terrainBaseY = -20.0f; // Bottom floor depth for the landscape polygons
 
     // Configurable object counts
-    constexpr int circleCount = 1000;
-    constexpr int boxCount = 1000;
-    constexpr int polygonCount = 1000;
+    constexpr int circleCount = 300;
+    constexpr int boxCount = 300;
+    constexpr int polygonCount = 300;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
@@ -682,7 +682,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     }
 
     // Spawn Random Convex Polygons
-    for (int i = 0; i < polygonCount; ++i) {
+    for (int i = 0; i < polygonCount; i++) {
         float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
         float y = rvg.real<float>(spawnMinY, spawnMaxY);
         float vx = rvg.real<float>(-1.5f, 1.5f);

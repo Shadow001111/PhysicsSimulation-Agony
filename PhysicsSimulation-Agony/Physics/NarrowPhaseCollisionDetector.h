@@ -4,6 +4,7 @@
 #include "SymmetricMatrix.h"
 
 #include <atomic>
+#include <mutex>
 
 namespace PS_AGONY
 {
