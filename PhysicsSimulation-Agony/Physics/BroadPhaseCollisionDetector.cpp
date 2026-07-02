@@ -563,6 +563,22 @@ namespace PS_AGONY
 
     void BroadPhaseCollisionDetector::fitBvhNodeAABBs(bool isRebuild)
     {
+        // InternalRealSimd must hold exactly 4 Reals.
+        using InternalRealSimd = std::conditional_t<
+            std::is_same_v<Real, float>,
+            Ecstasy::Simd<Real, 128>,
+            Ecstasy::Simd<Real, 256>
+        >;
+
+        using InternalUintSimd = std::conditional_t<
+            std::is_same_v<Real, float>,
+            Ecstasy::Simd<uint32_t, 128>,
+            Ecstasy::Simd<uint64_t, 256>
+        >;
+
+        // Setting mask. 'Set' stores in reverse order.
+        const InternalRealSimd minMaxBlendMask = InternalUintSimd::set(-1, 0, -1, 0).as<InternalRealSimd>();
+
         const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
         const Real* ECSTASY_RESTRICT bodyMinXPtr = bodiesAABB.minX;
         const Real* ECSTASY_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
@@ -579,10 +595,13 @@ namespace PS_AGONY
                 // Not leaf: compute AABB from its children.
                 const BvhNode& left  = bvhFunctionResources.nodes[node.leftChildIndex];
                 const BvhNode& right = bvhFunctionResources.nodes[node.leftChildIndex + 1];
-                node.minX = std::fmin(left.minX, right.minX);
-                node.maxX = std::fmax(left.maxX, right.maxX);
-                node.minY = std::fmin(left.minY, right.minY);
-                node.maxY = std::fmax(left.maxY, right.maxY);
+
+                const InternalRealSimd leftV  = InternalRealSimd::loadu(&left.minX);
+                const InternalRealSimd rightV = InternalRealSimd::loadu(&right.minX);
+                const auto minV = InternalRealSimd::min(leftV, rightV);
+                const auto maxV = InternalRealSimd::max(leftV, rightV);
+                const auto result = InternalRealSimd::blendv(minV, maxV, minMaxBlendMask);
+                result.storeu(&node.minX);
                 continue;
             }
 

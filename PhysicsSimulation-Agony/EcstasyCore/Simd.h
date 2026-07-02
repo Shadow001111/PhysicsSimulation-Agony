@@ -1426,6 +1426,7 @@ namespace Ecstasy
         {
             Target s;
             s.reg = reg;
+            return s;
         }
     };
 
