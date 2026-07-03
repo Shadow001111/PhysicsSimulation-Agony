@@ -587,10 +587,13 @@ namespace PS_AGONY
         constexpr Real DEAD_MAX = -DEAD_MIN;
         if (isRebuild)
         {
-            std::fill(leafBodyAABBs.minX.front().data.begin(), leafBodyAABBs.minX.back().data.end(), DEAD_MIN);
-            std::fill(leafBodyAABBs.maxX.front().data.begin(), leafBodyAABBs.maxX.back().data.end(), DEAD_MAX);
-            std::fill(leafBodyAABBs.minY.front().data.begin(), leafBodyAABBs.minY.back().data.end(), DEAD_MIN);
-            std::fill(leafBodyAABBs.maxY.front().data.begin(), leafBodyAABBs.maxY.back().data.end(), DEAD_MAX);
+            // Total number of individual 'Real' elements in one vector.
+            const size_t totalReals = leafBodyAABBs.minX.size() * BvhNode::KD_LEAF_SIZE;
+
+            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.minX.data()), totalReals, DEAD_MIN);
+            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.maxX.data()), totalReals, DEAD_MAX);
+            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.minY.data()), totalReals, DEAD_MIN);
+            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.maxY.data()), totalReals, DEAD_MAX);
         }
 
         for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.
