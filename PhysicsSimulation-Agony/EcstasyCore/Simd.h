@@ -271,6 +271,48 @@ namespace Ecstasy
             }
         }
 
+        // Non-temporal streaming store (requires aligned pointer; must be 16-byte aligned for 128-bit, 32-byte for 256-bit).
+        void streamStore(T* ptr) const noexcept
+        {
+            if constexpr (IS_INTEGER)
+            {
+                if constexpr (Bits == 256) _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr), reg);
+                else                       _mm_stream_si128(reinterpret_cast<__m128i*>(ptr), reg);
+            }
+            else if constexpr (IS_FLOAT)
+            {
+                if constexpr (Bits == 256) _mm256_stream_ps(ptr, reg);
+                else                       _mm_stream_ps(ptr, reg);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                if constexpr (Bits == 256) _mm256_stream_pd(ptr, reg);
+                else                       _mm_stream_pd(ptr, reg);
+            }
+        }
+
+        // Non-temporal streaming load (requires aligned pointer; must be 16-byte aligned for 128-bit, 32-byte for 256-bit).
+        [[nodiscard]] static Simd streamLoad(const T* ptr) noexcept
+        {
+            Simd s;
+            if constexpr (IS_INTEGER)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_stream_load_si256(reinterpret_cast<const __m256i*>(ptr));
+                else                       s.reg = _mm_stream_load_si128(reinterpret_cast<const __m128i*>(ptr));
+            }
+            else if constexpr (IS_FLOAT)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(_mm256_stream_load_si256(reinterpret_cast<const __m256i*>(ptr)));
+                else                       s.reg = _mm_castsi128_ps(_mm_stream_load_si128(reinterpret_cast<const __m128i*>(ptr)));
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(_mm256_stream_load_si256(reinterpret_cast<const __m256i*>(ptr)));
+                else                       s.reg = _mm_castsi128_pd(_mm_stream_load_si128(reinterpret_cast<const __m128i*>(ptr)));
+            }
+            return s;
+        }
+
         void storeLowerInt64(T* ptr) const noexcept
             requires (IS_INT32 && Bits == 128)
         {
@@ -353,10 +395,29 @@ namespace Ecstasy
         }
 
         // Get.
-        int32_t getLeastSignificantInt32() const noexcept
-            requires (IS_INT32 && Bits == 128)
+
+        [[nodiscard]] T getLowest() const noexcept
         {
-            return _mm_cvtsi128_si32(reg);
+            if constexpr (IS_32BIT_INTEGER)
+            {
+                if constexpr (Bits == 256) return _mm256_cvtsi256_si32(reg);
+                else                       return _mm_cvtsi128_si32(reg);
+            }
+            else if constexpr (IS_64BIT_INTEGER)
+            {
+                if constexpr (Bits == 256) return _mm256_cvtsi256_si64(reg);
+                else                       return _mm_cvtsi128_si64(reg);
+            }
+            else if constexpr (IS_FLOAT)
+            {
+                if constexpr (Bits == 256) return _mm256_cvtss_f32(reg);
+                else                       return _mm_cvtss_f32(reg);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                if constexpr (Bits == 256) return _mm256_cvtsd_f64(reg);
+                else                       return _mm_cvtsd_f64(reg);
+            }
         }
 
         // Bitwise operations.
@@ -1104,92 +1165,6 @@ namespace Ecstasy
             return s;
         }
 
-        [[nodiscard]] static T horizontalMin(const Simd& a) noexcept
-            requires IS_REAL
-        {
-            if constexpr (Bits == 128)
-            {
-                if constexpr (IS_FLOAT)
-                {
-                    __m128 v = a.reg;
-                    v = _mm_min_ps(v, _mm_shuffle_ps(v, v, 0x4E));
-                    v = _mm_min_ps(v, _mm_shuffle_ps(v, v, 0xB1));
-                    return _mm_cvtss_f32(v);
-                }
-                else if constexpr(IS_DOUBLE)
-                {
-                    __m128d v = a.reg;
-                    v = _mm_min_pd(v, _mm_shuffle_pd(v, v, 1));
-                    return _mm_cvtsd_f64(v);
-                }
-            }
-            else if constexpr (Bits == 256)
-            {
-                if constexpr (IS_FLOAT)
-                {
-                    __m256 v = a.reg;
-                    __m128 lo = _mm256_castps256_ps128(v);
-                    __m128 hi = _mm256_extractf128_ps(v, 1);
-                    __m128 min128 = _mm_min_ps(lo, hi);
-                    min128 = _mm_min_ps(min128, _mm_shuffle_ps(min128, min128, 0x4E));
-                    min128 = _mm_min_ps(min128, _mm_shuffle_ps(min128, min128, 0xB1));
-                    return _mm_cvtss_f32(min128);
-                }
-                else if constexpr(IS_DOUBLE)
-                {
-                    __m256d v = a.reg;
-                    __m128d lo = _mm256_castpd256_pd128(v);
-                    __m128d hi = _mm256_extractf128_pd(v, 1);
-                    __m128d min128 = _mm_min_pd(lo, hi);
-                    min128 = _mm_min_pd(min128, _mm_shuffle_pd(min128, min128, 1));
-                    return _mm_cvtsd_f64(min128);
-                }
-            }
-        }
-
-        [[nodiscard]] static T horizontalMax(const Simd& a) noexcept
-            requires IS_REAL
-        {
-            if constexpr (Bits == 128)
-            {
-                if constexpr (IS_FLOAT)
-                {
-                    __m128 v = a.reg;
-                    v = _mm_max_ps(v, _mm_shuffle_ps(v, v, 0x4E));
-                    v = _mm_max_ps(v, _mm_shuffle_ps(v, v, 0xB1));
-                    return _mm_cvtss_f32(v);
-                }
-                else if constexpr (IS_DOUBLE)
-                {
-                    __m128d v = a.reg;
-                    v = _mm_max_pd(v, _mm_shuffle_pd(v, v, 1));
-                    return _mm_cvtsd_f64(v);
-                }
-            }
-            else if constexpr (Bits == 256)
-            {
-                if constexpr (IS_FLOAT)
-                {
-                    __m256 v = a.reg;
-                    __m128 lo = _mm256_castps256_ps128(v);
-                    __m128 hi = _mm256_extractf128_ps(v, 1);
-                    __m128 max128 = _mm_max_ps(lo, hi);
-                    max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, 0x4E));
-                    max128 = _mm_max_ps(max128, _mm_shuffle_ps(max128, max128, 0xB1));
-                    return _mm_cvtss_f32(max128);
-                }
-                else if constexpr (IS_DOUBLE)
-                {
-                    __m256d v = a.reg;
-                    __m128d lo = _mm256_castpd256_pd128(v);
-                    __m128d hi = _mm256_extractf128_pd(v, 1);
-                    __m128d max128 = _mm_max_pd(lo, hi);
-                    max128 = _mm_max_pd(max128, _mm_shuffle_pd(max128, max128, 1));
-                    return _mm_cvtsd_f64(max128);
-                }
-            }
-        }
-
         [[nodiscard]] static Simd clamp(const Simd& value, const Simd& minBoundary, const Simd& maxBoundary)
         {
             return min(maxBoundary, max(minBoundary, value));
@@ -1198,11 +1173,79 @@ namespace Ecstasy
         // Extract.
 
         template<int Index>
-        [[nodiscard]] static Simd<T, 128> extractInt128(const Simd& a) noexcept
-            requires (IS_INTEGER && Bits == 256)
+        [[nodiscard]] static Simd<T, 128> extract128From256(const Simd& a) noexcept
+            requires (Bits == 256)
         {
+            static_assert(Index == 0 || Index == 1, "Index must be 0 or 1.");
+
+
+            if constexpr (Index == 0)
+            {
+                return castFrom256to128(a);
+            }
+
             Simd<T, 128> s;
-            s.reg = _mm256_extracti128_si256(a.reg, Index);
+            if constexpr (IS_FLOAT)
+            {
+                s.reg = _mm256_extractf128_ps(a.reg, Index);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                s.reg = _mm256_extractf128_pd(a.reg, Index);
+            }
+            else
+            {
+                s.reg = _mm256_extracti128_si256(a.reg, Index);
+            }
+
+            return s;
+        }
+
+        template<int Imm>
+        [[nodiscard]] static Simd shuffle(const Simd& a) noexcept
+            requires (Bits == 128)
+        {
+            Simd s;
+
+            if constexpr (IS_FLOAT)
+            {
+                s.reg = _mm_shuffle_ps(a.reg, a.reg, Imm);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                s.reg = _mm_shuffle_pd(a.reg, a.reg, Imm);
+            }
+            else
+            {
+                s.reg = _mm_shuffle_epi32(a.reg, Imm);
+            }
+
+            return s;
+        }
+
+        template<int Imm>
+        [[nodiscard]] static Simd shuffle(const Simd& a) noexcept
+            requires (Bits == 256)
+        {
+            Simd s;
+
+            if constexpr (IS_FLOAT)
+            {
+                s.reg = _mm256_shuffle_ps(a.reg, a.reg, Imm);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                s.reg = _mm256_shuffle_pd(a.reg, a.reg, Imm);
+            }
+            else if constexpr (IS_32BIT_INTEGER)
+            {
+                s.reg = _mm256_shuffle_epi32(a.reg, Imm);
+            }
+            else if constexpr (IS_64BIT_INTEGER)
+            {
+                s.reg = _mm256_permute4x64_epi64(a.reg, Imm);
+            }
+
             return s;
         }
 
@@ -1222,6 +1265,62 @@ namespace Ecstasy
             Simd<T, 128> s;
             s.reg = _mm_packs_epi32(low.reg, high.reg);
             return s;
+        }
+
+        // Horizontal methods.
+    private:
+        template<typename Op>
+        [[nodiscard]] static T reduce128ToScalar(const Simd<T, 128>& x, Op op) noexcept
+        {
+            Simd<T, 128> v = x;
+            if constexpr (sizeof(T) == 4)
+            {
+                v = op(v, Simd<T, 128>::template shuffle<0xB1>(v));
+                v = op(v, Simd<T, 128>::template shuffle<0x4E>(v));
+            }
+            else
+            {
+                v = op(v, Simd<T, 128>::template shuffle<0x1>(v));
+            }
+            return v.getLowest();
+        }
+
+        template<typename Op>
+        [[nodiscard]] static T horizontalReduce(const Simd& a, Op op) noexcept
+            requires std::is_invocable_r_v<Simd<T, 128>, Op, const Simd<T, 128>&, const Simd<T, 128>&>
+        {
+            if constexpr (Bits == 256)
+            {
+                // Split 256 on two 128.
+                Simd<T, 128> lo = extract128From256<0>(a);
+                Simd<T, 128> hi = extract128From256<1>(a);
+
+                // Perform operation on two halves.
+                Simd<T, 128> v = op(lo, hi);
+
+                // Reduce 128 to scalar.
+                return reduce128ToScalar(v, op);
+            }
+            else
+            {
+                // Reduce 128 to scalar.
+                return reduce128ToScalar(a, op);
+            }
+        }
+    public:
+        [[nodiscard]] static T horizontalAdd(const Simd& a) noexcept
+        {
+            return horizontalReduce(a, &Simd<T, 128>::add);
+        }
+
+        [[nodiscard]] static T horizontalMin(const Simd& a) noexcept
+        {
+            return horizontalReduce(a, &Simd<T, 128>::min);
+        }
+
+        [[nodiscard]] static T horizontalMax(const Simd& a) noexcept
+        {
+            return horizontalReduce(a, &Simd<T, 128>::max);
         }
 
         // Type casts.
@@ -1426,6 +1525,27 @@ namespace Ecstasy
         {
             // Dummy function. Simd doesn't care if int is signed or unsigned.
             return *this;
+        }
+
+        [[nodiscard]] static Simd<T, 128> castFrom256to128(const Simd& a) noexcept
+            requires (Bits == 256)
+        {
+            Simd<T, 128> s;
+
+            if constexpr (IS_FLOAT)
+            {
+                s.reg = _mm256_castps256_ps128(a.reg);
+            }
+            else if constexpr (IS_DOUBLE)
+            {
+                s.reg = _mm256_castpd256_pd128(a.reg);
+            }
+            else
+            {
+                s.reg = _mm256_castsi256_si128(a.reg);
+            }
+
+            return s;
         }
     };
 
