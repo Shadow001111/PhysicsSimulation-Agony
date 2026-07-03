@@ -7,7 +7,8 @@
 #include <cmath>
 
 
-static PS_AGONY::Real cross(const PS_AGONY::Vec2& a,
+static PS_AGONY::Real cross(
+    const PS_AGONY::Vec2& a,
     const PS_AGONY::Vec2& b,
     const PS_AGONY::Vec2& c)
 {
