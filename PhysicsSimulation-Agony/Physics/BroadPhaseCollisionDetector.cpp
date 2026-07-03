@@ -587,13 +587,26 @@ namespace PS_AGONY
         constexpr Real DEAD_MAX = -DEAD_MIN;
         if (isRebuild)
         {
+            // It's faster (1%) to write whole range at once than doing it for leftovers in loop.
+            TRACY_SCOPE_N("Dead writes");
+        
             // Total number of individual 'Real' elements in one vector.
             const size_t totalReals = leafBodyAABBs.minX.size() * BvhNode::KD_LEAF_SIZE;
-
-            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.minX.data()), totalReals, DEAD_MIN);
-            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.maxX.data()), totalReals, DEAD_MAX);
-            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.minY.data()), totalReals, DEAD_MIN);
-            std::fill_n(reinterpret_cast<Real*>(leafBodyAABBs.maxY.data()), totalReals, DEAD_MAX);
+        
+            const RealSimd deadMinV(DEAD_MIN);
+            const RealSimd deadMaxV(DEAD_MAX);
+        
+            Real* minXPtr = reinterpret_cast<Real*>(leafBodyAABBs.minX.data());
+            Real* maxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
+            Real* minYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
+            Real* maxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
+            for (size_t i = 0; i < totalReals; i += RealSimd::lanes)
+            {
+                deadMinV.store(minXPtr + i);
+                deadMinV.store(minYPtr + i);
+                deadMaxV.store(maxXPtr + i);
+                deadMaxV.store(maxYPtr + i);
+            }
         }
 
         for (size_t idx = nodeCount; idx-- > 0; ) // Reverse order.

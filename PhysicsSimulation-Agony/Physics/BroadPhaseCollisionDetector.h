@@ -9,13 +9,14 @@ namespace PS_AGONY
 {
 	class BroadPhaseCollisionDetector
 	{
-		// Note: Splitting on cold and hot didn't help.
 	public:
+		// Note: Splitting on cold and hot didn't help.
 		struct BvhNode
 		{
 			// Max KD_LEAF_SIZE is 32. Larger size will fuck up bitwise mask.
 			// (We can change mask to me uint64_t to allow max KD_LEAF_SIZE to be 64, but increasing KD_LEAF_SIZE leads to perfomance decrease in narrow phase.)
 			static constexpr uint32_t KD_LEAF_SIZE = 16;
+			static_assert((KD_LEAF_SIZE % Ecstasy::Simd<Real>::lanes) == 0, "KD_LEAF_SIZE must be multiple of Simd<Real>::lanes.");
 
 			static constexpr uint32_t INVALID_INDEX = -1;
 
