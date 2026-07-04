@@ -5,9 +5,12 @@
 #include "EcstasyCore/Portablity.h"
 
 #include <iostream>
+#include <bit>
 
 namespace PS_AGONY
 {
+    using RealSimd = Ecstasy::Simd<Real>;
+
     struct Vector2AndSqDistance
     {
         Vec2 vector;
@@ -326,8 +329,116 @@ namespace PS_AGONY
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
-        for (auto [indexA, indexB] : pairs)
+        const size_t pairCount = pairs.size();
+        size_t i = 0;
+        if constexpr (true)
         {
+            BodyPair bodyPairsBatch[RealSimd::lanes];
+
+            alignas(RealSimd::bytes) Real positionAXBatch[RealSimd::lanes];
+            alignas(RealSimd::bytes) Real positionAYBatch[RealSimd::lanes];
+
+            alignas(RealSimd::bytes) Real positionBXBatch[RealSimd::lanes];
+            alignas(RealSimd::bytes) Real positionBYBatch[RealSimd::lanes];
+
+            alignas(RealSimd::bytes) Real radiusABatch[RealSimd::lanes];
+            alignas(RealSimd::bytes) Real radiusBBatch[RealSimd::lanes];
+
+            alignas(RealSimd::bytes) Real normalXBatch[RealSimd::lanes];
+            alignas(RealSimd::bytes) Real normalYBatch[RealSimd::lanes];
+
+            alignas(RealSimd::bytes) Real depthBatch[RealSimd::lanes];
+
+            for (; i + RealSimd::lanes <= pairCount; i += RealSimd::lanes)
+            {
+                for (size_t j = 0; j < RealSimd::lanes; j++)
+                {
+                    const auto pair = pairs[i + j];
+                    bodyPairsBatch[j] = pair;
+
+                    const BodyIndex indexA = pair.a;
+                    const BodyIndex indexB = pair.b;
+
+                    positionAXBatch[j] = positionXPtr[indexA];
+                    positionAYBatch[j] = positionYPtr[indexA];
+                    positionBXBatch[j] = positionXPtr[indexB];
+                    positionBYBatch[j] = positionYPtr[indexB];
+
+                    const BodyIndex shapeA = shapeIndexPtr[indexA];
+                    const BodyIndex shapeB = shapeIndexPtr[indexB];
+
+                    radiusABatch[j] = radiusPtr[shapeA];
+                    radiusBBatch[j] = radiusPtr[shapeB];
+                }
+
+                const RealSimd positionAX = RealSimd::load(positionAXBatch);
+                const RealSimd positionAY = RealSimd::load(positionAYBatch);
+                const RealSimd positionBX = RealSimd::load(positionBXBatch);
+                const RealSimd positionBY = RealSimd::load(positionBYBatch);
+
+                const RealSimd radiusA = RealSimd::load(radiusABatch);
+                const RealSimd radiusB = RealSimd::load(radiusBBatch);
+
+                const RealSimd deltaPositionX = positionBX - positionAX;
+                const RealSimd deltaPositionY = positionBY - positionAY;
+
+                const RealSimd radiusSum = radiusA + radiusB;
+                const RealSimd radiusSumSquared = radiusSum * radiusSum;
+
+                const RealSimd squaredDistance = RealSimd::mulAdd(deltaPositionX, deltaPositionX, deltaPositionY * deltaPositionY);
+
+                const RealSimd isCollidingMask = squaredDistance < radiusSumSquared;
+
+                const RealSimd distance = RealSimd::sqrt(squaredDistance);
+                const RealSimd depth = radiusSum - distance;
+
+                const RealSimd isCloseToZeroMask = distance < RealSimd(ZERO_DIVISION_BOUNDARY);
+
+                const RealSimd invDistance = RealSimd(1) / distance;
+
+                const RealSimd normalAX = deltaPositionX * invDistance;
+                const RealSimd normalAY = deltaPositionY * invDistance;
+
+                const RealSimd normalBX(1);
+                const RealSimd normalBY(0);
+
+                const RealSimd normalX = RealSimd::blendv(normalAX, normalBX, isCloseToZeroMask);
+                const RealSimd normalY = RealSimd::blendv(normalAY, normalBY, isCloseToZeroMask);
+
+                normalX.store(normalXBatch);
+                normalY.store(normalYBatch);
+                depth.store(depthBatch);
+
+                {
+                    unsigned int collisionMask = isCollidingMask.movemask();
+
+                    while (collisionMask != 0)
+                    {
+                        const int lane = std::countr_zero(collisionMask);
+                        collisionMask &= collisionMask - 1;
+
+                        const BodyPair pair = bodyPairsBatch[lane];
+                        const Vec2 normal{ normalXBatch[lane], normalYBatch[lane] };
+                        const Real depth = depthBatch[lane];
+                        const Vec2 positionA{ positionAXBatch[lane], positionAYBatch[lane] };
+                        const Real radiusA = radiusABatch[lane];
+
+                        outCollisionData.emplace_back(
+                            pair.a, pair.b,
+                            normal,
+                            depth,
+                            positionA + normal * radiusA,
+                            Vec2(),
+                            1
+                        );
+                    }
+                }
+            }
+        }
+        for (; i < pairCount; i++)
+        {
+            auto [indexA, indexB] = pairs[i];
+
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
