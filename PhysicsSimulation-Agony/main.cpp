@@ -114,8 +114,9 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
 
         ss << "\nMemory: " << formatSizeBinary(total);
         ss << "\n  Bodies data: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
-        ss << "\n  Circles data: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
-        ss << "\n  Boxes data: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
+        ss << "\n  Circle data: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
+        ss << "\n  Box data: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
+        ss << "\n  Polygon data: " << formatSizeBinary(simulationData.polygonDataMemoryUsage);
         ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
         ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
         ss << "\n  Solver: " << formatSizeBinary(simulationData.solverMemoryUsage);

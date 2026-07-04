@@ -426,8 +426,7 @@ namespace PS_AGONY
 
                 const size_t readSize = solverResources.remainingIndices.size();
                 size_t currentStageIndex = 0;
-                size_t readPos = 0;
-                for (; readPos < readSize; readPos++)
+                for (size_t readPos = 0; readPos < readSize; readPos++)
                 {
                     // Get collision data at index.
                     const size_t collisionIndex = solverResources.remainingIndices[readPos];

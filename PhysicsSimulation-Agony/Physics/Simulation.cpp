@@ -1448,6 +1448,7 @@ namespace PS_AGONY
         data.bodyDataMemoryUsage = sizeof(BodySoA) + bodies.getMemoryUsage();
         data.circleDataMemoryUsage = sizeof(CircleSoA) + circles.getMemoryUsage();
         data.boxDataMemoryUsage = sizeof(BoxSoA) + boxes.getMemoryUsage();
+        data.polygonDataMemoryUsage = sizeof(PolygonSoA) + polygons.getMemoryUsage();
 
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
