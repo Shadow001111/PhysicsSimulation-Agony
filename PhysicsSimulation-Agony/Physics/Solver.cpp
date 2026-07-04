@@ -23,6 +23,8 @@ namespace PS_AGONY
         size_t total = sizeof(Solver);
 
         total += getVectorMemoryUsage(solverResources.remainingIndices);
+        total += getVectorMemoryUsage(solverResources.nextRemainingIndices);
+
         for (auto& pass : solverResources.stagingPasses)
         {
             total += getVectorMemoryUsage(pass);
@@ -333,6 +335,8 @@ namespace PS_AGONY
                 0ull
             );
         }
+        solverResources.nextRemainingIndices.clear();
+        solverResources.nextRemainingIndices.reserve(collisionCount);
 
         // Worker data.
         {
@@ -420,9 +424,10 @@ namespace PS_AGONY
             {
                 TRACY_SCOPE_NC("Coloring", Ecstasy::Color::Blue);
 
-                size_t readSize = solverResources.remainingIndices.size();
+                const size_t readSize = solverResources.remainingIndices.size();
                 size_t currentStageIndex = 0;
-                for (size_t readPos = 0; readPos < readSize;)
+                size_t readPos = 0;
+                for (; readPos < readSize; readPos++)
                 {
                     // Get collision data at index.
                     const size_t collisionIndex = solverResources.remainingIndices[readPos];
@@ -438,7 +443,7 @@ namespace PS_AGONY
                         solverResources.usedBodies[bodyIndexB] < currentStageIndex
                         )
                     {
-                        readPos++;
+                        solverResources.nextRemainingIndices.push_back(collisionIndex);
                         continue;
                     }
 
@@ -446,8 +451,8 @@ namespace PS_AGONY
                     if constexpr (DO_NOT_MARK_STATIC_BODIES_AS_USED)
                     {
                         // If body is static, it won't get modified anyway, so there can't be any data race.
-                        const ResolveCollisionsThreadedResources::UsedSlot isStaticA = isStaticPtr[bodyIndexA];
-                        const ResolveCollisionsThreadedResources::UsedSlot isStaticB = isStaticPtr[bodyIndexB];
+                        const size_t isStaticA = isStaticPtr[bodyIndexA];
+                        const size_t isStaticB = isStaticPtr[bodyIndexB];
 
                         solverResources.usedBodies[bodyIndexA] = (-isStaticA) | (currentStageIndex & (~isStaticA));
                         solverResources.usedBodies[bodyIndexB] = (-isStaticB) | (currentStageIndex & (~isStaticB));
@@ -462,21 +467,24 @@ namespace PS_AGONY
                     auto& stagingPass = solverResources.stagingPasses[currentStageIndex];
                     stagingPass.push_back(collisionIndex);
 
-                    // Remove index from remaining indices.
-                    solverResources.remainingIndices[readPos] = solverResources.remainingIndices.back();
-                    solverResources.remainingIndices.pop_back();
-                    readSize--;
-
                     // Advance to next stage or stop.
                     if (stagingPass.size() >= MAX_VALID_INDICES_PER_WORKER)
                     {
                         currentStageIndex++;
                         if (currentStageIndex >= workerCount)
                         {
+                            solverResources.nextRemainingIndices.insert(
+                                solverResources.nextRemainingIndices.end(),
+                                solverResources.remainingIndices.begin() + (readPos + 1),
+                                solverResources.remainingIndices.end()
+                            );
                             break;
                         }
                     }
                 }
+
+                solverResources.remainingIndices.clear();
+                solverResources.remainingIndices.swap(solverResources.nextRemainingIndices);
 
                 // Count valid passes.
                 for (size_t i = 0; i < workerCount; i++)

@@ -56,6 +56,7 @@ namespace PS_AGONY
 			std::vector<WorkerData> workerData;
 
 			std::vector<size_t> remainingIndices;
+			std::vector<size_t> nextRemainingIndices;
 			std::vector<std::vector<size_t>> stagingPasses;
 			std::vector<UsedSlot> usedBodies;
 
