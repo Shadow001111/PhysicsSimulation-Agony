@@ -128,8 +128,8 @@ namespace PS_AGONY
             {
                 const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
                 const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
-                const Real angularVelA = angularVelocityPtr[bodyIndexA];
-                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                const Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
                 bool noContacts = true;
 
@@ -143,8 +143,8 @@ namespace PS_AGONY
                     const Vec2 rAPerp = { -rA.y, rA.x };
                     const Vec2 rBPerp = { -rB.y, rB.x };
 
-                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
-                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+                    const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
 
                     const Vec2 relativeVelocity =
                         (linearVelocityB + angularLinearVelB) -
@@ -207,15 +207,15 @@ namespace PS_AGONY
             {
                 const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
                 const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
-                const Real angularVelA = angularVelocityPtr[bodyIndexA];
-                const Real angularVelB = angularVelocityPtr[bodyIndexB];
+                const Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+                const Real angularVelocityB = angularVelocityPtr[bodyIndexB];
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
                     const Vec2 rAPerp = rAPerpArray[i];
                     const Vec2 rBPerp = rBPerpArray[i];
 
-                    const Vec2 angularLinearVelA = rAPerp * angularVelA;
-                    const Vec2 angularLinearVelB = rBPerp * angularVelB;
+                    const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
 
                     const Vec2 relativeVelocity =
                         (linearVelocityB + angularLinearVelB) -
@@ -584,6 +584,9 @@ namespace PS_AGONY
     void Solver::resolveCollisionsIndirect(const std::vector<BodyCollisionData>& narrowPhaseCollisions, const std::vector<size_t>& collisionIndices)
     {
         TRACY_SCOPE_NC("Resolve collisions (Indirect)", Ecstasy::Color::HotPink);
+
+        // My tests show that copying data to make it sequantial is a little faster than doing indirect loads.
+        // Plus it allows for having single source of truth for collision resolution.
 
         static thread_local std::vector<BodyCollisionData> tempData; // TODO: Add to memory usage.
 

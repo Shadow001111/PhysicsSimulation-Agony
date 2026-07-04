@@ -13,6 +13,9 @@
 
 namespace PS_AGONY
 {
+    using RealSimd = Ecstasy::Simd<Real>;
+
+
     static Real calculateCircleInertia(Real mass, Real radius, Vec2 centerOfMass)
     {
         const Real radiusSquared = radius * radius;
@@ -905,8 +908,6 @@ namespace PS_AGONY
 
     void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
     {
-        using RealSimd = Ecstasy::Simd<Real>;
-
         TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
@@ -1025,8 +1026,6 @@ namespace PS_AGONY
 
     void Simulation::integrate(size_t bodyCount, Real deltaTime)
     {
-        using RealSimd = Ecstasy::Simd<Real>;
-
         TRACY_SCOPE_NC("Intergrate", Ecstasy::Color::Blue);
 
         const RealSimd deltaTimeV{ deltaTime };
@@ -1132,7 +1131,7 @@ namespace PS_AGONY
         const size_t count = circles.getCount();
         if (count == 0) return;
 
-        using RealSimd = Ecstasy::Simd<Real>;
+        TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Color::DarkGreen);
 
         using IndexSimd = std::conditional_t<
             std::is_same_v<Real, float>,
@@ -1151,9 +1150,9 @@ namespace PS_AGONY
         Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
 
+        alignas(IndexSimd::bytes) BodyIndex bodyIndexBatch[IndexSimd::lanes];
         alignas(RealSimd::bytes) Real xBatch[RealSimd::lanes];
         alignas(RealSimd::bytes) Real yBatch[RealSimd::lanes];
-        alignas(IndexSimd::bytes) BodyIndex bodyIndexBatch[IndexSimd::lanes];
 
         alignas(RealSimd::bytes) Real minXBatch[RealSimd::lanes];
         alignas(RealSimd::bytes) Real minYBatch[RealSimd::lanes];
@@ -1170,7 +1169,7 @@ namespace PS_AGONY
 
             if constexpr (RealSimd::isGatherAvailable())
             {
-                const auto indices = IndexSimd::load((const int32_t*)(bodyIndexPtr + i));
+                const auto indices = IndexSimd::load((const int32_t*)bodyIndexBatch);
                 x = RealSimd::gather(positionXPtr, indices);
                 y = RealSimd::gather(positionYPtr, indices);
             }
@@ -1223,6 +1222,8 @@ namespace PS_AGONY
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
+        TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Color::DarkGreen);
+
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
@@ -1240,8 +1241,8 @@ namespace PS_AGONY
         for (size_t i = 0; i < count; i++)
         {
             const BodyIndex bodyIndex = bodyIndexPtr[i];
-            const Real widthHalf = halfWidthPtr[i];
-            const Real heightHalf = halfHeightPtr[i];
+            const Real halfWidth = halfWidthPtr[i];
+            const Real halfHeight = halfHeightPtr[i];
 
             const Real x = positionXPtr[bodyIndex];
             const Real y = positionYPtr[bodyIndex];
@@ -1251,8 +1252,8 @@ namespace PS_AGONY
             const Real absCos = std::fabs(cos);
             const Real absSin = std::fabs(sin);
 
-            const Real ex = absCos * widthHalf + absSin * heightHalf;
-            const Real ey = absSin * widthHalf + absCos * heightHalf;
+            const Real ex = absCos * halfWidth + absSin * halfHeight;
+            const Real ey = absSin * halfWidth + absCos * halfHeight;
 
             aabbMinXPtr[bodyIndex] = x - ex;
             aabbMinYPtr[bodyIndex] = y - ey;
@@ -1265,6 +1266,8 @@ namespace PS_AGONY
     {
         const size_t count = polygons.getCount();
         if (count == 0) return;
+
+        TRACY_SCOPE_NC("Build polygon AABBs", Ecstasy::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
@@ -1286,18 +1289,19 @@ namespace PS_AGONY
             const Real cos = rotationCosPtr[bodyIndex];
             const Real sin = rotationSinPtr[bodyIndex];
 
-            const Vec2* verts = localVertsPtr[i].data();
-            const size_t vertCount = localVertsPtr[i].size();
+            const Vec2* verticesPtr = localVertsPtr[i].data();
+            const size_t vertexCount = localVertsPtr[i].size();
 
-            Real minX = std::numeric_limits<Real>::max();
-            Real minY = std::numeric_limits<Real>::max();
+            Real minX =  std::numeric_limits<Real>::max();
+            Real minY =  std::numeric_limits<Real>::max();
             Real maxX = -std::numeric_limits<Real>::max();
             Real maxY = -std::numeric_limits<Real>::max();
 
-            for (size_t v = 0; v < vertCount; v++)
+            for (size_t v = 0; v < vertexCount; v++)
             {
-                const Real wx = cos * verts[v].x - sin * verts[v].y;
-                const Real wy = sin * verts[v].x + cos * verts[v].y;
+                const Vec2 vertex = verticesPtr[v];
+                const Real wx = cos * vertex.x - sin * vertex.y;
+                const Real wy = sin * vertex.x + cos * vertex.y;
                 minX = std::fmin(minX, wx);
                 maxX = std::fmax(maxX, wx);
                 minY = std::fmin(minY, wy);
@@ -1313,7 +1317,7 @@ namespace PS_AGONY
 
     void Simulation::wrapRotation()
     {
-        using RealSimd = Ecstasy::Simd<Real>;
+        
 
         constexpr size_t LANES = RealSimd::lanes;
 
@@ -1369,7 +1373,7 @@ namespace PS_AGONY
 
     void Simulation::computeWorldCenters()
     {
-        using RealSimd = Ecstasy::Simd<Real>;
+        
 
         TRACY_SCOPE_NC("Compute true positions", Ecstasy::Color::Magenta);
 
