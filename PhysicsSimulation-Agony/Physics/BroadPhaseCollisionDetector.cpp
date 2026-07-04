@@ -361,11 +361,12 @@ namespace PS_AGONY
         // Sort.
         alignas(64) uint32_t count[4][RADIX_SIZE] = {};
 
+        // Note: Combining packing pass with counting pass worsens perfomance.
         {
             TRACY_SCOPE_N("Counting pass");
             for (uint32_t i = 0; i < bodyCount; i++)
             {
-                const uint32_t k = mortonCodePtr[i];
+                const uint32_t k = packedA[i].key;
                 count[0][k & 0xFF]++;
                 count[1][(k >> 8) & 0xFF]++;
                 count[2][(k >> 16) & 0xFF]++;
@@ -603,8 +604,8 @@ namespace PS_AGONY
             for (size_t i = 0; i < totalReals; i += RealSimd::lanes)
             {
                 deadMinV.store(minXPtr + i);
-                deadMinV.store(minYPtr + i);
                 deadMaxV.store(maxXPtr + i);
+                deadMinV.store(minYPtr + i);
                 deadMaxV.store(maxYPtr + i);
             }
         }
