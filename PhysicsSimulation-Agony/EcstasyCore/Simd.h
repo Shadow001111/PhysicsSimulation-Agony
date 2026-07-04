@@ -1523,8 +1523,9 @@ namespace Ecstasy
                 (std::is_same_v<Target, Simd<int64_t, Bits>> && IS_UINT64)
             )
         {
-            // Dummy function. Simd doesn't care if int is signed or unsigned.
-            return *this;
+            Target s;
+            s.reg = reg;
+            return s;
         }
 
         [[nodiscard]] static Simd<T, 128> castFrom256to128(const Simd& a) noexcept
