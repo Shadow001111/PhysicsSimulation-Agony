@@ -567,9 +567,9 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     constexpr float terrainBaseY = -20.0f;
 
     // Configurable object counts
-    constexpr int circleCount = 1700;
-    constexpr int boxCount = 1700;
-    constexpr int polygonCount = 1700;
+    constexpr int circleCount = 5000;
+    constexpr int boxCount = 1;
+    constexpr int polygonCount = 1;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {

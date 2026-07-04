@@ -1,5 +1,6 @@
 ﻿#include "NarrowPhaseCollisionDetector.h"
 #include "Threading.h"
+#include "PrintUtilities.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -599,6 +600,15 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
+        auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
+            {
+                const Vec2 ab = b - a;
+                const Real denom = glm::dot(ab, ab);
+                if (denom < ZERO_DIVISION_BOUNDARY) return a;
+                const Real t = glm::dot(p - a, ab) / denom;
+                return a + ab * glm::clamp(t, Real(0), Real(1));
+            };
+
         for (auto [indexA, indexB] : pairs)
         {
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -625,47 +635,52 @@ namespace PS_AGONY
                 glm::dot(positionA - positionB, upB)
             };
 
-            auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
-                {
-                    const Vec2 ab = b - a;
-                    const Real denom = glm::dot(ab, ab);
-                    if (denom < ZERO_DIVISION_BOUNDARY) return a;
-                    const Real t = glm::dot(p - a, ab) / denom;
-                    return a + ab * glm::clamp(t, Real(0), Real(1));
-                };
-
-            Real bestDist2 = std::numeric_limits<Real>::max();
-            Vec2 bestPointLocal;
-            uint32_t bestEdgeIndex = 0;
-
+            Real maxSeparation = -std::numeric_limits<Real>::max();
+            uint32_t supportEdge = 0;
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
-                const Vec2 a = localVerts[i];
-                const Vec2 b = localVerts[(i + 1) % uint32_t(vertexCount)];
-                const Vec2 q = closestPointOnSegment(circleLocal, a, b);
-                const Vec2 d = q - circleLocal;
-                const Real dist2 = glm::dot(d, d);
-
-                if (dist2 < bestDist2)
+                const Vec2 normal = edgeOutwardNormal(localVerts, vertexCount, i);
+                const Real separation = glm::dot(normal, circleLocal - localVerts[i]);
+                if (separation > maxSeparation)
                 {
-                    bestDist2 = dist2;
-                    bestPointLocal = q;
-                    bestEdgeIndex = i;
+                    maxSeparation = separation;
+                    supportEdge = i;
                 }
             }
 
-            if (bestDist2 >= radiusA * radiusA) continue;
+            if (maxSeparation > radiusA) continue;
 
             Vec2 normalLocal;
-            if (bestDist2 >= ZERO_DIVISION_BOUNDARY_SQUARED)
+            Real separation;
+            if (maxSeparation >= ZERO_DIVISION_BOUNDARY)
             {
-                const Real invDist = Real(1) / std::sqrt(bestDist2);
-                normalLocal = (bestPointLocal - circleLocal) * invDist;
+                // Center is outside the polygon but possibly within radiusA
+                // of it.
+                const Vec2 a = localVerts[supportEdge];
+                const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
+                const Vec2 q = closestPointOnSegment(circleLocal, a, b);
+                const Vec2 d = circleLocal - q;
+                const Real distSquared = glm::dot(d, d);
+
+                if (distSquared < ZERO_DIVISION_BOUNDARY_SQUARED)
+                {
+                    normalLocal = edgeOutwardNormal(localVerts, vertexCount, supportEdge);
+                    separation = 0;
+                }
+                else
+                {
+                    const Real dist = std::sqrt(distSquared);
+                    normalLocal = d / dist;
+                    separation = dist;
+                }
+
+                if (separation > radiusA) continue;
             }
             else
             {
-                normalLocal = edgeOutwardNormal(localVerts, vertexCount, bestEdgeIndex);
-                flipSignIfNegative(normalLocal, glm::dot(circleLocal - bestPointLocal, normalLocal));
+                // Circle center is inside the polygon.
+                normalLocal = edgeOutwardNormal(localVerts, vertexCount, supportEdge);
+                separation = maxSeparation;
             }
 
             Vec2 normal = {
@@ -675,7 +690,7 @@ namespace PS_AGONY
 
             flipSignIfNegative(normal, glm::dot(positionB - positionA, normal));
 
-            const Real depth = radiusA - std::sqrt(bestDist2);
+            const Real depth = radiusA - separation;
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
             outCollisionData.emplace_back(
