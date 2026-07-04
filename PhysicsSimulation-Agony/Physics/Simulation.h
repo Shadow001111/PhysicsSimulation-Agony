@@ -29,6 +29,7 @@ namespace PS_AGONY
 			size_t bodyDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
 			size_t boxDataMemoryUsage = 0;
+			size_t polygonDataMemoryUsage = 0;
 
 			size_t materialDataMemoryUsage = 0;
 			size_t broadPhaseDetectorMemoryUsage = 0;
@@ -39,7 +40,7 @@ namespace PS_AGONY
 		struct SimulationSettings
 		{
 			Real updateInterval = 1.0 / 300.0;
-			uint32_t collisionSolvingIterations = 3;
+			uint32_t collisionSolvingIterations = 6;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.

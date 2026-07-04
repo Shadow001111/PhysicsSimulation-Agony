@@ -560,8 +560,8 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
 void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr float worldWidth = 1600.0f;
-    constexpr float terrainSegmentWidth = 8.0f;
+    constexpr float worldWidth = 150.0f;
+    constexpr float terrainSegmentWidth = 16.0f;
     constexpr float wallThickness = 5.0f;
     constexpr float wallHeight = 60.0f;
     constexpr float terrainBaseY = -20.0f;
@@ -597,7 +597,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
         });
 
     // === 3. JOINED POLYGON LANDSCAPE (LOCAL COORDINATES) ===
-    const int terrainSegments = static_cast<int>(worldWidth / terrainSegmentWidth);
+    const int terrainSegments = static_cast<int>(std::ceil(worldWidth / terrainSegmentWidth));
     std::vector<float> heights(terrainSegments + 1);
     float currentHeight = 0.0f;
 
