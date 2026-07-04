@@ -567,15 +567,15 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     constexpr float terrainBaseY = -20.0f;
 
     // Configurable object counts
-    constexpr int circleCount = 5000;
-    constexpr int boxCount = 1;
-    constexpr int polygonCount = 1;
+    constexpr int circleCount = 1000;
+    constexpr int boxCount = 1000;
+    constexpr int polygonCount = 1000;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
-        .elasticity = 0.4f,
-        .staticFriction = 0.7f,
-        .dynamicFriction = 0.6f
+        .elasticity = 0.8f,
+        .staticFriction = 1.0f,
+        .dynamicFriction = 0.5f
     };
     PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(worldMaterial);
 
@@ -708,6 +708,78 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     }
 }
 
+void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    // === CONFIGURATION VARIABLES ===
+    constexpr int pyramidRows = 5; // Number of rows in the pyramid
+    constexpr float boxWidth = 0.6f;
+    constexpr float boxHeight = 0.6f;
+    constexpr float boxMass = 1.0f;
+
+    constexpr float floorThickness = 2.0f;
+    constexpr float floorWidth = (pyramidRows + 8) * boxWidth;
+
+    // === 1. MATERIAL SETUP ===
+    // High friction and lower elasticity help the pyramid remain stable upon initialization
+    PS_AGONY::Material pyramidMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 1.8f,
+        .dynamicFriction = 1.6f
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(pyramidMaterial);
+
+    // === 2. STATIC FLOOR ===
+    simulation.createBox({
+        .base.position = { 0.0f, -floorThickness * 0.5f },
+        .base.mass = 0, // Static
+        .base.materialIndex = materialIdx,
+        .size = { floorWidth, floorThickness }
+        });
+
+    // === 3. PYRAMID GENERATION ===
+    // Outer loop moves from the bottom row up to the top apex
+    for (int row = 0; row < pyramidRows; ++row)
+    {
+        int boxesInRow = pyramidRows - row;
+
+        // Calculate starting X coordinate to center each row perfectly around X = 0
+        float startX = -0.5f * (boxesInRow - 1) * boxWidth;
+
+        // Calculate Y coordinate for the center of the boxes in the current row
+        float y = (row + 0.5f) * boxHeight;
+
+        for (int col = 0; col < boxesInRow; ++col)
+        {
+            float x = startX + col * boxWidth;
+
+            simulation.createBox({
+                .base.position = { x, y },
+                .base.velocity = { 0.0f, 0.0f },
+                .base.rotation = 0.0f,
+                .base.angularVelocity = 0.0f,
+                .base.mass = boxMass,
+                .base.materialIndex = materialIdx,
+                .size = { boxWidth, boxHeight }
+                });
+        }
+    }
+
+    // === 4. OPTIONAL: INTERACTIVE PROJECTILE ===
+    // Adds a heavy dynamic sphere positioned above to drop or smash into the pyramid
+    //{
+    //    constexpr float ballRadius = 1.0f;
+    //    simulation.createCircle({
+    //        .base.position = { -((pyramidRows * boxWidth) * 0.5f + 2.0f), (pyramidRows * boxHeight) + 2.0f },
+    //        .base.velocity = { 8.0f, -4.0f }, // Launched towards the pyramid structure
+    //        .base.rotation = 0.0f,
+    //        .base.angularVelocity = 0.0f,
+    //        .base.mass = 50.0f, // Heavy weight to impact the structure
+    //        .base.materialIndex = materialIdx,
+    //        .radius = ballRadius
+    //        });
+    //}
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Random::Generator rvg; // Random value generator.
@@ -738,5 +810,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 5)
     {
         load_LargeWorld(simulation, rvg);
+    }
+    else if (scene == 6)
+    {
+        load_StackedPyramid(simulation, rvg);
     }
 }
