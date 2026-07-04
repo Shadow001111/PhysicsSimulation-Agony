@@ -114,6 +114,11 @@ namespace PS_AGONY
             const Real invInertiaA = invInertiaPtr[bodyIndexA];
             const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
+            Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+            Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+            Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+            Real angularVelocityB = angularVelocityPtr[bodyIndexB];
+
             const Vec2 normal = data.normal;
             const Real depth = data.depth;
 
@@ -126,11 +131,6 @@ namespace PS_AGONY
 
             const Real impulseScale = Real(1.0) / Real(data.contactCount);
             {
-                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
-                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
-                const Real angularVelocityA = angularVelocityPtr[bodyIndexA];
-                const Real angularVelocityB = angularVelocityPtr[bodyIndexB];
-
                 bool noContacts = true;
 
                 for (uint32_t i = 0; i < contactCount; i++)
@@ -178,37 +178,22 @@ namespace PS_AGONY
             // Apply collision impulses.
             {
                 const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-                {
-                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
-                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
-                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
 
-                    const Real angularVelocityChangeA = (
-                        glm::dot(rAPerpArray[0], impulseArray[0]) +
-                        glm::dot(rAPerpArray[1], impulseArray[1])
-                        ) * invInertiaA;
-                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
-                }
+                linearVelocityA -= impulseSum * invMassA;
+                angularVelocityA -= (
+                    glm::dot(rAPerpArray[0], impulseArray[0]) +
+                    glm::dot(rAPerpArray[1], impulseArray[1])
+                    ) * invInertiaA;
 
-                {
-                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
-                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
-                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
-
-                    const Real angularVelocityChangeB = (
-                        glm::dot(rBPerpArray[0], impulseArray[0]) +
-                        glm::dot(rBPerpArray[1], impulseArray[1])
-                        ) * invInertiaB;
-                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
-                }
+                linearVelocityB += impulseSum * invMassB;
+                angularVelocityB += (
+                    glm::dot(rBPerpArray[0], impulseArray[0]) +
+                    glm::dot(rBPerpArray[1], impulseArray[1])
+                    ) * invInertiaB;
             }
 
             // Calculate friction impulses.
             {
-                const Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
-                const Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
-                const Real angularVelocityA = angularVelocityPtr[bodyIndexA];
-                const Real angularVelocityB = angularVelocityPtr[bodyIndexB];
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
                     const Vec2 rAPerp = rAPerpArray[i];
@@ -257,29 +242,18 @@ namespace PS_AGONY
             // Apply friction impulses.
             {
                 const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-                {
-                    const Vec2 linearVelocityChangeA = impulseSum * invMassA;
-                    velocityXPtr[bodyIndexA] -= linearVelocityChangeA.x;
-                    velocityYPtr[bodyIndexA] -= linearVelocityChangeA.y;
-            
-                    const Real angularVelocityChangeA = (
-                        glm::dot(rAPerpArray[0], impulseArray[0]) +
-                        glm::dot(rAPerpArray[1], impulseArray[1])
-                        ) * invInertiaA;
-                    angularVelocityPtr[bodyIndexA] -= angularVelocityChangeA;
-                }
-            
-                {
-                    const Vec2 linearVelocityChangeB = impulseSum * invMassB;
-                    velocityXPtr[bodyIndexB] += linearVelocityChangeB.x;
-                    velocityYPtr[bodyIndexB] += linearVelocityChangeB.y;
-            
-                    const Real angularVelocityChangeB = (
-                        glm::dot(rBPerpArray[0], impulseArray[0]) +
-                        glm::dot(rBPerpArray[1], impulseArray[1])
-                        ) * invInertiaB;
-                    angularVelocityPtr[bodyIndexB] += angularVelocityChangeB;
-                }
+
+                linearVelocityA -= impulseSum * invMassA;
+                angularVelocityA -= (
+                    glm::dot(rAPerpArray[0], impulseArray[0]) +
+                    glm::dot(rAPerpArray[1], impulseArray[1])
+                    ) * invInertiaA;
+
+                linearVelocityB += impulseSum * invMassB;
+                angularVelocityB += (
+                    glm::dot(rBPerpArray[0], impulseArray[0]) +
+                    glm::dot(rBPerpArray[1], impulseArray[1])
+                    ) * invInertiaB;
             }
 
             // Position and velocity correction.
@@ -306,11 +280,18 @@ namespace PS_AGONY
                 const Vec2 correctionAVec = normal * correctionA;
                 const Vec2 correctionBVec = normal * correctionB;
 
-                velocityXPtr[bodyIndexA] -= correctionAVec.x;
-                velocityYPtr[bodyIndexA] -= correctionAVec.y;
-                velocityXPtr[bodyIndexB] += correctionBVec.x;
-                velocityYPtr[bodyIndexB] += correctionBVec.y;
+                linearVelocityA -= correctionAVec;
+                linearVelocityB += correctionBVec;
             }
+
+            // Store velocities.
+            velocityXPtr[bodyIndexA] = linearVelocityA.x;
+            velocityYPtr[bodyIndexA] = linearVelocityA.y;
+            velocityXPtr[bodyIndexB] = linearVelocityB.x;
+            velocityYPtr[bodyIndexB] = linearVelocityB.y;
+
+            angularVelocityPtr[bodyIndexA] = angularVelocityA;
+            angularVelocityPtr[bodyIndexB] = angularVelocityB;
         }
     }
 
