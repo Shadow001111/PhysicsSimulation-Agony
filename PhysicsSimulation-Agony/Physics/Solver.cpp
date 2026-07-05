@@ -121,16 +121,43 @@ namespace PS_AGONY
             Real angularVelocityA = angularVelocityPtr[bodyIndexA];
             Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
+            //
             const Vec2 normal = data.normal;
             const Real depth = data.depth;
 
-            // Calculate collision impulses.
+            //
             std::array<Vec2, 2> impulseArray{};
             std::array<Vec2, 2> rAPerpArray{};
             std::array<Vec2, 2> rBPerpArray{};
             std::array<Real, 2> jnArray{};
-            const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
+            const uint32_t contactCount = data.contactCount;
 
+            const Vec2 tangent = { -normal.y, normal.x };
+
+            // Warm starting.
+            for (uint32_t i = 0; i < contactCount; i++)
+            {
+                Real oldJn = data.persistentContactData[i].normalImpulseAccumulator;
+                Real oldJt = data.persistentContactData[i].tangentImpulseAccumulator;
+
+                if (oldJn > Real(0) || std::fabs(oldJt) > Real(0))
+                {
+                    const Vec2 contactPoint = data.contactPoints[i];
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
+                    const Vec2 rAPerp = { -rA.y, rA.x };
+                    const Vec2 rBPerp = { -rB.y, rB.x };
+
+                    const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
+
+                    linearVelocityA -= warmStartImpulse * invMassA;
+                    angularVelocityA -= glm::dot(rAPerp, warmStartImpulse) * invInertiaA;
+                    linearVelocityB += warmStartImpulse * invMassB;
+                    angularVelocityB += glm::dot(rBPerp, warmStartImpulse) * invInertiaB;
+                }
+            }
+
+            // Compute collision impulses.
             const Real impulseScale = Real(1.0) / Real(data.contactCount);
             {
                 bool noContacts = true;
@@ -154,7 +181,9 @@ namespace PS_AGONY
 
                     const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 
-                    if (velocityAlongNormal > Real(0)) continue;
+                    Real& accumulatedJn = data.persistentContactData[i].normalImpulseAccumulator;
+
+                    if (velocityAlongNormal > Real(0) && accumulatedJn <= Real(0)) continue;
 
                     const Real rAPerpDotN = glm::dot(rAPerp, normal);
                     const Real rBPerpDotN = glm::dot(rBPerp, normal);
@@ -165,10 +194,14 @@ namespace PS_AGONY
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
                     const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
 
-                    impulseArray[i] = jn * normal;
+                    const Real oldJn = accumulatedJn;
+                    accumulatedJn = std::fmax(Real(0), oldJn + jn);
+                    const Real deltaJn = accumulatedJn - oldJn;
+
+                    impulseArray[i] = deltaJn * normal;
                     rAPerpArray[i] = rAPerp;
                     rBPerpArray[i] = rBPerp;
-                    jnArray[i] = jn;
+                    jnArray[i] = accumulatedJn;
 
                     noContacts = false;
                 }
@@ -194,7 +227,7 @@ namespace PS_AGONY
                     ) * invInertiaB;
             }
 
-            // Calculate friction impulses.
+            // Compute friction impulses.
             {
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
@@ -208,15 +241,7 @@ namespace PS_AGONY
                         (linearVelocityB + angularLinearVelB) -
                         (linearVelocityA + angularLinearVelA);
 
-                    Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
-                    const Real tangentLengthSq = glm::dot(tangent, tangent);
-                    if (tangentLengthSq < frictionEpsilonSq)
-                    {
-                        impulseArray[i] = Vec2(0.0, 0.0);
-                        continue;
-                    }
-
-                    tangent /= std::sqrt(tangentLengthSq);
+                    const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
 
                     const Real rAPerpDotT = glm::dot(rAPerp, tangent);
                     const Real rBPerpDotT = glm::dot(rBPerp, tangent);
@@ -225,19 +250,26 @@ namespace PS_AGONY
                     const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
 
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                    const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
+                    const Real jt = -currentSlipVel / denom * impulseScale;
+
+                    Real& accumulatedJt = data.persistentContactData[i].tangentImpulseAccumulator;
+                    const Real oldJt = accumulatedJt;
+                    Real targetJt = oldJt + jt;
 
                     const Real jn = jnArray[i];
-                    if (std::fabs(jt) <= jn * staticFriction)
+                    const Real maxStatic = jn * staticFriction;
+                    if (std::fabs(targetJt) <= maxStatic)
                     {
-                        impulseArray[i] = -jt * tangent; // Static friction.
+                        accumulatedJt = targetJt; // Static friction holds
                     }
                     else
                     {
                         const Real maxDynamic = jn * dynamicFriction;
-                        const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
-                        impulseArray[i] = f * tangent; // Dynamic friction.
+                        accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic); // Slipping dynamically
                     }
+
+                    const Real deltaJt = accumulatedJt - oldJt;
+                    impulseArray[i] = deltaJt * tangent;
                 }
             }
 
