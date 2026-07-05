@@ -13,8 +13,9 @@ namespace PS_AGONY
 		{
 			static constexpr bool ENABLE_VELOCITY_CORRECTION = false;
 
-			// Baumgarte stabilization. No slop.
+			// Baumgarte stabilization.
 			const Real positionCorrectionPercent = 1.0;
+			const Real positionCorrectionSlop = 0.001;
 			const Real velocityCorrectionStrength = 8.0;
 		};
 
