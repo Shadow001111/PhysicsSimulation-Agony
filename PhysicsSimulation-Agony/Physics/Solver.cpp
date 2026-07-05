@@ -105,7 +105,7 @@ namespace PS_AGONY
 
             const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
 
-            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real staticFriction  = std::sqrt(std::fmax(Real(0), materialA->staticFriction  * materialB->staticFriction));
             const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
             // Compute world centers of mass.
@@ -586,7 +586,7 @@ namespace PS_AGONY
         const size_t collisionCount = collisionIndices.size();
 
         {
-            TRACY_SCOPE_N("Allocate and copy");
+            TRACY_SCOPE_N("Copy collision data in (Indirect)");
 
             tempData.resize(collisionCount);
             for (size_t i = 0; i < collisionCount; i++)
@@ -595,5 +595,17 @@ namespace PS_AGONY
             }
         }
         resolveCollisions(tempData);
+        {
+            TRACY_SCOPE_N("Copy persistent contact data out (Indirect)");
+
+            for (size_t i = 0; i < collisionCount; i++)
+            {
+                // Persistent contact data is mutable.
+                const BodyCollisionData& collData = narrowPhaseCollisions[collisionIndices[i]];
+                const BodyCollisionData& tempCollData = tempData[i];
+                collData.persistentContactData[0] = tempCollData.persistentContactData[0];
+                collData.persistentContactData[1] = tempCollData.persistentContactData[1];
+            }
+        }
     }
 }
