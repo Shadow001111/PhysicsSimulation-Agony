@@ -12,12 +12,6 @@ namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Simd<Real>;
 
-    struct Vector2AndSqDistance
-    {
-        Vec2 vector;
-        Real squaredDistance;
-    };
-
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
         SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> mat;
@@ -91,27 +85,34 @@ namespace PS_AGONY
             findCollisionsSingleThreaded(bodyPairs);
         }
 
-        // Remove non-existent contact data by creating new map.
-        {
-            TRACY_SCOPE_N("Remove unused contact data");
+        return allCollisionData;
+    }
 
-            previousContactDataContainer.clear();
-            for (BodyCollisionData& collData : allCollisionData)
+    void NarrowPhaseCollisionDetector::updatePersistentContactData()
+    {
+        TRACY_SCOPE_N("Update persistent contact data");
+
+        previousContactDataContainer.clear();
+        for (BodyCollisionData& collData : allCollisionData)
+        {
+            ContactKey contactKey;
+            contactKey.bodyA = collData.bodyA;
+            contactKey.bodyB = collData.bodyB;
+
+            // Iterate over contacts.
+            const uint32_t contactCount = collData.contactCount;
+            for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
             {
-                // Iterate over contacts.
-                const uint32_t contactCount = collData.contactCount;
-                for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
-                {
-                    // Move contact data to the map.
-                    previousContactDataContainer.emplace(
-                        collData.contactIds[contactIndex],
-                        collData.persistentContactData[contactIndex]
-                    );
-                }
+                // Set contact id.
+                contactKey.contactId = collData.contactIds[contactIndex];
+
+                // Move contact data to the map.
+                previousContactDataContainer.emplace(
+                    contactKey,
+                    collData.persistentContactData[contactIndex]
+                );
             }
         }
-
-        return allCollisionData;
     }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
@@ -276,20 +277,23 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Move previous contact data");
             for (BodyCollisionData& collData : chunkData.results)
             {
+                ContactKey contactKey;
+                contactKey.bodyA = collData.bodyA;
+                contactKey.bodyB = collData.bodyB;
+
                 // Iterate over contacts.
                 const uint32_t contactCount = collData.contactCount;
                 for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
                 {
-                    // Get contact id.
-                    const uint32_t contactId = collData.contactIds[contactIndex];
+                    // Set contact id.
+                    contactKey.contactId = collData.contactIds[contactIndex];
 
                     // Check if contact existed in previous frame.
-                    const auto it = previousContactDataContainer.find(contactId);
+                    const auto it = previousContactDataContainer.find(contactKey);
                     if (it == previousContactDataContainer.end()) continue;
 
                     // Move previous data.
-                    const PersistentContactData& previousContactData = it->second;
-                    collData.persistentContactData[contactIndex] = previousContactData;
+                    collData.persistentContactData[contactIndex] = it->second;
                 }
             }
         }
