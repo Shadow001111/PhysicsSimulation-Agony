@@ -38,15 +38,15 @@ namespace PS_AGONY
         return total;
     }
 
-    void Solver::resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Solver::solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        TRACY_SCOPE_NC("Resolve collisions", Ecstasy::Color::Violet);
+        TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
 
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
         // Get pointers.
-        Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
-        Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
 
         const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
         const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
@@ -258,39 +258,6 @@ namespace PS_AGONY
                     ) * invInertiaB;
             }
 
-            // Position and velocity correction.
-            const Real newDepth = depth - simulationSettings.positionCorrectionSlop;
-            if (depth > 0)
-            {
-                const Real invTotalInvMass_x_Depth = newDepth / totalInvMass;
-
-                const Real correctionStrengthA = invMassA * invTotalInvMass_x_Depth;
-                const Real correctionStrengthB = invMassB * invTotalInvMass_x_Depth;
-                {
-                    const Real correctionA = correctionStrengthA * simulationSettings.positionCorrectionPercent;
-                    const Real correctionB = correctionStrengthB * simulationSettings.positionCorrectionPercent;
-
-                    const Vec2 correctionAVec = normal * correctionA;
-                    const Vec2 correctionBVec = normal * correctionB;
-
-                    positionXPtr[bodyIndexA] -= correctionAVec.x;
-                    positionYPtr[bodyIndexA] -= correctionAVec.y;
-                    positionXPtr[bodyIndexB] += correctionBVec.x;
-                    positionYPtr[bodyIndexB] += correctionBVec.y;
-                }
-                if constexpr (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
-                {
-                    const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
-                    const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
-
-                    const Vec2 correctionAVec = normal * correctionA;
-                    const Vec2 correctionBVec = normal * correctionB;
-
-                    linearVelocityA -= correctionAVec;
-                    linearVelocityB += correctionBVec;
-                }
-            }
-
             // Store velocities.
             velocityXPtr[bodyIndexA] = linearVelocityA.x;
             velocityYPtr[bodyIndexA] = linearVelocityA.y;
@@ -302,7 +269,7 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Solver::solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
         constexpr size_t COLLISION_COUNT_PER_WORKER = 830;
         constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
@@ -315,7 +282,7 @@ namespace PS_AGONY
         // Single-threaded path.
         if (narrowPhaseCollisions.size() < MIN_COLLISION_COUNT_FOR_THREADING)
         {
-            resolveCollisions(narrowPhaseCollisions);
+            solveVelocityConstraints(narrowPhaseCollisions);
             return;
         }
 
@@ -327,7 +294,7 @@ namespace PS_AGONY
 
         const size_t workerCount = std::min(availableWorkerCount, neededWorkerCount);
 
-        TRACY_SCOPE_NC("Resolve collisions (Threaded)", Ecstasy::Color::Purple);
+        TRACY_SCOPE_NC("Solve velocity constraints (Threaded)", Ecstasy::Color::Purple);
 
         // Fill remaining indices.
         const size_t collisionCount = narrowPhaseCollisions.size();
@@ -391,7 +358,7 @@ namespace PS_AGONY
                     if (wData.indices.empty()) continue;
 
                     // Execute.
-                    resolveCollisionsIndirect(narrowPhaseCollisions, wData.indices);
+                    solveVelocityConstraintsIndirect(narrowPhaseCollisions, wData.indices);
 
                     wData.indices.clear();
 
@@ -570,13 +537,49 @@ namespace PS_AGONY
         // Execute remaining on main thread.
         if (!solverResources.remainingIndices.empty())
         {
-            resolveCollisionsIndirect(narrowPhaseCollisions, solverResources.remainingIndices);
+            solveVelocityConstraintsIndirect(narrowPhaseCollisions, solverResources.remainingIndices);
         }
     }
 
-    void Solver::resolveCollisionsIndirect(const std::vector<BodyCollisionData>& narrowPhaseCollisions, const std::vector<size_t>& collisionIndices)
+    void Solver::solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
     {
-        TRACY_SCOPE_NC("Resolve collisions (Indirect)", Ecstasy::Color::HotPink);
+        TRACY_SCOPE_NC("Solve position constraints", Ecstasy::Color::Indigo);
+
+        Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+
+        for (size_t c = 0; c < narrowPhaseCollisions.size(); c++)
+        {
+            const auto& data = narrowPhaseCollisions[c];
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
+
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0)) continue;
+
+            const Real correctionDepth = data.depth - simulationSettings.positionCorrectionSlop;
+            if (correctionDepth <= Real(0)) continue;
+
+            const Real invTotalInvMass_x_Depth = correctionDepth / totalInvMass;
+            const Real correctionA = invMassA * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
+            const Real correctionB = invMassB * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
+
+            const Vec2 correctionAVec = data.normal * correctionA;
+            const Vec2 correctionBVec = data.normal * correctionB;
+
+            positionXPtr[bodyIndexA] -= correctionAVec.x;
+            positionYPtr[bodyIndexA] -= correctionAVec.y;
+            positionXPtr[bodyIndexB] += correctionBVec.x;
+            positionYPtr[bodyIndexB] += correctionBVec.y;
+        }
+    }
+
+    void Solver::solveVelocityConstraintsIndirect(const std::vector<BodyCollisionData>& narrowPhaseCollisions, const std::vector<size_t>& collisionIndices)
+    {
+        TRACY_SCOPE_NC("Solve velocity constraints (Indirect)", Ecstasy::Color::HotPink);
 
         // My tests show that copying data to make it sequantial is a little faster than doing indirect loads.
         // Plus it allows for having single source of truth for collision resolution.
@@ -594,6 +597,6 @@ namespace PS_AGONY
                 tempData[i] = narrowPhaseCollisions[collisionIndices[i]];
             }
         }
-        resolveCollisions(tempData);
+        solveVelocityConstraints(tempData);
     }
 }

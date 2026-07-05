@@ -11,12 +11,9 @@ namespace PS_AGONY
 	{
 		struct SimulationSettings
 		{
-			static constexpr bool ENABLE_VELOCITY_CORRECTION = false;
-
 			// Baumgarte stabilization.
 			const Real positionCorrectionPercent = 1.0;
 			const Real positionCorrectionSlop = 0.001;
-			const Real velocityCorrectionStrength = 8.0;
 		};
 
 		struct ResolveCollisionsThreadedResources
@@ -86,10 +83,12 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 
-		void resolveCollisions(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-		void resolveCollisionsThreadedGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+
+		void solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 	private:
-		void resolveCollisionsIndirect(
+		void solveVelocityConstraintsIndirect(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 			const std::vector<size_t>& collisionIndices
 		);

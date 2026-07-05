@@ -236,8 +236,6 @@ namespace PS_AGONY
 
             runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
             runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
-
-            runtimeDebugData.maxCollisionSolvingIterations = simulationSettings.collisionSolvingIterations;
         }
     }
 
@@ -896,7 +894,7 @@ namespace PS_AGONY
         integrate(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
-        iterativeCollisionSolving(deltaTime);
+        solveCollisions(deltaTime);
     }
 
     void Simulation::postUpdate()
@@ -1068,10 +1066,8 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::iterativeCollisionSolving(Real deltaTime)
+    void Simulation::solveCollisions(Real deltaTime)
     {
-        runtimeDebugData.collisionSolvingIterationsHappened = 0;
-
         const size_t bodyCount = bodies.getCount();
 
         // Early return.
@@ -1094,28 +1090,27 @@ namespace PS_AGONY
             materials
         );
 
-        // Solves until runs out of iterations or no collision is found.
-        uint32_t i = 0;
-        for (;i < simulationSettings.collisionSolvingIterations; i++)
+        // Compute true position for all bodies.
+        computeWorldCenters();
+
+        // Rebuild AABBs.
+        buildBodyAABBs();
+
+        // Broad phase.
+        // TODO: Refit instead of rebuilding each time.
+        const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
+        if (broadCollisionData.empty()) return;
+
+        // Narrow phase.
+        const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
+        if (narrowCollisionData.empty()) return;
+
+        // Collision resolution.
+        for (uint32_t i = 0; i < simulationSettings.velocitySolvingIterations; i++)
         {
-            // Compute true position for all bodies.
-            computeWorldCenters();
-
-            // Rebuild AABBs.
-            buildBodyAABBs();
-
-            // Broad phase.
-            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(i == 0);
-            if (broadCollisionData.empty()) break;
-
-            // Narrow phase.
-            const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
-            if (narrowCollisionData.empty()) break;
-
-            // Collision resolution.
-            solver.resolveCollisionsThreadedGraphColoring(narrowCollisionData);
+            solver.solveVelocityConstraintsThreaded(narrowCollisionData);
         }
-        runtimeDebugData.collisionSolvingIterationsHappened = i;
+        solver.solvePositionConstraints(narrowCollisionData);
     }
 
     void Simulation::buildBodyAABBs()
