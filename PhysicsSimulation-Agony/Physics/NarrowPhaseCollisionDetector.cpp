@@ -252,6 +252,10 @@ namespace PS_AGONY
                     std::swap(bodyIndexA, bodyIndexB);
                     std::swap(typeA, typeB);
                 }
+                else if (typeA == typeB && bodyIndexB > bodyIndexA)
+                {
+                    std::swap(bodyIndexA, bodyIndexB);
+                }
 
                 chunkData.pairs((size_t)typeA, (size_t)typeB).emplace_back(bodyIndexA, bodyIndexB);
             }

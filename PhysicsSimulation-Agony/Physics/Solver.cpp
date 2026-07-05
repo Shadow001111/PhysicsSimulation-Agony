@@ -150,9 +150,10 @@ namespace PS_AGONY
 
                     const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
 
-                    linearVelocityA -= warmStartImpulse * invMassA;
+                    linearVelocityA  -= warmStartImpulse * invMassA;
+                    linearVelocityB  += warmStartImpulse * invMassB;
+
                     angularVelocityA -= glm::dot(rAPerp, warmStartImpulse) * invInertiaA;
-                    linearVelocityB += warmStartImpulse * invMassB;
                     angularVelocityB += glm::dot(rBPerp, warmStartImpulse) * invInertiaB;
                 }
             }
@@ -207,7 +208,14 @@ namespace PS_AGONY
                 }
 
                 // Check if there is at least one valid contact.
-                if (noContacts) continue;
+                if (noContacts)
+                {
+                    velocityXPtr[bodyIndexA] = linearVelocityA.x;
+                    velocityYPtr[bodyIndexA] = linearVelocityA.y;
+                    velocityXPtr[bodyIndexB] = linearVelocityB.x;
+                    velocityYPtr[bodyIndexB] = linearVelocityB.y;
+                    continue;
+                }
             }
 
             // Apply collision impulses.
