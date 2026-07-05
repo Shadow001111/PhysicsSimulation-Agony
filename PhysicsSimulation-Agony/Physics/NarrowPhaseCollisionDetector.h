@@ -13,8 +13,9 @@ namespace PS_AGONY
 		BodyIndex bodyA, bodyB;
 		Vec2 normal;
 		Real depth;
-		Vec2 contacts[2];
 		uint32_t contactCount;
+		Vec2 contactPoints[2];
+		uint32_t contactIds[2];
 
 		BodyCollisionData() = default;
 
@@ -22,13 +23,16 @@ namespace PS_AGONY
 			BodyIndex bodyA, BodyIndex bodyB,
 			Vec2 normal,
 			Real depth,
-			Vec2 contact1, Vec2 contact2,
-			uint32_t contactCount
+			uint32_t contactCount,
+			Vec2 contactPoint1, Vec2 contactPoint2,
+			uint32_t contactId1, uint32_t contactId2
 		) :
 			bodyA(bodyA), bodyB(bodyB), normal(normal), depth(depth), contactCount(contactCount)
 		{
-			contacts[0] = contact1;
-			contacts[1] = contact2;
+			contactPoints[0] = contactPoint1;
+			contactPoints[1] = contactPoint2;
+			contactIds[0] = contactId1;
+			contactIds[1] = contactId2;
 		}
 	};
 

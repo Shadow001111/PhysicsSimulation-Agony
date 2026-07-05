@@ -428,9 +428,11 @@ namespace PS_AGONY
                             pair.a, pair.b,
                             normal,
                             depth,
+                            1,
                             positionA + normal * radiusA,
                             Vec2(),
-                            1
+                            0,
+                            0
                         );
                     }
                 }
@@ -473,9 +475,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                1,
                 positionA + normal * radiusA,
                 Vec2(),
-                1
+                0,
+                0
             );
         }
     }
@@ -547,9 +551,11 @@ namespace PS_AGONY
                     indexA, indexB,
                     normal,
                     depth,
+                    1,
                     contactOnCircle,
                     Vec2(),
-                    1
+                    0,
+                    0
                 );
                 continue;
             }
@@ -578,9 +584,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                1,
                 contactOnCircle,
                 Vec2(),
-                1
+                0,
+                0
             );
         }
     }
@@ -697,9 +705,10 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                1,
                 contactOnCircle,
                 Vec2(),
-                1
+                0, 0
             );
         }
     }
@@ -889,9 +898,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                contactCount,
                 contacts[0],
                 contacts[1],
-                contactCount
+                0,
+                0
             );
         }
     }
@@ -1131,9 +1142,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                contactCount,
                 contacts[0],
                 contacts[1],
-                contactCount
+                0,
+                0
             );
 
         nextPair:
@@ -1345,9 +1358,11 @@ namespace PS_AGONY
                     indexA, indexB,
                     normal,
                     depth,
+                    contactCount,
                     contacts[0],
                     contacts[1],
-                    contactCount
+                    0,
+                    0
                 );
             }
         nextPair:
