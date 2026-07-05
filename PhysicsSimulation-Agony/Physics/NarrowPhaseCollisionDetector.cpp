@@ -66,8 +66,8 @@ namespace PS_AGONY
 
         allCollisionData.reserve(bodyPairs.size());
 
+        // Determine to use threading or not.
         bool useThreading = false;
-        
         if (executionPolicy == ExecutionPolicy::ForceMultiThreaded)
         {
             useThreading = true;
@@ -81,6 +81,7 @@ namespace PS_AGONY
             useThreading = bodyPairs.size() > 635;
         }
         
+        // Find collisions.
         if (useThreading)
         {
             findCollisionsMultiThreaded(bodyPairs);
@@ -88,6 +89,26 @@ namespace PS_AGONY
         else
         {
             findCollisionsSingleThreaded(bodyPairs);
+        }
+
+        // Remove non-existent contact data by creating new map.
+        {
+            TRACY_SCOPE_N("Remove unused contact data");
+
+            previousContactDataContainer.clear();
+            for (BodyCollisionData& collData : allCollisionData)
+            {
+                // Iterate over contacts.
+                const uint32_t contactCount = collData.contactCount;
+                for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
+                {
+                    // Move contact data to the map.
+                    previousContactDataContainer.emplace(
+                        collData.contactIds[contactIndex],
+                        collData.persistentContactData[contactIndex]
+                    );
+                }
+            }
         }
 
         return allCollisionData;
@@ -249,12 +270,34 @@ namespace PS_AGONY
                 (this->*func)(vec, chunkData.results);
             }
         }
+
+        // Move persistent contact data from previous frame.
+        {
+            TRACY_SCOPE_N("Move previous contact data");
+            for (BodyCollisionData& collData : chunkData.results)
+            {
+                // Iterate over contacts.
+                const uint32_t contactCount = collData.contactCount;
+                for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
+                {
+                    // Get contact id.
+                    const uint32_t contactId = collData.contactIds[contactIndex];
+
+                    // Check if contact existed in previous frame.
+                    const auto it = previousContactDataContainer.find(contactId);
+                    if (it == previousContactDataContainer.end()) continue;
+
+                    // Move previous data.
+                    const PersistentContactData& previousContactData = it->second;
+                    collData.persistentContactData[contactIndex] = previousContactData;
+                }
+            }
+        }
     }
 
 
     /*===COLLISION METHODS===*/
 
-    // TODO: Maybe change threshold values for double Real.
     constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
     constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
     constexpr Real SAT_EPSILON = 1e-4;

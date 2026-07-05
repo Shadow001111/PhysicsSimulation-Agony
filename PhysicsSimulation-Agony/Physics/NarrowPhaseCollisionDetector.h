@@ -4,10 +4,16 @@
 #include "SymmetricMatrix.h"
 
 #include <atomic>
-#include <mutex>
+#include <robin_hood.h>
 
 namespace PS_AGONY
 {
+	struct PersistentContactData
+	{
+		Real normalImpulseAccumulator = 0;
+		Real tangentImpulseAccumulator = 0;
+	};
+
 	struct BodyCollisionData
 	{
 		BodyIndex bodyA, bodyB;
@@ -16,6 +22,7 @@ namespace PS_AGONY
 		uint32_t contactCount;
 		Vec2 contactPoints[2];
 		uint32_t contactIds[2];
+		PersistentContactData persistentContactData[2] = { {}, {} };
 
 		BodyCollisionData() = default;
 
@@ -88,6 +95,9 @@ namespace PS_AGONY
 
 		std::vector<BodyCollisionData> allCollisionData;
 		std::vector<ChunkData> chunks;
+
+		// TODO: Add to getMemoryUsage.
+		robin_hood::unordered_flat_map<uint32_t, PersistentContactData> previousContactDataContainer;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
