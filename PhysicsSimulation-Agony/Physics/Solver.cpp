@@ -137,7 +137,7 @@ namespace PS_AGONY
 
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
-                    const Vec2 contactPoint = data.contacts[i];
+                    const Vec2 contactPoint = data.contactPoints[i];
 
                     const Vec2 rA = contactPoint - centerOfMassA;
                     const Vec2 rB = contactPoint - centerOfMassB;

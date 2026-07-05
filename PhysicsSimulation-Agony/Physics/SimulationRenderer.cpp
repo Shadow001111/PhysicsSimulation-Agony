@@ -493,7 +493,7 @@ namespace PS_AGONY
 
             for (size_t j = 0; j < collData.contactCount; j++)
             {
-                const auto& contact = collData.contacts[j];
+                const auto& contact = collData.contactPoints[j];
 
                 auto& renderData = circleResources.instanceData.emplace_back();
 
