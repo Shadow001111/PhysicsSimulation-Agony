@@ -1114,6 +1114,10 @@ namespace PS_AGONY
 
             // Collision resolution.
             solver.resolveCollisionsThreadedGraphColoring(narrowCollisionData);
+
+            // Update persistent contact data.
+            // TODO: Persistent data can be updated on other thread before broad phase 'queryPairs'.
+            narrowPhaseCollisionDetector.updatePersistentContactData();
         }
         runtimeDebugData.collisionSolvingIterationsHappened = i;
     }

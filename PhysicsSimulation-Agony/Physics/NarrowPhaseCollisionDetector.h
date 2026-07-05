@@ -22,7 +22,7 @@ namespace PS_AGONY
 		uint32_t contactCount;
 		Vec2 contactPoints[2];
 		uint32_t contactIds[2];
-		PersistentContactData persistentContactData[2] = { {}, {} };
+		mutable PersistentContactData persistentContactData[2] = { {}, {} };
 
 		BodyCollisionData() = default;
 
@@ -87,6 +87,32 @@ namespace PS_AGONY
 			}
 		};
 
+		struct ContactKey
+		{
+			uint32_t bodyA;
+			uint32_t bodyB;
+			uint32_t contactId;
+
+			bool operator==(const ContactKey& other) const noexcept
+			{
+				return bodyA == other.bodyA && bodyB == other.bodyB && contactId == other.contactId;
+			}
+		};
+
+		struct ContactKeyHasher
+		{
+			size_t operator()(const ContactKey& key) const noexcept
+			{
+				// Use a high-quality 64-bit prime multiplier for rapid bit avalanche.
+				uint64_t hash = key.bodyA;
+				hash = (hash ^ key.bodyB) * 0x517cc1b727220a95ull;
+				hash = (hash ^ key.contactId) * 0x517cc1b727220a95ull;
+
+				// Final shift-mix to ensure the high bits influence the lower index bits.
+				return static_cast<size_t>(hash ^ (hash >> 32));
+			}
+		};
+
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
 			const std::vector<BodyPair>&, std::vector<BodyCollisionData>&
 			);
@@ -97,7 +123,7 @@ namespace PS_AGONY
 		std::vector<ChunkData> chunks;
 
 		// TODO: Add to getMemoryUsage.
-		robin_hood::unordered_flat_map<uint32_t, PersistentContactData> previousContactDataContainer;
+		robin_hood::unordered_flat_map<ContactKey, PersistentContactData, ContactKeyHasher> previousContactDataContainer;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
@@ -127,6 +153,8 @@ namespace PS_AGONY
 		);
 
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+
+		void updatePersistentContactData();
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 
