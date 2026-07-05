@@ -259,31 +259,36 @@ namespace PS_AGONY
             }
 
             // Position and velocity correction.
-            const Real invTotalInvMass_x_Depth = depth / totalInvMass;
-            const Real correctionStrengthA = invMassA * invTotalInvMass_x_Depth;
-            const Real correctionStrengthB = invMassB * invTotalInvMass_x_Depth;
+            const Real newDepth = depth - simulationSettings.positionCorrectionSlop;
+            if (depth > 0)
             {
-                const Real correctionA = correctionStrengthA * simulationSettings.positionCorrectionPercent;
-                const Real correctionB = correctionStrengthB * simulationSettings.positionCorrectionPercent;
+                const Real invTotalInvMass_x_Depth = newDepth / totalInvMass;
 
-                const Vec2 correctionAVec = normal * correctionA;
-                const Vec2 correctionBVec = normal * correctionB;
+                const Real correctionStrengthA = invMassA * invTotalInvMass_x_Depth;
+                const Real correctionStrengthB = invMassB * invTotalInvMass_x_Depth;
+                {
+                    const Real correctionA = correctionStrengthA * simulationSettings.positionCorrectionPercent;
+                    const Real correctionB = correctionStrengthB * simulationSettings.positionCorrectionPercent;
 
-                positionXPtr[bodyIndexA] -= correctionAVec.x;
-                positionYPtr[bodyIndexA] -= correctionAVec.y;
-                positionXPtr[bodyIndexB] += correctionBVec.x;
-                positionYPtr[bodyIndexB] += correctionBVec.y;
-            }
-            if constexpr (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
-            {
-                const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
-                const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
+                    const Vec2 correctionAVec = normal * correctionA;
+                    const Vec2 correctionBVec = normal * correctionB;
 
-                const Vec2 correctionAVec = normal * correctionA;
-                const Vec2 correctionBVec = normal * correctionB;
+                    positionXPtr[bodyIndexA] -= correctionAVec.x;
+                    positionYPtr[bodyIndexA] -= correctionAVec.y;
+                    positionXPtr[bodyIndexB] += correctionBVec.x;
+                    positionYPtr[bodyIndexB] += correctionBVec.y;
+                }
+                if constexpr (SimulationSettings::ENABLE_VELOCITY_CORRECTION)
+                {
+                    const Real correctionA = correctionStrengthA * simulationSettings.velocityCorrectionStrength;
+                    const Real correctionB = correctionStrengthB * simulationSettings.velocityCorrectionStrength;
 
-                linearVelocityA -= correctionAVec;
-                linearVelocityB += correctionBVec;
+                    const Vec2 correctionAVec = normal * correctionA;
+                    const Vec2 correctionBVec = normal * correctionB;
+
+                    linearVelocityA -= correctionAVec;
+                    linearVelocityB += correctionBVec;
+                }
             }
 
             // Store velocities.
