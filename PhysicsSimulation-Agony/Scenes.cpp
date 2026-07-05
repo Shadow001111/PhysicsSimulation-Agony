@@ -560,16 +560,16 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
 void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr float worldWidth = 150.0f;
+    constexpr float worldWidth = 35.0f;
     constexpr float terrainSegmentWidth = 16.0f;
     constexpr float wallThickness = 5.0f;
-    constexpr float wallHeight = 60.0f;
+    constexpr float wallHeight = 120.0f;
     constexpr float terrainBaseY = -20.0f;
 
     // Configurable object counts
-    constexpr int circleCount = 500;
-    constexpr int boxCount = 500;
-    constexpr int polygonCount = 500;
+    constexpr int circleCount = 900;
+    constexpr int boxCount = 900;
+    constexpr int polygonCount = 900;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
@@ -638,8 +638,8 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 
     // === 4. EVENLY SPREAD DYNAMIC OBJECTS ===
     const float spawnBufferX = worldWidth * 0.45f; // Keep spawns slightly away from outer edge walls
-    constexpr float spawnMinY = 25.0f;
-    constexpr float spawnMaxY = 50.0f;
+    constexpr float spawnMaxY = wallHeight + terrainBaseY;
+    constexpr float spawnMinY = spawnMaxY - 15.0f;
 
     // Spawn Circles
     for (int i = 0; i < circleCount; ++i) {

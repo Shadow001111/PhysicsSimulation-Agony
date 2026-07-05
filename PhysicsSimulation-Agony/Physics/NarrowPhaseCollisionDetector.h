@@ -130,6 +130,8 @@ namespace PS_AGONY
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
+
+		static constexpr bool ENABLE_WARM_STARTING = false;
 	public:
 		enum class ExecutionPolicy
 		{

@@ -90,6 +90,12 @@ namespace PS_AGONY
 
     void NarrowPhaseCollisionDetector::updatePersistentContactData()
     {
+        if constexpr (!ENABLE_WARM_STARTING)
+        {
+            previousContactDataContainer.clear();
+            return;
+        }
+
         TRACY_SCOPE_N("Update persistent contact data");
 
         previousContactDataContainer.clear();
@@ -277,6 +283,7 @@ namespace PS_AGONY
         }
 
         // Move persistent contact data from previous frame.
+        if constexpr (ENABLE_WARM_STARTING)
         {
             TRACY_SCOPE_N("Move previous contact data");
             for (BodyCollisionData& collData : chunkData.results)
