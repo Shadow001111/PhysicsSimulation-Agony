@@ -33,11 +33,11 @@ namespace PS_AGONY
 
 			struct Wave
 			{
-				std::vector<std::vector<size_t>> stagingPasses;
+				std::vector<std::vector<size_t>> passes;
 
 				Wave(size_t workerCount)
 				{
-					stagingPasses.resize(workerCount);
+					passes.resize(workerCount);
 				}
 
 				// TODO: Add moving.
@@ -57,9 +57,7 @@ namespace PS_AGONY
 		{
 			struct alignas(64) WorkerData
 			{
-				std::vector<size_t> indices;
 				std::atomic<bool> isDestroyed{ false };
-				std::atomic<uint32_t> workWave{ 0 };
 
 				WorkerData() = default;
 				~WorkerData() = default;
@@ -69,7 +67,6 @@ namespace PS_AGONY
 
 				WorkerData(WorkerData&& other) noexcept
 				{
-					indices = std::move(other.indices);
 					isDestroyed.store(true, std::memory_order_release);
 				}
 
@@ -77,7 +74,6 @@ namespace PS_AGONY
 				{
 					if (this != &other)
 					{
-						indices = std::move(other.indices);
 						isDestroyed.store(true, std::memory_order_release);
 					}
 					return *this;
@@ -88,6 +84,7 @@ namespace PS_AGONY
 
 			std::vector<WorkerData> workerData;
 			std::atomic<uint32_t> workNotDone{ 0 };
+			std::atomic<uint32_t> currentWaveTicket{ 0 }; // Monotonically increasing: wave = ticket % waveCount, iteration = ticket / waveCount.
 		};
 		
 		using SolveIndirectFunc = void(Solver::*)(
@@ -100,6 +97,8 @@ namespace PS_AGONY
 
 		WorkerResources workerResources;
 		ThreadedConstraintSolvingPlan threadedPlan;
+
+		std::vector<PositionAnchor> positionAnchors;
 
 		SimulationSettings simulationSettings;
 	public:
@@ -132,10 +131,27 @@ namespace PS_AGONY
 		void planWorkerCount(size_t collisionCount);
 		void planExecutionWithGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 
-		void solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
-		void solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
+		void computeAnchorPoints(
+			std::vector<PositionAnchor>& outPositionAnchors,
+			const std::vector<BodyCollisionData>& narrowPhaseCollisions
+		);
 
-		void solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
+		void solveVelocityConstraints(
+			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+			uint32_t solverIterations
+		);
+
+		void solvePositionConstraints(
+			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+			const std::vector<PositionAnchor>& positionAnchors,
+			uint32_t solverIterations
+		);
+
+		void solveConstraintsThreaded(
+			SolveIndirectFunc solveFunc,
+			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+			uint32_t solverIterations
+		);
 
 		void solveVelocityConstraintsIndirect
 		(

@@ -22,12 +22,6 @@ namespace PS_AGONY
     {
         size_t total = sizeof(Solver);
 
-        // Worker.
-        for (const auto& wData : workerResources.workerData)
-        {
-            total += getVectorMemoryUsage(wData.indices);
-        }
-
         // Threaded plan.
         total += getVectorMemoryUsage(threadedPlan.remainingIndices);
         total += getVectorMemoryUsage(threadedPlan.nextRemainingIndices);
@@ -36,12 +30,14 @@ namespace PS_AGONY
 
         for (auto& wave : threadedPlan.waves)
         {
-            total += getVectorMemoryUsage(wave.stagingPasses);
-            for (auto& pass : wave.stagingPasses)
+            total += getVectorMemoryUsage(wave.passes);
+            for (auto& pass : wave.passes)
             {
                 total += getVectorMemoryUsage(pass);
             }
         }
+
+        total += getVectorMemoryUsage(positionAnchors);
 
         return total;
     }
@@ -52,8 +48,10 @@ namespace PS_AGONY
         uint32_t positionIterations
     )
     {
+        computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
+
         solveVelocityConstraints(narrowPhaseCollisions, velocityIterations);
-        solvePositionConstraints(narrowPhaseCollisions, positionIterations);
+        solvePositionConstraints(narrowPhaseCollisions, positionAnchors, positionIterations);
     }
 
     void Solver::solveThreaded(
@@ -72,11 +70,12 @@ namespace PS_AGONY
         }
 
         // Multi-threading path.
+        computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
+
         planExecutionWithGraphColoring(narrowPhaseCollisions);
 
-        solveVelocityConstraintsThreaded(narrowPhaseCollisions, velocityIterations);
-
-        solvePositionConstraints(narrowPhaseCollisions, positionIterations);
+        solveConstraintsThreaded(&Solver::solveVelocityConstraintsIndirect, narrowPhaseCollisions, velocityIterations);
+        solveConstraintsThreaded(&Solver::solvePositionConstraintsIndirect, narrowPhaseCollisions, positionIterations);
     }
 
     void Solver::planWorkerCount(size_t collisionCount)
@@ -175,7 +174,7 @@ namespace PS_AGONY
                     }
 
                     // Push index to staging pass.
-                    auto& stagingPass = currentWave.stagingPasses[currentStageIndex];
+                    auto& stagingPass = currentWave.passes[currentStageIndex];
                     stagingPass.push_back(collisionIndex);
 
                     // Advance to next stage or stop.
@@ -197,7 +196,7 @@ namespace PS_AGONY
                 threadedPlan.remainingIndices.clear();
                 threadedPlan.remainingIndices.swap(threadedPlan.nextRemainingIndices);
             }
-            if (currentWave.stagingPasses[0].empty()) [[unlikely]]
+            if (currentWave.passes[0].empty()) [[unlikely]]
             {
                 break;
             }
@@ -208,7 +207,53 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations)
+    void Solver::computeAnchorPoints(
+        std::vector<PositionAnchor>& outPositionAnchors,
+        const std::vector<BodyCollisionData>& narrowPhaseCollisions
+    )
+    {
+        TRACY_SCOPE_NC("Compute anchor points", Ecstasy::Color::Chocolate);
+
+        Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
+
+        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+            {
+                return {
+                    positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
+                    positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
+                };
+            };
+
+        auto invRotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
+            {
+                return { v.x * cos + v.y * sin, -v.x * sin + v.y * cos };
+            };
+
+
+        const size_t collisionCount = narrowPhaseCollisions.size();
+        outPositionAnchors.resize(collisionCount);
+        for (size_t c = 0; c < collisionCount; c++)
+        {
+            const auto& data = narrowPhaseCollisions[c];
+            const Vec2 contactPoint = data.contacts[0]; // Only the first point is used.
+
+            const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
+            const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
+
+            outPositionAnchors[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
+            outPositionAnchors[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
+        }
+    }
+
+    void Solver::solveVelocityConstraints(
+        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+        uint32_t solverIterations
+    )
     {
         TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
 
@@ -442,93 +487,11 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations)
-    {
-        // Don't run while it's not repaired yet.
-        return;
-
-        auto& threadPool = Threading::getGlobalThreadPool();
-
-        TRACY_SCOPE_NC("Solve velocity constraints (Threaded)", Ecstasy::Color::Purple);
-
-        // Worker data.
-        {
-            TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
-            for (auto& wData : workerResources.workerData)
-            {
-                wData.isDestroyed.wait(false, std::memory_order_acquire);
-            }
-        }
-        workerResources.workerData.resize(threadedPlan.workerCount);
-        for (auto& w : workerResources.workerData)
-        {
-            w.indices.clear();
-            w.isDestroyed.store(false, std::memory_order_release);
-            w.workWave.store(0, std::memory_order_release);
-        }
-
-        workerResources.workNotDone.store(0, std::memory_order_release);
-
-        // Lambdas.
-        auto workerFunc = [&](size_t workerIndex)
-            {
-                auto& wData = workerResources.workerData[workerIndex];
-                
-                uint32_t previousWave = 0;
-                while (true)
-                {
-                    // Stop.
-                    if (previousWave == WorkerResources::STOP_WAVE) break;
-
-                    // Wait for data next wave.
-                    wData.workWave.wait(previousWave, std::memory_order_acquire);
-                    previousWave = wData.workWave.load(std::memory_order_acquire);
-
-                    // If workers will receive stop signal, they still must to execute their work and only then stop.
-
-                    // Check for stop.
-                    if (wData.indices.empty()) continue;
-
-                    // Execute.
-                    solveVelocityConstraintsIndirect(narrowPhaseCollisions, wData.indices);
-
-                    wData.indices.clear();
-
-                    auto wND = workerResources.workNotDone.fetch_sub(1, std::memory_order_release) - 1;
-                    if (wND == 0)
-                    {
-                        workerResources.workNotDone.notify_one();
-                    }
-                }
-
-                wData.isDestroyed.store(true, std::memory_order_release);
-                wData.isDestroyed.notify_one();
-            };
-
-        for (size_t i = 0; i < threadedPlan.workerCount; i++)
-        {
-            threadPool.enqueue(workerFunc, i);
-        }
-
-        // Main loop.
-        while (true)
-        {
-            
-        }
-
-        // Wait for last wave end.
-        {
-            TRACY_SCOPE_NC("Wait for wave end", Ecstasy::Color::Brown);
-            while (true)
-            {
-                uint32_t val = workerResources.workNotDone.load(std::memory_order_acquire);
-                if (val == 0) break;
-                workerResources.workNotDone.wait(val, std::memory_order_acquire);
-            }
-        }
-    }
-
-    void Solver::solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations)
+    void Solver::solvePositionConstraints(
+        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+        const std::vector<PositionAnchor>& positionAnchors,
+        uint32_t solverIterations
+    )
     {
         TRACY_SCOPE_NC("Solve position constraints", Ecstasy::Color::Indigo);
 
@@ -553,30 +516,10 @@ namespace PS_AGONY
                 return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
             };
 
-        auto invRotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
-            {
-                return { v.x * cos + v.y * sin, -v.x * sin + v.y * cos };
-            };
-
         // Cache each contact's anchor in local (unrotated) space, relative to each body's
         // center of mass, at the moment the contact was generated (both anchors coincide
         // with data.contacts[0] right now, before any correction has moved anything).
         const size_t collisionCount = narrowPhaseCollisions.size();
-
-        // TODO: Add to getMemoryUsage.
-        static thread_local std::vector<PositionAnchor> positionAnchors;
-        positionAnchors.resize(collisionCount);
-        for (size_t c = 0; c < collisionCount; c++)
-        {
-            const auto& data = narrowPhaseCollisions[c];
-            const Vec2 contactPoint = data.contacts[0]; // Only the first point is used, matching current behavior.
-
-            const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
-            const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
-
-            positionAnchors[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
-            positionAnchors[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
-        }
 
         for (uint32_t iteration = 0; iteration < solverIterations; iteration++)
         {
@@ -621,6 +564,99 @@ namespace PS_AGONY
         }
     }
 
+    void Solver::solveConstraintsThreaded(
+        SolveIndirectFunc solveFunc,
+        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+        uint32_t solverIterations
+    )
+    {
+        auto& threadPool = Threading::getGlobalThreadPool();
+
+        TRACY_SCOPE_NC("Solve constraints (Threaded)", Ecstasy::Color::Purple);
+
+        const size_t workerCount = threadedPlan.workerCount;
+        const size_t waveCount = threadedPlan.waves.size();
+
+        if (waveCount == 0 || solverIterations == 0)
+        {
+            return;
+        }
+
+        const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * solverIterations;
+
+        // Worker data.
+        {
+            TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
+            for (auto& wData : workerResources.workerData)
+            {
+                wData.isDestroyed.wait(false, std::memory_order_acquire);
+            }
+        }
+        workerResources.workerData.resize(workerCount);
+        for (auto& w : workerResources.workerData)
+        {
+            w.isDestroyed.store(false, std::memory_order_release);
+        }
+
+        workerResources.currentWaveTicket.store(0, std::memory_order_release);
+        workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
+
+        // Lambdas.
+        auto workerFunc = [&](size_t workerIndex)
+            {
+                auto& wData = workerResources.workerData[workerIndex];
+
+                uint32_t localTicket = 0;
+                while (true)
+                {
+                    // All waves x all iterations done -> stop.
+                    if (localTicket >= totalTicks) break;
+
+                    const size_t waveIndex = localTicket % waveCount;
+                    const auto& wave = threadedPlan.waves[waveIndex];
+                    const auto& indices = wave.passes[workerIndex];
+
+                    // 1) Get work from current wave and execute it. If empty, skip.
+                    if (!indices.empty())
+                    {
+                        (this->*solveFunc)(narrowPhaseCollisions, indices);
+                    }
+
+                    // 2) Decrease atomic counter; last one to finish advances the wave and wakes everyone.
+                    const uint32_t remaining = workerResources.workNotDone.fetch_sub(1, std::memory_order_acq_rel) - 1;
+                    if (remaining == 0)
+                    {
+                        workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
+                        workerResources.currentWaveTicket.fetch_add(1, std::memory_order_release);
+                        workerResources.currentWaveTicket.notify_all();
+                    }
+
+                    // 3) Wait for new wave (returns immediately if the ticket already moved past localTicket).
+                    workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
+                    localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
+
+                    // 4) Loop naturally wraps back to wave 0 via (localTicket % waveCount) until totalTicks is hit.
+                }
+
+                wData.isDestroyed.store(true, std::memory_order_release);
+                wData.isDestroyed.notify_one();
+            };
+
+        for (size_t i = 0; i < workerCount; i++)
+        {
+            threadPool.enqueue(workerFunc, i);
+        }
+
+        // Wait for all workers to finish every iteration and terminate.
+        {
+            TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
+            for (auto& wData : workerResources.workerData)
+            {
+                wData.isDestroyed.wait(false, std::memory_order_acquire);
+            }
+        }
+    }
+
     void Solver::solveVelocityConstraintsIndirect(
         const std::vector<BodyCollisionData>& narrowPhaseCollisions,
         const std::vector<size_t>& collisionIndices
@@ -658,7 +694,8 @@ namespace PS_AGONY
         // My tests show that copying data to make it sequantial is a little faster than doing indirect loads.
         // Plus it allows for having single source of truth for collision resolution.
 
-        static thread_local std::vector<BodyCollisionData> tempData; // TODO: Add to memory usage.
+        static thread_local std::vector<BodyCollisionData> tempCollisionData; // TODO: Add to memory usage.
+        static thread_local std::vector<PositionAnchor> tempPositionAnchorData;
         // TODO: Better create pool for these.
 
         const size_t collisionCount = collisionIndices.size();
@@ -666,13 +703,19 @@ namespace PS_AGONY
         {
             TRACY_SCOPE_N("Allocate and copy");
 
-            tempData.resize(collisionCount);
+            tempCollisionData.resize(collisionCount);
             for (size_t i = 0; i < collisionCount; i++)
             {
-                tempData[i] = narrowPhaseCollisions[collisionIndices[i]];
+                tempCollisionData[i] = narrowPhaseCollisions[collisionIndices[i]];
+            }
+
+            tempPositionAnchorData.resize(collisionCount);
+            for (size_t i = 0; i < collisionCount; i++)
+            {
+                tempPositionAnchorData[i] = positionAnchors[collisionIndices[i]];
             }
         }
 
-        solvePositionConstraints(tempData, 1);
+        solvePositionConstraints(tempCollisionData, tempPositionAnchorData, 1);
     }
 }
