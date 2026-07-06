@@ -90,14 +90,15 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 
-		void solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
-		void solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
+		void solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
 
 		void solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
 	private:
 		void solveVelocityConstraintsIndirect(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			const std::vector<size_t>& collisionIndices
+			const std::vector<size_t>& collisionIndices,
+			uint32_t solverIterations
 		);
 	};
 }
