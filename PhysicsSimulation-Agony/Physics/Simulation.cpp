@@ -1110,7 +1110,7 @@ namespace PS_AGONY
         {
             solver.solveVelocityConstraintsThreaded(narrowCollisionData);
         }
-        solver.solvePositionConstraints(narrowCollisionData);
+        solver.solvePositionConstraints(narrowCollisionData, simulationSettings.positionSolvingIterations);
     }
 
     void Simulation::buildBodyAABBs()
