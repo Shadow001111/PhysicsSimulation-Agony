@@ -1108,8 +1108,9 @@ namespace PS_AGONY
         // Collision resolution.
         for (uint32_t i = 0; i < simulationSettings.velocitySolvingIterations; i++)
         {
-            solver.solveVelocityConstraintsThreaded(narrowCollisionData);
+            solver.solveVelocityConstraintsThreaded(narrowCollisionData, 1);
         }
+        //solver.solveVelocityConstraintsThreaded(narrowCollisionData, simulationSettings.velocitySolvingIterations);
         solver.solvePositionConstraints(narrowCollisionData, simulationSettings.positionSolvingIterations);
     }
 
