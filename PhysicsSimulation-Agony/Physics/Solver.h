@@ -9,10 +9,16 @@ namespace PS_AGONY
 {
 	class Solver
 	{
+		struct PositionAnchor
+		{
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+		};
+
 		struct SimulationSettings
 		{
 			// Baumgarte stabilization.
-			const Real positionCorrectionPercent = 1.0;
+			const Real positionCorrectionPercent = 0.5;
 			const Real positionCorrectionSlop = 0.001;
 		};
 
@@ -66,6 +72,7 @@ namespace PS_AGONY
 		const std::vector<Material>* materials;
 
 		ResolveCollisionsThreadedResources solverResources;
+		std::vector<PositionAnchor> positionAnchors;
 
 		SimulationSettings simulationSettings;
 	public:
@@ -86,7 +93,7 @@ namespace PS_AGONY
 		void solveVelocityConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 		void solveVelocityConstraintsThreaded(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
 
-		void solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		void solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations);
 	private:
 		void solveVelocityConstraintsIndirect(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,

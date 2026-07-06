@@ -35,6 +35,8 @@ namespace PS_AGONY
             total += getVectorMemoryUsage(wData.indices);
         }
 
+        total += getVectorMemoryUsage(positionAnchors);
+
         return total;
     }
 
@@ -541,39 +543,93 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
+    void Solver::solvePositionConstraints(const std::vector<BodyCollisionData>& narrowPhaseCollisions, uint32_t solverIterations)
     {
         TRACY_SCOPE_NC("Solve position constraints", Ecstasy::Color::Indigo);
 
         Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
         Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
         const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 
-        for (size_t c = 0; c < narrowPhaseCollisions.size(); c++)
+        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+            {
+                return {
+                    positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
+                    positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
+                };
+            };
+
+        auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
+            {
+                return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
+            };
+
+        auto invRotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
+            {
+                return { v.x * cos + v.y * sin, -v.x * sin + v.y * cos };
+            };
+
+        // Cache each contact's anchor in local (unrotated) space, relative to each body's
+        // center of mass, at the moment the contact was generated (both anchors coincide
+        // with data.contacts[0] right now, before any correction has moved anything).
+        const size_t collisionCount = narrowPhaseCollisions.size();
+        positionAnchors.resize(collisionCount);
+        for (size_t c = 0; c < collisionCount; c++)
         {
             const auto& data = narrowPhaseCollisions[c];
-            const BodyIndex bodyIndexA = data.bodyA;
-            const BodyIndex bodyIndexB = data.bodyB;
+            const Vec2 contactPoint = data.contacts[0]; // Only the first point is used, matching current behavior.
 
-            const Real invMassA = invMassPtr[bodyIndexA];
-            const Real invMassB = invMassPtr[bodyIndexB];
-            const Real totalInvMass = invMassA + invMassB;
-            if (totalInvMass <= Real(0)) continue;
+            const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
+            const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
 
-            const Real correctionDepth = data.depth - simulationSettings.positionCorrectionSlop;
-            if (correctionDepth <= Real(0)) continue;
+            positionAnchors[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
+            positionAnchors[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
+        }
 
-            const Real invTotalInvMass_x_Depth = correctionDepth / totalInvMass;
-            const Real correctionA = invMassA * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
-            const Real correctionB = invMassB * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
+        for (uint32_t iteration = 0; iteration < solverIterations; iteration++)
+        {
+            for (size_t c = 0; c < collisionCount; c++)
+            {
+                const auto& data = narrowPhaseCollisions[c];
+                const BodyIndex bodyIndexA = data.bodyA;
+                const BodyIndex bodyIndexB = data.bodyB;
 
-            const Vec2 correctionAVec = data.normal * correctionA;
-            const Vec2 correctionBVec = data.normal * correctionB;
+                const Real invMassA = invMassPtr[bodyIndexA];
+                const Real invMassB = invMassPtr[bodyIndexB];
+                const Real totalInvMass = invMassA + invMassB;
+                if (totalInvMass <= Real(0)) continue;
 
-            positionXPtr[bodyIndexA] -= correctionAVec.x;
-            positionYPtr[bodyIndexA] -= correctionAVec.y;
-            positionXPtr[bodyIndexB] += correctionBVec.x;
-            positionYPtr[bodyIndexB] += correctionBVec.y;
+                // Re-derive the world anchors from the current (possibly already corrected) transforms.
+                const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+                const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+
+                const Vec2 worldAnchorA = centerOfMassA + rotate(positionAnchors[c].localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+                const Vec2 worldAnchorB = centerOfMassB + rotate(positionAnchors[c].localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+
+                // The anchors coincided (drift = 0) when depth was measured, so drift is exactly
+                // how much penetration has already been resolved since then.
+                const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
+                const Real currentSeparation = data.depth - drift;
+
+                const Real correctionDepth = currentSeparation - simulationSettings.positionCorrectionSlop;
+                if (correctionDepth <= Real(0)) continue;
+
+                const Real invTotalInvMass_x_Depth = correctionDepth / totalInvMass;
+                const Real correctionA = invMassA * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
+                const Real correctionB = invMassB * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
+
+                const Vec2 correctionAVec = data.normal * correctionA;
+                const Vec2 correctionBVec = data.normal * correctionB;
+
+                positionXPtr[bodyIndexA] -= correctionAVec.x;
+                positionYPtr[bodyIndexA] -= correctionAVec.y;
+                positionXPtr[bodyIndexB] += correctionBVec.x;
+                positionYPtr[bodyIndexB] += correctionBVec.y;
+            }
         }
     }
 

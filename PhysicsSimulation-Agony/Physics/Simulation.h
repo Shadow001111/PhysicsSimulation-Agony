@@ -38,7 +38,7 @@ namespace PS_AGONY
 		{
 			Real updateInterval = 1.0 / 300.0;
 			uint32_t velocitySolvingIterations = 6;
-			//uint32_t positionSolvingIterations = 1;
+			uint32_t positionSolvingIterations = 6;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.
