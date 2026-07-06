@@ -7,6 +7,14 @@
 #include <numeric>
 #include <iostream>
 
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#define SPIN_PAUSE() _mm_pause()
+#else
+#include <thread>
+#define SPIN_PAUSE() std::this_thread::yield()
+#endif
+
 namespace PS_AGONY
 {
     void Solver::setDataViewers(
@@ -48,6 +56,8 @@ namespace PS_AGONY
         uint32_t positionIterations
     )
     {
+        TRACY_SCOPE_NC("Solve constraints", Ecstasy::Color::OliveDrab);
+
         computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
 
         solveVelocityConstraints(narrowPhaseCollisions, velocityIterations);
@@ -60,6 +70,8 @@ namespace PS_AGONY
         uint32_t positionIterations
     )
     {
+        TRACY_SCOPE_NC("Solve constraints", Ecstasy::Color::OliveDrab);
+
         planWorkerCount(narrowPhaseCollisions.size());
 
         // Single-threaded path.
@@ -107,14 +119,11 @@ namespace PS_AGONY
         // Fill remaining indices.
         const size_t collisionCount = narrowPhaseCollisions.size();
         threadedPlan.remainingIndices.resize(collisionCount);
-        {
-            TRACY_SCOPE_NC("Fill indices", Ecstasy::Color::Red);
-            std::iota(
-                threadedPlan.remainingIndices.begin(),
-                threadedPlan.remainingIndices.end(),
-                0ull
-            );
-        }
+        std::iota(
+            threadedPlan.remainingIndices.begin(),
+            threadedPlan.remainingIndices.end(),
+            0ull
+        );
 
         // Get pointers.
         const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
@@ -571,7 +580,7 @@ namespace PS_AGONY
     {
         auto& threadPool = Threading::getGlobalThreadPool();
 
-        TRACY_SCOPE_NC("Solve constraints (Threaded)", Ecstasy::Color::Purple);
+        TRACY_SCOPE_NC("Solve constraints (Multi-threaded)", Ecstasy::Color::Purple);
 
         const size_t workerCount = threadedPlan.workerCount;
         const size_t waveCount = threadedPlan.waves.size();
@@ -632,7 +641,14 @@ namespace PS_AGONY
                     }
 
                     // Wait for new wave.
-                    workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
+                    //workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
+                    {
+                        TRACY_SCOPE_NC("Spin", Ecstasy::Color::Black);
+                        while (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
+                        {
+                            SPIN_PAUSE();
+                        }
+                    }
                     localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
 
                     // Loop naturally wraps back to wave 0 via (localTicket % waveCount) until totalTicks is hit.
