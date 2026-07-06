@@ -89,7 +89,7 @@ namespace PS_AGONY
         // Multi-threading path.
         auto& threadPool = Threading::getGlobalThreadPool();
 
-        const size_t availableWorkerCount = threadPool.getThreadCount() - 1; // One less to not share logical core with main thread (depends on scheduler).
+        const size_t availableWorkerCount = threadPool.getThreadCount();
         const size_t neededWorkerCount = collisionCount / ThreadedConstraintSolvingPlan::COLLISION_COUNT_PER_WORKER;
 
         threadedPlan.workerCount = std::min(availableWorkerCount, neededWorkerCount);
@@ -585,13 +585,6 @@ namespace PS_AGONY
         const uint32_t totalTicks = positionSolvingStartTick + static_cast<uint32_t>(waveCount) * positionIterations;
 
         // Worker data.
-        {
-            TRACY_SCOPE_NC("Wait for workers to get destroyed", Ecstasy::Color::Gray);
-            for (auto& wData : workerResources.workerData)
-            {
-                wData.isDestroyed.wait(false, std::memory_order_acquire);
-            }
-        }
         workerResources.workerData.resize(workerCount);
         for (auto& w : workerResources.workerData)
         {
@@ -649,17 +642,18 @@ namespace PS_AGONY
                 wData.isDestroyed.notify_one();
             };
 
-        for (size_t i = 0; i < workerCount; i++)
+        for (size_t i = 1; i < workerCount; i++)
         {
             threadPool.enqueue(workerFunc, i);
         }
+        workerFunc(0);
 
         // Wait for all workers to finish every iteration and terminate.
         {
             TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
-            for (auto& wData : workerResources.workerData)
+            for (size_t i = 1; i < workerResources.workerData.size(); i++)
             {
-                wData.isDestroyed.wait(false, std::memory_order_acquire);
+                workerResources.workerData[i].isDestroyed.wait(false, std::memory_order_acquire);
             }
         }
     }
