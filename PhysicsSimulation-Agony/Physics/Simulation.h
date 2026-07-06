@@ -156,7 +156,7 @@ namespace PS_AGONY
 
 		void integrate(size_t bodyCount, Real deltaTime);
 
-		void solveCollisions(Real deltaTime);
+		void findAndSolveCollisions(Real deltaTime);
 
 		void buildBodyAABBs();
 		void buildCircleAABBs();
