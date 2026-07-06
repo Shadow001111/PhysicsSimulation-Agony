@@ -894,7 +894,7 @@ namespace PS_AGONY
         integrate(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
-        solveCollisions(deltaTime);
+        findAndSolveCollisions(deltaTime);
     }
 
     void Simulation::postUpdate()
@@ -1066,7 +1066,7 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::solveCollisions(Real deltaTime)
+    void Simulation::findAndSolveCollisions(Real deltaTime)
     {
         const size_t bodyCount = bodies.getCount();
 
@@ -1106,12 +1106,8 @@ namespace PS_AGONY
         if (narrowCollisionData.empty()) return;
 
         // Collision resolution.
-        for (uint32_t i = 0; i < simulationSettings.velocitySolvingIterations; i++)
-        {
-            solver.solveVelocityConstraintsThreaded(narrowCollisionData, 1);
-        }
-        //solver.solveVelocityConstraintsThreaded(narrowCollisionData, simulationSettings.velocitySolvingIterations);
-        solver.solvePositionConstraints(narrowCollisionData, simulationSettings.positionSolvingIterations);
+        //solver.solve(narrowCollisionData, simulationSettings.velocitySolvingIterations, simulationSettings.positionSolvingIterations);
+        solver.solveThreaded(narrowCollisionData, simulationSettings.velocitySolvingIterations, simulationSettings.positionSolvingIterations);
     }
 
     void Simulation::buildBodyAABBs()
