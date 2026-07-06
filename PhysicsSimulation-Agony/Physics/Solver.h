@@ -86,11 +86,6 @@ namespace PS_AGONY
 			std::atomic<uint32_t> workNotDone{ 0 };
 			std::atomic<uint32_t> currentWaveTicket{ 0 }; // Monotonically increasing: wave = ticket % waveCount, iteration = ticket / waveCount.
 		};
-		
-		using SolveIndirectFunc = void(Solver::*)(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			const std::vector<size_t>& collisionIndices
-			);
 
 		BodySoA* bodies;
 		const std::vector<Material>* materials;
@@ -148,9 +143,9 @@ namespace PS_AGONY
 		);
 
 		void solveConstraintsThreaded(
-			SolveIndirectFunc solveFunc,
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			uint32_t solverIterations
+			uint32_t velocityIterations,
+			uint32_t positionIterations
 		);
 
 		void solveVelocityConstraintsIndirect

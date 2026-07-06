@@ -74,8 +74,7 @@ namespace PS_AGONY
 
         planExecutionWithGraphColoring(narrowPhaseCollisions);
 
-        solveConstraintsThreaded(&Solver::solveVelocityConstraintsIndirect, narrowPhaseCollisions, velocityIterations);
-        solveConstraintsThreaded(&Solver::solvePositionConstraintsIndirect, narrowPhaseCollisions, positionIterations);
+        solveConstraintsThreaded(narrowPhaseCollisions, velocityIterations, positionIterations);
     }
 
     void Solver::planWorkerCount(size_t collisionCount)
@@ -565,9 +564,9 @@ namespace PS_AGONY
     }
 
     void Solver::solveConstraintsThreaded(
-        SolveIndirectFunc solveFunc,
         const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-        uint32_t solverIterations
+        uint32_t velocityIterations,
+        uint32_t positionIterations
     )
     {
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -577,12 +576,13 @@ namespace PS_AGONY
         const size_t workerCount = threadedPlan.workerCount;
         const size_t waveCount = threadedPlan.waves.size();
 
-        if (waveCount == 0 || solverIterations == 0)
+        if (waveCount == 0 || (velocityIterations == 0 && positionIterations == 0))
         {
             return;
         }
 
-        const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * solverIterations;
+        const uint32_t positionSolvingStartTick = static_cast<uint32_t>(waveCount) * velocityIterations;
+        const uint32_t totalTicks = positionSolvingStartTick + static_cast<uint32_t>(waveCount) * positionIterations;
 
         // Worker data.
         {
@@ -616,13 +616,20 @@ namespace PS_AGONY
                     const auto& wave = threadedPlan.waves[waveIndex];
                     const auto& indices = wave.passes[workerIndex];
 
-                    // 1) Get work from current wave and execute it. If empty, skip.
+                    // Get work from current wave and execute it. If empty, skip.
                     if (!indices.empty())
                     {
-                        (this->*solveFunc)(narrowPhaseCollisions, indices);
+                        if (localTicket >= positionSolvingStartTick)
+                        {
+                            solvePositionConstraintsIndirect(narrowPhaseCollisions, indices);
+                        }
+                        else
+                        {
+                            solveVelocityConstraintsIndirect(narrowPhaseCollisions, indices);
+                        }
                     }
 
-                    // 2) Decrease atomic counter; last one to finish advances the wave and wakes everyone.
+                    // Decrease atomic counter; last one to finish advances the wave and wakes everyone.
                     const uint32_t remaining = workerResources.workNotDone.fetch_sub(1, std::memory_order_acq_rel) - 1;
                     if (remaining == 0)
                     {
@@ -631,11 +638,11 @@ namespace PS_AGONY
                         workerResources.currentWaveTicket.notify_all();
                     }
 
-                    // 3) Wait for new wave (returns immediately if the ticket already moved past localTicket).
+                    // Wait for new wave.
                     workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
                     localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
 
-                    // 4) Loop naturally wraps back to wave 0 via (localTicket % waveCount) until totalTicks is hit.
+                    // Loop naturally wraps back to wave 0 via (localTicket % waveCount) until totalTicks is hit.
                 }
 
                 wData.isDestroyed.store(true, std::memory_order_release);
