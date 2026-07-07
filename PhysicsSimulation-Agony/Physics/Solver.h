@@ -82,7 +82,7 @@ namespace PS_AGONY
 
 			std::vector<WorkerData> workerData;
 			alignas(64) std::atomic<uint32_t> workNotDone{ 0 };
-			alignas(64) std::atomic<uint32_t> currentWaveTicket{ 0 }; // Monotonically increasing: wave = ticket % waveCount, iteration = ticket / waveCount.
+			alignas(64) std::atomic<uint32_t> currentWaveTicket{ 0 };
 		};
 
 		BodySoA* bodies;

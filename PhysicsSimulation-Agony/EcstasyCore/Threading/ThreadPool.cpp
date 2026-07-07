@@ -277,6 +277,9 @@ namespace Ecstasy::Threading
         {
             pinCurrentThreadToCpu(pinIndex);
         }
+
+        // Thread priority.
+        setThreadPriorityToHighest();
     }
 
 

@@ -667,17 +667,20 @@ namespace PS_AGONY
                     {
                         workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
                         workerResources.currentWaveTicket.fetch_add(1, std::memory_order_release);
+                        localTicket++;
                     }
-
-                    // Wait for new wave.
+                    else
                     {
-                        TRACY_SCOPE_NC("Spin", Ecstasy::Color::Black);
-                        while (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
+                        // Wait for new wave.
                         {
-                            SPIN_PAUSE();
+                            TRACY_SCOPE_NC("Spin", Ecstasy::Color::Black);
+                            while (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
+                            {
+                                SPIN_PAUSE();
+                            }
                         }
+                        localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
                     }
-                    localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
 
                     // Loop naturally wraps back to wave 0 via (localTicket % waveCount) until totalTicks is hit.
                 }
