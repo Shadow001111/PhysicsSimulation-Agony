@@ -667,6 +667,7 @@ namespace PS_AGONY
                     {
                         workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
                         workerResources.currentWaveTicket.fetch_add(1, std::memory_order_release);
+                        workerResources.currentWaveTicket.notify_all();
                         localTicket++;
                     }
                     else
@@ -674,9 +675,18 @@ namespace PS_AGONY
                         // Wait for new wave.
                         {
                             TRACY_SCOPE_NC("Spin", Ecstasy::Color::Black);
-                            while (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
+                            for (int i = 0; i < 200; i++)
                             {
+                                if (workerResources.currentWaveTicket.load(std::memory_order_acquire) != localTicket)
+                                    break;
                                 SPIN_PAUSE();
+                            }
+                        }
+                        {
+                            TRACY_SCOPE_NC("Sleep", Ecstasy::Color::Black);
+                            if (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
+                            {
+                                workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
                             }
                         }
                         localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
