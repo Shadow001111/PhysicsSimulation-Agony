@@ -33,60 +33,10 @@ namespace PS_AGONY
 
 			static_assert(MIN_COLLISION_COUNT_FOR_THREADING >= MAX_VALID_INDICES_PER_WORKER);
 
-			struct Wave
+			struct PassOffset
 			{
-				struct Indices
-				{
-					std::vector<size_t> indices;
-					size_t indirectDataOffset = 0;
-
-					Indices() = default;
-
-					Indices(const Indices& other) = delete;
-					Indices& operator=(const Indices& other) = delete;
-
-					Indices(Indices&& other) noexcept
-					{
-						indices = std::move(other.indices);
-						indirectDataOffset = other.indirectDataOffset;
-					}
-
-					Indices& operator=(Indices&& other) noexcept
-					{
-						if (this != &other) [[likely]]
-						{
-							indices = std::move(other.indices);
-							indirectDataOffset = other.indirectDataOffset;
-						}
-						return *this;
-					}
-				};
-
-				std::vector<Indices> passes;
-
-				Wave() = default;
-
-				Wave(size_t workerCount)
-				{
-					passes.resize(workerCount);
-				}
-
-				Wave(const Wave& other) = delete;
-				Wave& operator=(const Wave& other) = delete;
-
-				Wave(Wave&& other) noexcept
-				{
-					passes = std::move(other.passes);
-				}
-
-				Wave& operator=(Wave&& other) noexcept
-				{
-					if (this != &other) [[likely]]
-					{
-						passes = std::move(other.passes);
-					}
-					return *this;
-				}
+				uint32_t start = 0;
+				uint32_t size = 0;
 			};
 
 			using UsedSlot = uint8_t;
@@ -96,7 +46,9 @@ namespace PS_AGONY
 			std::vector<size_t> remainingIndices;
 			std::vector<size_t> nextRemainingIndices;
 			std::vector<UsedSlot> usedBodies;
-			std::vector<Wave> waves; // TODO: Reduce horrible reallocation issue. Maybe object pool?
+
+			std::vector<size_t> flatIndices;
+			std::vector<PassOffset> passOffsets;
 		};
 
 		struct WorkerResources
