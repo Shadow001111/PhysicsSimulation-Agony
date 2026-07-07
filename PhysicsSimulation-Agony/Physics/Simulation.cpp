@@ -1106,7 +1106,6 @@ namespace PS_AGONY
         if (narrowCollisionData.empty()) return;
 
         // Collision resolution.
-        //solver.solve(narrowCollisionData, simulationSettings.velocitySolvingIterations, simulationSettings.positionSolvingIterations);
         solver.solveThreaded(narrowCollisionData, simulationSettings.velocitySolvingIterations, simulationSettings.positionSolvingIterations);
     }
 

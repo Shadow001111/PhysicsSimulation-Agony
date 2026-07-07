@@ -83,8 +83,8 @@ namespace PS_AGONY
 			static constexpr uint32_t STOP_WAVE = -1;
 
 			std::vector<WorkerData> workerData;
-			std::atomic<uint32_t> workNotDone{ 0 };
-			std::atomic<uint32_t> currentWaveTicket{ 0 }; // Monotonically increasing: wave = ticket % waveCount, iteration = ticket / waveCount.
+			alignas(64) std::atomic<uint32_t> workNotDone{ 0 };
+			alignas(64) std::atomic<uint32_t> currentWaveTicket{ 0 }; // Monotonically increasing: wave = ticket % waveCount, iteration = ticket / waveCount.
 		};
 
 		BodySoA* bodies;
