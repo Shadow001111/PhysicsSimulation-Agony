@@ -75,7 +75,7 @@ namespace PS_AGONY
         planWorkerCount(narrowPhaseCollisions.size());
 
         // Single-threaded path.
-        if (threadedPlan.workerCount == 0)
+        if (threadedPlan.workerCount <= 1)
         {
             solve(narrowPhaseCollisions, velocityIterations, positionIterations);
             return;
@@ -637,11 +637,9 @@ namespace PS_AGONY
                     {
                         workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
                         workerResources.currentWaveTicket.fetch_add(1, std::memory_order_release);
-                        workerResources.currentWaveTicket.notify_all();
                     }
 
                     // Wait for new wave.
-                    //workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
                     {
                         TRACY_SCOPE_NC("Spin", Ecstasy::Color::Black);
                         while (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
