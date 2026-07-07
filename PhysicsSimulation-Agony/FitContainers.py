@@ -6,8 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
+# Cleaned up global regex patterns to prevent greedy bleeding across tokens
 ALIGN_DEF_RE = re.compile(r"^\s*align\(([^)]+)\)\s*is\s*:(.*)$", re.IGNORECASE)
-USAGE_RE = re.compile(r"^\s*(.*?)\s+align\((.+?)\)\s*$", re.IGNORECASE)
+ALIGN_ATTR_RE = re.compile(r"align\((.*?)\)", re.IGNORECASE)
+SIZE_ATTR_RE = re.compile(r"size\((.*?)\)", re.IGNORECASE)
 INT_RE = re.compile(r"\d+")
 COMMENT_RE = re.compile(r"^\s*//")
 
@@ -20,16 +22,17 @@ class BufferInterval:
     end: int
     alignment_name: str
     alignment: int
+    size: int
 
 
 @dataclass
 class Region:
     id: int
     alignment: int
+    size: int = 0
     members: List[BufferInterval] = field(default_factory=list)
 
     def can_accept(self, buffer: BufferInterval) -> bool:
-        # Regions can dynamically upgrade their alignment, so we only check for lifetime overlaps
         for b in self.members:
             if buffer.end > b.start and buffer.start < b.end:
                 return False
@@ -38,6 +41,7 @@ class Region:
     def add(self, buffer: BufferInterval) -> None:
         self.members.append(buffer)
         self.alignment = max(self.alignment, buffer.alignment)
+        self.size = max(self.size, buffer.size)
 
 
 def is_power_of_two(x: int) -> bool:
@@ -45,7 +49,6 @@ def is_power_of_two(x: int) -> bool:
 
 
 def parse_alignment_definitions(lines: Iterable[str]) -> Dict[str, List[int]]:
-    """Collect all alignment definitions from the file."""
     out: Dict[str, List[int]] = {}
     for line in lines:
         m = ALIGN_DEF_RE.match(line)
@@ -81,39 +84,40 @@ def parse_usage_lines(
     lines: List[str],
     align_defs: Dict[str, List[int]],
 ) -> List[BufferInterval]:
-    """Parse usage lines and convert them into block-scoped lifetimes."""
     intervals: List[BufferInterval] = []
-    stack: List[Tuple[int, str, int, int]] = []  # depth, name, alignment, start
+    stack: List[Tuple[int, str, int, int, int]] = []
     parsed_count = 0
 
     for line in lines:
         if ALIGN_DEF_RE.match(line):
             continue
 
-        # Empty lines or comments act as explicit boundaries to close active lifetimes
         if not line.strip() or COMMENT_RE.match(line):
             while stack:
-                d, n, a, start = stack.pop()
-                intervals.append(
-                    BufferInterval(
-                        name=n,
-                        depth=d,
-                        start=start,
-                        end=parsed_count,
-                        alignment_name=str(a),
-                        alignment=a,
-                    )
-                )
+                d, n, a, s, start = stack.pop()
+                intervals.append(BufferInterval(n, d, start, parsed_count, str(a), a, s))
             continue
 
-        m = USAGE_RE.match(line)
-        if not m:
+        align_m = ALIGN_ATTR_RE.search(line)
+        if not align_m:
             continue
 
-        content = m.group(1)
-        align_token = m.group(2).strip()
+        size_m = SIZE_ATTR_RE.search(line)
+        first_attr_idx = align_m.start()
+        if size_m and size_m.start() < first_attr_idx:
+            first_attr_idx = size_m.start()
 
-        # Visual layout column depth is determined by the total leading formatting prefix width
+        content = line[:first_attr_idx]
+        align_token = align_m.group(1).strip()
+        
+        size = 0
+        if size_m:
+            size_token = size_m.group(1).strip()
+            if size_token.isdigit():
+                size = int(size_token)
+            else:
+                raise ValueError(f"Invalid size value {size_token!r} in line: {line!r}")
+
         leading_len = len(content) - len(content.lstrip(" |"))
         depth = leading_len
         name = content[leading_len:].strip()
@@ -123,44 +127,22 @@ def parse_usage_lines(
 
         alignment = resolve_alignment(align_token, align_defs)
 
-        # Scopes close strictly when the column indentation level decreases
         while stack and stack[-1][0] > depth:
-            d, n, a, start = stack.pop()
-            intervals.append(
-                BufferInterval(
-                    name=n,
-                    depth=d,
-                    start=start,
-                    end=parsed_count,
-                    alignment_name=str(a),
-                    alignment=a,
-                )
-            )
+            d, n, a, s, start = stack.pop()
+            intervals.append(BufferInterval(n, d, start, parsed_count, str(a), a, s))
 
-        stack.append((depth, name, alignment, parsed_count))
+        stack.append((depth, name, alignment, size, parsed_count))
         parsed_count += 1
 
-    # Flush out remaining items at EOF
     while stack:
-        d, n, a, start = stack.pop()
-        intervals.append(
-            BufferInterval(
-                name=n,
-                depth=d,
-                start=start,
-                end=parsed_count,
-                alignment_name=str(a),
-                alignment=a,
-            )
-        )
+        d, n, a, s, start = stack.pop()
+        intervals.append(BufferInterval(n, d, start, parsed_count, str(a), a, s))
 
     intervals.sort(key=lambda x: (x.start, x.depth))
     return intervals
 
 
 class RegionAllocator:
-    """Assign buffers to the smallest number of reusable regions, supporting alignment upgrades."""
-
     def allocate(self, intervals: List[BufferInterval]) -> List[Region]:
         intervals = sorted(intervals, key=lambda x: (x.start, x.depth))
         regions: List[Region] = []
@@ -170,12 +152,14 @@ class RegionAllocator:
             candidates = [r for r in regions if r.can_accept(buffer)]
             if candidates:
                 candidates.sort(key=lambda r: (
+                    max(0, buffer.size - r.size),
+                    r.size,
                     max(0, buffer.alignment - r.alignment)
                 ))
                 chosen = candidates[0]
 
             if chosen is None:
-                chosen = Region(id=len(regions), alignment=buffer.alignment)
+                chosen = Region(id=len(regions), alignment=buffer.alignment, size=buffer.size)
                 regions.append(chosen)
 
             chosen.add(buffer)
@@ -183,24 +167,29 @@ class RegionAllocator:
         return regions
 
 
-def print_intervals(intervals: List[BufferInterval]) -> None:
-    print("Parsed intervals:")
-    for b in intervals:
-        print(
-            f"  {b.name:32s}  start={b.start:3d}  end={b.end:3d}  "
-            f"indent={b.depth:2d}  align={b.alignment:3d}"
-        )
+def print_regions(regions: List[Region], intervals: List[BufferInterval]) -> None:
+    # 1. Calculate raw total (before combining)
+    raw_memory = sum(b.size for b in intervals)
+    
+    # 2. Calculate optimized total (after combining)
+    optimized_memory = sum(r.size for r in regions)
+    
+    # 3. Calculate ratio
+    percentage = (optimized_memory / raw_memory * 100) if raw_memory > 0 else 0
 
-
-def print_regions(regions: List[Region]) -> None:
     print("\nRegion assignment:")
     for region in regions:
-        print(f"  Region {region.id}  effective_align={region.alignment}")
-        for b in sorted(region.members, key=lambda x: (x.start, x.end, x.depth, x.name)):
-            print(
-                f"    {b.name:30s}  live=[{b.start}, {b.end})  align={b.alignment}  depth={b.depth}"
-            )
-    print(f"\nTotal regions required: {len(regions)}")
+        print(f"  Region {region.id}  effective_align={region.alignment}  effective_size={region.size}")
+        for b in sorted(region.members, key=lambda x: x.start):
+            print(f"    {b.name:30s}  align={b.alignment}  size={b.size}")
+    
+    print("\n" + "="*40)
+    print("Memory Footprint Report:")
+    print(f"  Raw Memory (No reuse):   {raw_memory:,} bytes")
+    print(f"  Optimized Memory:        {optimized_memory:,} bytes")
+    print(f"  Reduction:               {raw_memory - optimized_memory:,} bytes")
+    print(f"  Efficiency:              {percentage:.2f}% of original size")
+    print("="*40)
 
 
 def main() -> None:
@@ -214,15 +203,10 @@ def main() -> None:
     align_defs = parse_alignment_definitions(lines)
     intervals = parse_usage_lines(lines, align_defs)
 
-    print("Alignment dictionary:")
-    for name, vals in align_defs.items():
-        print(f"  {name}: {vals} (effective={max(vals)})")
-
-    print_intervals(intervals)
-
     allocator = RegionAllocator()
     regions = allocator.allocate(intervals)
-    print_regions(regions)
+    
+    print_regions(regions, intervals)
 
 
 if __name__ == "__main__":

@@ -236,12 +236,12 @@
     <ClInclude Include="Physics\ScratchBuffer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\SharedScratchBuffers.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />
     <None Include="FitContainers.py" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="temp.txt" />
   </ItemGroup>
 </Project>
