@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <vector>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -33,14 +34,55 @@ namespace PS_AGONY
 
 			struct Wave
 			{
-				std::vector<std::vector<size_t>> passes;
+				struct Indices
+				{
+					std::vector<size_t> indices;
+
+					Indices() = default;
+
+					Indices(const Indices& other) = delete;
+					Indices& operator=(const Indices& other) = delete;
+
+					Indices(Indices&& other) noexcept
+					{
+						indices = std::move(other.indices);
+					}
+
+					Indices& operator=(Indices&& other) noexcept
+					{
+						if (this != &other) [[likely]]
+						{
+							indices = std::move(other.indices);
+						}
+						return *this;
+					}
+				};
+
+				std::vector<Indices> passes;
+
+				Wave() = default;
 
 				Wave(size_t workerCount)
 				{
 					passes.resize(workerCount);
 				}
 
-				// TODO: Add moving.
+				Wave(const Wave& other) = delete;
+				Wave& operator=(const Wave& other) = delete;
+
+				Wave(Wave&& other) noexcept
+				{
+					passes = std::move(other.passes);
+				}
+
+				Wave& operator=(Wave&& other) noexcept
+				{
+					if (this != &other) [[likely]]
+					{
+						passes = std::move(other.passes);
+					}
+					return *this;
+				}
 			};
 
 			using UsedSlot = uint8_t;

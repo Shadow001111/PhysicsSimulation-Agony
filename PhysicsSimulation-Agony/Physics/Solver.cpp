@@ -41,7 +41,7 @@ namespace PS_AGONY
             total += getVectorMemoryUsage(wave.passes);
             for (auto& pass : wave.passes)
             {
-                total += getVectorMemoryUsage(pass);
+                total += getVectorMemoryUsage(pass.indices);
             }
         }
 
@@ -181,12 +181,12 @@ namespace PS_AGONY
                         threadedPlan.usedBodies[bodyIndexB] = currentStageIndex;
                     }
 
-                    // Push index to staging pass.
-                    auto& stagingPass = currentWave.passes[currentStageIndex];
-                    stagingPass.push_back(collisionIndex);
+                    // Push index.
+                    auto& pass = currentWave.passes[currentStageIndex].indices;
+                    pass.push_back(collisionIndex);
 
                     // Advance to next stage or stop.
-                    if (stagingPass.size() >= ThreadedConstraintSolvingPlan::MAX_VALID_INDICES_PER_WORKER)
+                    if (pass.size() >= ThreadedConstraintSolvingPlan::MAX_VALID_INDICES_PER_WORKER)
                     {
                         currentStageIndex++;
                         if (currentStageIndex >= threadedPlan.workerCount)
@@ -204,7 +204,7 @@ namespace PS_AGONY
                 threadedPlan.remainingIndices.clear();
                 threadedPlan.remainingIndices.swap(threadedPlan.nextRemainingIndices);
             }
-            if (currentWave.passes[0].empty()) [[unlikely]]
+            if (currentWave.passes[0].indices.empty()) [[unlikely]]
             {
                 break;
             }
@@ -616,7 +616,7 @@ namespace PS_AGONY
 
                     const size_t waveIndex = localTicket % waveCount;
                     const auto& wave = threadedPlan.waves[waveIndex];
-                    const auto& indices = wave.passes[workerIndex];
+                    const auto& indices = wave.passes[workerIndex].indices;
 
                     // Get work from current wave and execute it. If empty, skip.
                     if (!indices.empty())
