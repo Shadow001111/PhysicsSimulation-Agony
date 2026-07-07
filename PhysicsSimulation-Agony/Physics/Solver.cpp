@@ -601,6 +601,7 @@ namespace PS_AGONY
             return;
         }
 
+        // Reorder indirect data.
         {
             TRACY_SCOPE_N("Reorder indirect data");
 
@@ -673,21 +674,15 @@ namespace PS_AGONY
                     else
                     {
                         // Wait for new wave.
+                        for (int i = 0; i < 2000; i++)
                         {
-                            TRACY_SCOPE_NC("Spin", Ecstasy::Color::Black);
-                            for (int i = 0; i < 200; i++)
-                            {
-                                if (workerResources.currentWaveTicket.load(std::memory_order_acquire) != localTicket)
-                                    break;
-                                SPIN_PAUSE();
-                            }
+                            SPIN_PAUSE();
+                            if (workerResources.currentWaveTicket.load(std::memory_order_acquire) != localTicket)
+                                break;
                         }
+                        if (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
                         {
-                            TRACY_SCOPE_NC("Sleep", Ecstasy::Color::Black);
-                            if (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
-                            {
-                                workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
-                            }
+                            workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
                         }
                         localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
                     }
