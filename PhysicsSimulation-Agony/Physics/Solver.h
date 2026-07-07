@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <vector>
+#include <span>
 #include <iostream>
 
 namespace PS_AGONY
@@ -37,6 +38,7 @@ namespace PS_AGONY
 				struct Indices
 				{
 					std::vector<size_t> indices;
+					size_t indirectDataOffset = 0;
 
 					Indices() = default;
 
@@ -46,6 +48,7 @@ namespace PS_AGONY
 					Indices(Indices&& other) noexcept
 					{
 						indices = std::move(other.indices);
+						indirectDataOffset = other.indirectDataOffset;
 					}
 
 					Indices& operator=(Indices&& other) noexcept
@@ -53,6 +56,7 @@ namespace PS_AGONY
 						if (this != &other) [[likely]]
 						{
 							indices = std::move(other.indices);
+							indirectDataOffset = other.indirectDataOffset;
 						}
 						return *this;
 					}
@@ -137,6 +141,9 @@ namespace PS_AGONY
 
 		std::vector<PositionAnchor> positionAnchors;
 
+		std::vector<BodyCollisionData> indirectCollisionData;
+		std::vector<PositionAnchor> indirectPositionAnchorData;
+
 		SimulationSettings simulationSettings;
 	public:
 		Solver() = default;
@@ -174,13 +181,13 @@ namespace PS_AGONY
 		);
 
 		void solveVelocityConstraints(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+			std::span<const BodyCollisionData> narrowPhaseCollisions,
 			uint32_t solverIterations
 		);
 
 		void solvePositionConstraints(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			const std::vector<PositionAnchor>& positionAnchors,
+			std::span<const BodyCollisionData> narrowPhaseCollisions,
+			std::span<const PositionAnchor> positionAnchors,
 			uint32_t solverIterations
 		);
 
@@ -188,18 +195,6 @@ namespace PS_AGONY
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
-		);
-
-		void solveVelocityConstraintsIndirect
-		(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			const std::vector<size_t>& collisionIndices
-		);
-
-		void solvePositionConstraintsIndirect
-		(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			const std::vector<size_t>& collisionIndices
 		);
 	};
 }
