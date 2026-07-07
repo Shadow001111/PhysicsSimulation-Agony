@@ -1,25 +1,33 @@
 Region assignment:
-  Region 0  effective_align=64
-    Centroid-x                      live=[0, 5)  align=64  depth=1
-    nodePairsToTraverse             live=[5, 8)  align=4  depth=1
-    positionAnchors                 live=[8, 16)  align=8  depth=1
-  Region 1  effective_align=64
-    Centroid-y                      live=[1, 5)  align=64  depth=2
-    leafPairsToTestCollisions       live=[6, 8)  align=4  depth=2
-    remainingIndices                live=[9, 16)  align=8  depth=2
-  Region 2  effective_align=8
-    Morton-codes                    live=[2, 3)  align=4  depth=3
-    Container1-for-sorting          live=[3, 5)  align=4  depth=2
-    leavesToTestCollisions          live=[7, 8)  align=4  depth=3
-    nextRemainingIndices            live=[10, 16)  align=8  depth=3
-  Region 3  effective_align=4
-    Container2-for-sorting          live=[4, 5)  align=4  depth=3
-    usedBodies                      live=[11, 16)  align=1  depth=4
-  Region 4  effective_align=8
-    flatIndices                     live=[12, 16)  align=8  depth=5
-  Region 5  effective_align=4
-    passOffsets                     live=[13, 16)  align=4  depth=6
-  Region 6  effective_align=8
-    indirectCollisionData           live=[14, 16)  align=8  depth=7
-  Region 7  effective_align=8
-    indirectPositionAnchorData      live=[15, 16)  align=8  depth=8
+  Region 0  effective_align=64  effective_size=75496
+    transformedCentroidX            align=64  size=12016
+    nodePairsToTraverse             align=4  size=1232
+    nextRemainingIndices            align=8  size=75496
+  Region 1  effective_align=64  effective_size=12016
+    transformedCentroidY            align=64  size=12016
+    leafPairsToTestCollisions       align=4  size=1000
+    usedBodies                      align=1  size=3004
+  Region 2  effective_align=8  effective_size=75880
+    mortonCodes                     align=4  size=12016
+    leavesToTestCollisions          align=4  size=1092
+    flatIndices                     align=8  size=75880
+  Region 3  effective_align=8  effective_size=152640
+    tempPackedBodyIndicesToSort     align=4  size=24032
+    positionAnchors                 align=8  size=152640
+  Region 4  effective_align=8  effective_size=79448
+    tempPackedBodyIndicesToSort2    align=4  size=24032
+    remainingIndices                align=8  size=79448
+  Region 5  effective_align=4  effective_size=528
+    passOffsets                     align=4  size=528
+  Region 6  effective_align=8  effective_size=380000
+    indirectCollisionData           align=8  size=380000
+  Region 7  effective_align=8  effective_size=152000
+    indirectPositionAnchorData      align=8  size=152000
+
+========================================
+Memory Footprint Report:
+  Raw Memory (No reuse):   1,006,432 bytes
+  Optimized Memory:        928,008 bytes
+  Reduction:               78,424 bytes
+  Efficiency:              92.21% of original size
+========================================
