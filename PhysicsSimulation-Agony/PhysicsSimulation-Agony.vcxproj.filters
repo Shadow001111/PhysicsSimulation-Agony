@@ -233,6 +233,9 @@
     <ClInclude Include="Physics\PrintUtilities.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\ScratchBuffer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />
