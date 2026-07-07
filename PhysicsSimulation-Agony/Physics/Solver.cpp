@@ -47,6 +47,9 @@ namespace PS_AGONY
 
         total += getVectorMemoryUsage(positionAnchors);
 
+        total += getVectorMemoryUsage(indirectCollisionData);
+        total += getVectorMemoryUsage(indirectPositionAnchorData);
+
         return total;
     }
 
@@ -182,11 +185,11 @@ namespace PS_AGONY
                     }
 
                     // Push index.
-                    auto& pass = currentWave.passes[currentStageIndex].indices;
-                    pass.push_back(collisionIndex);
+                    auto& pass = currentWave.passes[currentStageIndex];
+                    pass.indices.push_back(collisionIndex);
 
                     // Advance to next stage or stop.
-                    if (pass.size() >= ThreadedConstraintSolvingPlan::MAX_VALID_INDICES_PER_WORKER)
+                    if (pass.indices.size() >= ThreadedConstraintSolvingPlan::MAX_VALID_INDICES_PER_WORKER)
                     {
                         currentStageIndex++;
                         if (currentStageIndex >= threadedPlan.workerCount)
@@ -208,9 +211,20 @@ namespace PS_AGONY
             {
                 break;
             }
-            else if (threadedPlan.remainingIndices.empty())
+            if (threadedPlan.remainingIndices.empty())
             {
                 break;
+            }
+        }
+
+        // Assign offsets.
+        size_t totalElements = 0;
+        for (auto& wave : threadedPlan.waves)
+        {
+            for (auto& pass : wave.passes)
+            {
+                pass.indirectDataOffset = totalElements;
+                totalElements += pass.indices.size();
             }
         }
     }
@@ -259,7 +273,7 @@ namespace PS_AGONY
     }
 
     void Solver::solveVelocityConstraints(
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+        std::span<const BodyCollisionData> narrowPhaseCollisions,
         uint32_t solverIterations
     )
     {
@@ -496,8 +510,8 @@ namespace PS_AGONY
     }
 
     void Solver::solvePositionConstraints(
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-        const std::vector<PositionAnchor>& positionAnchors,
+        std::span<const BodyCollisionData> narrowPhaseCollisions,
+        std::span<const PositionAnchor> positionAnchors,
         uint32_t solverIterations
     )
     {
@@ -590,6 +604,27 @@ namespace PS_AGONY
             return;
         }
 
+        {
+            TRACY_SCOPE_N("Reorder indirect data");
+
+            const size_t collisionCount = narrowPhaseCollisions.size();
+
+            indirectCollisionData.resize(collisionCount);
+            indirectPositionAnchorData.resize(collisionCount);
+            for (auto& wave : threadedPlan.waves)
+            {
+                for (auto& pass : wave.passes)
+                {
+                    for (size_t i = 0; i < pass.indices.size(); i++)
+                    {
+                        const size_t originalIndex = pass.indices[i];
+                        indirectCollisionData[pass.indirectDataOffset + i] = narrowPhaseCollisions[originalIndex];
+                        indirectPositionAnchorData[pass.indirectDataOffset + i] = positionAnchors[originalIndex];
+                    }
+                }
+            }
+        }
+
         const uint32_t positionSolvingStartTick = static_cast<uint32_t>(waveCount) * velocityIterations;
         const uint32_t totalTicks = positionSolvingStartTick + static_cast<uint32_t>(waveCount) * positionIterations;
 
@@ -616,18 +651,25 @@ namespace PS_AGONY
 
                     const size_t waveIndex = localTicket % waveCount;
                     const auto& wave = threadedPlan.waves[waveIndex];
-                    const auto& indices = wave.passes[workerIndex].indices;
+                    const auto& pass = wave.passes[workerIndex];
+                    const auto& indices = pass.indices;
 
                     // Get work from current wave and execute it. If empty, skip.
                     if (!indices.empty())
                     {
+                        const size_t offset = pass.indirectDataOffset;
+                        const size_t indexCount = indices.size();
+
+                        std::span<const BodyCollisionData> collisionSlice(indirectCollisionData.data() + offset, indexCount);
+
                         if (localTicket >= positionSolvingStartTick)
                         {
-                            solvePositionConstraintsIndirect(narrowPhaseCollisions, indices);
+                            std::span<const PositionAnchor> anchorSlice(indirectPositionAnchorData.data() + offset, indexCount);
+                            solvePositionConstraints(collisionSlice, anchorSlice, 1);
                         }
                         else
                         {
-                            solveVelocityConstraintsIndirect(narrowPhaseCollisions, indices);
+                            solveVelocityConstraints(collisionSlice, 1);
                         }
                     }
 
@@ -670,67 +712,5 @@ namespace PS_AGONY
                 workerResources.workerData[i].isDestroyed.wait(false, std::memory_order_acquire);
             }
         }
-    }
-
-    void Solver::solveVelocityConstraintsIndirect(
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-        const std::vector<size_t>& collisionIndices
-    )
-    {
-        TRACY_SCOPE_NC("Solve velocity constraints (Indirect)", Ecstasy::Color::HotPink);
-
-        // My tests show that copying data to make it sequantial is a little faster than doing indirect loads.
-        // Plus it allows for having single source of truth for collision resolution.
-
-        static thread_local std::vector<BodyCollisionData> tempData; // TODO: Add to memory usage.
-
-        const size_t collisionCount = collisionIndices.size();
-
-        {
-            TRACY_SCOPE_N("Allocate and copy");
-
-            tempData.resize(collisionCount);
-            for (size_t i = 0; i < collisionCount; i++)
-            {
-                tempData[i] = narrowPhaseCollisions[collisionIndices[i]];
-            }
-        }
-
-        solveVelocityConstraints(tempData, 1);
-    }
-
-    void Solver::solvePositionConstraintsIndirect(
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-        const std::vector<size_t>& collisionIndices
-    )
-    {
-        TRACY_SCOPE_NC("Solve position constraints (Indirect)", Ecstasy::Color::HotPink);
-
-        // My tests show that copying data to make it sequantial is a little faster than doing indirect loads.
-        // Plus it allows for having single source of truth for collision resolution.
-
-        static thread_local std::vector<BodyCollisionData> tempCollisionData; // TODO: Add to memory usage.
-        static thread_local std::vector<PositionAnchor> tempPositionAnchorData;
-        // TODO: Better create pool for these.
-
-        const size_t collisionCount = collisionIndices.size();
-
-        {
-            TRACY_SCOPE_N("Allocate and copy");
-
-            tempCollisionData.resize(collisionCount);
-            for (size_t i = 0; i < collisionCount; i++)
-            {
-                tempCollisionData[i] = narrowPhaseCollisions[collisionIndices[i]];
-            }
-
-            tempPositionAnchorData.resize(collisionCount);
-            for (size_t i = 0; i < collisionCount; i++)
-            {
-                tempPositionAnchorData[i] = positionAnchors[collisionIndices[i]];
-            }
-        }
-
-        solvePositionConstraints(tempCollisionData, tempPositionAnchorData, 1);
     }
 }
