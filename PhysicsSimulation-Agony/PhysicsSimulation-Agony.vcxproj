@@ -312,6 +312,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />
+    <None Include="FitContainers.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="temp.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

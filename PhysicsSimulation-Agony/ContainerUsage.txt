@@ -1,0 +1,24 @@
+align(Real) is: 4 or 8.
+align(RealSimd) is: 16 or 32 or 64.
+
+//Broad-phase build
+|Centroid-x                    align(RealSimd)
+||Centroid-y                align(RealSimd)
+|||Morton-codes                align(4)
+  ||Container1-for-sorting    align(4)
+  |||Container2-for-sorting    align(4)
+
+//Broad-phase query
+|nodePairsToTraverse         align(4)
+||leafPairsToTestCollisions  align(4)
+|||leavesToTestCollisions     align(4)
+
+// Solver (multi-threaded)
+|positionAnchors                        align(Real)
+||remainingIndices                        align(8)
+|||nextRemainingIndices                    align(8)
+||||usedBodies                            align(1)
+|||||flatIndices                        align(8)
+||||||passOffsets                        align(4)
+|   |||indirectCollisionData            align(Real)
+|   ||||indirectPositionAnchorData        align(Real)

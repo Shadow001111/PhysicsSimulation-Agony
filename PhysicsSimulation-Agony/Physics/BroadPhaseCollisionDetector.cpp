@@ -774,7 +774,6 @@ namespace PS_AGONY
 
         // Launch workers to traverse independent sub-trees.
         alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 0 };
-        alignas(64) std::atomic<uint32_t> workersAlive{ 0 };
         {
             TRACY_SCOPE_N("Launch workers");
 
