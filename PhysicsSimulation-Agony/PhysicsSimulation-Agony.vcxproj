@@ -308,6 +308,7 @@
     <ClInclude Include="Physics\SimulationRenderer.h" />
     <ClInclude Include="Scenes.h" />
     <ClInclude Include="Physics\Solver.h" />
+    <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <ItemGroup>
