@@ -95,10 +95,6 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
         upsPercent = std::fmin(upsPercent, 1.0f);
         ss << "\n  UPS: " << simulationData.updatesHappened << " / " << simulationData.updatesSupposedToHappen
             << " (" << upsPercent * 100.0f << "%)";
-
-        float collisionIterationsPercent = (float)simulationData.collisionSolvingIterationsHappened / (float)simulationData.maxCollisionSolvingIterations;
-        ss << "\n  Collision iterations: " << simulationData.collisionSolvingIterationsHappened << " / " << simulationData.maxCollisionSolvingIterations
-            << " (" << collisionIterationsPercent * 100.0f << "%)";
     }
 
     // Memory.

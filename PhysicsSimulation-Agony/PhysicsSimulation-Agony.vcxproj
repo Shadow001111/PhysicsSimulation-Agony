@@ -302,16 +302,19 @@
     <ClInclude Include="EcstasyCore\Portablity.h" />
     <ClInclude Include="Physics\PrintUtilities.h" />
     <ClInclude Include="Physics\Simulation.h" />
+    <ClInclude Include="Physics\SharedScratchBuffers.h" />
     <ClInclude Include="Physics\SymmetricMatrix.h" />
     <ClInclude Include="Physics\Threading.h" />
     <ClInclude Include="Physics\Types.h" />
     <ClInclude Include="Physics\SimulationRenderer.h" />
     <ClInclude Include="Scenes.h" />
     <ClInclude Include="Physics\Solver.h" />
+    <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />
+    <None Include="FitContainers.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
