@@ -101,8 +101,6 @@ namespace PS_AGONY
 
         solveConstraintsThreaded(narrowPhaseCollisions, velocityIterations, positionIterations);
 
-        std::cout << solvingPlanner.computeEfficiency() << "\n";
-
         // Note: I tried to 'computeAnchorPoints'in parallel with 'solvingPlanner.planExecution'. It caused slowdown in second.
         // Maybe app is memory bound.
     }
