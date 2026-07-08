@@ -1,6 +1,7 @@
 #pragma once
 #include "NarrowPhaseCollisionDetector.h"
 #include "Material.h"
+#include "SolvingPlanners/FCSSolvingPlanner.h"
 
 #include <atomic>
 #include <vector>
@@ -22,33 +23,6 @@ namespace PS_AGONY
 			// Baumgarte stabilization.
 			const Real positionCorrectionPercent = 0.5;
 			const Real positionCorrectionSlop = 0.001;
-		};
-
-		struct ThreadedConstraintSolvingPlan
-		{
-			static constexpr size_t COLLISION_COUNT_PER_WORKER = 830;
-			static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
-			static constexpr size_t MAX_VALID_INDICES_PER_WORKER = 256;
-			static constexpr bool DO_NOT_MARK_STATIC_BODIES_AS_USED = false;
-
-			static_assert(MIN_COLLISION_COUNT_FOR_THREADING >= MAX_VALID_INDICES_PER_WORKER);
-
-			struct PassOffset
-			{
-				uint32_t start = 0;
-				uint32_t size = 0;
-			};
-
-			using UsedSlot = uint8_t;
-
-			size_t workerCount = 0;
-
-			std::vector<size_t> remainingIndices;
-			std::vector<size_t> nextRemainingIndices;
-			std::vector<UsedSlot> usedBodies;
-
-			std::vector<size_t> flatIndices;
-			std::vector<PassOffset> passOffsets;
 		};
 
 		struct WorkerResources
@@ -89,8 +63,9 @@ namespace PS_AGONY
 		const std::vector<Material>* materials;
 
 		WorkerResources workerResources;
-		ThreadedConstraintSolvingPlan threadedPlan;
+		FCSSolvingPlanner solvingPlanner;
 
+		std::vector<BodyPair> collidingBodyPairs;
 		std::vector<PositionAnchor> positionAnchors;
 
 		std::vector<BodyCollisionData> indirectCollisionData;
@@ -124,8 +99,7 @@ namespace PS_AGONY
 			uint32_t positionIterations
 		);
 	private:
-		void planWorkerCount(size_t collisionCount);
-		void planExecutionWithGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions);
+		size_t planWorkerCount(size_t collisionCount);
 
 		void computeAnchorPoints(
 			std::vector<PositionAnchor>& outPositionAnchors,

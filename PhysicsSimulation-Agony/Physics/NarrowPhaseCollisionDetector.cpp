@@ -114,7 +114,7 @@ namespace PS_AGONY
 
     void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs)
     {
-        TRACY_SCOPE_N("Single‑threaded narrow phase");
+        TRACY_SCOPE_N("Single-threaded narrow phase");
 
         chunks.resize(1);
         ChunkData& cd = chunks[0];

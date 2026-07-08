@@ -1436,7 +1436,7 @@ namespace Ecstasy
             return this->to<Target>();
         }
 
-        // Reinterpret casts – zero cost, no instruction emitted.
+        // Reinterpret casts - zero cost, no instruction emitted.
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
