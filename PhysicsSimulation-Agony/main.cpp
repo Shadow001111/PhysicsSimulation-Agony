@@ -148,9 +148,7 @@ static int gameFunc()
     wnd.linkInputManager(&windowInputManager);
 
     // Textures.
-    {
-        Texture::initGlobalData();
-    }
+    Texture::initGlobalData();
 
     // Create framebuffer.
     FrameBuffer framebuffer;

@@ -46,7 +46,7 @@ namespace PS_AGONY
         uint32_t positionIterations
     )
     {
-        TRACY_SCOPE_NC("Solve constraints", Ecstasy::Color::OliveDrab);
+        TRACY_SCOPE_NC("Solve constraints (Single-threaded)", Ecstasy::Color::OliveDrab);
 
         computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
 
@@ -66,7 +66,7 @@ namespace PS_AGONY
         uint32_t positionIterations
     )
     {
-        TRACY_SCOPE_NC("Solve constraints", Ecstasy::Color::OliveDrab);
+        TRACY_SCOPE_NC("Solve constraints (Multi-threaded)", Ecstasy::Color::OliveDrab);
 
         const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
 
@@ -482,12 +482,11 @@ namespace PS_AGONY
     {
         auto& threadPool = Threading::getGlobalThreadPool();
 
-        TRACY_SCOPE_NC("Solve constraints (Multi-threaded)", Ecstasy::Color::Purple);
-
         const size_t workerCount = solvingPlanner.getWorkerCount();
-        const auto& flatIndices = solvingPlanner.getFlatIndices();
+
         const auto& passOffsets = solvingPlanner.getPassOffsets();
         const size_t waveCount = passOffsets.size() / workerCount;
+        const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 
         if (waveCount == 0 || (velocityIterations == 0 && positionIterations == 0))
         {
@@ -498,15 +497,15 @@ namespace PS_AGONY
         {
             TRACY_SCOPE_N("Reorder indirect data");
 
+            const auto& flatIndices = solvingPlanner.getFlatIndices();
             const size_t mappedCount = flatIndices.size();
-
             const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
 
             indirectCollisionData.resize(mappedCount);
             indirectPositionAnchorData.resize(mappedCount);
             for (size_t i = 0; i < mappedCount; i++)
             {
-                const size_t originalIndex = flatIndices[i];
+                const size_t originalIndex = flatIndicesPtr[i];
                 indirectCollisionData[i] = narrowPhaseCollisions[originalIndex];
                 indirectPositionAnchorData[i] = positionAnchors[originalIndex];
             }
@@ -539,7 +538,7 @@ namespace PS_AGONY
                     const size_t waveIndex = localTicket % waveCount;
 
                     const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-                    const auto& passOffset = passOffsets[passGlobalIndex];
+                    const auto& passOffset = passOffsetsPtr[passGlobalIndex];
 
                     // Get work from current wave and execute it. If empty, skip.
                     if (passOffset.size > 0)

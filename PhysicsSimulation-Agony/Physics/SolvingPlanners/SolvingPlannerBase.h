@@ -33,7 +33,7 @@ namespace PS_AGONY
         SolvingPlannerBase(SolvingPlannerBase&&) = delete;
         SolvingPlannerBase& operator=(SolvingPlannerBase&&) = delete;
 
-        void setWorkerCount(size_t workerCount) noexcept;
+        void setWorkerCount(size_t workerCount) noexcept { this->workerCount = workerCount; };
         virtual void planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount) = 0;
         [[nodiscard]] virtual double computeEfficiency() const = 0;
         [[nodiscard]] virtual bool validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const = 0;
