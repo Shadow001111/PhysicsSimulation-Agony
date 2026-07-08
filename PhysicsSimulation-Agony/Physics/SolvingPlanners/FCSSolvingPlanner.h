@@ -17,12 +17,10 @@ namespace PS_AGONY
         FCSSolvingPlanner(FCSSolvingPlanner&&) = delete;
         FCSSolvingPlanner& operator=(FCSSolvingPlanner&&) = delete;
 
-        static size_t chooseWorkerCount(size_t collisionCount, size_t availableWorkerCount);
-
         void planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount) override;
-        double computeEfficiency() const override;
-        bool validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const override;
-        size_t getMemoryUsage() const override;
+        [[nodiscard]] double computeEfficiency() const override;
+        [[nodiscard]] bool validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const override;
+        [[nodiscard]] size_t getMemoryUsage() const override;
 	};
 }
 
