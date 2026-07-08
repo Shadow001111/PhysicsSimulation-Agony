@@ -86,11 +86,12 @@ namespace PS_AGONY
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
 		Solver solver;
 
-		// Timers.
-		Real updateTimeAccumulator = 0.0;
+		// Time.
+		Real simulationRunTimer = 0;
+		Real updateTimeAccumulator = 0;
 
 		// Debug data.
-		Real debugDataResetTimeAccumulator = 0.0;
+		Real debugDataResetTimeAccumulator = 0;
 		mutable DebugData runtimeDebugData;
 		mutable DebugData debugDataSnaphot;
 

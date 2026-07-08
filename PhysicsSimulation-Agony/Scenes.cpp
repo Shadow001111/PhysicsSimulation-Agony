@@ -711,7 +711,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr int pyramidRows = 5; // Number of rows in the pyramid
+    constexpr int pyramidRows = 15; // Number of rows in the pyramid
     constexpr float boxWidth = 0.6f;
     constexpr float boxHeight = 0.6f;
     constexpr float boxMass = 1.0f;
