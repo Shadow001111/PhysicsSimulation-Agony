@@ -1,33 +1,33 @@
 Region assignment:
-  Region 0  effective_align=64  effective_size=75496
-    transformedCentroidX            align=64  size=12016
-    nodePairsToTraverse             align=4  size=1232
-    nextRemainingIndices            align=8  size=75496
-  Region 1  effective_align=64  effective_size=12016
-    transformedCentroidY            align=64  size=12016
-    leafPairsToTestCollisions       align=4  size=1000
-    usedBodies                      align=1  size=3004
-  Region 2  effective_align=8  effective_size=75880
-    mortonCodes                     align=4  size=12016
-    leavesToTestCollisions          align=4  size=1092
-    flatIndices                     align=8  size=75880
-  Region 3  effective_align=8  effective_size=152640
+  Region 0  effective_align=8  savings=25,264 bytes
     tempPackedBodyIndicesToSort     align=4  size=24032
-    positionAnchors                 align=8  size=152640
-  Region 4  effective_align=8  effective_size=79448
-    tempPackedBodyIndicesToSort2    align=4  size=24032
-    remainingIndices                align=8  size=79448
-  Region 5  effective_align=4  effective_size=528
-    passOffsets                     align=4  size=528
-  Region 6  effective_align=8  effective_size=380000
+    nodePairsToTraverse             align=4  size=1232
     indirectCollisionData           align=8  size=380000
-  Region 7  effective_align=8  effective_size=152000
+  Region 1  effective_align=8  savings=25,124 bytes
+    tempPackedBodyIndicesToSort2    align=4  size=24032
+    leavesToTestCollisions          align=4  size=1092
+    positionAnchors                 align=8  size=152640
+  Region 2  effective_align=64  savings=13,016 bytes
+    transformedCentroidX            align=64  size=12016
+    leafPairsToTestCollisions       align=4  size=1000
     indirectPositionAnchorData      align=8  size=152000
+  Region 3  effective_align=64  savings=12,016 bytes
+    transformedCentroidY            align=64  size=12016
+    remainingIndices                align=8  size=79448
+  Region 4  effective_align=8  savings=12,016 bytes
+    mortonCodes                     align=4  size=12016
+    flatIndices                     align=8  size=75880
+  Region 5  effective_align=8  savings=0 bytes
+    nextRemainingIndices            align=8  size=75496
+  Region 6  effective_align=1  savings=0 bytes
+    usedBodies                      align=1  size=3004
+  Region 7  effective_align=4  savings=0 bytes
+    passOffsets                     align=4  size=528
 
 ========================================
 Memory Footprint Report:
   Raw Memory (No reuse):   1,006,432 bytes
-  Optimized Memory:        928,008 bytes
-  Reduction:               78,424 bytes
-  Efficiency:              92.21% of original size
+  Optimized Memory:        918,996 bytes
+  Reduction:               87,436 bytes
+  Efficiency:              91.31% of original size
 ========================================

@@ -1,3 +1,5 @@
+// Containers that are included, are only which don't need to keep state whole lifetime.
+
 align(Real) is: 4 or 8.
 align(RealSimd) is: 16 or 32 or 64.
 
