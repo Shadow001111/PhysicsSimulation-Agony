@@ -63,16 +63,20 @@ namespace PS_AGONY
 
 		struct BvhFunctionResources
 		{
+			// Must keep their state between frames:
+
 			std::vector<BvhNode> nodes;
+			std::vector<BodyIndex> mainBodyIndices;
+
+			// The rest (Build):
 
 			SimdAlignedVector<Real> transformedCentroidX;
 			SimdAlignedVector<Real> transformedCentroidY;
-
 			SimdAlignedVector<uint32_t> mortonCodes;
-
-			std::vector<BodyIndex> mainBodyIndices;
 			std::vector<PackedBodyIndex> tempPackedBodyIndicesToSort;
 			std::vector<PackedBodyIndex> tempPackedBodyIndicesToSort2;
+
+			// The rest (Query):
 
 			std::vector<BvhNodePair> nodePairsToTraverse;
 			std::vector<BvhNodePair> leafPairsToTestCollisions;

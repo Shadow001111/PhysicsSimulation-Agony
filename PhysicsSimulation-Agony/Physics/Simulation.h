@@ -23,24 +23,25 @@ namespace PS_AGONY
 			uint32_t updatesHappened = 0;
 			uint32_t updatesSupposedToHappen = 0;
 
-			uint32_t collisionSolvingIterationsHappened = 0;
-			uint32_t maxCollisionSolvingIterations = 0;
-
 			size_t bodyDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
 			size_t boxDataMemoryUsage = 0;
 			size_t polygonDataMemoryUsage = 0;
 
 			size_t materialDataMemoryUsage = 0;
+
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
 			size_t solverMemoryUsage = 0;
+
+			//size_t scratchBufferMemoryUsage = 0;
 		};
 	private:
 		struct SimulationSettings
 		{
 			Real updateInterval = 1.0 / 300.0;
-			uint32_t collisionSolvingIterations = 6;
+			uint32_t velocitySolvingIterations = 6;
+			uint32_t positionSolvingIterations = 6;
 			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
 			// Environment.
@@ -158,7 +159,7 @@ namespace PS_AGONY
 
 		void integrate(size_t bodyCount, Real deltaTime);
 
-		void iterativeCollisionSolving(Real deltaTime);
+		void findAndSolveCollisions(Real deltaTime);
 
 		void buildBodyAABBs();
 		void buildCircleAABBs();
