@@ -560,7 +560,7 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
 void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr float worldWidth = 25.0f;
+    constexpr float worldWidth = 125.0f;
     constexpr float terrainSegmentWidth = 16.0f;
     constexpr float wallThickness = 5.0f;
     constexpr float wallHeight = 60.0f;

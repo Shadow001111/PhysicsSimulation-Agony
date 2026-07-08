@@ -1,7 +1,8 @@
 #pragma once
 #include "NarrowPhaseCollisionDetector.h"
 #include "Material.h"
-#include "SolvingPlanners/FCSSolvingPlanner.h"
+
+#include "SolvingPlanners/LLSolvingPlanner.h"
 
 #include <atomic>
 #include <vector>
@@ -63,7 +64,7 @@ namespace PS_AGONY
 		const std::vector<Material>* materials;
 
 		WorkerResources workerResources;
-		FCSSolvingPlanner solvingPlanner;
+		LLSolvingPlanner solvingPlanner;
 
 		std::vector<BodyPair> collidingBodyPairs;
 		std::vector<PositionAnchor> positionAnchors;
