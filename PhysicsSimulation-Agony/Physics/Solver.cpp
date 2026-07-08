@@ -56,8 +56,14 @@ namespace PS_AGONY
 
         computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
 
-        solveVelocityConstraints(narrowPhaseCollisions, velocityIterations);
-        solvePositionConstraints(narrowPhaseCollisions, positionAnchors, positionIterations);
+        for (uint32_t i = 0; i < velocityIterations; i++)
+        {
+            solveVelocityConstraints(narrowPhaseCollisions);
+        }
+        for (uint32_t i = 0; i < positionIterations; i++)
+        {
+            solvePositionConstraints(narrowPhaseCollisions, positionAnchors);
+        }
     }
 
     void Solver::solveThreaded(
@@ -83,6 +89,9 @@ namespace PS_AGONY
         planExecutionWithGraphColoring(narrowPhaseCollisions);
 
         solveConstraintsThreaded(narrowPhaseCollisions, velocityIterations, positionIterations);
+
+        // Note: I tried to 'computeAnchorPoints'in parallel with 'planExecutionWithGraphColoring'. It caused slowdown in second.
+        // Maybe app is memory bound.
     }
 
     void Solver::planWorkerCount(size_t collisionCount)
@@ -270,8 +279,7 @@ namespace PS_AGONY
     }
 
     void Solver::solveVelocityConstraints(
-        std::span<const BodyCollisionData> narrowPhaseCollisions,
-        uint32_t solverIterations
+        std::span<const BodyCollisionData> narrowPhaseCollisions
     )
     {
         TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
@@ -314,202 +322,198 @@ namespace PS_AGONY
             };
 
         // Main loop.
-        for (uint32_t solverIteration = 0; solverIteration < solverIterations; solverIteration++)
+        for (const auto& data : narrowPhaseCollisions)
         {
-            for (const auto& data : narrowPhaseCollisions)
+            // Get body indices.
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
+
+            // Get inv masses.
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0)) [[unlikely]]
             {
-                // Get body indices.
-                const BodyIndex bodyIndexA = data.bodyA;
-                const BodyIndex bodyIndexB = data.bodyB;
+                continue;
+            }
 
-                // Get inv masses.
-                const Real invMassA = invMassPtr[bodyIndexA];
-                const Real invMassB = invMassPtr[bodyIndexB];
+            // Get materials.
+            const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
+            const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
 
-                const Real totalInvMass = invMassA + invMassB;
-                if (totalInvMass <= Real(0)) [[unlikely]]
-                {
-                    continue;
-                }
+            const Material* materialA = materialPtr + materialIndexA;
+            const Material* materialB = materialPtr + materialIndexB;
 
-                // Get materials.
-                const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
-                const MaterialIndex materialIndexB = materialIndexPtr[bodyIndexB];
+            const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
 
-                const Material* materialA = materialPtr + materialIndexA;
-                const Material* materialB = materialPtr + materialIndexB;
-
-                const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
-
-            const Real staticFriction =  std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
             const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
-                // Compute world centers of mass.
-                const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
-                const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+            // Compute world centers of mass.
+            const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+            const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
-                //
-                const Real invInertiaA = invInertiaPtr[bodyIndexA];
-                const Real invInertiaB = invInertiaPtr[bodyIndexB];
+            //
+            const Real invInertiaA = invInertiaPtr[bodyIndexA];
+            const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
-                Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
-                Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
-                Real angularVelocityA = angularVelocityPtr[bodyIndexA];
-                Real angularVelocityB = angularVelocityPtr[bodyIndexB];
+            Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
+            Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+            Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+            Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
-                const Vec2 normal = data.normal;
-                const Real depth = data.depth;
+            const Vec2 normal = data.normal;
+            const Real depth = data.depth;
 
-                // Calculate collision impulses.
-                std::array<Vec2, 2> impulseArray{};
-                std::array<Vec2, 2> rAPerpArray{};
-                std::array<Vec2, 2> rBPerpArray{};
-                std::array<Real, 2> jnArray{};
-                const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
+            // Calculate collision impulses.
+            std::array<Vec2, 2> impulseArray{};
+            std::array<Vec2, 2> rAPerpArray{};
+            std::array<Vec2, 2> rBPerpArray{};
+            std::array<Real, 2> jnArray{};
+            const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
 
             const Real impulseScale = Real(1.0) / Real(contactCount);
+            {
+                bool noContacts = true;
+
+                for (uint32_t i = 0; i < contactCount; i++)
                 {
-                    bool noContacts = true;
+                    const Vec2 contactPoint = data.contacts[i];
 
-                    for (uint32_t i = 0; i < contactCount; i++)
-                    {
-                        const Vec2 contactPoint = data.contacts[i];
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
 
-                        const Vec2 rA = contactPoint - centerOfMassA;
-                        const Vec2 rB = contactPoint - centerOfMassB;
+                    const Vec2 rAPerp = { -rA.y, rA.x };
+                    const Vec2 rBPerp = { -rB.y, rB.x };
 
-                        const Vec2 rAPerp = { -rA.y, rA.x };
-                        const Vec2 rBPerp = { -rB.y, rB.x };
+                    const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
 
-                        const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
-                        const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
 
-                        const Vec2 relativeVelocity =
-                            (linearVelocityB + angularLinearVelB) -
-                            (linearVelocityA + angularLinearVelA);
+                    const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 
-                        const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
+                    if (velocityAlongNormal > Real(0)) continue;
 
-                        if (velocityAlongNormal > Real(0)) continue;
+                    const Real rAPerpDotN = glm::dot(rAPerp, normal);
+                    const Real rBPerpDotN = glm::dot(rBPerp, normal);
 
-                        const Real rAPerpDotN = glm::dot(rAPerp, normal);
-                        const Real rBPerpDotN = glm::dot(rBPerp, normal);
+                    const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
 
-                        const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
-                        const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
 
-                        const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                        const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
+                    impulseArray[i] = jn * normal;
+                    rAPerpArray[i] = rAPerp;
+                    rBPerpArray[i] = rBPerp;
+                    jnArray[i] = jn;
 
-                        impulseArray[i] = jn * normal;
-                        rAPerpArray[i] = rAPerp;
-                        rBPerpArray[i] = rBPerp;
-                        jnArray[i] = jn;
-
-                        noContacts = false;
-                    }
-
-                    // Check if there is at least one valid contact.
-                    if (noContacts) continue;
+                    noContacts = false;
                 }
 
-                // Apply collision impulses.
-                {
-                    const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-
-                    linearVelocityA -= impulseSum * invMassA;
-                    angularVelocityA -= (
-                        glm::dot(rAPerpArray[0], impulseArray[0]) +
-                        glm::dot(rAPerpArray[1], impulseArray[1])
-                        ) * invInertiaA;
-
-                    linearVelocityB += impulseSum * invMassB;
-                    angularVelocityB += (
-                        glm::dot(rBPerpArray[0], impulseArray[0]) +
-                        glm::dot(rBPerpArray[1], impulseArray[1])
-                        ) * invInertiaB;
-                }
-
-                // Calculate friction impulses.
-                {
-                    for (uint32_t i = 0; i < contactCount; i++)
-                    {
-                        const Vec2 rAPerp = rAPerpArray[i];
-                        const Vec2 rBPerp = rBPerpArray[i];
-
-                        const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
-                        const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
-
-                        const Vec2 relativeVelocity =
-                            (linearVelocityB + angularLinearVelB) -
-                            (linearVelocityA + angularLinearVelA);
-
-                        Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
-                        const Real tangentLengthSq = glm::dot(tangent, tangent);
-                        if (tangentLengthSq < frictionEpsilonSq)
-                        {
-                            impulseArray[i] = Vec2(0.0, 0.0);
-                            continue;
-                        }
-
-                        tangent /= std::sqrt(tangentLengthSq);
-
-                        const Real rAPerpDotT = glm::dot(rAPerp, tangent);
-                        const Real rBPerpDotT = glm::dot(rBPerp, tangent);
-
-                        const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
-                        const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
-
-                        const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                        const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
-
-                        const Real jn = jnArray[i];
-                        if (std::fabs(jt) <= jn * staticFriction)
-                        {
-                            impulseArray[i] = -jt * tangent; // Static friction.
-                        }
-                        else
-                        {
-                            const Real maxDynamic = jn * dynamicFriction;
-                            const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
-                            impulseArray[i] = f * tangent; // Dynamic friction.
-                        }
-                    }
-                }
-
-                // Apply friction impulses.
-                {
-                    const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-
-                    linearVelocityA -= impulseSum * invMassA;
-                    angularVelocityA -= (
-                        glm::dot(rAPerpArray[0], impulseArray[0]) +
-                        glm::dot(rAPerpArray[1], impulseArray[1])
-                        ) * invInertiaA;
-
-                    linearVelocityB += impulseSum * invMassB;
-                    angularVelocityB += (
-                        glm::dot(rBPerpArray[0], impulseArray[0]) +
-                        glm::dot(rBPerpArray[1], impulseArray[1])
-                        ) * invInertiaB;
-                }
-
-                // Store velocities.
-                velocityXPtr[bodyIndexA] = linearVelocityA.x;
-                velocityYPtr[bodyIndexA] = linearVelocityA.y;
-                velocityXPtr[bodyIndexB] = linearVelocityB.x;
-                velocityYPtr[bodyIndexB] = linearVelocityB.y;
-
-                angularVelocityPtr[bodyIndexA] = angularVelocityA;
-                angularVelocityPtr[bodyIndexB] = angularVelocityB;
+                // Check if there is at least one valid contact.
+                if (noContacts) continue;
             }
+
+            // Apply collision impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+
+                linearVelocityA -= impulseSum * invMassA;
+                angularVelocityA -= (
+                    glm::dot(rAPerpArray[0], impulseArray[0]) +
+                    glm::dot(rAPerpArray[1], impulseArray[1])
+                    ) * invInertiaA;
+
+                linearVelocityB += impulseSum * invMassB;
+                angularVelocityB += (
+                    glm::dot(rBPerpArray[0], impulseArray[0]) +
+                    glm::dot(rBPerpArray[1], impulseArray[1])
+                    ) * invInertiaB;
+            }
+
+            // Calculate friction impulses.
+            {
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    const Vec2 rAPerp = rAPerpArray[i];
+                    const Vec2 rBPerp = rBPerpArray[i];
+
+                    const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
+                    const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
+
+                    const Vec2 relativeVelocity =
+                        (linearVelocityB + angularLinearVelB) -
+                        (linearVelocityA + angularLinearVelA);
+
+                    Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
+                    const Real tangentLengthSq = glm::dot(tangent, tangent);
+                    if (tangentLengthSq < frictionEpsilonSq)
+                    {
+                        impulseArray[i] = Vec2(0.0, 0.0);
+                        continue;
+                    }
+
+                    tangent /= std::sqrt(tangentLengthSq);
+
+                    const Real rAPerpDotT = glm::dot(rAPerp, tangent);
+                    const Real rBPerpDotT = glm::dot(rBPerp, tangent);
+
+                    const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
+                    const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
+
+                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
+                    const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
+
+                    const Real jn = jnArray[i];
+                    if (std::fabs(jt) <= jn * staticFriction)
+                    {
+                        impulseArray[i] = -jt * tangent; // Static friction.
+                    }
+                    else
+                    {
+                        const Real maxDynamic = jn * dynamicFriction;
+                        const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
+                        impulseArray[i] = f * tangent; // Dynamic friction.
+                    }
+                }
+            }
+
+            // Apply friction impulses.
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+
+                linearVelocityA -= impulseSum * invMassA;
+                angularVelocityA -= (
+                    glm::dot(rAPerpArray[0], impulseArray[0]) +
+                    glm::dot(rAPerpArray[1], impulseArray[1])
+                    ) * invInertiaA;
+
+                linearVelocityB += impulseSum * invMassB;
+                angularVelocityB += (
+                    glm::dot(rBPerpArray[0], impulseArray[0]) +
+                    glm::dot(rBPerpArray[1], impulseArray[1])
+                    ) * invInertiaB;
+            }
+
+            // Store velocities.
+            velocityXPtr[bodyIndexA] = linearVelocityA.x;
+            velocityYPtr[bodyIndexA] = linearVelocityA.y;
+            velocityXPtr[bodyIndexB] = linearVelocityB.x;
+            velocityYPtr[bodyIndexB] = linearVelocityB.y;
+
+            angularVelocityPtr[bodyIndexA] = angularVelocityA;
+            angularVelocityPtr[bodyIndexB] = angularVelocityB;
         }
     }
 
     void Solver::solvePositionConstraints(
         std::span<const BodyCollisionData> narrowPhaseCollisions,
-        std::span<const PositionAnchor> positionAnchors,
-        uint32_t solverIterations
+        std::span<const PositionAnchor> positionAnchors
     )
     {
         TRACY_SCOPE_NC("Solve position constraints", Ecstasy::Color::Indigo);
@@ -540,46 +544,43 @@ namespace PS_AGONY
         // with data.contacts[0] right now, before any correction has moved anything).
         const size_t collisionCount = narrowPhaseCollisions.size();
 
-        for (uint32_t iteration = 0; iteration < solverIterations; iteration++)
+        for (size_t c = 0; c < collisionCount; c++)
         {
-            for (size_t c = 0; c < collisionCount; c++)
-            {
-                const auto& data = narrowPhaseCollisions[c];
-                const BodyIndex bodyIndexA = data.bodyA;
-                const BodyIndex bodyIndexB = data.bodyB;
+            const auto& data = narrowPhaseCollisions[c];
+            const BodyIndex bodyIndexA = data.bodyA;
+            const BodyIndex bodyIndexB = data.bodyB;
 
-                const Real invMassA = invMassPtr[bodyIndexA];
-                const Real invMassB = invMassPtr[bodyIndexB];
-                const Real totalInvMass = invMassA + invMassB;
-                if (totalInvMass <= Real(0)) continue;
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+            const Real totalInvMass = invMassA + invMassB;
+            if (totalInvMass <= Real(0)) continue;
 
-                // Re-derive the world anchors from the current (possibly already corrected) transforms.
-                const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
-                const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+            // Re-derive the world anchors from the current (possibly already corrected) transforms.
+            const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+            const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
-                const Vec2 worldAnchorA = centerOfMassA + rotate(positionAnchors[c].localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-                const Vec2 worldAnchorB = centerOfMassB + rotate(positionAnchors[c].localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+            const Vec2 worldAnchorA = centerOfMassA + rotate(positionAnchors[c].localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+            const Vec2 worldAnchorB = centerOfMassB + rotate(positionAnchors[c].localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
-                // The anchors coincided (drift = 0) when depth was measured, so drift is exactly
-                // how much penetration has already been resolved since then.
-                const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
-                const Real currentSeparation = data.depth - drift;
+            // The anchors coincided (drift = 0) when depth was measured, so drift is exactly
+            // how much penetration has already been resolved since then.
+            const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
+            const Real currentSeparation = data.depth - drift;
 
-                const Real correctionDepth = currentSeparation - simulationSettings.positionCorrectionSlop;
-                if (correctionDepth <= Real(0)) continue;
+            const Real correctionDepth = currentSeparation - simulationSettings.positionCorrectionSlop;
+            if (correctionDepth <= Real(0)) continue;
 
-                const Real invTotalInvMass_x_Depth = correctionDepth / totalInvMass;
-                const Real correctionA = invMassA * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
-                const Real correctionB = invMassB * invTotalInvMass_x_Depth * simulationSettings.positionCorrectionPercent;
+            const Real totalCorrection = correctionDepth / totalInvMass * simulationSettings.positionCorrectionPercent;
+            const Real correctionA = invMassA * totalCorrection;
+            const Real correctionB = invMassB * totalCorrection;
 
-                const Vec2 correctionAVec = data.normal * correctionA;
-                const Vec2 correctionBVec = data.normal * correctionB;
+            const Vec2 correctionAVec = data.normal * correctionA;
+            const Vec2 correctionBVec = data.normal * correctionB;
 
-                positionXPtr[bodyIndexA] -= correctionAVec.x;
-                positionYPtr[bodyIndexA] -= correctionAVec.y;
-                positionXPtr[bodyIndexB] += correctionBVec.x;
-                positionYPtr[bodyIndexB] += correctionBVec.y;
-            }
+            positionXPtr[bodyIndexA] -= correctionAVec.x;
+            positionYPtr[bodyIndexA] -= correctionAVec.y;
+            positionXPtr[bodyIndexB] += correctionBVec.x;
+            positionYPtr[bodyIndexB] += correctionBVec.y;
         }
     }
 
@@ -654,11 +655,11 @@ namespace PS_AGONY
                         if (localTicket >= positionSolvingStartTick)
                         {
                             std::span<const PositionAnchor> anchorSlice(indirectPositionAnchorData.data() + passOffset.start, passOffset.size);
-                            solvePositionConstraints(collisionSlice, anchorSlice, 1);
+                            solvePositionConstraints(collisionSlice, anchorSlice);
                         }
                         else
                         {
-                            solveVelocityConstraints(collisionSlice, 1);
+                            solveVelocityConstraints(collisionSlice);
                         }
                     }
 

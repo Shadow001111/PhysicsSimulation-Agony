@@ -133,14 +133,12 @@ namespace PS_AGONY
 		);
 
 		void solveVelocityConstraints(
-			std::span<const BodyCollisionData> narrowPhaseCollisions,
-			uint32_t solverIterations
+			std::span<const BodyCollisionData> narrowPhaseCollisions
 		);
 
 		void solvePositionConstraints(
 			std::span<const BodyCollisionData> narrowPhaseCollisions,
-			std::span<const PositionAnchor> positionAnchors,
-			uint32_t solverIterations
+			std::span<const PositionAnchor> positionAnchors
 		);
 
 		void solveConstraintsThreaded(
