@@ -880,6 +880,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Physics step", Ecstasy::Color::Orange);
 
+        simulationRunTimer += deltaTime;
+
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
 
