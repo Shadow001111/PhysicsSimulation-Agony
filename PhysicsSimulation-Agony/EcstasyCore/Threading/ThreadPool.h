@@ -64,7 +64,7 @@ namespace Ecstasy::Threading
             }
         }
 
-        // Non‑copyable, non‑movable - the container owns the storage.
+        // Non-copyable, non-movable - the container owns the storage.
         WorkerThreadContainer(const WorkerThreadContainer&) = delete;
         WorkerThreadContainer& operator=(const WorkerThreadContainer&) = delete;
 

@@ -30,13 +30,7 @@ namespace PS_AGONY
     {
         size_t total = sizeof(Solver);
 
-        // Threaded plan.
-        total += getVectorMemoryUsage(threadedPlan.remainingIndices);
-        total += getVectorMemoryUsage(threadedPlan.nextRemainingIndices);
-        total += getVectorMemoryUsage(threadedPlan.usedBodies);
-        
-        total += getVectorMemoryUsage(threadedPlan.flatIndices);
-        total += getVectorMemoryUsage(threadedPlan.passOffsets);
+        total += solvingPlanner.getMemoryUsage();
 
         total += getVectorMemoryUsage(positionAnchors);
 
@@ -74,10 +68,10 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Solve constraints", Ecstasy::Color::OliveDrab);
 
-        planWorkerCount(narrowPhaseCollisions.size());
+        const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
 
         // Single-threaded path.
-        if (threadedPlan.workerCount <= 1)
+        if (workerCount <= 1)
         {
             solve(narrowPhaseCollisions, velocityIterations, positionIterations);
             return;
@@ -86,153 +80,49 @@ namespace PS_AGONY
         // Multi-threading path.
         computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
 
-        planExecutionWithGraphColoring(narrowPhaseCollisions);
+        {
+            TRACY_SCOPE_NC("Collect colliding body pairs from collision data", Ecstasy::Color::Red);
+
+            const size_t collisionCount = narrowPhaseCollisions.size();
+
+            collidingBodyPairs.resize(collisionCount);
+            for (size_t i = 0; i < collisionCount; i++)
+            {
+                const BodyCollisionData& collData = narrowPhaseCollisions[i];
+                collidingBodyPairs[i] = { collData.bodyA, collData.bodyB };
+            }
+        }
+
+        {
+            TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
+            solvingPlanner.setWorkerCount(workerCount);
+            solvingPlanner.planExecution(collidingBodyPairs, bodies->getCount());
+        }
 
         solveConstraintsThreaded(narrowPhaseCollisions, velocityIterations, positionIterations);
 
-        // Note: I tried to 'computeAnchorPoints'in parallel with 'planExecutionWithGraphColoring'. It caused slowdown in second.
+        // Note: I tried to 'computeAnchorPoints'in parallel with 'solvingPlanner.planExecution'. It caused slowdown in second.
         // Maybe app is memory bound.
     }
 
-    void Solver::planWorkerCount(size_t collisionCount)
+    size_t Solver::planWorkerCount(size_t collisionCount)
     {
+        static constexpr size_t COLLISION_COUNT_PER_WORKER = 830;
+        static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
+
         // Single-threaded path.
-        if (collisionCount < ThreadedConstraintSolvingPlan::MIN_COLLISION_COUNT_FOR_THREADING)
+        if (collisionCount < MIN_COLLISION_COUNT_FOR_THREADING)
         {
-            threadedPlan.workerCount = 0;
-            return;
+            return 0;
         }
 
         // Multi-threading path.
         auto& threadPool = Threading::getGlobalThreadPool();
 
         const size_t availableWorkerCount = threadPool.getThreadCount();
-        const size_t neededWorkerCount = collisionCount / ThreadedConstraintSolvingPlan::COLLISION_COUNT_PER_WORKER;
+        const size_t neededWorkerCount = collisionCount / COLLISION_COUNT_PER_WORKER;
 
-        threadedPlan.workerCount = std::min(availableWorkerCount, neededWorkerCount);
-    }
-
-    void Solver::planExecutionWithGraphColoring(const std::vector<BodyCollisionData>& narrowPhaseCollisions)
-    {
-        TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
-
-        const size_t collisionCount = narrowPhaseCollisions.size();
-        
-        // Prepare containers.
-        threadedPlan.nextRemainingIndices.clear();
-
-        threadedPlan.flatIndices.clear();
-        threadedPlan.flatIndices.reserve(collisionCount);
-
-        threadedPlan.passOffsets.clear();
-
-        threadedPlan.usedBodies.resize(bodies->getCount());
-
-        // Fill remaining indices.
-        threadedPlan.remainingIndices.resize(collisionCount);
-        std::iota(
-            threadedPlan.remainingIndices.begin(),
-            threadedPlan.remainingIndices.end(),
-            0ull
-        );
-
-        // Get pointers.
-        const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
-
-        // Coloring loop.
-        while (true)
-        {
-            // Clear body-using history.
-            std::fill(
-                threadedPlan.usedBodies.begin(),
-                threadedPlan.usedBodies.end(),
-                ThreadedConstraintSolvingPlan::UsedSlot(-1) // Unsigned.
-            );
-
-            // Reserve worker slots for the upcoming wave
-            const size_t currentWaveStartPassIndex = threadedPlan.passOffsets.size();
-            threadedPlan.passOffsets.resize(currentWaveStartPassIndex + threadedPlan.workerCount, { 0, 0 });
-
-            // Coloring.
-            {
-                // TODO: Make first grab take whole range for stage 0.
-
-                const size_t readSize = threadedPlan.remainingIndices.size();
-                size_t currentStageIndex = 0;
-                for (size_t readPos = 0; readPos < readSize; readPos++)
-                {
-                    // Get collision data at index.
-                    const size_t collisionIndex = threadedPlan.remainingIndices[readPos];
-                    const auto& collisionData = narrowPhaseCollisions[collisionIndex];
-
-                    // Get body indices.
-                    const BodyIndex bodyIndexA = collisionData.bodyA;
-                    const BodyIndex bodyIndexB = collisionData.bodyB;
-
-                    // If body is used by previous stages, skip.
-                    if (
-                        threadedPlan.usedBodies[bodyIndexA] < currentStageIndex ||
-                        threadedPlan.usedBodies[bodyIndexB] < currentStageIndex
-                        )
-                    {
-                        threadedPlan.nextRemainingIndices.push_back(collisionIndex);
-                        continue;
-                    }
-
-                    // Mark bodies as used by current stage.
-                    if constexpr (ThreadedConstraintSolvingPlan::DO_NOT_MARK_STATIC_BODIES_AS_USED)
-                    {
-                        // If body is static, it won't get modified anyway, so there can't be any data race.
-                        const size_t isStaticA = isStaticPtr[bodyIndexA];
-                        const size_t isStaticB = isStaticPtr[bodyIndexB];
-
-                        threadedPlan.usedBodies[bodyIndexA] = (-isStaticA) | (currentStageIndex & (~isStaticA));
-                        threadedPlan.usedBodies[bodyIndexB] = (-isStaticB) | (currentStageIndex & (~isStaticB));
-                    }
-                    else
-                    {
-                        threadedPlan.usedBodies[bodyIndexA] = currentStageIndex;
-                        threadedPlan.usedBodies[bodyIndexB] = currentStageIndex;
-                    }
-
-                    // Push index.
-                    const size_t passGlobalIndex = currentWaveStartPassIndex + currentStageIndex;
-                    if (threadedPlan.passOffsets[passGlobalIndex].size == 0)
-                    {
-                        threadedPlan.passOffsets[passGlobalIndex].start = static_cast<uint32_t>(threadedPlan.flatIndices.size());
-                    }
-                    threadedPlan.flatIndices.push_back(collisionIndex);
-                    threadedPlan.passOffsets[passGlobalIndex].size++;
-
-                    // Advance to next stage or stop.
-                    if (threadedPlan.passOffsets[passGlobalIndex].size >= ThreadedConstraintSolvingPlan::MAX_VALID_INDICES_PER_WORKER)
-                    {
-                        currentStageIndex++;
-                        if (currentStageIndex >= threadedPlan.workerCount)
-                        {
-                            threadedPlan.nextRemainingIndices.insert(
-                                threadedPlan.nextRemainingIndices.end(),
-                                threadedPlan.remainingIndices.begin() + (readPos + 1),
-                                threadedPlan.remainingIndices.end()
-                            );
-                            break;
-                        }
-                    }
-                }
-
-                threadedPlan.remainingIndices.clear();
-                threadedPlan.remainingIndices.swap(threadedPlan.nextRemainingIndices);
-            }
-            if (threadedPlan.passOffsets[currentWaveStartPassIndex].size == 0) [[unlikely]]
-            {
-                threadedPlan.passOffsets.resize(currentWaveStartPassIndex);
-                break;
-            }
-            if (threadedPlan.remainingIndices.empty())
-            {
-                break;
-            }
-        }
+        return std::min(availableWorkerCount, neededWorkerCount);
     }
 
     void Solver::computeAnchorPoints(
@@ -594,8 +484,10 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Solve constraints (Multi-threaded)", Ecstasy::Color::Purple);
 
-        const size_t workerCount = threadedPlan.workerCount;
-        const size_t waveCount = threadedPlan.passOffsets.size() / workerCount;
+        const size_t workerCount = solvingPlanner.getWorkerCount();
+        const auto& flatIndices = solvingPlanner.getFlatIndices();
+        const auto& passOffsets = solvingPlanner.getPassOffsets();
+        const size_t waveCount = passOffsets.size() / workerCount;
 
         if (waveCount == 0 || (velocityIterations == 0 && positionIterations == 0))
         {
@@ -606,13 +498,15 @@ namespace PS_AGONY
         {
             TRACY_SCOPE_N("Reorder indirect data");
 
-            const size_t mappedCount = threadedPlan.flatIndices.size();
+            const size_t mappedCount = flatIndices.size();
+
+            const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
 
             indirectCollisionData.resize(mappedCount);
             indirectPositionAnchorData.resize(mappedCount);
             for (size_t i = 0; i < mappedCount; i++)
             {
-                const size_t originalIndex = threadedPlan.flatIndices[i];
+                const size_t originalIndex = flatIndices[i];
                 indirectCollisionData[i] = narrowPhaseCollisions[originalIndex];
                 indirectPositionAnchorData[i] = positionAnchors[originalIndex];
             }
@@ -645,7 +539,7 @@ namespace PS_AGONY
                     const size_t waveIndex = localTicket % waveCount;
 
                     const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-                    const auto& passOffset = threadedPlan.passOffsets[passGlobalIndex];
+                    const auto& passOffset = passOffsets[passGlobalIndex];
 
                     // Get work from current wave and execute it. If empty, skip.
                     if (passOffset.size > 0)
