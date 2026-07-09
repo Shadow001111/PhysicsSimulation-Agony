@@ -99,6 +99,7 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Update persistent contact data");
 
         previousContactDataContainer.clear();
+        previousContactDataContainer.reserve(allCollisionData.size());
         for (BodyCollisionData& collData : allCollisionData)
         {
             ContactKey contactKey;
