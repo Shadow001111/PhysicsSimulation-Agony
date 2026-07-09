@@ -254,7 +254,6 @@ namespace PS_AGONY
             std::array<Vec2, 2> rBPerpArray{};
             std::array<Real, 2> jnArray{};
             const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
-            const Real impulseScale = Real(1.0) / Real(contactCount);
 
             // Calculate collision impulses and apply them.
             {
@@ -288,7 +287,7 @@ namespace PS_AGONY
                     const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
 
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom;
 
                     const Vec2 impulse = jn * normal;
                     rAPerpArray[i] = rAPerp;
@@ -335,7 +334,7 @@ namespace PS_AGONY
                     const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
 
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                    const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
+                    const Real jt = glm::dot(relativeVelocity, tangent) / denom;
 
                     const Real jn = jnArray[i];
 
