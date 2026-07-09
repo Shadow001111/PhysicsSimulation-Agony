@@ -4,7 +4,6 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
-#include <numeric>
 #include <iostream>
 
 #if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
@@ -250,16 +249,14 @@ namespace PS_AGONY
             Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
             const Vec2 normal = data.normal;
-            const Real depth = data.depth;
 
-            // Calculate collision impulses.
-            std::array<Vec2, 2> impulseArray{};
             std::array<Vec2, 2> rAPerpArray{};
             std::array<Vec2, 2> rBPerpArray{};
             std::array<Real, 2> jnArray{};
             const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
-
             const Real impulseScale = Real(1.0) / Real(contactCount);
+
+            // Calculate collision impulses and apply them.
             {
                 bool noContacts = true;
 
@@ -293,36 +290,25 @@ namespace PS_AGONY
                     const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
                     const Real jn = -elasticityPlusOne * velocityAlongNormal / denom * impulseScale;
 
-                    impulseArray[i] = jn * normal;
+                    const Vec2 impulse = jn * normal;
                     rAPerpArray[i] = rAPerp;
                     rBPerpArray[i] = rBPerp;
                     jnArray[i] = jn;
-
                     noContacts = false;
+
+                    // Apply impulse.
+                    linearVelocityA -= impulse * invMassA;
+                    angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
+
+                    linearVelocityB += impulse * invMassB;
+                    angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
                 }
 
                 // Check if there is at least one valid contact.
                 if (noContacts) continue;
             }
 
-            // Apply collision impulses.
-            {
-                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-
-                linearVelocityA -= impulseSum * invMassA;
-                angularVelocityA -= (
-                    glm::dot(rAPerpArray[0], impulseArray[0]) +
-                    glm::dot(rAPerpArray[1], impulseArray[1])
-                    ) * invInertiaA;
-
-                linearVelocityB += impulseSum * invMassB;
-                angularVelocityB += (
-                    glm::dot(rBPerpArray[0], impulseArray[0]) +
-                    glm::dot(rBPerpArray[1], impulseArray[1])
-                    ) * invInertiaB;
-            }
-
-            // Calculate friction impulses.
+            // Calculate friction impulses and apply them.
             {
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
@@ -338,11 +324,7 @@ namespace PS_AGONY
 
                     Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
                     const Real tangentLengthSq = glm::dot(tangent, tangent);
-                    if (tangentLengthSq < frictionEpsilonSq)
-                    {
-                        impulseArray[i] = Vec2(0.0, 0.0);
-                        continue;
-                    }
+                    if (tangentLengthSq < frictionEpsilonSq) continue;
 
                     tangent /= std::sqrt(tangentLengthSq);
 
@@ -356,34 +338,26 @@ namespace PS_AGONY
                     const Real jt = glm::dot(relativeVelocity, tangent) / denom * impulseScale;
 
                     const Real jn = jnArray[i];
+
+                    Vec2 impulse;
                     if (std::fabs(jt) <= jn * staticFriction)
                     {
-                        impulseArray[i] = -jt * tangent; // Static friction.
+                        impulse = -jt * tangent; // Static friction.
                     }
                     else
                     {
                         const Real maxDynamic = jn * dynamicFriction;
                         const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
-                        impulseArray[i] = f * tangent; // Dynamic friction.
+                        impulse = f * tangent; // Dynamic friction.
                     }
+
+                    // Apply impulse.
+                    linearVelocityA -= impulse * invMassA;
+                    angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
+
+                    linearVelocityB += impulse * invMassB;
+                    angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
                 }
-            }
-
-            // Apply friction impulses.
-            {
-                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-
-                linearVelocityA -= impulseSum * invMassA;
-                angularVelocityA -= (
-                    glm::dot(rAPerpArray[0], impulseArray[0]) +
-                    glm::dot(rAPerpArray[1], impulseArray[1])
-                    ) * invInertiaA;
-
-                linearVelocityB += impulseSum * invMassB;
-                angularVelocityB += (
-                    glm::dot(rBPerpArray[0], impulseArray[0]) +
-                    glm::dot(rBPerpArray[1], impulseArray[1])
-                    ) * invInertiaB;
             }
 
             // Store velocities.
