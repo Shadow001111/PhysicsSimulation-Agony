@@ -19,6 +19,18 @@ namespace PS_AGONY
 			Vec2 localAnchorB;
 		};
 
+		struct ContactPointMass
+		{
+			Vec2 rAPerp, rBPerp;
+			Real normalMass;
+			Real tangentMass;
+		};
+
+		struct ContactMassData
+		{
+			std::array<ContactPointMass, 2> points;
+		};
+
 		struct SimulationSettings
 		{
 			// Baumgarte stabilization.
@@ -67,10 +79,11 @@ namespace PS_AGONY
 		LLSolvingPlanner solvingPlanner;
 
 		std::vector<BodyPair> collidingBodyPairs;
-		std::vector<PositionAnchor> positionAnchors;
-
 		std::vector<BodyCollisionData> indirectCollisionData;
-		std::vector<PositionAnchor> indirectPositionAnchorData;
+
+		std::vector<PositionAnchor> positionAnchors;
+		std::vector<ContactMassData> contactMasses;
+
 
 		SimulationSettings simulationSettings;
 	public:
@@ -102,10 +115,7 @@ namespace PS_AGONY
 	private:
 		size_t planWorkerCount(size_t collisionCount);
 
-		void computeAnchorPoints(
-			std::vector<PositionAnchor>& outPositionAnchors,
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions
-		);
+		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
 		void solveVelocityConstraints(
 			std::span<const BodyCollisionData> narrowPhaseCollisions
@@ -117,7 +127,7 @@ namespace PS_AGONY
 		);
 
 		void solveConstraintsThreaded(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+			const std::vector<BodyCollisionData>& collisionDataContainer,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);

@@ -32,9 +32,9 @@ namespace PS_AGONY
         total += solvingPlanner.getMemoryUsage();
 
         total += getVectorMemoryUsage(positionAnchors);
+        total += getVectorMemoryUsage(contactMasses);
 
         total += getVectorMemoryUsage(indirectCollisionData);
-        total += getVectorMemoryUsage(indirectPositionAnchorData);
 
         return total;
     }
@@ -47,7 +47,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Solve constraints (Single-threaded)", Ecstasy::Color::OliveDrab);
 
-        computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
+        computeConstantData(narrowPhaseCollisions);
 
         for (uint32_t i = 0; i < velocityIterations; i++)
         {
@@ -77,8 +77,6 @@ namespace PS_AGONY
         }
 
         // Multi-threading path.
-        computeAnchorPoints(positionAnchors, narrowPhaseCollisions);
-
         {
             TRACY_SCOPE_NC("Collect colliding body pairs from collision data", Ecstasy::Color::Red);
 
@@ -91,14 +89,28 @@ namespace PS_AGONY
                 collidingBodyPairs[i] = { collData.bodyA, collData.bodyB };
             }
         }
-
         {
             TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
             solvingPlanner.setWorkerCount(workerCount);
             solvingPlanner.planExecution(collidingBodyPairs, bodies->getCount());
         }
+        {
+            TRACY_SCOPE_N("Reorder indirect data");
 
-        solveConstraintsThreaded(narrowPhaseCollisions, velocityIterations, positionIterations);
+            const auto& flatIndices = solvingPlanner.getFlatIndices();
+            const size_t mappedCount = flatIndices.size();
+            const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
+
+            indirectCollisionData.resize(mappedCount);
+            for (size_t i = 0; i < mappedCount; i++)
+            {
+                const size_t originalIndex = flatIndicesPtr[i];
+                indirectCollisionData[i] = narrowPhaseCollisions[originalIndex];
+            }
+        }
+        computeConstantData(indirectCollisionData);
+
+        solveConstraintsThreaded(indirectCollisionData, velocityIterations, positionIterations);
 
         // Note: I tried to 'computeAnchorPoints'in parallel with 'solvingPlanner.planExecution'. It caused slowdown in second.
         // Maybe app is memory bound.
@@ -124,12 +136,9 @@ namespace PS_AGONY
         return std::min(availableWorkerCount, neededWorkerCount);
     }
 
-    void Solver::computeAnchorPoints(
-        std::vector<PositionAnchor>& outPositionAnchors,
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions
-    )
+    void Solver::computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer)
     {
-        TRACY_SCOPE_NC("Compute anchor points", Ecstasy::Color::Chocolate);
+        TRACY_SCOPE_NC("Compute constant data", Ecstasy::Color::Chocolate);
 
         Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
         Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -137,6 +146,8 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
         auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
             {
@@ -151,19 +162,67 @@ namespace PS_AGONY
                 return { v.x * cos + v.y * sin, -v.x * sin + v.y * cos };
             };
 
+        // Resize containers.
+        const size_t collisionCount = collisionDataContainer.size();
+        positionAnchors.resize(collisionCount);
+        //contactMasses.resize(collisionCount);
 
-        const size_t collisionCount = narrowPhaseCollisions.size();
-        outPositionAnchors.resize(collisionCount);
+        const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
+
+        // Compute constant data.
         for (size_t c = 0; c < collisionCount; c++)
         {
-            const auto& data = narrowPhaseCollisions[c];
-            const Vec2 contactPoint = data.contacts[0]; // Only the first point is used.
+            const auto& data = collisionDataPtr[c];
+            {
+                const Vec2 contactPoint = data.contacts[0]; // Only the first point is used.
 
-            const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
-            const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
+                const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
+                const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
 
-            outPositionAnchors[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
-            outPositionAnchors[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
+                positionAnchors[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
+                positionAnchors[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
+            }
+            /*{
+                auto& masses = contactMasses[c];
+
+                const Real invMassA = invMassPtr[data.bodyA];
+                const Real invMassB = invMassPtr[data.bodyB];
+                const Real invInertiaA = invInertiaPtr[data.bodyA];
+                const Real invInertiaB = invInertiaPtr[data.bodyB];
+                const Real totalInvMass = invMassA + invMassB;
+
+                const Vec2 normal = data.normal;
+                const Vec2 tangent{ -normal.y, normal.x };
+
+                const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
+                const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
+
+                 TODO: Use SIMD.
+                for (uint32_t i = 0; i < data.contactCount; i++)
+                {
+                    const Vec2 contactPoint = data.contacts[i];
+                    auto& point = masses.points[i];
+
+                    const Vec2 rA = contactPoint - centerOfMassA;
+                    const Vec2 rB = contactPoint - centerOfMassB;
+                    point.rAPerp = { -rA.y, rA.x };
+                    point.rBPerp = { -rB.y, rB.x };
+
+                    const Real rAPerpDotN = glm::dot(point.rAPerp, normal);
+                    const Real rBPerpDotN = glm::dot(point.rBPerp, normal);
+                    const Real normalDenom = totalInvMass
+                        + rAPerpDotN * rAPerpDotN * invInertiaA
+                        + rBPerpDotN * rBPerpDotN * invInertiaB;
+                    point.normalMass = normalDenom > Real(0) ? Real(1) / normalDenom : Real(0);
+
+                    const Real rAPerpDotT = glm::dot(point.rAPerp, tangent);
+                    const Real rBPerpDotT = glm::dot(point.rBPerp, tangent);
+                    const Real tangentDenom = totalInvMass
+                        + rAPerpDotT * rAPerpDotT * invInertiaA
+                        + rBPerpDotT * rBPerpDotT * invInertiaB;
+                    point.tangentMass = tangentDenom > Real(0) ? Real(1) / tangentDenom : Real(0);
+                }
+            }*/
         }
     }
 
@@ -444,7 +503,7 @@ namespace PS_AGONY
     }
 
     void Solver::solveConstraintsThreaded(
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+        const std::vector<BodyCollisionData>& collisionDataContainer,
         uint32_t velocityIterations,
         uint32_t positionIterations
     )
@@ -457,31 +516,15 @@ namespace PS_AGONY
         const size_t waveCount = passOffsets.size() / workerCount;
         const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 
-        if (waveCount == 0 || (velocityIterations == 0 && positionIterations == 0))
+        if (waveCount == 0 || (velocityIterations == 0 && positionIterations == 0)) [[unlikely]]
         {
             return;
         }
 
-        // Reorder indirect data.
-        {
-            TRACY_SCOPE_N("Reorder indirect data");
-
-            const auto& flatIndices = solvingPlanner.getFlatIndices();
-            const size_t mappedCount = flatIndices.size();
-            const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
-
-            indirectCollisionData.resize(mappedCount);
-            indirectPositionAnchorData.resize(mappedCount);
-            for (size_t i = 0; i < mappedCount; i++)
-            {
-                const size_t originalIndex = flatIndicesPtr[i];
-                indirectCollisionData[i] = narrowPhaseCollisions[originalIndex];
-                indirectPositionAnchorData[i] = positionAnchors[originalIndex];
-            }
-        }
-
         const uint32_t positionSolvingStartTick = static_cast<uint32_t>(waveCount) * velocityIterations;
         const uint32_t totalTicks = positionSolvingStartTick + static_cast<uint32_t>(waveCount) * positionIterations;
+
+        const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
 
         // Worker data.
         workerResources.workerData.resize(workerCount);
@@ -512,11 +555,11 @@ namespace PS_AGONY
                     // Get work from current wave and execute it. If empty, skip.
                     if (passOffset.size > 0)
                     {
-                        std::span<const BodyCollisionData> collisionSlice(indirectCollisionData.data() + passOffset.start, passOffset.size);
+                        std::span<const BodyCollisionData> collisionSlice(collisionDataPtr + passOffset.start, passOffset.size);
 
                         if (localTicket >= positionSolvingStartTick)
                         {
-                            std::span<const PositionAnchor> anchorSlice(indirectPositionAnchorData.data() + passOffset.start, passOffset.size);
+                            std::span<const PositionAnchor> anchorSlice(positionAnchors.data() + passOffset.start, passOffset.size);
                             solvePositionConstraints(collisionSlice, anchorSlice);
                         }
                         else
