@@ -18,11 +18,17 @@ namespace PS_AGONY
 			struct ContactData
 			{
 				Vec2 rAPerp, rBPerp;
-				Real normalMass;
+				Real normalMassXElasticityFactor;
 				Real tangentMass;
 			};
 
 			std::array<ContactData, 2> points;
+		};
+
+		struct FrictionData
+		{
+			Real staticFriction;
+			Real dynamicFriction;
 		};
 
 		struct PositionConstraintData
@@ -83,7 +89,7 @@ namespace PS_AGONY
 
 		std::vector<PositionConstraintData> positionConstraintContainer;
 		std::vector<VelocityConstraintData> velocityConstraintContainer;
-
+		std::vector<FrictionData> frictionDataContainer;
 
 		SimulationSettings simulationSettings;
 	public:
@@ -119,7 +125,8 @@ namespace PS_AGONY
 
 		void solveVelocityConstraints(
 			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer
+			std::span<const VelocityConstraintData> constraintDataContainer,
+			std::span<const FrictionData> frictionDataContainer
 		);
 
 		void solvePositionConstraints(
