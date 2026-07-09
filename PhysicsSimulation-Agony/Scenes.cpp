@@ -573,7 +573,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
-        .elasticity = 0.8f,
+        .elasticity = 0.99f,
         .staticFriction = 1.0f,
         .dynamicFriction = 0.5f
     };
