@@ -567,9 +567,9 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     constexpr float terrainBaseY = -20.0f;
 
     // Configurable object counts
-    constexpr int circleCount = 1000;
-    constexpr int boxCount = 1000;
-    constexpr int polygonCount = 1000;
+    constexpr int circleCount = 1200;
+    constexpr int boxCount = 1200;
+    constexpr int polygonCount = 1200;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
@@ -711,7 +711,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr int pyramidRows = 15; // Number of rows in the pyramid
+    constexpr int pyramidRows = 30; // Number of rows in the pyramid
     constexpr float boxWidth = 0.6f;
     constexpr float boxHeight = 0.6f;
     constexpr float boxMass = 1.0f;
@@ -723,8 +723,8 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
     // High friction and lower elasticity help the pyramid remain stable upon initialization
     PS_AGONY::Material pyramidMaterial = {
         .elasticity = 0.1f,
-        .staticFriction = 1.8f,
-        .dynamicFriction = 1.6f
+        .staticFriction = 0.8f,
+        .dynamicFriction = 0.6f
     };
     PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(pyramidMaterial);
 

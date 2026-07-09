@@ -223,10 +223,6 @@ namespace PS_AGONY
             const Real invMassB = invMassPtr[bodyIndexB];
 
             const Real totalInvMass = invMassA + invMassB;
-            if (totalInvMass <= Real(0)) [[unlikely]]
-            {
-                continue;
-            }
 
             // Get materials.
             const MaterialIndex materialIndexA = materialIndexPtr[bodyIndexA];
@@ -429,10 +425,11 @@ namespace PS_AGONY
                 return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
             };
 
-        // Cache each contact's anchor in local (unrotated) space, relative to each body's
-        // center of mass, at the moment the contact was generated (both anchors coincide
-        // with data.contacts[0] right now, before any correction has moved anything).
         const size_t collisionCount = narrowPhaseCollisions.size();
+
+        // Note: I tried to use Simd, it was slower, probably because of the gather-scatter, or just memory intensive.
+        //       plus it was invalid because same body index could appear multiple times in simd batch (on same worker).
+        //       remaking solving planner to account for that would be hell!
 
         for (size_t c = 0; c < collisionCount; c++)
         {
@@ -443,7 +440,6 @@ namespace PS_AGONY
             const Real invMassA = invMassPtr[bodyIndexA];
             const Real invMassB = invMassPtr[bodyIndexB];
             const Real totalInvMass = invMassA + invMassB;
-            if (totalInvMass <= Real(0)) continue;
 
             // Re-derive the world anchors from the current (possibly already corrected) transforms.
             const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
