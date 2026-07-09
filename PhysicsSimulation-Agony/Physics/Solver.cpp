@@ -31,10 +31,10 @@ namespace PS_AGONY
 
         total += solvingPlanner.getMemoryUsage();
 
-        total += getVectorMemoryUsage(positionAnchors);
-        total += getVectorMemoryUsage(contactMasses);
+        total += getVectorMemoryUsage(positionConstraintContainer);
+        total += getVectorMemoryUsage(velocityConstraintContainer);
 
-        total += getVectorMemoryUsage(indirectCollisionData);
+        total += getVectorMemoryUsage(orderedCollisionData);
 
         return total;
     }
@@ -51,11 +51,11 @@ namespace PS_AGONY
 
         for (uint32_t i = 0; i < velocityIterations; i++)
         {
-            solveVelocityConstraints(narrowPhaseCollisions);
+            solveVelocityConstraints(narrowPhaseCollisions, velocityConstraintContainer);
         }
         for (uint32_t i = 0; i < positionIterations; i++)
         {
-            solvePositionConstraints(narrowPhaseCollisions, positionAnchors);
+            solvePositionConstraints(narrowPhaseCollisions, positionConstraintContainer);
         }
     }
 
@@ -95,22 +95,22 @@ namespace PS_AGONY
             solvingPlanner.planExecution(collidingBodyPairs, bodies->getCount());
         }
         {
-            TRACY_SCOPE_N("Reorder indirect data");
+            TRACY_SCOPE_N("Reorder collision data");
 
             const auto& flatIndices = solvingPlanner.getFlatIndices();
             const size_t mappedCount = flatIndices.size();
             const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
 
-            indirectCollisionData.resize(mappedCount);
+            orderedCollisionData.resize(mappedCount);
             for (size_t i = 0; i < mappedCount; i++)
             {
                 const size_t originalIndex = flatIndicesPtr[i];
-                indirectCollisionData[i] = narrowPhaseCollisions[originalIndex];
+                orderedCollisionData[i] = narrowPhaseCollisions[originalIndex];
             }
         }
-        computeConstantData(indirectCollisionData);
+        computeConstantData(orderedCollisionData);
 
-        solveConstraintsThreaded(indirectCollisionData, velocityIterations, positionIterations);
+        solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
 
         // Note: I tried to 'computeAnchorPoints'in parallel with 'solvingPlanner.planExecution'. It caused slowdown in second.
         // Maybe app is memory bound.
@@ -164,8 +164,8 @@ namespace PS_AGONY
 
         // Resize containers.
         const size_t collisionCount = collisionDataContainer.size();
-        positionAnchors.resize(collisionCount);
-        //contactMasses.resize(collisionCount);
+        positionConstraintContainer.resize(collisionCount);
+        velocityConstraintContainer.resize(collisionCount);
 
         const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
 
@@ -173,17 +173,16 @@ namespace PS_AGONY
         for (size_t c = 0; c < collisionCount; c++)
         {
             const auto& data = collisionDataPtr[c];
+            const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
+            const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
             {
                 const Vec2 contactPoint = data.contacts[0]; // Only the first point is used.
 
-                const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
-                const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
-
-                positionAnchors[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
-                positionAnchors[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
+                positionConstraintContainer[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
+                positionConstraintContainer[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
             }
-            /*{
-                auto& masses = contactMasses[c];
+            {
+                auto& velocityConstraint = velocityConstraintContainer[c];
 
                 const Real invMassA = invMassPtr[data.bodyA];
                 const Real invMassB = invMassPtr[data.bodyB];
@@ -194,14 +193,11 @@ namespace PS_AGONY
                 const Vec2 normal = data.normal;
                 const Vec2 tangent{ -normal.y, normal.x };
 
-                const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
-                const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
-
-                 TODO: Use SIMD.
+                // TODO: Use SIMD.
                 for (uint32_t i = 0; i < data.contactCount; i++)
                 {
                     const Vec2 contactPoint = data.contacts[i];
-                    auto& point = masses.points[i];
+                    auto& point = velocityConstraint.points[i];
 
                     const Vec2 rA = contactPoint - centerOfMassA;
                     const Vec2 rB = contactPoint - centerOfMassB;
@@ -222,12 +218,13 @@ namespace PS_AGONY
                         + rBPerpDotT * rBPerpDotT * invInertiaB;
                     point.tangentMass = tangentDenom > Real(0) ? Real(1) / tangentDenom : Real(0);
                 }
-            }*/
+            }
         }
     }
 
     void Solver::solveVelocityConstraints(
-        std::span<const BodyCollisionData> narrowPhaseCollisions
+        std::span<const BodyCollisionData> collisionDataContainer,
+        std::span<const VelocityConstraintData> constraintDataContainer
     )
     {
         TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
@@ -235,12 +232,6 @@ namespace PS_AGONY
         constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
 
         // Get pointers.
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
-
-        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
-        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
-
         Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
         Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
@@ -258,23 +249,16 @@ namespace PS_AGONY
                 return { velocityX, velocityY };
             };
 
-        auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
-            {
-                const Real positionX = positionXPtr[bodyIndex];
-                const Real positionY = positionYPtr[bodyIndex];
-
-                const Real localCOMX = localCenterOfMassXPtr[bodyIndex];
-                const Real localCOMY = localCenterOfMassYPtr[bodyIndex];
-
-                return { positionX + localCOMX, positionY + localCOMY };
-            };
-
         // Main loop.
-        for (const auto& data : narrowPhaseCollisions)
+        const size_t collisionCount = collisionDataContainer.size();
+        for (size_t c = 0; c < collisionCount; c++)
         {
+            const BodyCollisionData& collisionData = collisionDataContainer[c];
+            const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
+
             // Get body indices.
-            const BodyIndex bodyIndexA = data.bodyA;
-            const BodyIndex bodyIndexB = data.bodyB;
+            const BodyIndex bodyIndexA = collisionData.bodyA;
+            const BodyIndex bodyIndexB = collisionData.bodyB;
 
             // Get inv masses.
             const Real invMassA = invMassPtr[bodyIndexA];
@@ -291,12 +275,8 @@ namespace PS_AGONY
 
             const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0); // Hoping for fused multiply-add. Adding here instead of adding in impulse calculation.
 
-            const Real staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
+            const Real staticFriction  = std::sqrt(std::fmax(Real(0), materialA->staticFriction  * materialB->staticFriction));
             const Real dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
-
-            // Compute world centers of mass.
-            const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
-            const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
             //
             const Real invInertiaA = invInertiaPtr[bodyIndexA];
@@ -307,12 +287,10 @@ namespace PS_AGONY
             Real angularVelocityA = angularVelocityPtr[bodyIndexA];
             Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
-            const Vec2 normal = data.normal;
+            const Vec2 normal = collisionData.normal;
 
-            std::array<Vec2, 2> rAPerpArray{};
-            std::array<Vec2, 2> rBPerpArray{};
             std::array<Real, 2> jnArray{};
-            const uint32_t contactCount = data.contactCount; // std::min(data.contactCount, 2u);
+            const uint32_t contactCount = collisionData.contactCount; // std::min(data.contactCount, 2u);
 
             // Calculate collision impulses and apply them.
             {
@@ -320,13 +298,10 @@ namespace PS_AGONY
 
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
-                    const Vec2 contactPoint = data.contacts[i];
+                    const auto& contactData = velocityConstraintData.points[i];
 
-                    const Vec2 rA = contactPoint - centerOfMassA;
-                    const Vec2 rB = contactPoint - centerOfMassB;
-
-                    const Vec2 rAPerp = { -rA.y, rA.x };
-                    const Vec2 rBPerp = { -rB.y, rB.x };
+                    const Vec2 rAPerp = contactData.rAPerp;
+                    const Vec2 rBPerp = contactData.rBPerp;
 
                     const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
                     const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
@@ -339,18 +314,9 @@ namespace PS_AGONY
 
                     if (velocityAlongNormal > Real(0)) continue;
 
-                    const Real rAPerpDotN = glm::dot(rAPerp, normal);
-                    const Real rBPerpDotN = glm::dot(rBPerp, normal);
-
-                    const Real inertiaTermA = rAPerpDotN * rAPerpDotN * invInertiaA;
-                    const Real inertiaTermB = rBPerpDotN * rBPerpDotN * invInertiaB;
-
-                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                    const Real jn = -elasticityPlusOne * velocityAlongNormal / denom;
+                    const Real jn = -elasticityPlusOne * velocityAlongNormal * contactData.normalMass;
 
                     const Vec2 impulse = jn * normal;
-                    rAPerpArray[i] = rAPerp;
-                    rBPerpArray[i] = rBPerp;
                     jnArray[i] = jn;
                     noContacts = false;
 
@@ -370,8 +336,10 @@ namespace PS_AGONY
             {
                 for (uint32_t i = 0; i < contactCount; i++)
                 {
-                    const Vec2 rAPerp = rAPerpArray[i];
-                    const Vec2 rBPerp = rBPerpArray[i];
+                    const auto& contactData = velocityConstraintData.points[i];
+
+                    const Vec2 rAPerp = contactData.rAPerp;
+                    const Vec2 rBPerp = contactData.rBPerp;
 
                     const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
                     const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
@@ -386,14 +354,7 @@ namespace PS_AGONY
 
                     tangent /= std::sqrt(tangentLengthSq);
 
-                    const Real rAPerpDotT = glm::dot(rAPerp, tangent);
-                    const Real rBPerpDotT = glm::dot(rBPerp, tangent);
-
-                    const Real inertiaTermA = rAPerpDotT * rAPerpDotT * invInertiaA;
-                    const Real inertiaTermB = rBPerpDotT * rBPerpDotT * invInertiaB;
-
-                    const Real denom = totalInvMass + inertiaTermA + inertiaTermB;
-                    const Real jt = glm::dot(relativeVelocity, tangent) / denom;
+                    const Real jt = glm::dot(relativeVelocity, tangent) * contactData.tangentMass;
 
                     const Real jn = jnArray[i];
 
@@ -430,8 +391,8 @@ namespace PS_AGONY
     }
 
     void Solver::solvePositionConstraints(
-        std::span<const BodyCollisionData> narrowPhaseCollisions,
-        std::span<const PositionAnchor> positionAnchors
+        std::span<const BodyCollisionData> collisionDataContainer,
+        std::span<const PositionConstraintData> constraintDataContainer
     )
     {
         TRACY_SCOPE_NC("Solve position constraints", Ecstasy::Color::Indigo);
@@ -457,7 +418,7 @@ namespace PS_AGONY
                 return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
             };
 
-        const size_t collisionCount = narrowPhaseCollisions.size();
+        const size_t collisionCount = collisionDataContainer.size();
 
         // Note: I tried to use Simd, it was slower, probably because of the gather-scatter, or just memory intensive.
         //       plus it was invalid because same body index could appear multiple times in simd batch (on same worker).
@@ -465,7 +426,7 @@ namespace PS_AGONY
 
         for (size_t c = 0; c < collisionCount; c++)
         {
-            const auto& data = narrowPhaseCollisions[c];
+            const auto& data = collisionDataContainer[c];
             const BodyIndex bodyIndexA = data.bodyA;
             const BodyIndex bodyIndexB = data.bodyB;
 
@@ -477,8 +438,9 @@ namespace PS_AGONY
             const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
             const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
-            const Vec2 worldAnchorA = centerOfMassA + rotate(positionAnchors[c].localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-            const Vec2 worldAnchorB = centerOfMassB + rotate(positionAnchors[c].localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+            const PositionConstraintData& positionConstraintData = constraintDataContainer[c];
+            const Vec2 worldAnchorA = centerOfMassA + rotate(positionConstraintData.localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+            const Vec2 worldAnchorB = centerOfMassB + rotate(positionConstraintData.localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
             // The anchors coincided (drift = 0) when depth was measured, so drift is exactly
             // how much penetration has already been resolved since then.
@@ -559,12 +521,13 @@ namespace PS_AGONY
 
                         if (localTicket >= positionSolvingStartTick)
                         {
-                            std::span<const PositionAnchor> anchorSlice(positionAnchors.data() + passOffset.start, passOffset.size);
-                            solvePositionConstraints(collisionSlice, anchorSlice);
+                            std::span<const PositionConstraintData> constraintSlice(positionConstraintContainer.data() + passOffset.start, passOffset.size);
+                            solvePositionConstraints(collisionSlice, constraintSlice);
                         }
                         else
                         {
-                            solveVelocityConstraints(collisionSlice);
+                            std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
+                            solveVelocityConstraints(collisionSlice, constraintSlice);
                         }
                     }
 

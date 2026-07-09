@@ -13,22 +13,22 @@ namespace PS_AGONY
 {
 	class Solver
 	{
-		struct PositionAnchor
+		struct VelocityConstraintData
+		{
+			struct ContactData
+			{
+				Vec2 rAPerp, rBPerp;
+				Real normalMass;
+				Real tangentMass;
+			};
+
+			std::array<ContactData, 2> points;
+		};
+
+		struct PositionConstraintData
 		{
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
-		};
-
-		struct ContactPointMass
-		{
-			Vec2 rAPerp, rBPerp;
-			Real normalMass;
-			Real tangentMass;
-		};
-
-		struct ContactMassData
-		{
-			std::array<ContactPointMass, 2> points;
 		};
 
 		struct SimulationSettings
@@ -79,10 +79,10 @@ namespace PS_AGONY
 		LLSolvingPlanner solvingPlanner;
 
 		std::vector<BodyPair> collidingBodyPairs;
-		std::vector<BodyCollisionData> indirectCollisionData;
+		std::vector<BodyCollisionData> orderedCollisionData;
 
-		std::vector<PositionAnchor> positionAnchors;
-		std::vector<ContactMassData> contactMasses;
+		std::vector<PositionConstraintData> positionConstraintContainer;
+		std::vector<VelocityConstraintData> velocityConstraintContainer;
 
 
 		SimulationSettings simulationSettings;
@@ -118,12 +118,13 @@ namespace PS_AGONY
 		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
 		void solveVelocityConstraints(
-			std::span<const BodyCollisionData> narrowPhaseCollisions
+			std::span<const BodyCollisionData> collisionDataContainer,
+			std::span<const VelocityConstraintData> constraintDataContainer
 		);
 
 		void solvePositionConstraints(
-			std::span<const BodyCollisionData> narrowPhaseCollisions,
-			std::span<const PositionAnchor> positionAnchors
+			std::span<const BodyCollisionData> collisionDataContainer,
+			std::span<const PositionConstraintData> constraintDataContainer
 		);
 
 		void solveConstraintsThreaded(
