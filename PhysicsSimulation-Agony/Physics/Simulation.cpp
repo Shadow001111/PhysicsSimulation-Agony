@@ -1113,6 +1113,9 @@ namespace PS_AGONY
             simulationSettings.velocitySolvingIterations,
             simulationSettings.positionSolvingIterations
         );
+
+        // Updating persistent contact data.
+        narrowPhaseCollisionDetector.updatePersistentContactData();
     }
 
     void Simulation::buildBodyAABBs()
