@@ -12,6 +12,16 @@ namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Simd<Real>;
 
+
+    template <typename Map>
+    size_t robinHoodMapMemoryUsage(const Map& map)
+    {
+        // mask() + 1 == current bucket count (always a power of two).
+        auto const numElementsWithBuffer = map.calcNumElementsWithBuffer(map.mask() + 1);
+        return map.calcNumBytesTotal(numElementsWithBuffer);
+    }
+
+
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
         SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> mat;
@@ -134,6 +144,8 @@ namespace PS_AGONY
             }
             total += PS_AGONY::getVectorMemoryUsage(chunkData.results);
         }
+
+        total += robinHoodMapMemoryUsage(previousContactDataContainer);
 
         return total;
     }
