@@ -782,36 +782,45 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
 
 void load_StackedTower(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
-    // === CONFIGURATION VARIABLES ===
-    constexpr int towerRows = 100;    // N: Number of stacked square boxes
-    constexpr float boxSize = 0.6f;  // Dimension for square sides (width & height)
+    constexpr int towerRows = 100;
+    constexpr float boxSize = 0.6f;
     constexpr float boxMass = 1.0f;
 
-    constexpr float floorThickness = 2.0f;
-    constexpr float floorWidth = 10.0f;
+    constexpr float boundaryThickness = 2.0f;
+    constexpr float floorWidth = 100.0f;
 
-    // === 1. MATERIAL SETUP ===
     PS_AGONY::Material towerMaterial = {
-        .elasticity = 0.0f,         // Zero elasticity for ideal stack stability
-        .staticFriction = 0.8f,     // Requested static friction
-        .dynamicFriction = 0.6f     // Requested dynamic friction
+        .elasticity = 0.0f,
+        .staticFriction = 0.0f,
+        .dynamicFriction = 0.0f
     };
     PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(towerMaterial);
 
-    // === 2. STATIC FLOOR ===
-    // Placed so that its top edge rests exactly at Y = 0.0
+
     simulation.createBox({
-        .base.position = { 0.0f, -floorThickness * 0.5f },
-        .base.mass = 0, // Static
+        .base.position = { 0.0f, -boundaryThickness * 0.5f },
+        .base.mass = 0,
         .base.materialIndex = materialIdx,
-        .size = { floorWidth, floorThickness }
+        .size = { floorWidth, boundaryThickness }
         });
 
-    // === 3. VERTICAL TOWER GENERATION ===
-    // Spawns boxes cleanly stacked on top of each other centered at X = 0.0
+    constexpr float wallHeight = towerRows * boxSize;
+    simulation.createBox({
+        .base.position = { -(boundaryThickness + boxSize) * 0.5f, wallHeight * 0.5f },
+        .base.mass = 0,
+        .base.materialIndex = materialIdx,
+        .size = { boundaryThickness, wallHeight  }
+        });
+    simulation.createBox({
+        .base.position = {  (boundaryThickness + boxSize) * 0.5f, wallHeight * 0.5f },
+        .base.mass = 0,
+        .base.materialIndex = materialIdx,
+        .size = { boundaryThickness, wallHeight  }
+        });
+
+
     for (int i = 0; i < towerRows; ++i)
     {
-        // Calculate Y coordinate for the center of the box in the current row
         float y = (i + 0.5f) * boxSize;
 
         simulation.createBox({
