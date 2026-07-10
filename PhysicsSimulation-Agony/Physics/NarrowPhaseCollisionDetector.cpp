@@ -12,11 +12,15 @@ namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Simd<Real>;
 
-    struct Vector2AndSqDistance
+
+    template <typename Map>
+    size_t robinHoodMapMemoryUsage(const Map& map)
     {
-        Vec2 vector;
-        Real squaredDistance;
-    };
+        // mask() + 1 == current bucket count (always a power of two).
+        auto const numElementsWithBuffer = map.calcNumElementsWithBuffer(map.mask() + 1);
+        return map.calcNumBytesTotal(numElementsWithBuffer);
+    }
+
 
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
@@ -66,8 +70,8 @@ namespace PS_AGONY
 
         allCollisionData.reserve(bodyPairs.size());
 
+        // Determine to use threading or not.
         bool useThreading = false;
-        
         if (executionPolicy == ExecutionPolicy::ForceMultiThreaded)
         {
             useThreading = true;
@@ -81,6 +85,7 @@ namespace PS_AGONY
             useThreading = bodyPairs.size() > 635;
         }
         
+        // Find collisions.
         if (useThreading)
         {
             findCollisionsMultiThreaded(bodyPairs);
@@ -91,6 +96,37 @@ namespace PS_AGONY
         }
 
         return allCollisionData;
+    }
+
+    void NarrowPhaseCollisionDetector::updatePersistentContactData()
+    {
+        if constexpr (!ENABLE_WARM_STARTING)
+        {
+            previousContactDataContainer.clear();
+            return;
+        }
+
+        TRACY_SCOPE_N("Update persistent contact data");
+
+        previousContactDataContainer.clear();
+        previousContactDataContainer.reserve(allCollisionData.size());
+        for (BodyCollisionData& collData : allCollisionData)
+        {
+            BodyPairKey bodyPairKey{ collData.bodyA , collData.bodyB };
+
+            CachedContactPair& data = previousContactDataContainer.emplace(bodyPairKey, CachedContactPair{}).first->second;
+
+            // Reset contact ids.
+            data.contactIds[0] = 0xFFFFFFFF;
+            data.contactIds[1] = 0xFFFFFFFF;
+
+            // Only cache valid active contacts.
+            for (uint32_t i = 0; i < collData.contactCount; i++)
+            {
+                data.contactIds[i] = collData.contactIds[i];
+                data.contactData[i] = collData.persistentContactData[i];
+            }
+        }
     }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
@@ -108,6 +144,8 @@ namespace PS_AGONY
             }
             total += PS_AGONY::getVectorMemoryUsage(chunkData.results);
         }
+
+        total += robinHoodMapMemoryUsage(previousContactDataContainer);
 
         return total;
     }
@@ -230,6 +268,10 @@ namespace PS_AGONY
                     std::swap(bodyIndexA, bodyIndexB);
                     std::swap(typeA, typeB);
                 }
+                else if (typeA == typeB && bodyIndexB > bodyIndexA)
+                {
+                    std::swap(bodyIndexA, bodyIndexB);
+                }
 
                 chunkData.pairs((size_t)typeA, (size_t)typeB).emplace_back(bodyIndexA, bodyIndexB);
             }
@@ -249,12 +291,40 @@ namespace PS_AGONY
                 (this->*func)(vec, chunkData.results);
             }
         }
+
+        // Move persistent contact data from previous frame.
+        if constexpr (ENABLE_WARM_STARTING)
+        {
+            TRACY_SCOPE_N("Move previous contact data");
+            for (BodyCollisionData& collData : chunkData.results)
+            {
+                BodyPairKey bodyPairKey{ collData.bodyA , collData.bodyB };
+
+                // Check if pair existed in previous frame.
+                const auto it = previousContactDataContainer.find(bodyPairKey);
+                if (it == previousContactDataContainer.end()) continue;
+
+                const CachedContactPair& data = it->second;
+
+                // Match current contacts with previous frame contacts using contactIds
+                for (uint32_t i = 0; i < collData.contactCount; i++)
+                {
+                    if (data.contactIds[0] != uint32_t(-1) && collData.contactIds[i] == data.contactIds[0])
+                    {
+                        collData.persistentContactData[i] = data.contactData[0];
+                    }
+                    else if (data.contactIds[1] != uint32_t(-1) && collData.contactIds[i] == data.contactIds[1])
+                    {
+                        collData.persistentContactData[i] = data.contactData[1];
+                    }
+                }
+            }
+        }
     }
 
 
     /*===COLLISION METHODS===*/
 
-    // TODO: Maybe change threshold values for double Real.
     constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
     constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
     constexpr Real SAT_EPSILON = 1e-4;
@@ -428,9 +498,11 @@ namespace PS_AGONY
                             pair.a, pair.b,
                             normal,
                             depth,
+                            1,
                             positionA + normal * radiusA,
                             Vec2(),
-                            1
+                            0,
+                            0
                         );
                     }
                 }
@@ -473,9 +545,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                1,
                 positionA + normal * radiusA,
                 Vec2(),
-                1
+                0,
+                0
             );
         }
     }
@@ -543,19 +617,27 @@ namespace PS_AGONY
                 const Real depth = radiusA - distance;
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
+                uint32_t contactId = 0;
+                if      (circleLocalPosition.x >  halfWidthB)  contactId = 0;
+                else if (circleLocalPosition.x < -halfWidthB)  contactId = 1;
+                if      (circleLocalPosition.y >  halfHeightB) contactId = 2;
+                else if (circleLocalPosition.y < -halfHeightB) contactId = 3;
+
                 outCollisionData.emplace_back(
                     indexA, indexB,
                     normal,
                     depth,
+                    1,
                     contactOnCircle,
                     Vec2(),
-                    1
+                    contactId,
+                    0
                 );
                 continue;
             }
 
             // Circle center inside box: choose nearest face.
-            const Real dx = halfWidthB - std::fabs(circleLocalPosition.x);
+            const Real dx = halfWidthB  - std::fabs(circleLocalPosition.x);
             const Real dy = halfHeightB - std::fabs(circleLocalPosition.y);
             const bool useX = dx < dy;
             const Real minPen = useX ? dx : dy;
@@ -564,8 +646,17 @@ namespace PS_AGONY
             const Real sy = std::copysign(Real(1), circleLocalPosition.y);
 
             Vec2 normalLocal;
-            if (useX) normalLocal = Vec2(sx, Real(0));
-            else      normalLocal = Vec2(Real(0), sy);
+            uint32_t contactId;
+            if (useX)
+            {
+                normalLocal = Vec2(sx, Real(0));
+                contactId = sx > 0 ? 0 : 1;
+            }
+            else      
+            {
+                normalLocal = Vec2(Real(0), sy);
+                contactId = sy > 0 ? 2 : 3;
+            }
 
             const Vec2 normal = -Vec2{
                 cosB * normalLocal.x - sinB * normalLocal.y,
@@ -574,13 +665,16 @@ namespace PS_AGONY
             const Real depth = radiusA + minPen;
             const Vec2 contactOnCircle = positionA + normal * radiusA;
 
+
             outCollisionData.emplace_back(
                 indexA, indexB,
                 normal,
                 depth,
+                1,
                 contactOnCircle,
                 Vec2(),
-                1
+                contactId,
+                0
             );
         }
     }
@@ -654,8 +748,7 @@ namespace PS_AGONY
             Real separation;
             if (maxSeparation >= ZERO_DIVISION_BOUNDARY)
             {
-                // Center is outside the polygon but possibly within radiusA
-                // of it.
+                // Center is outside the polygon but possibly within radiusA of it.
                 const Vec2 a = localVerts[supportEdge];
                 const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
                 const Vec2 q = closestPointOnSegment(circleLocal, a, b);
@@ -697,9 +790,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
+                1,
                 contactOnCircle,
                 Vec2(),
-                1
+                supportEdge,
+                0
             );
         }
     }
@@ -873,15 +968,21 @@ namespace PS_AGONY
 
             Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
             if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
-            if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
+            if (clipSegment(clipped[0], clipped[1], refEdgeEnd,    sideDir)) continue;
 
-            Vec2 contacts[2];
+            Vec2 contactPoints[2];
+            uint32_t contactIds[2];
             uint32_t contactCount = 0;
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
+            const uint32_t contactIdBase = (uint32_t)bestAxis << 1;
             for (uint32_t i = 0; i < 2; i++)
             {
                 if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
-                    contacts[contactCount++] = clipped[i];
+                {
+                    contactPoints[contactCount] = clipped[i];
+                    contactIds[contactCount] = contactIdBase | i;
+                    contactCount++;
+                }
             }
             if (contactCount == 0) continue;
 
@@ -889,9 +990,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
-                contacts[0],
-                contacts[1],
-                contactCount
+                contactCount,
+                contactPoints[0],
+                contactPoints[1],
+                contactIds[0],
+                contactIds[1]
             );
         }
     }
@@ -1065,10 +1168,12 @@ namespace PS_AGONY
 
             Vec2 incEdgeStart, incEdgeEnd;
 
+            uint32_t incidentEdge;
+            uint32_t incidentEdge2;
             if (refIsBox)
             {
                 // Incident edge is the polygon edge whose normal is most opposite the reference normal.
-                uint32_t incidentEdge = 0;
+                incidentEdge = 0;
                 Real minDot = std::numeric_limits<Real>::max();
 
                 for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
@@ -1082,8 +1187,10 @@ namespace PS_AGONY
                     }
                 }
 
+                incidentEdge2 = (incidentEdge + 1) % uint32_t(vertexCount);
+
                 incEdgeStart = polyWorldVerts[incidentEdge];
-                incEdgeEnd = polyWorldVerts[(incidentEdge + 1) % uint32_t(vertexCount)];
+                incEdgeEnd = polyWorldVerts[incidentEdge2];
             }
             else
             {
@@ -1093,16 +1200,24 @@ namespace PS_AGONY
                 const bool useX = std::fabs(dotX) > std::fabs(dotY);
                 const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
 
+                const int signBool = sign > 0;
+
                 Vec2 faceCenter, edgeOffset;
                 if (useX)
                 {
                     faceCenter = positionA + rightA * (sign * halfWidthA);
                     edgeOffset = upA * halfHeightA;
+
+                    incidentEdge  = (1 - signBool) * 3;
+                    incidentEdge2 = 2 - signBool;
                 }
                 else
                 {
                     faceCenter = positionA + upA * (sign * halfHeightA);
                     edgeOffset = rightA * halfWidthA;
+
+                    incidentEdge  = 1 - signBool;
+                    incidentEdge2 = 2 + signBool;
                 }
 
                 incEdgeStart = faceCenter + edgeOffset;
@@ -1113,15 +1228,20 @@ namespace PS_AGONY
             if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
             if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
 
-            Vec2 contacts[2];
+            uint32_t id1 = incidentEdge;
+            uint32_t id2 = incidentEdge2;
+
+            Vec2 contactPoints[2];
+            uint32_t contactIds[2];
             uint32_t contactCount = 0;
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
-
             for (uint32_t i = 0; i < 2; i++)
             {
                 if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
                 {
-                    contacts[contactCount++] = clipped[i];
+                    contactPoints[contactCount] = clipped[i];
+                    contactIds[contactCount] = (i == 0) ? id1 : id2;
+                    contactCount++;
                 }
             }
 
@@ -1131,9 +1251,11 @@ namespace PS_AGONY
                 indexA, indexB,
                 normal,
                 depth,
-                contacts[0],
-                contacts[1],
-                contactCount
+                contactCount,
+                contactPoints[0],
+                contactPoints[1],
+                contactIds[0],
+                contactIds[1]
             );
 
         nextPair:
@@ -1328,14 +1450,19 @@ namespace PS_AGONY
 
                 const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
 
-                std::array<Vec2, 2> contacts;
-                uint32_t contactCount = 0;
+                const uint32_t id1 = incidentEdgeIndex;
+                const uint32_t id2 = (incidentEdgeIndex + 1) % uint32_t(incVerts.size());
 
+                Vec2 contactPoints[2];
+                uint32_t contactIds[2];
+                uint32_t contactCount = 0;
                 for (uint32_t i = 0; i < 2; i++)
                 {
                     if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
                     {
-                        contacts[contactCount++] = clipped[i];
+                        contactPoints[contactCount] = clipped[i];
+                        contactIds[contactCount] = (i == 0) ? id1 : id2;
+                        contactCount++;
                     }
                 }
 
@@ -1345,9 +1472,11 @@ namespace PS_AGONY
                     indexA, indexB,
                     normal,
                     depth,
-                    contacts[0],
-                    contacts[1],
-                    contactCount
+                    contactCount,
+                    contactPoints[0],
+                    contactPoints[1],
+                    contactIds[0],
+                    contactIds[1]
                 );
             }
         nextPair:
