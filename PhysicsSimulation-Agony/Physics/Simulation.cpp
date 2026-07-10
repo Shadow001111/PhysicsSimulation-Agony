@@ -467,6 +467,9 @@ namespace PS_AGONY
                 if (swappedShapeIdx < boxes.getCount())
                     boxes.bodyIndices[swappedShapeIdx] = bodyIndex;
             }
+
+            // Invalidate persistent contact data.
+            narrowPhaseCollisionDetector.invalidatePersistentContactData();
         }
 
         // Pop back all BodySoA vectors.
