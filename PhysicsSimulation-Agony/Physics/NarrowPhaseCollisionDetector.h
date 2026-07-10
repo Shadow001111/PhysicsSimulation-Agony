@@ -126,14 +126,16 @@ namespace PS_AGONY
 
 		robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> previousContactDataContainer;
 
+		bool isPersistentContactDataInvalidated = false;
+
 		// SoA data viewers.
 		BodySoAViewer bodies;
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
-
-		static constexpr bool ENABLE_WARM_STARTING = true;
 	public:
+		static constexpr bool ENABLE_WARM_STARTING = false;
+
 		enum class ExecutionPolicy
 		{
 			Standard,
@@ -158,6 +160,7 @@ namespace PS_AGONY
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		void updatePersistentContactData();
+		void invalidatePersistentContactData() noexcept { isPersistentContactDataInvalidated = true; }
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 

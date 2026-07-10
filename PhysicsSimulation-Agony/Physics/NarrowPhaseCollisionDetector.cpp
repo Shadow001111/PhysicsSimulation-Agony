@@ -70,6 +70,12 @@ namespace PS_AGONY
 
         allCollisionData.reserve(bodyPairs.size());
 
+        if (isPersistentContactDataInvalidated)
+        {
+            isPersistentContactDataInvalidated = false;
+            previousContactDataContainer.clear();
+        }
+
         // Determine to use threading or not.
         bool useThreading = false;
         if (executionPolicy == ExecutionPolicy::ForceMultiThreaded)
