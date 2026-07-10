@@ -790,7 +790,7 @@ void load_StackedTower(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
     constexpr float floorWidth = 100.0f;
 
     PS_AGONY::Material towerMaterial = {
-        .elasticity = 0.0f,
+        .elasticity = 0.9f,
         .staticFriction = 0.0f,
         .dynamicFriction = 0.0f
     };
