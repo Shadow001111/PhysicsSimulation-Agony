@@ -8,6 +8,17 @@
 
 namespace PS_AGONY
 {
+    [[nodiscard]] static uint32_t idToHexColor(uint32_t x) noexcept
+    {
+        x ^= x >> 16;
+        x *= 0x7feb352dU;
+        x ^= x >> 15;
+        x *= 0x846ca68bU;
+        x ^= x >> 16;
+        return x & 0xFFFFFF;
+    }
+
+
     void SimulationRenderer::init()
     {
         TRACY_SCOPE_N("SimulationRenderer init");
@@ -493,7 +504,7 @@ namespace PS_AGONY
 
             for (size_t j = 0; j < collData.contactCount; j++)
             {
-                const auto& contact = collData.contacts[j];
+                const auto& contact = collData.contactPoints[j];
 
                 auto& renderData = circleResources.instanceData.emplace_back();
 
@@ -503,7 +514,7 @@ namespace PS_AGONY
                 renderData.localCOMY = 0.0f;
                 renderData.rotation = 0.0f;
                 renderData.radius = 0.05f;
-                renderData.color = 0xFF0000;
+                renderData.color = idToHexColor(collData.contactIds[j]);
                 renderData.textureId = 0;
             }
         }

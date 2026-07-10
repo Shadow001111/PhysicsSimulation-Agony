@@ -4,16 +4,25 @@
 #include "SymmetricMatrix.h"
 
 #include <atomic>
+#include <robin_hood.h>
 
 namespace PS_AGONY
 {
+	struct PersistentContactData
+	{
+		Real normalImpulseAccumulator = 0;
+		Real tangentImpulseAccumulator = 0;
+	};
+
 	struct BodyCollisionData
 	{
 		BodyIndex bodyA, bodyB;
 		Vec2 normal;
 		Real depth;
-		Vec2 contacts[2];
 		uint32_t contactCount;
+		Vec2 contactPoints[2];
+		uint32_t contactIds[2];
+		mutable PersistentContactData persistentContactData[2] = { {}, {} };
 
 		BodyCollisionData() = default;
 
@@ -21,13 +30,16 @@ namespace PS_AGONY
 			BodyIndex bodyA, BodyIndex bodyB,
 			Vec2 normal,
 			Real depth,
-			Vec2 contact1, Vec2 contact2,
-			uint32_t contactCount
+			uint32_t contactCount,
+			Vec2 contactPoint1, Vec2 contactPoint2,
+			uint32_t contactId1, uint32_t contactId2
 		) :
 			bodyA(bodyA), bodyB(bodyB), normal(normal), depth(depth), contactCount(contactCount)
 		{
-			contacts[0] = contact1;
-			contacts[1] = contact2;
+			contactPoints[0] = contactPoint1;
+			contactPoints[1] = contactPoint2;
+			contactIds[0] = contactId1;
+			contactIds[1] = contactId2;
 		}
 	};
 
@@ -75,6 +87,34 @@ namespace PS_AGONY
 			}
 		};
 
+		struct CachedContactPair
+		{
+			uint32_t contactIds[2] = { uint32_t(-1), uint32_t(-1) };
+			PersistentContactData contactData[2];
+		};
+
+		struct BodyPairKey
+		{
+			BodyIndex bodyA;
+			BodyIndex bodyB;
+
+			bool operator==(const BodyPairKey& other) const noexcept
+			{
+				return bodyA == other.bodyA && bodyB == other.bodyB;
+			}
+		};
+
+		struct BodyPairKeyHasher
+		{
+			size_t operator()(const BodyPairKey& key) const noexcept
+			{
+				constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
+				uint64_t h = (uint64_t)key.bodyA + addConst;
+				h ^= (uint64_t)key.bodyB + addConst + (h << 6) + (h >> 2);
+				return h;
+			}
+		};
+
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
 			const std::vector<BodyPair>&, std::vector<BodyCollisionData>&
 			);
@@ -84,11 +124,15 @@ namespace PS_AGONY
 		std::vector<BodyCollisionData> allCollisionData;
 		std::vector<ChunkData> chunks;
 
+		robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> previousContactDataContainer;
+
 		// SoA data viewers.
 		BodySoAViewer bodies;
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
+
+		static constexpr bool ENABLE_WARM_STARTING = true;
 	public:
 		enum class ExecutionPolicy
 		{
@@ -112,6 +156,8 @@ namespace PS_AGONY
 		);
 
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+
+		void updatePersistentContactData();
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 
