@@ -12,6 +12,8 @@ namespace PS_AGONY
 {
 	class Solver
 	{
+		// Structures / classes.
+
 		struct VelocityConstraintData
 		{
 			struct ContactData
@@ -77,6 +79,19 @@ namespace PS_AGONY
 			alignas(64) std::atomic<uint32_t> currentWaveTicket{ 0 };
 		};
 
+		enum class VelocitySolverType
+		{
+			ApplyImpulsesSequentially,
+			ApplySumOfImpulses,
+			//Block
+		};
+
+		// Static memeber fields.
+
+		static constexpr VelocitySolverType VELOCITY_SOLVER_TYPE = VelocitySolverType::ApplySumOfImpulses;
+
+		// Memeber fields.
+
 		BodySoA* bodies;
 		const std::vector<Material>* materials;
 
@@ -122,7 +137,13 @@ namespace PS_AGONY
 
 		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
-		void solveVelocityConstraints(
+		void solveVelocityConstraints_ApplyImpulsesSequentially(
+			std::span<const BodyCollisionData> collisionDataContainer,
+			std::span<const VelocityConstraintData> constraintDataContainer,
+			std::span<const FrictionData> frictionDataContainer
+		);
+
+		void solveVelocityConstraints_ApplySumOfImpulses(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
