@@ -112,6 +112,19 @@ namespace PS_AGONY
         computeConstantData(orderedCollisionData);
 
         solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
+
+        // Scatter persistent contact data back to the detector's original container.
+        {
+            TRACY_SCOPE_N("Scatter persistent contact data back");
+            const auto& flatIndices = solvingPlanner.getFlatIndices();
+            const size_t mappedCount = flatIndices.size();
+            for (size_t i = 0; i < mappedCount; i++)
+            {
+                const size_t originalIndex = flatIndices[i];
+                // narrowPhaseCollisions is const&, but persistentContactData is mutable -> legal write.
+                narrowPhaseCollisions[originalIndex].persistentContactData = orderedCollisionData[i].persistentContactData;
+            }
+        }
     }
 
     size_t Solver::planWorkerCount(size_t collisionCount)
