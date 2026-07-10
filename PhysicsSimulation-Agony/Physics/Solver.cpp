@@ -52,14 +52,7 @@ namespace PS_AGONY
 
         for (uint32_t i = 0; i < velocityIterations; i++)
         {
-            if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplyImpulsesSequentially)
-            {
-                solveVelocityConstraints_ApplyImpulsesSequentially(narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
-            }
-            else if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
-            {
-                solveVelocityConstraints_ApplySumOfImpulses(narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
-            }
+            solveVelocityConstraints(narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
         }
         for (uint32_t i = 0; i < positionIterations; i++)
         {
@@ -257,7 +250,7 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solveVelocityConstraints_ApplyImpulsesSequentially(
+    void Solver::solveVelocityConstraints(
         std::span<const BodyCollisionData> collisionDataContainer,
         std::span<const VelocityConstraintData> constraintDataContainer,
         std::span<const FrictionData> frictionDataContainer
@@ -274,14 +267,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
         const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
-        // Lambdas.
-        auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
-            {
-                const Real velocityX = velocityXPtr[bodyIndex];
-                const Real velocityY = velocityYPtr[bodyIndex];
-                return { velocityX, velocityY };
-            };
-
         // Main loop.
         const size_t collisionCount = collisionDataContainer.size();
         for (size_t c = 0; c < collisionCount; c++)
@@ -293,25 +278,26 @@ namespace PS_AGONY
             const BodyIndex bodyIndexA = collisionData.bodyA;
             const BodyIndex bodyIndexB = collisionData.bodyB;
 
-            // Get inv masses.
+            // Get body data.
             const Real invMassA = invMassPtr[bodyIndexA];
             const Real invMassB = invMassPtr[bodyIndexB];
 
-            //
             const Real invInertiaA = invInertiaPtr[bodyIndexA];
             const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
-            Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
-            Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
+            Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
+            Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
             Real angularVelocityA = angularVelocityPtr[bodyIndexA];
             Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
+            //
             const Vec2 normal = collisionData.normal;
+            const uint32_t contactCount = collisionData.contactCount;
 
+            [[maybe_unused]] std::array<Vec2, 2> impulseArray{};
             std::array<Real, 2> jnArray{};
-            const uint32_t contactCount = collisionData.contactCount; // std::min(data.contactCount, 2u);
 
-            // Calculate collision impulses and apply them.
+            // Collision impulses.
             bool noContacts = true;
             for (uint32_t i = 0; i < contactCount; i++)
             {
@@ -332,23 +318,52 @@ namespace PS_AGONY
                 if (velocityAlongNormal > Real(0)) continue;
 
                 const Real jn = -velocityAlongNormal * contactData.normalMassXElasticityFactor;
-
-                const Vec2 impulse = jn * normal;
+;
                 jnArray[i] = jn;
                 noContacts = false;
 
-                // Apply impulse.
-                linearVelocityA -= impulse * invMassA;
-                angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
+                if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplyImpulsesSequentially)
+                {
+                    const Vec2 impulse = jn * normal;
+                    linearVelocityA -= impulse * invMassA;
+                    angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
 
-                linearVelocityB += impulse * invMassB;
-                angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
+                    linearVelocityB += impulse * invMassB;
+                    angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
+                }
+                else if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
+                {
+                    impulseArray[i] = jn * normal;
+                }
             }
 
             // Check if there is at least one valid contact.
             if (noContacts) continue;
 
-            // Calculate friction impulses and apply them.
+            if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
+            {
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+
+                linearVelocityA -= impulseSum * invMassA;
+                linearVelocityB += impulseSum * invMassB;
+
+                const Real dotSumA =
+                    glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
+                    glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
+
+                const Real dotSumB =
+                    glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
+                    glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
+
+                angularVelocityA -= dotSumA * invInertiaA;
+                angularVelocityB += dotSumB * invInertiaB;
+
+                // Reset impulse array for friction accumulation step
+                impulseArray[0] = Vec2();
+                impulseArray[1] = Vec2();
+            }
+
+            // Friction impulses.
             const FrictionData& frictionData = frictionDataContainer[c];
             const Real staticFriction  = frictionData.staticFriction;
             const Real dynamicFriction = frictionData.dynamicFriction;
@@ -388,172 +403,21 @@ namespace PS_AGONY
                     impulse = f * tangent; // Dynamic friction.
                 }
 
-                // Apply impulse.
-                linearVelocityA -= impulse * invMassA;
-                angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
-
-                linearVelocityB += impulse * invMassB;
-                angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
-            }
-
-            // Store velocities.
-            velocityXPtr[bodyIndexA] = linearVelocityA.x;
-            velocityYPtr[bodyIndexA] = linearVelocityA.y;
-            velocityXPtr[bodyIndexB] = linearVelocityB.x;
-            velocityYPtr[bodyIndexB] = linearVelocityB.y;
-
-            angularVelocityPtr[bodyIndexA] = angularVelocityA;
-            angularVelocityPtr[bodyIndexB] = angularVelocityB;
-        }
-    }
-
-    void Solver::solveVelocityConstraints_ApplySumOfImpulses(std::span<const BodyCollisionData> collisionDataContainer, std::span<const VelocityConstraintData> constraintDataContainer, std::span<const FrictionData> frictionDataContainer)
-    {
-        TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
-
-        constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
-
-        // Get pointers.
-        Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
-        Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
-        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
-        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-
-        // Lambdas.
-        auto getLinearVelocity = [&](const BodyIndex& bodyIndex) -> Vec2
-            {
-                const Real velocityX = velocityXPtr[bodyIndex];
-                const Real velocityY = velocityYPtr[bodyIndex];
-                return { velocityX, velocityY };
-            };
-
-        // Main loop.
-        const size_t collisionCount = collisionDataContainer.size();
-        for (size_t c = 0; c < collisionCount; c++)
-        {
-            const BodyCollisionData& collisionData = collisionDataContainer[c];
-            const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
-
-            // Get body indices.
-            const BodyIndex bodyIndexA = collisionData.bodyA;
-            const BodyIndex bodyIndexB = collisionData.bodyB;
-
-            // Get inv masses.
-            const Real invMassA = invMassPtr[bodyIndexA];
-            const Real invMassB = invMassPtr[bodyIndexB];
-
-            //
-            const Real invInertiaA = invInertiaPtr[bodyIndexA];
-            const Real invInertiaB = invInertiaPtr[bodyIndexB];
-
-            Vec2 linearVelocityA = getLinearVelocity(bodyIndexA);
-            Vec2 linearVelocityB = getLinearVelocity(bodyIndexB);
-            Real angularVelocityA = angularVelocityPtr[bodyIndexA];
-            Real angularVelocityB = angularVelocityPtr[bodyIndexB];
-
-            const Vec2 normal = collisionData.normal;
-
-            std::array<Vec2, 2> impulseArray{};
-            std::array<Real, 2> jnArray{};
-            const uint32_t contactCount = collisionData.contactCount;
-
-            // Calculate collision impulses.
-            bool noContacts = true;
-            for (uint32_t i = 0; i < contactCount; i++)
-            {
-                const auto& contactData = velocityConstraintData.points[i];
-
-                const Vec2 rAPerp = contactData.rAPerp;
-                const Vec2 rBPerp = contactData.rBPerp;
-
-                const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
-                const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
-
-                const Vec2 relativeVelocity =
-                    (linearVelocityB + angularLinearVelB) -
-                    (linearVelocityA + angularLinearVelA);
-
-                const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
-
-                if (velocityAlongNormal > Real(0)) continue;
-
-                const Real jn = -velocityAlongNormal * contactData.normalMassXElasticityFactor;
-
-                impulseArray[i] = jn * normal;
-                jnArray[i] = jn;
-                noContacts = false;
-            }
-
-            // Check if there is at least one valid contact.
-            if (noContacts) continue;
-
-            // Apply collision impulses.
-            {
-                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-
-                linearVelocityA -= impulseSum * invMassA;
-                linearVelocityB += impulseSum * invMassB;
-
-                const Real dotSumA =
-                    glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
-                    glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
-
-                const Real dotSumB =
-                    glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
-                    glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
-
-                angularVelocityA -= dotSumA * invInertiaA;
-                angularVelocityB += dotSumB * invInertiaB;
-            }
-
-            // Calculate friction impulses.
-            impulseArray[0] = Vec2();
-            impulseArray[1] = Vec2();
-
-            const FrictionData& frictionData = frictionDataContainer[c];
-            const Real staticFriction = frictionData.staticFriction;
-            const Real dynamicFriction = frictionData.dynamicFriction;
-            for (uint32_t i = 0; i < contactCount; i++)
-            {
-                const auto& contactData = velocityConstraintData.points[i];
-
-                const Vec2 rAPerp = contactData.rAPerp;
-                const Vec2 rBPerp = contactData.rBPerp;
-
-                const Vec2 angularLinearVelA = rAPerp * angularVelocityA;
-                const Vec2 angularLinearVelB = rBPerp * angularVelocityB;
-
-                const Vec2 relativeVelocity =
-                    (linearVelocityB + angularLinearVelB) -
-                    (linearVelocityA + angularLinearVelA);
-
-                Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
-                const Real tangentLengthSq = glm::dot(tangent, tangent);
-                if (tangentLengthSq < frictionEpsilonSq) continue;
-
-                tangent /= std::sqrt(tangentLengthSq);
-
-                const Real jt = glm::dot(relativeVelocity, tangent) * contactData.tangentMass;
-
-                const Real jn = jnArray[i];
-
-                Vec2 impulse;
-                if (std::fabs(jt) <= jn * staticFriction)
+                if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplyImpulsesSequentially)
                 {
-                    impulse = -jt * tangent; // Static friction.
-                }
-                else
-                {
-                    const Real maxDynamic = jn * dynamicFriction;
-                    const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
-                    impulse = f * tangent; // Dynamic friction.
-                }
+                    linearVelocityA -= impulse * invMassA;
+                    angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
 
-                impulseArray[i] = impulse;
+                    linearVelocityB += impulse * invMassB;
+                    angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
+                }
+                else if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
+                {
+                    impulseArray[i] = impulse;
+                }
             }
 
-            // Apply friction impulses.
+            if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
             {
                 const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
 
@@ -722,14 +586,7 @@ namespace PS_AGONY
                             std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
                             std::span<const FrictionData> frictionDataSlice(frictionDataContainer.data() + passOffset.start, passOffset.size);
 
-                            if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplyImpulsesSequentially)
-                            {
-                                solveVelocityConstraints_ApplyImpulsesSequentially(collisionSlice, constraintSlice, frictionDataSlice);
-                            }
-                            else if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
-                            {
-                                solveVelocityConstraints_ApplySumOfImpulses(collisionSlice, constraintSlice, frictionDataSlice);
-                            }
+                            solveVelocityConstraints(collisionSlice, constraintSlice, frictionDataSlice);
                         }
                     }
 

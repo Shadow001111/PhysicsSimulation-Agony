@@ -137,13 +137,7 @@ namespace PS_AGONY
 
 		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
-		void solveVelocityConstraints_ApplyImpulsesSequentially(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer,
-			std::span<const FrictionData> frictionDataContainer
-		);
-
-		void solveVelocityConstraints_ApplySumOfImpulses(
+		void solveVelocityConstraints(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
