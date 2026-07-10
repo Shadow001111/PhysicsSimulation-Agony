@@ -19,7 +19,7 @@ namespace PS_AGONY
 	{
 		BodyIndex bodyA, bodyB;
 		Vec2 normal;
-		Real depth;
+		Real penetration;
 		uint32_t contactCount;
 		Vec2 contactPoints[2];
 		uint32_t contactIds[2];
@@ -35,7 +35,7 @@ namespace PS_AGONY
 			Vec2 contactPoint1, Vec2 contactPoint2,
 			uint32_t contactId1, uint32_t contactId2
 		) :
-			bodyA(bodyA), bodyB(bodyB), normal(normal), depth(depth), contactCount(contactCount)
+			bodyA(bodyA), bodyB(bodyB), normal(normal), penetration(depth), contactCount(contactCount)
 		{
 			contactPoints[0] = contactPoint1;
 			contactPoints[1] = contactPoint2;
@@ -135,7 +135,7 @@ namespace PS_AGONY
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
 	public:
-		static constexpr bool ENABLE_WARM_STARTING = true;
+		static constexpr bool ENABLE_WARM_STARTING = false;
 
 		enum class ExecutionPolicy
 		{

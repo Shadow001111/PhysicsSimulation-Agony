@@ -717,7 +717,7 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
     constexpr float boxMass = 1.0f;
 
     constexpr float floorThickness = 2.0f;
-    constexpr float floorWidth = (pyramidRows + 8) * boxWidth;
+    constexpr float floorWidth = (pyramidRows + 8) * boxWidth * 3;
 
     // === 1. MATERIAL SETUP ===
     // High friction and lower elasticity help the pyramid remain stable upon initialization
