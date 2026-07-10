@@ -299,37 +299,40 @@ namespace PS_AGONY
             std::array<Real, 2> jnArray{};
 
             // Warm starting.
-            for (uint32_t i = 0; i < contactCount; i++)
+            if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
             {
-                Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
-                Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+                for (uint32_t i = 0; i < contactCount; i++)
+                {
+                    Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
+                    Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
 
-                const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
-                const bool isValid = oldJn > Real(0) || std::fabs(oldJt) > Real(0); // TODO: Check if it's right!
+                    const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
+                    const bool isValid = oldJn > Real(0) || std::fabs(oldJt) > Real(0); // TODO: Check if it's right!
 
-                impulseArray[i] = warmStartImpulse * Real(isValid);
-            }
+                    impulseArray[i] = warmStartImpulse * Real(isValid);
+                }
 
-            { // Can apply sum of impulses, because they don't change outcome.
-                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+                { // Can apply sum of impulses, because they don't change outcome.
+                    const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
 
-                linearVelocityA -= impulseSum * invMassA;
-                linearVelocityB += impulseSum * invMassB;
+                    linearVelocityA -= impulseSum * invMassA;
+                    linearVelocityB += impulseSum * invMassB;
 
-                const Real dotSumA =
-                    glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
-                    glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
+                    const Real dotSumA =
+                        glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
+                        glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
 
-                const Real dotSumB =
-                    glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
-                    glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
+                    const Real dotSumB =
+                        glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
+                        glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
 
-                angularVelocityA -= dotSumA * invInertiaA;
-                angularVelocityB += dotSumB * invInertiaB;
+                    angularVelocityA -= dotSumA * invInertiaA;
+                    angularVelocityB += dotSumB * invInertiaB;
 
-                // Reset impulse array for collision accumulation step.
-                impulseArray[0] = Vec2();
-                impulseArray[1] = Vec2();
+                    // Reset impulse array for collision accumulation step.
+                    impulseArray[0] = Vec2();
+                    impulseArray[1] = Vec2();
+                }
             }
 
             // Collision impulses.
@@ -551,9 +554,9 @@ namespace PS_AGONY
             // The anchors coincided (drift = 0) when depth was measured, so drift is exactly
             // how much penetration has already been resolved since then.
             const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
-            const Real currentSeparation = data.depth - drift;
+            const Real currentPenetration = data.penetration - drift;
 
-            const Real correctionDepth = currentSeparation - simulationSettings.positionCorrectionSlop;
+            const Real correctionDepth = currentPenetration - simulationSettings.positionCorrectionSlop;
             if (correctionDepth <= Real(0)) continue;
 
             const Real totalCorrection = correctionDepth / totalInvMass * simulationSettings.positionCorrectionPercent;

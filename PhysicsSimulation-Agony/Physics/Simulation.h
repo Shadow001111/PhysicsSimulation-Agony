@@ -156,11 +156,9 @@ namespace PS_AGONY
 
 		void postUpdate();
 
-		void applyExternalForces(size_t bodyCount, Real deltaTime);
+		void integrateVelocities(size_t bodyCount, Real deltaTime);
 
-		void integrate(size_t bodyCount, Real deltaTime);
-
-		void findAndSolveCollisions(Real deltaTime);
+		void integratePositions(size_t bodyCount, Real deltaTime);
 
 		void buildBodyAABBs();
 		void buildCircleAABBs();
@@ -173,7 +171,7 @@ namespace PS_AGONY
 
 		void computeWorldCenters();
 
-		void applyConstraints();
+		void applyBodyHolderConstraint();
 
 		void collectMemoryUsage(DebugData& data) const;
 	};

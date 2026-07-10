@@ -883,23 +883,75 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Physics step", Ecstasy::Color::Orange);
 
+        // Update timer.
         simulationRunTimer += deltaTime;
 
+        // Check if any body exist.
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
 
+        // Check if any material exist.
         if (materials.empty()) [[unlikely]]
         {
             std::cerr << "[AGONY][Simulation]: Material count is zero, which should be impossible.\n";
             materials.emplace_back(); // Default material.
         }
 
-        applyExternalForces(bodyCount, deltaTime);
-        applyConstraints();
-        integrate(bodyCount, deltaTime);
+        // Set data viewers.
+        broadPhaseCollisionDetector.setDataViewers(
+            AABBSoAViewer(bodies.aabb)
+        );
+
+        narrowPhaseCollisionDetector.setDataViewers(
+            BodySoAViewer(bodies),
+            CircleSoAViewer(circles),
+            BoxSoAViewer(boxes),
+            PolygonSoAViewer(polygons)
+        );
+
+        solver.setDataViewers(
+            bodies,
+            materials
+        );
+
+        // Main stuff.
+        integrateVelocities(bodyCount, deltaTime);
+        applyBodyHolderConstraint();
+        integratePositions(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
-        findAndSolveCollisions(deltaTime);
+
+        // Compute true position for all bodies.
+        computeWorldCenters();
+
+        // Rebuild AABBs.
+        buildBodyAABBs();
+
+        if (bodyCount >= 2)
+        {
+            // Broad phase.
+            // TODO: Refit instead of rebuilding each time.
+            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
+            if (broadCollisionData.empty()) return;
+
+            // Narrow phase.
+            const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
+            if (narrowCollisionData.empty()) return;
+
+            // Collision resolution.
+            solver.solveThreaded(
+                narrowCollisionData,
+                simulationSettings.velocitySolvingIterations,
+                simulationSettings.positionSolvingIterations
+            );
+
+            // Updating persistent contact data.
+            narrowPhaseCollisionDetector.updatePersistentContactData();
+        }
+        else
+        {
+            // Call manual reset for data that can be displayed.
+        }
     }
 
     void Simulation::postUpdate()
@@ -909,9 +961,9 @@ namespace PS_AGONY
         buildBodyAABBs();
     }
 
-    void Simulation::applyExternalForces(size_t bodyCount, Real deltaTime)
+    void Simulation::integrateVelocities(size_t bodyCount, Real deltaTime)
     {
-        TRACY_SCOPE_NC("Apply external forces", Ecstasy::Color::Red);
+        TRACY_SCOPE_NC("Integrate velocities", Ecstasy::Color::Red);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
@@ -1027,9 +1079,9 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::integrate(size_t bodyCount, Real deltaTime)
+    void Simulation::integratePositions(size_t bodyCount, Real deltaTime)
     {
-        TRACY_SCOPE_NC("Intergrate", Ecstasy::Color::Blue);
+        TRACY_SCOPE_NC("Intergrate positions", Ecstasy::Color::Blue);
 
         const RealSimd deltaTimeV{ deltaTime };
 
@@ -1069,56 +1121,6 @@ namespace PS_AGONY
                 rotationPtr[i]  += angularVelocityPtr[i] * deltaTime;
             }
         }
-    }
-
-    void Simulation::findAndSolveCollisions(Real deltaTime)
-    {
-        const size_t bodyCount = bodies.getCount();
-
-        // Early return.
-        if (bodyCount < 2) return;
-
-        // Set data viewers.
-        broadPhaseCollisionDetector.setDataViewers(
-            AABBSoAViewer(bodies.aabb)
-        );
-
-        narrowPhaseCollisionDetector.setDataViewers(
-            BodySoAViewer(bodies),
-            CircleSoAViewer(circles),
-            BoxSoAViewer(boxes),
-            PolygonSoAViewer(polygons)
-        );
-
-        solver.setDataViewers(
-            bodies,
-            materials
-        );
-
-        // Compute true position for all bodies.
-        computeWorldCenters();
-
-        // Rebuild AABBs.
-        buildBodyAABBs();
-
-        // Broad phase.
-        // TODO: Refit instead of rebuilding each time.
-        const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
-        if (broadCollisionData.empty()) return;
-
-        // Narrow phase.
-        const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
-        if (narrowCollisionData.empty()) return;
-
-        // Collision resolution.
-        solver.solveThreaded(
-            narrowCollisionData,
-            simulationSettings.velocitySolvingIterations,
-            simulationSettings.positionSolvingIterations
-        );
-
-        // Updating persistent contact data.
-        narrowPhaseCollisionDetector.updatePersistentContactData();
     }
 
     void Simulation::buildBodyAABBs()
@@ -1423,7 +1425,7 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::applyConstraints()
+    void Simulation::applyBodyHolderConstraint()
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
