@@ -114,6 +114,7 @@ namespace PS_AGONY
         solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
 
         // Scatter persistent contact data back to the detector's original container.
+        if (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
         {
             TRACY_SCOPE_N("Scatter persistent contact data back");
             const auto& flatIndices = solvingPlanner.getFlatIndices();
@@ -258,8 +259,6 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
 
-        constexpr Real frictionEpsilonSq = Real(1e-3 * 1e-3);
-
         // Get pointers.
         Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
@@ -294,8 +293,44 @@ namespace PS_AGONY
             const Vec2 normal = collisionData.normal;
             const uint32_t contactCount = collisionData.contactCount;
 
-            [[maybe_unused]] std::array<Vec2, 2> impulseArray{};
+            const Vec2 tangent = { -normal.y, normal.x };
+
+            std::array<Vec2, 2> impulseArray{};
             std::array<Real, 2> jnArray{};
+
+            // Warm starting.
+            for (uint32_t i = 0; i < contactCount; i++)
+            {
+                Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
+                Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+
+                const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
+                const bool isValid = oldJn > Real(0) || std::fabs(oldJt) > Real(0); // TODO: Check if it's right!
+
+                impulseArray[i] = warmStartImpulse * Real(isValid);
+            }
+
+            { // Can apply sum of impulses, because they don't change outcome.
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+
+                linearVelocityA -= impulseSum * invMassA;
+                linearVelocityB += impulseSum * invMassB;
+
+                const Real dotSumA =
+                    glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
+                    glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
+
+                const Real dotSumB =
+                    glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
+                    glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
+
+                angularVelocityA -= dotSumA * invInertiaA;
+                angularVelocityB += dotSumB * invInertiaB;
+
+                // Reset impulse array for collision accumulation step.
+                impulseArray[0] = Vec2();
+                impulseArray[1] = Vec2();
+            }
 
             // Collision impulses.
             bool noContacts = true;
@@ -315,16 +350,22 @@ namespace PS_AGONY
 
                 const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 
-                if (velocityAlongNormal > Real(0)) continue;
+                Real& accumulatedJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
+
+                if (velocityAlongNormal > Real(0) && accumulatedJn <= Real(0)) continue; // TODO: Check if that is okay!
 
                 const Real jn = -velocityAlongNormal * contactData.normalMassXElasticityFactor;
+
+                const Real oldJn = accumulatedJn;
+                accumulatedJn = std::fmax(Real(0), oldJn + jn);
+                const Real deltaJn = accumulatedJn - oldJn;
 ;
-                jnArray[i] = jn;
+                jnArray[i] = accumulatedJn;
                 noContacts = false;
 
                 if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplyImpulsesSequentially)
                 {
-                    const Vec2 impulse = jn * normal;
+                    const Vec2 impulse = deltaJn * normal;
                     linearVelocityA -= impulse * invMassA;
                     angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
 
@@ -333,12 +374,19 @@ namespace PS_AGONY
                 }
                 else if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
                 {
-                    impulseArray[i] = jn * normal;
+                    impulseArray[i] = deltaJn * normal;
                 }
             }
 
             // Check if there is at least one valid contact.
-            if (noContacts) continue;
+            if (noContacts)
+            {
+                velocityXPtr[bodyIndexA] = linearVelocityA.x;
+                velocityYPtr[bodyIndexA] = linearVelocityA.y;
+                velocityXPtr[bodyIndexB] = linearVelocityB.x;
+                velocityYPtr[bodyIndexB] = linearVelocityB.y;
+                continue;
+            }
 
             if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplySumOfImpulses)
             {
@@ -358,7 +406,7 @@ namespace PS_AGONY
                 angularVelocityA -= dotSumA * invInertiaA;
                 angularVelocityB += dotSumB * invInertiaB;
 
-                // Reset impulse array for friction accumulation step
+                // Reset impulse array for friction accumulation step.
                 impulseArray[0] = Vec2();
                 impulseArray[1] = Vec2();
             }
@@ -381,28 +429,29 @@ namespace PS_AGONY
                     (linearVelocityB + angularLinearVelB) -
                     (linearVelocityA + angularLinearVelA);
 
-                Vec2 tangent = relativeVelocity - glm::dot(relativeVelocity, normal) * normal;
-                const Real tangentLengthSq = glm::dot(tangent, tangent);
-                if (tangentLengthSq < frictionEpsilonSq) continue;
+                const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
 
-                tangent /= std::sqrt(tangentLengthSq);
+                const Real jt = -currentSlipVel * contactData.tangentMass;
 
-                const Real jt = glm::dot(relativeVelocity, tangent) * contactData.tangentMass;
+                Real& accumulatedJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+                const Real oldJt = accumulatedJt;
+                Real targetJt = oldJt + jt;
 
                 const Real jn = jnArray[i];
 
-                Vec2 impulse;
                 if (std::fabs(jt) <= jn * staticFriction)
                 {
-                    impulse = -jt * tangent; // Static friction.
+                    accumulatedJt = targetJt; // Static friction.
                 }
                 else
                 {
                     const Real maxDynamic = jn * dynamicFriction;
-                    const Real f = -std::clamp(jt, -maxDynamic, maxDynamic);
-                    impulse = f * tangent; // Dynamic friction.
+                    accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic); // Dynamic friction.
                 }
 
+                const Real deltaJt = accumulatedJt - oldJt;
+
+                const Vec2 impulse = deltaJt * tangent;
                 if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::ApplyImpulsesSequentially)
                 {
                     linearVelocityA -= impulse * invMassA;
