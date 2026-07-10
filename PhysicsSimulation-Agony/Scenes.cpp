@@ -783,7 +783,7 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
 void load_StackedTower(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr int towerRows = 10;    // N: Number of stacked square boxes
+    constexpr int towerRows = 100;    // N: Number of stacked square boxes
     constexpr float boxSize = 0.6f;  // Dimension for square sides (width & height)
     constexpr float boxMass = 1.0f;
 
