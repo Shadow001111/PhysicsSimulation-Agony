@@ -87,29 +87,31 @@ namespace PS_AGONY
 			}
 		};
 
-		struct ContactKey
+		struct CachedContactPair
 		{
-			uint32_t bodyA;
-			uint32_t bodyB;
-			uint32_t contactId;
+			uint32_t contactIds[2] = { uint32_t(-1), uint32_t(-1) };
+			PersistentContactData contactData[2];
+		};
 
-			bool operator==(const ContactKey& other) const noexcept
+		struct BodyPairKey
+		{
+			BodyIndex bodyA;
+			BodyIndex bodyB;
+
+			bool operator==(const BodyPairKey& other) const noexcept
 			{
-				return bodyA == other.bodyA && bodyB == other.bodyB && contactId == other.contactId;
+				return bodyA == other.bodyA && bodyB == other.bodyB;
 			}
 		};
 
-		struct ContactKeyHasher
+		struct BodyPairKeyHasher
 		{
-			size_t operator()(const ContactKey& key) const noexcept
+			size_t operator()(const BodyPairKey& key) const noexcept
 			{
-				// Use a high-quality 64-bit prime multiplier for rapid bit avalanche.
-				uint64_t hash = key.bodyA;
-				hash = (hash ^ key.bodyB) * 0x517cc1b727220a95ull;
-				hash = (hash ^ key.contactId) * 0x517cc1b727220a95ull;
-
-				// Final shift-mix to ensure the high bits influence the lower index bits.
-				return static_cast<size_t>(hash ^ (hash >> 32));
+				constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
+				uint64_t h = (uint64_t)key.bodyA + addConst;
+				h ^= (uint64_t)key.bodyB + addConst + (h << 6) + (h >> 2);
+				return h;
 			}
 		};
 
@@ -123,7 +125,7 @@ namespace PS_AGONY
 		std::vector<ChunkData> chunks;
 
 		// TODO: Add to getMemoryUsage.
-		robin_hood::unordered_flat_map<ContactKey, PersistentContactData, ContactKeyHasher> previousContactDataContainer;
+		robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> previousContactDataContainer;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;

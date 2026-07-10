@@ -102,22 +102,19 @@ namespace PS_AGONY
         previousContactDataContainer.reserve(allCollisionData.size());
         for (BodyCollisionData& collData : allCollisionData)
         {
-            ContactKey contactKey;
-            contactKey.bodyA = collData.bodyA;
-            contactKey.bodyB = collData.bodyB;
+            BodyPairKey bodyPairKey{ collData.bodyA , collData.bodyB };
 
-            // Iterate over contacts.
-            const uint32_t contactCount = collData.contactCount;
-            for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
+            CachedContactPair& data = previousContactDataContainer.emplace(bodyPairKey, CachedContactPair{}).first->second;
+
+            // Reset contact ids.
+            data.contactIds[0] = 0xFFFFFFFF;
+            data.contactIds[1] = 0xFFFFFFFF;
+
+            // Only cache valid active contacts.
+            for (uint32_t i = 0; i < collData.contactCount; i++)
             {
-                // Set contact id.
-                contactKey.contactId = collData.contactIds[contactIndex];
-
-                // Move contact data to the map.
-                previousContactDataContainer.emplace(
-                    contactKey,
-                    collData.persistentContactData[contactIndex]
-                );
+                data.contactIds[i] = collData.contactIds[i];
+                data.contactData[i] = collData.persistentContactData[i];
             }
         }
     }
@@ -289,23 +286,25 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Move previous contact data");
             for (BodyCollisionData& collData : chunkData.results)
             {
-                ContactKey contactKey;
-                contactKey.bodyA = collData.bodyA;
-                contactKey.bodyB = collData.bodyB;
+                BodyPairKey bodyPairKey{ collData.bodyA , collData.bodyB };
 
-                // Iterate over contacts.
-                const uint32_t contactCount = collData.contactCount;
-                for (uint32_t contactIndex = 0; contactIndex < contactCount; contactIndex++)
+                // Check if pair existed in previous frame.
+                const auto it = previousContactDataContainer.find(bodyPairKey);
+                if (it == previousContactDataContainer.end()) continue;
+
+                const CachedContactPair& data = it->second;
+
+                // Match current contacts with previous frame contacts using contactIds
+                for (uint32_t i = 0; i < collData.contactCount; i++)
                 {
-                    // Set contact id.
-                    contactKey.contactId = collData.contactIds[contactIndex];
-
-                    // Check if contact existed in previous frame.
-                    const auto it = previousContactDataContainer.find(contactKey);
-                    if (it == previousContactDataContainer.end()) continue;
-
-                    // Move previous data.
-                    collData.persistentContactData[contactIndex] = it->second;
+                    if (data.contactIds[0] != uint32_t(-1) && collData.contactIds[i] == data.contactIds[0])
+                    {
+                        collData.persistentContactData[i] = data.contactData[0];
+                    }
+                    else if (data.contactIds[1] != uint32_t(-1) && collData.contactIds[i] == data.contactIds[1])
+                    {
+                        collData.persistentContactData[i] = data.contactData[1];
+                    }
                 }
             }
         }
