@@ -177,7 +177,7 @@ namespace PS_AGONY
             const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
             const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
             {
-                const Vec2 contactPoint = data.contacts[0]; // Only the first point is used.
+                const Vec2 contactPoint = data.contactPoints[0]; // Only the first point is used.
 
                 positionConstraintContainer[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
                 positionConstraintContainer[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
@@ -206,7 +206,7 @@ namespace PS_AGONY
 
                 for (uint32_t i = 0; i < data.contactCount; i++)
                 {
-                    const Vec2 contactPoint = data.contacts[i];
+                    const Vec2 contactPoint = data.contactPoints[i];
                     auto& point = velocityConstraint.points[i];
 
                     const Vec2 rA = contactPoint - centerOfMassA;

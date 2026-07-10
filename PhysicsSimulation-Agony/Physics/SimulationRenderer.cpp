@@ -56,7 +56,7 @@ namespace PS_AGONY
         // Render.
         renderBodies(viewProjectionMatrix);
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
-        //renderContactPoints(simulation, viewProjectionMatrix);
+        renderContactPoints(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
