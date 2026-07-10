@@ -88,7 +88,7 @@ namespace PS_AGONY
 
 		// Static memeber fields.
 
-		static constexpr VelocitySolverType VELOCITY_SOLVER_TYPE = VelocitySolverType::ApplySumOfImpulses;
+		static constexpr VelocitySolverType VELOCITY_SOLVER_TYPE = VelocitySolverType::ApplyImpulsesSequentially;
 
 		// Memeber fields.
 

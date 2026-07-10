@@ -439,7 +439,7 @@ namespace PS_AGONY
 
                 const Real jn = jnArray[i];
 
-                if (std::fabs(jt) <= jn * staticFriction)
+                if (std::fabs(targetJt) <= jn * staticFriction)
                 {
                     accumulatedJt = targetJt; // Static friction.
                 }
