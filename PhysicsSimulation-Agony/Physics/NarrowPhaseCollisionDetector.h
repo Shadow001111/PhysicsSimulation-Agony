@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <robin_hood.h>
+#include <array>
 
 namespace PS_AGONY
 {
@@ -22,7 +23,7 @@ namespace PS_AGONY
 		uint32_t contactCount;
 		Vec2 contactPoints[2];
 		uint32_t contactIds[2];
-		mutable PersistentContactData persistentContactData[2] = { {}, {} };
+		mutable std::array<PersistentContactData, 2> persistentContactData{};
 
 		BodyCollisionData() = default;
 
@@ -134,7 +135,7 @@ namespace PS_AGONY
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
 	public:
-		static constexpr bool ENABLE_WARM_STARTING = false;
+		static constexpr bool ENABLE_WARM_STARTING = true;
 
 		enum class ExecutionPolicy
 		{

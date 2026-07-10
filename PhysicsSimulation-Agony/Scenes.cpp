@@ -780,6 +780,52 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
     //}
 }
 
+void load_StackedTower(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    // === CONFIGURATION VARIABLES ===
+    constexpr int towerRows = 10;    // N: Number of stacked square boxes
+    constexpr float boxSize = 0.6f;  // Dimension for square sides (width & height)
+    constexpr float boxMass = 1.0f;
+
+    constexpr float floorThickness = 2.0f;
+    constexpr float floorWidth = 10.0f;
+
+    // === 1. MATERIAL SETUP ===
+    PS_AGONY::Material towerMaterial = {
+        .elasticity = 0.0f,         // Zero elasticity for ideal stack stability
+        .staticFriction = 0.8f,     // Requested static friction
+        .dynamicFriction = 0.6f     // Requested dynamic friction
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(towerMaterial);
+
+    // === 2. STATIC FLOOR ===
+    // Placed so that its top edge rests exactly at Y = 0.0
+    simulation.createBox({
+        .base.position = { 0.0f, -floorThickness * 0.5f },
+        .base.mass = 0, // Static
+        .base.materialIndex = materialIdx,
+        .size = { floorWidth, floorThickness }
+        });
+
+    // === 3. VERTICAL TOWER GENERATION ===
+    // Spawns boxes cleanly stacked on top of each other centered at X = 0.0
+    for (int i = 0; i < towerRows; ++i)
+    {
+        // Calculate Y coordinate for the center of the box in the current row
+        float y = (i + 0.5f) * boxSize;
+
+        simulation.createBox({
+            .base.position = { 0.0f, y },
+            .base.velocity = { 0.0f, 0.0f },
+            .base.rotation = 0.0f,
+            .base.angularVelocity = 0.0f,
+            .base.mass = boxMass,
+            .base.materialIndex = materialIdx,
+            .size = { boxSize, boxSize }
+            });
+    }
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Random::Generator rvg; // Random value generator.
@@ -814,5 +860,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 6)
     {
         load_StackedPyramid(simulation, rvg);
+    }
+    else if (scene == 7)
+    {
+        load_StackedTower(simulation, rvg);
     }
 }
