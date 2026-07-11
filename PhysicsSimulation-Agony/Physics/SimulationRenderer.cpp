@@ -56,7 +56,7 @@ namespace PS_AGONY
         // Render.
         renderBodies(viewProjectionMatrix);
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
-        renderContactPoints(simulation, viewProjectionMatrix);
+        //renderContactPoints(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
@@ -64,8 +64,8 @@ namespace PS_AGONY
         // Circle.
         {
             std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/Bodies/Circle/circle_textured.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/Circle/circle_textured.frag" }
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/circle.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/circle.frag" }
             };
             
             circleResources.shader.create(sources);
@@ -74,8 +74,8 @@ namespace PS_AGONY
         // Box.
         {
             std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/Bodies/Box/box.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/Box/box.frag" }
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/box.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/box.frag" }
             };
 
             boxResources.shader.create(sources);
@@ -84,8 +84,8 @@ namespace PS_AGONY
         // Polygon.
         {
             std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER,   "res/Shaders/Bodies/Polygon/polygon.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/Polygon/polygon.frag" }
+                { GL_VERTEX_SHADER,   "res/Shaders/Bodies/polygon.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/polygon.frag" }
             };
             polygonResources.shader.create(sources);
         }
@@ -220,7 +220,6 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.785f;
             renderDataPtr[i].radius = 0.03f;
 			renderDataPtr[i].color = 0xFF0000;
-            renderDataPtr[i].textureId = 0;
         }
 
         // Render.
@@ -250,7 +249,6 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.0f;
             renderDataPtr[i].radius = 0.03f;
             renderDataPtr[i].color = 0x0000FF;
-            renderDataPtr[i].textureId = 0;
         }
 
         // Render.
@@ -280,7 +278,6 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = 0.0f;
             renderDataPtr[i].radius = 0.03f;
             renderDataPtr[i].color = 0x00FF00;
-            renderDataPtr[i].textureId = 0;
         }
 
         // Render.
@@ -301,7 +298,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
-        const BodyTextureId* ECSTASY_RESTRICT bodyTextureIdPtr = bodies.textureId;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices;
@@ -319,7 +315,6 @@ namespace PS_AGONY
             renderDataPtr[i].rotation = rotationPtr[bodyIndex];
             renderDataPtr[i].radius = radiusPtr[i];
 			renderDataPtr[i].color = 0xFFFFFF;
-            renderDataPtr[i].textureId = bodyTextureIdPtr[bodyIndex];
         }
 
         // Render.
@@ -340,7 +335,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
-        const BodyTextureId* ECSTASY_RESTRICT bodyTextureIdPtr = bodies.textureId;
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
@@ -360,7 +354,6 @@ namespace PS_AGONY
             renderDataPtr[i].halfWidth = halfWidthPtr[i];
             renderDataPtr[i].halfHeight = halfHeightPtr[i];
             renderDataPtr[i].color = 0xFFFFFF;
-            renderDataPtr[i].textureId = bodyTextureIdPtr[bodyIndex];
         }
 
         // Render.
@@ -378,7 +371,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
-        const BodyTextureId* ECSTASY_RESTRICT textureIdPtr = bodies.textureId;
 
         // Polygon SoA pointers.
         const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices;
@@ -421,7 +413,6 @@ namespace PS_AGONY
             instData[i].localCOMY = localCOMYPtr[bodyIndex];
             instData[i].rotation = rotationPtr[bodyIndex];
             instData[i].color = 0xFFFFFF;
-            instData[i].textureId = textureIdPtr[bodyIndex];
 
             cmds[i].count = vertCount;
             cmds[i].instanceCount = 1;
@@ -515,7 +506,6 @@ namespace PS_AGONY
                 renderData.rotation = 0.0f;
                 renderData.radius = 0.05f;
                 renderData.color = idToHexColor(collData.contactIds[j]);
-                renderData.textureId = 0;
             }
         }
 
@@ -656,10 +646,6 @@ namespace PS_AGONY
 		vao.enableAttribute(5);
         vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
 		vao.setAttributeDivisor(5, 1);
-
-        vao.enableAttribute(6);
-        vao.setIntAttribute(6, 1, sizeof(float) * 7, 1);
-        vao.setAttributeDivisor(6, 1);
     }
 
     void SimulationRenderer::ensureBoxInstanceVboCapacity(size_t count)
@@ -700,10 +686,6 @@ namespace PS_AGONY
         vao.enableAttribute(5);
         vao.setIntAttribute(5, 1, sizeof(float) * 7, 1);
         vao.setAttributeDivisor(5, 1);
-
-        vao.enableAttribute(6);
-        vao.setIntAttribute(6, 1, sizeof(float) * 8, 1);
-        vao.setAttributeDivisor(6, 1);
     }
 
     void SimulationRenderer::ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount)

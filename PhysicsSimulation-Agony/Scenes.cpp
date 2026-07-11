@@ -214,7 +214,6 @@ void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Ge
             .base.angularVelocity = 0,
             .base.mass = 100,
             .base.materialIndex = material1Index,
-            .base.textureId = 1,
             .radius = radius
         });
     }
@@ -496,7 +495,6 @@ void load_Planet(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& r
             .base.angularVelocity = 0,
             .base.mass = 20000,
             .base.materialIndex = material1Index,
-            .base.textureId = 1,
             .radius = radius
             });
     }
@@ -552,7 +550,6 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
             .base.angularVelocity = 0,
             .base.mass = 20,
             .base.materialIndex = material0Index,
-            .base.textureId = 1,
             .radius = 4
         });
 }
