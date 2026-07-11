@@ -468,8 +468,8 @@ namespace PS_AGONY
                     boxes.bodyIndices[swappedShapeIdx] = bodyIndex;
             }
 
-            // Invalidate persistent contact data.
-            narrowPhaseCollisionDetector.invalidatePersistentContactData();
+            // Record deletion.
+            deletedBodies.emplace_back( bodyIndex, static_cast<BodyIndex>(bodyCount - 1) );
         }
 
         // Pop back all BodySoA vectors.
@@ -913,6 +913,10 @@ namespace PS_AGONY
             bodies,
             materials
         );
+
+        // Remap persistent contact data if body was deleted.
+        narrowPhaseCollisionDetector.remapPersistentContactData(deletedBodies);
+        deletedBodies.clear();
 
         // Main stuff.
         integrateVelocities(bodyCount, deltaTime);

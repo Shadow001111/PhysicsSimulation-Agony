@@ -67,11 +67,13 @@ namespace PS_AGONY
 			BodyTextureId textureId{ 0 };
 		};
 
-		// Bodies SoA.
+		// Bodies.
 		BodySoA bodies;
 		CircleSoA circles;
 		BoxSoA boxes;
 		PolygonSoA polygons;
+
+		std::vector<BodyDeletion> deletedBodies;
 
 		// Materials.
 		std::vector<Material> materials;

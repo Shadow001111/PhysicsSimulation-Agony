@@ -18,6 +18,12 @@ namespace PS_AGONY
 		BodyIndex a, b;
 	};
 
+	struct BodyDeletion
+	{
+		BodyIndex deletedIndex;
+		BodyIndex swappedFromIndex;
+	};
+
 	enum class BodyType : uint8_t
 	{
 		Circle,

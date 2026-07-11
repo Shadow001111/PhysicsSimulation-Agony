@@ -46,6 +46,8 @@ namespace PS_AGONY
 
 	class NarrowPhaseCollisionDetector
 	{
+		// Structures.
+
 		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
 
 		struct alignas(64) ChunkData
@@ -120,14 +122,16 @@ namespace PS_AGONY
 			const std::vector<BodyPair>&, std::vector<BodyCollisionData>&
 			);
 
+		// Static fields.
+
 		static const SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> collisionFuncs;
+
+		// Fields.
 
 		std::vector<BodyCollisionData> allCollisionData;
 		std::vector<ChunkData> chunks;
 
 		robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> previousContactDataContainer;
-
-		bool isPersistentContactDataInvalidated = false;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
@@ -161,7 +165,7 @@ namespace PS_AGONY
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		void updatePersistentContactData();
-		void invalidatePersistentContactData() noexcept { isPersistentContactDataInvalidated = true; }
+		void remapPersistentContactData(const std::vector<BodyDeletion>& deletions);
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 

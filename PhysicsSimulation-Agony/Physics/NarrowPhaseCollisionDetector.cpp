@@ -70,12 +70,6 @@ namespace PS_AGONY
 
         allCollisionData.reserve(bodyPairs.size());
 
-        if (isPersistentContactDataInvalidated)
-        {
-            isPersistentContactDataInvalidated = false;
-            previousContactDataContainer.clear();
-        }
-
         // Determine to use threading or not.
         bool useThreading = false;
         if (executionPolicy == ExecutionPolicy::ForceMultiThreaded)
@@ -133,6 +127,64 @@ namespace PS_AGONY
                 data.contactData[i] = collData.persistentContactData[i];
             }
         }
+    }
+
+    void NarrowPhaseCollisionDetector::remapPersistentContactData(const std::vector<BodyDeletion>& deletions)
+    {
+        if (deletions.empty() || previousContactDataContainer.empty())
+        {
+            return;
+        }
+
+        TRACY_SCOPE_N("Remap persistent contact data");
+
+        // Temporary container to safely transition into.
+        robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> newContainer;
+        newContainer.reserve(previousContactDataContainer.size());
+
+        constexpr BodyIndex INVALID_INDEX = std::numeric_limits<BodyIndex>::max();
+
+        for (const auto& [key, data] : previousContactDataContainer)
+        {
+            BodyIndex a = key.bodyA;
+            BodyIndex b = key.bodyB;
+            bool alive = true;
+
+            // Sequentially replay the deletions/swaps exactly as they occurred.
+            for (const auto& deletion : deletions)
+            {
+                if (a == deletion.deletedIndex || b == deletion.deletedIndex)
+                {
+                    alive = false;
+                    break;
+                }
+                if (deletion.swappedFromIndex != INVALID_INDEX)
+                {
+                    if (a == deletion.swappedFromIndex) a = deletion.deletedIndex;
+                    if (b == deletion.swappedFromIndex) b = deletion.deletedIndex;
+                }
+            }
+
+            if (alive)
+            {
+                // Re-sort the indices to preserve narrow-phase invariants.
+                BodyType typeA = bodies.bodyType[a];
+                BodyType typeB = bodies.bodyType[b];
+
+                if (typeA > typeB)
+                {
+                    std::swap(a, b);
+                }
+                else if (typeA == typeB && b > a)
+                {
+                    std::swap(a, b);
+                }
+
+                newContainer[BodyPairKey{ a, b }] = data;
+            }
+        }
+
+        previousContactDataContainer = std::move(newContainer);
     }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
