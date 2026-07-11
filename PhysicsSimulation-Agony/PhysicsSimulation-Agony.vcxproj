@@ -240,7 +240,7 @@
     <ClCompile Include="EcstasyCore\Threading\ThreadPool.cpp" />
     <ClCompile Include="EcstasyCore\Threading\ThreadUtils.cpp" />
     <ClCompile Include="Physics\BodySoA.cpp" />
-    <ClCompile Include="Physics\SolvingPlanners\LLSolvingPlanner.cpp" />
+    <ClCompile Include="Physics\SolvingPlanner.cpp" />
     <ClCompile Include="Physics\FastCosSin.cpp" />
     <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
@@ -276,7 +276,8 @@
     <ClInclude Include="EcstasyCore\Threading\Task.h" />
     <ClInclude Include="EcstasyCore\Threading\ThreadPool.h" />
     <ClInclude Include="EcstasyCore\Threading\ThreadUtils.h" />
-    <ClInclude Include="Physics\SolvingPlanners\LLSolvingPlanner.h" />
+    <ClInclude Include="Physics\ContainerUtilities.h" />
+    <ClInclude Include="Physics\SolvingPlanner.h" />
     <ClInclude Include="Physics\Constants.h" />
     <ClInclude Include="Physics\FastCosSin.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
@@ -313,7 +314,6 @@
     <ClInclude Include="Scenes.h" />
     <ClInclude Include="Physics\Solver.h" />
     <ClInclude Include="Physics\ScratchBuffer.h" />
-    <ClInclude Include="Physics\SolvingPlanners\SolvingPlannerBase.h" />
     <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <ItemGroup>

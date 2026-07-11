@@ -1,5 +1,6 @@
 #pragma once
 #include "GlmTypes.h"
+#include "ContainerUtilities.h"
 
 #include "EcstasyCore/Simd.h"
 #include "Core/MemoryAllocation/AlignedAllocator.h"
@@ -10,12 +11,6 @@
 
 namespace PS_AGONY
 {
-	template<typename Container>
-	inline size_t getVectorMemoryUsage(const Container& container)
-	{
-		return container.capacity() * sizeof(container[0]);
-	}
-
 	template<typename T, size_t aligment>
 	using AlignedVector = std::vector<T, AlignedAllocator<T, aligment>>;
 

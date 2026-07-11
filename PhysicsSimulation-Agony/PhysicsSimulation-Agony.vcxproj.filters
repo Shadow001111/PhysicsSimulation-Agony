@@ -99,7 +99,7 @@
     <ClCompile Include="Physics\FastCosSin.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SolvingPlanners\LLSolvingPlanner.cpp">
+    <ClCompile Include="Physics\SolvingPlanner.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\BodySoA.cpp">
@@ -245,10 +245,10 @@
     <ClInclude Include="Physics\SharedScratchBuffers.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SolvingPlanners\SolvingPlannerBase.h">
+    <ClInclude Include="Physics\SolvingPlanner.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SolvingPlanners\LLSolvingPlanner.h">
+    <ClInclude Include="Physics\ContainerUtilities.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

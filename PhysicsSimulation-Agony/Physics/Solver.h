@@ -2,7 +2,7 @@
 #include "NarrowPhaseCollisionDetector.h"
 #include "Material.h"
 
-#include "SolvingPlanners/LLSolvingPlanner.h"
+#include "SolvingPlanner.h"
 
 #include <atomic>
 #include <vector>
@@ -96,7 +96,7 @@ namespace PS_AGONY
 		const std::vector<Material>* materials;
 
 		WorkerResources workerResources;
-		LLSolvingPlanner solvingPlanner;
+		SolvingPlanner solvingPlanner;
 
 		std::vector<BodyPair> collidingBodyPairs;
 		std::vector<BodyCollisionData> orderedCollisionData;
