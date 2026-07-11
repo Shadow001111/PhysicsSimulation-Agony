@@ -329,13 +329,46 @@ namespace PS_AGONY
         //    return;
         //}
 
+        // Filter out consecutive duplicate vertices.
+        std::vector<Vec2> uniqueVertices;
+        uniqueVertices.reserve(params.verticesCount);
+        for (size_t i = 0; i < params.verticesCount; ++i)
+        {
+            const Vec2& current = params.localVertices[i];
+
+            // Check the current vertex against all vertices we've already accepted.
+            bool isDuplicate = false;
+            for (const Vec2& existing : uniqueVertices)
+            {
+                if (existing.x == current.x && existing.y == current.y)
+                {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+
+            // Only add it if it hasn't been seen anywhere else yet.
+            if (!isDuplicate)
+            {
+                uniqueVertices.push_back(current);
+            }
+        }
+        
+        if (uniqueVertices.size() < 3)
+        {
+            std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
+            return;
+        }
+
+        std::cout << uniqueVertices.size() << "\n";
+
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = polygons.getCount();
 
         const Real mass = std::fmax(Real(0), params.base.mass);
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
-        VerticesContainer vertices{ params.localVertices, params.verticesCount };
+        VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
 
         auto iCOM = calculatePolygonInertia(mass, vertices, std::nullopt);
         const Real inertia = iCOM.first;
