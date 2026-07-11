@@ -50,6 +50,20 @@ namespace PS_AGONY
 			std::vector<BoxInstanceData> instanceData;
 		};
 
+		struct LineVertex
+		{
+			float x, y;
+			uint32_t color;
+		};
+
+		struct SpringRenderResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vbo;
+			Shader shader;
+			std::vector<LineVertex> vertexData;
+		};
+
 		struct FloatAABB
 		{
 			float minX, minY;
@@ -86,12 +100,12 @@ namespace PS_AGONY
 		struct PolygonRenderResources
 		{
 			VertexArray vao;
-			ImmutableBuffer vertexVbo;   // Packed local vertex positions for all polygons.
-			ImmutableBuffer instanceVbo; // Per-polygon transform data.
-			ImmutableBuffer indirectBuf; // DrawArraysIndirectCommand array.
+			ImmutableBuffer vertexVbo;
+			ImmutableBuffer instanceVbo;
+			ImmutableBuffer indirectBuf;
 			Shader shader;
-			std::vector<glm::vec2>               vertexData;
-			std::vector<PolygonInstanceData>     instanceData;
+			std::vector<glm::vec2> vertexData;
+			std::vector<PolygonInstanceData> instanceData;
 			std::vector<DrawArraysIndirectCommand> drawCommands;
 		};
 
@@ -99,6 +113,7 @@ namespace PS_AGONY
 		CircleRenderResources circleResources;
 		BoxRenderResources boxResources;
 		PolygonRenderResources polygonResources;
+		SpringRenderResources springResources;
 
 		AABBResources aabbResources;
 
@@ -142,6 +157,8 @@ namespace PS_AGONY
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 
+		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+
 		// Render shapes.
 
 		void renderCircleShapes(const Mat4& viewProjectionMatrix);
@@ -157,6 +174,8 @@ namespace PS_AGONY
 		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);
 
 		void ensureAABBInstanceVboCapacity(size_t count);
+
+		void ensureSpringBufferCapacity(size_t vertexCount);
 	};
 }
 

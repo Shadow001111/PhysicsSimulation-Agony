@@ -161,10 +161,13 @@ namespace PS_AGONY
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }
 
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
+
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
 		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(boxes); }
 		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(polygons); }
+
+		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 	private:
