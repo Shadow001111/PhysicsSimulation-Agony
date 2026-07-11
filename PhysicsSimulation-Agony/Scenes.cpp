@@ -557,16 +557,16 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
 void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr float worldWidth = 35.0f;
+    constexpr float worldWidth = 125.0f;
     constexpr float terrainSegmentWidth = 16.0f;
     constexpr float wallThickness = 5.0f;
     constexpr float wallHeight = 50.0f;
     constexpr float terrainBaseY = -20.0f;
 
     // Configurable object counts
-    constexpr int circleCount = 2;
-    constexpr int boxCount = 2;
-    constexpr int polygonCount = 2;
+    constexpr int circleCount = 1500;
+    constexpr int boxCount = 1500;
+    constexpr int polygonCount = 1500;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {

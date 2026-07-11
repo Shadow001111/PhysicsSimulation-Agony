@@ -360,8 +360,6 @@ namespace PS_AGONY
             return;
         }
 
-        std::cout << uniqueVertices.size() << "\n";
-
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = polygons.getCount();
 
@@ -458,33 +456,9 @@ namespace PS_AGONY
         if (bodyIndex != bodyCount - 1)
         {
             // Swap all vectors in BodySoA.
-            std::swap(bodies.offsetX[bodyIndex], bodies.offsetX.back());
-            std::swap(bodies.offsetY[bodyIndex], bodies.offsetY.back());
-            std::swap(bodies.localCenterOfMassX[bodyIndex], bodies.localCenterOfMassX.back());
-            std::swap(bodies.localCenterOfMassY[bodyIndex], bodies.localCenterOfMassY.back());
-            std::swap(bodies.worldCenterX[bodyIndex], bodies.worldCenterX.back());
-            std::swap(bodies.worldCenterY[bodyIndex], bodies.worldCenterY.back());
-            std::swap(bodies.velocityX[bodyIndex], bodies.velocityX.back());
-            std::swap(bodies.velocityY[bodyIndex], bodies.velocityY.back());
-            std::swap(bodies.rotation[bodyIndex], bodies.rotation.back());
-            std::swap(bodies.angularVelocity[bodyIndex], bodies.angularVelocity.back());
-            std::swap(bodies.mass[bodyIndex], bodies.mass.back());
-            std::swap(bodies.invMass[bodyIndex], bodies.invMass.back());
-            std::swap(bodies.inertia[bodyIndex], bodies.inertia.back());
-            std::swap(bodies.invInertia[bodyIndex], bodies.invInertia.back());
-            std::swap(bodies.rotationCos[bodyIndex], bodies.rotationCos.back());
-            std::swap(bodies.rotationSin[bodyIndex], bodies.rotationSin.back());
-            std::swap(bodies.isStatic[bodyIndex], bodies.isStatic.back());
-            std::swap(bodies.materialIndex[bodyIndex], bodies.materialIndex.back());
-            std::swap(bodies.aabb.minX[bodyIndex], bodies.aabb.minX.back());
-            std::swap(bodies.aabb.minY[bodyIndex], bodies.aabb.minY.back());
-            std::swap(bodies.aabb.maxX[bodyIndex], bodies.aabb.maxX.back());
-            std::swap(bodies.aabb.maxY[bodyIndex], bodies.aabb.maxY.back());
-            std::swap(bodies.bodyType[bodyIndex], bodies.bodyType.back());
-            std::swap(bodies.shapeIndex[bodyIndex], bodies.shapeIndex.back());
+            bodies.swapWithBack(bodyIndex);
 
             // Update the shape entry that refers to the swapped body (if any).
-            //const BodyIndex swappedBodyIndex = bodyCount - 1;
             const BodyType swappedType = bodies.bodyType[bodyIndex];
             const BodyIndex swappedShapeIdx = bodies.shapeIndex[bodyIndex];
             if (swappedType == BodyType::Circle)
@@ -503,30 +477,7 @@ namespace PS_AGONY
         }
 
         // Pop back all BodySoA vectors.
-        bodies.offsetX.pop_back();
-        bodies.offsetY.pop_back();
-        bodies.localCenterOfMassX.pop_back();
-        bodies.localCenterOfMassY.pop_back();
-        bodies.worldCenterX.pop_back();
-        bodies.worldCenterY.pop_back();
-        bodies.velocityX.pop_back();
-        bodies.velocityY.pop_back();
-        bodies.rotation.pop_back();
-        bodies.angularVelocity.pop_back();
-        bodies.mass.pop_back();
-        bodies.invMass.pop_back();
-        bodies.inertia.pop_back();
-        bodies.invInertia.pop_back();
-        bodies.rotationCos.pop_back();
-        bodies.rotationSin.pop_back();
-        bodies.isStatic.pop_back();
-        bodies.materialIndex.pop_back();
-        bodies.aabb.minX.pop_back();
-        bodies.aabb.minY.pop_back();
-        bodies.aabb.maxX.pop_back();
-        bodies.aabb.maxY.pop_back();
-        bodies.bodyType.pop_back();
-        bodies.shapeIndex.pop_back();
+        bodies.popBack();
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
