@@ -64,7 +64,6 @@ namespace PS_AGONY
 			Real mass{ 0 };
 			std::optional<Vec2> centerOfMass = std::nullopt;
 			MaterialIndex materialIndex{ 0 };
-			BodyTextureId textureId{ 0 };
 		};
 
 		// Bodies.

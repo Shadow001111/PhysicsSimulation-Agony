@@ -69,8 +69,6 @@ namespace PS_AGONY
         AABBSoAViewer_Internal aabb;
         const BodyType* bodyType = nullptr;
         const BodyIndex* shapeIndex = nullptr;
-
-        const BodyTextureId* textureId = nullptr;
     public:
         BodySoAViewer() = default;
 
@@ -96,8 +94,7 @@ namespace PS_AGONY
             materialIndex(data.materialIndex.data()),
             aabb(data.aabb),
             bodyType(data.bodyType.data()),
-            shapeIndex(data.shapeIndex.data()),
-            textureId(data.textureId.data())
+            shapeIndex(data.shapeIndex.data())
         {}
 
         size_t getCount() const noexcept { return count; }

@@ -21,7 +21,6 @@ namespace PS_AGONY
 			float rotation;
 			float radius;
 			uint32_t color; // 3 bytes used.
-			uint32_t textureId;
 		};
 
 		struct BoxInstanceData
@@ -31,7 +30,6 @@ namespace PS_AGONY
 			float rotation;
 			float halfWidth, halfHeight;
 			uint32_t color; // 3 bytes used.
-			uint32_t textureId;
 		};
 
 		struct CircleRenderResources

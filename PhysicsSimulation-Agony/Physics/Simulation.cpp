@@ -264,8 +264,7 @@ namespace PS_AGONY
 			centerOfMass,
             materialIndex,
             BodyType::Circle,
-            newShapeIndex,
-            params.base.textureId
+            newShapeIndex
 		);
 
         circles.append(
@@ -300,8 +299,7 @@ namespace PS_AGONY
 			centerOfMass,
             materialIndex,
             BodyType::Box,
-            newShapeIndex,
-            params.base.textureId
+            newShapeIndex
         );
 
         boxes.append(
@@ -364,8 +362,7 @@ namespace PS_AGONY
             neededCenterOfMass,
             materialIndex,
             BodyType::Polygon,
-            newShapeIndex,
-            params.base.textureId
+            newShapeIndex
         );
 
         polygons.append(
@@ -451,7 +448,6 @@ namespace PS_AGONY
             std::swap(bodies.aabb.maxY[bodyIndex], bodies.aabb.maxY.back());
             std::swap(bodies.bodyType[bodyIndex], bodies.bodyType.back());
             std::swap(bodies.shapeIndex[bodyIndex], bodies.shapeIndex.back());
-            std::swap(bodies.textureId[bodyIndex], bodies.textureId.back());
 
             // Update the shape entry that refers to the swapped body (if any).
             //const BodyIndex swappedBodyIndex = bodyCount - 1;
@@ -497,7 +493,6 @@ namespace PS_AGONY
         bodies.aabb.maxY.pop_back();
         bodies.bodyType.pop_back();
         bodies.shapeIndex.pop_back();
-        bodies.textureId.pop_back();
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
