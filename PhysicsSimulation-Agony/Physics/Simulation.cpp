@@ -240,7 +240,7 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::createCircle(const CircleCreateParams& params)
+    std::optional<BodyIndex> Simulation::createCircle(const CircleCreateParams& params)
     {
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = circles.getCount();
@@ -272,9 +272,11 @@ namespace PS_AGONY
             newBodyIndex,
             radius
 		);
+
+        return newBodyIndex;
     }
 
-    void Simulation::createBox(const BoxCreateParams& params)
+    std::optional<BodyIndex> Simulation::createBox(const BoxCreateParams& params)
     {
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = boxes.getCount();
@@ -308,19 +310,21 @@ namespace PS_AGONY
             width  * Real(0.5),
             height * Real(0.5)
         );
+
+        return newBodyIndex;
     }
 
-    void Simulation::createPolygon(const PolygonCreateParams& params)
+    std::optional<BodyIndex> Simulation::createPolygon(const PolygonCreateParams& params)
     {
         if (params.localVertices == nullptr)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices container is nullptr.\n";
-            return;
+            return std::nullopt;
         }
         if (params.verticesCount < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices count is less than three.\n";
-            return;
+            return std::nullopt;
         }
         //if (params.base.centerOfMass.has_value())
         //{
@@ -357,7 +361,7 @@ namespace PS_AGONY
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
-            return;
+            return std::nullopt;
         }
 
         const BodyIndex newBodyIndex = bodies.getCount();
@@ -401,6 +405,8 @@ namespace PS_AGONY
             newBodyIndex,
             std::move(vertices)
         );
+
+        return newBodyIndex;
     }
 
     void Simulation::destroyBody(BodyIndex bodyIndex)
@@ -478,6 +484,19 @@ namespace PS_AGONY
 
         // Pop back all BodySoA vectors.
         bodies.popBack();
+    }
+
+    void Simulation::createSpring(const SpringCreateParams& params)
+    {
+        springs.append(
+            params.bodyIndexA,
+            params.bodyIndexB,
+            params.localAnchorA,
+            params.localAnchorB,
+            params.restLength,
+            params.stiffness,
+            params.damping
+        );
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -894,11 +913,13 @@ namespace PS_AGONY
             materials
         );
 
-        // Remap persistent contact data if body was deleted.
+        // Remap data if body was deleted.
         narrowPhaseCollisionDetector.remapPersistentContactData(deletedBodies);
+        springs.remapAfterDeletions(deletedBodies);
         deletedBodies.clear();
 
         // Main stuff.
+        applySpringForces(deltaTime);
         integrateVelocities(bodyCount, deltaTime);
         applyBodyHolderConstraint();
         integratePositions(bodyCount, deltaTime);
@@ -1467,6 +1488,75 @@ namespace PS_AGONY
 
         velocityXPtr[bodyIndex] = newBodyVelocity.x;
         velocityYPtr[bodyIndex] = newBodyVelocity.y;
+    }
+
+    void Simulation::applySpringForces(Real deltaTime)
+    {
+        auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2 {
+            return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
+            };
+
+        const size_t springCount = springs.getCount();
+        for (size_t i = 0; i < springCount; ++i)
+        {
+            const BodyIndex idxA = springs.bodyIndexA[i];
+            const BodyIndex idxB = springs.bodyIndexB[i];
+
+            const Real invMassA = bodies.invMass[idxA];
+            const Real invMassB = bodies.invMass[idxB];
+
+            // Optimize early out if both attachments are static anchors
+            if (invMassA == Real(0) && invMassB == Real(0)) continue;
+
+            const Real invInertiaA = bodies.invInertia[idxA];
+            const Real invInertiaB = bodies.invInertia[idxB];
+
+            // 1. Calculate center of masses
+            const Vec2 comA{ bodies.offsetX[idxA] + bodies.localCenterOfMassX[idxA], bodies.offsetY[idxA] + bodies.localCenterOfMassY[idxA] };
+            const Vec2 comB{ bodies.offsetX[idxB] + bodies.localCenterOfMassX[idxB], bodies.offsetY[idxB] + bodies.localCenterOfMassY[idxB] };
+
+            // 2. Rotate anchors to world-space offsets
+            const Vec2 rA = rotate(springs.localAnchorA[i], bodies.rotationCos[idxA], bodies.rotationSin[idxA]);
+            const Vec2 rB = rotate(springs.localAnchorB[i], bodies.rotationCos[idxB], bodies.rotationSin[idxB]);
+
+            const Vec2 wA = comA + rA;
+            const Vec2 wB = comB + rB;
+
+            // 3. Compute structural directional vector configurations
+            const Vec2 delta = wB - wA;
+            const Real currentLength = glm::length(delta);
+            if (currentLength < Real(1e-6)) continue;
+
+            const Vec2 dir = delta / currentLength;
+
+            // 4. Extract linear velocities + point-angular cross velocity additions
+            const Vec2 vA = Vec2(bodies.velocityX[idxA], bodies.velocityY[idxA]) + Vec2(-bodies.angularVelocity[idxA] * rA.y, bodies.angularVelocity[idxA] * rA.x);
+            const Vec2 vB = Vec2(bodies.velocityX[idxB], bodies.velocityY[idxB]) + Vec2(-bodies.angularVelocity[idxB] * rB.y, bodies.angularVelocity[idxB] * rB.x);
+            const Vec2 relVel = vB - vA;
+
+            // 5. Hooke's Spring Law along with linear damping factors
+            const Real springForceMag = springs.stiffness[i] * (currentLength - springs.restLength[i]);
+            const Real dampingForceMag = springs.damping[i] * glm::dot(relVel, dir);
+            const Real totalForceMag = springForceMag + dampingForceMag;
+
+            const Vec2 force = dir * totalForceMag;
+
+            // 6. Direct application onto rigid body velocity channels
+            if (invMassA > Real(0))
+            {
+                bodies.velocityX[idxA] += force.x * invMassA * deltaTime;
+                bodies.velocityY[idxA] += force.y * invMassA * deltaTime;
+                const Real torqueA = rA.x * force.y - rA.y * force.x;
+                bodies.angularVelocity[idxA] += torqueA * invInertiaA * deltaTime;
+            }
+            if (invMassB > Real(0))
+            {
+                bodies.velocityX[idxB] -= force.x * invMassB * deltaTime;
+                bodies.velocityY[idxB] -= force.y * invMassB * deltaTime;
+                const Real torqueB = rB.x * (-force.y) - rB.y * (-force.x);
+                bodies.angularVelocity[idxB] += torqueB * invInertiaB * deltaTime;
+            }
+        }
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const

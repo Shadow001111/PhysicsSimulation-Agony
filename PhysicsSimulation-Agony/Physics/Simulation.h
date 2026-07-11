@@ -67,6 +67,17 @@ namespace PS_AGONY
 			MaterialIndex materialIndex{ 0 };
 		};
 
+		struct SpringCreateParams
+		{
+			BodyIndex bodyIndexA;
+			BodyIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Real restLength;
+			Real stiffness;
+			Real damping;
+		};
+
 		// Bodies.
 		BodySoA bodies;
 		CircleSoA circles;
@@ -74,6 +85,9 @@ namespace PS_AGONY
 		PolygonSoA polygons;
 
 		std::vector<BodyDeletion> deletedBodies;
+
+		// Constraints.
+		SpringSoA springs;
 
 		// Materials.
 		std::vector<Material> materials;
@@ -126,11 +140,13 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		void createCircle(const CircleCreateParams& params);
-		void createBox(const BoxCreateParams& params);
-		void createPolygon(const PolygonCreateParams& params);
+		std::optional<BodyIndex> createCircle(const CircleCreateParams& params);
+		std::optional<BodyIndex> createBox(const BoxCreateParams& params);
+		std::optional<BodyIndex> createPolygon(const PolygonCreateParams& params);
 
 		void destroyBody(BodyIndex bodyIndex);
+
+		void createSpring(const SpringCreateParams& params);
 
 		MaterialIndex createMaterial(const Material& material);
 
@@ -172,6 +188,8 @@ namespace PS_AGONY
 		void computeWorldCenters();
 
 		void applyBodyHolderConstraint();
+
+		void applySpringForces(Real deltaTime);
 
 		void collectMemoryUsage(DebugData& data) const;
 	};
