@@ -1,10 +1,11 @@
-#include "LLSolvingPlanner.h"
+#include "SolvingPlanner.h"
+#include "ContainerUtilities.h"
 
 #include <numeric>
 
 namespace PS_AGONY
 {
-    void LLSolvingPlanner::planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount)
+    void SolvingPlanner::planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount)
     {
         const size_t collisionCount = collisions.size();
 
@@ -91,7 +92,7 @@ namespace PS_AGONY
         }
     }
 
-    double LLSolvingPlanner::computeEfficiency() const
+    double SolvingPlanner::computeEfficiency() const
     {
         if (workerCount == 0 || flatIndices.empty())
             return 0.0;
@@ -113,7 +114,7 @@ namespace PS_AGONY
         return static_cast<double>(scheduled) / (static_cast<double>(workerCount) * maxLoad) * 100.0;
     }
 
-    bool LLSolvingPlanner::validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const
+    bool SolvingPlanner::validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const
     {
         if (workerCount == 0) return passOffsets.empty();
 
@@ -149,7 +150,7 @@ namespace PS_AGONY
         return true;
     }
 
-    size_t LLSolvingPlanner::getMemoryUsage() const
+    size_t SolvingPlanner::getMemoryUsage() const
     {
         size_t total = 0;
         total += getVectorMemoryUsage(flatIndices);
