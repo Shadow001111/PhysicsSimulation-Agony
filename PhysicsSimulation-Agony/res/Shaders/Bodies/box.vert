@@ -10,6 +10,7 @@ layout (location = 6) in uint instanceTextureId;
 
 out vec2 uv;
 out flat vec3 color;
+out flat vec2 halfSize;
 
 uniform mat4 viewProjectionMatrix;
 
@@ -30,6 +31,7 @@ void main()
     gl_Position = viewProjectionMatrix * vec4(worldPosition, 0.0, 1.0);
 
     uv = localPosition;
+    halfSize = instanceHalfSize;
 
     const float r = (instanceColor >> 16) / 255.0;
     const float g = ((instanceColor >> 8) & 255) / 255.0;

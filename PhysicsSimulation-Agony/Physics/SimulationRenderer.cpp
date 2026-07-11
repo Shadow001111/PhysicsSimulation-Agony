@@ -25,17 +25,6 @@ namespace PS_AGONY
 
         initShaders();
         initBuffers();
-
-        {
-            TextureLoader::TextureLoadParams params
-            {
-                .desiredChannels = 4,
-                .createMipmaps = true,
-                .compression = TextureCompression::Format::NONE,
-                .isHDR = false
-            };
-            TextureLoader::createTexture2DFromImage(hardcodedTexture, "res/Textures/Ev.png", params);
-        }
     }
 
     void SimulationRenderer::render(const Simulation& simulation)
@@ -529,9 +518,6 @@ namespace PS_AGONY
         circleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
         circleResources.vao.bind();
-
-        hardcodedTexture.bindUnit(0);
-        circleResources.shader.setInt("uHardCodedTexture", 0);
 
         // Draw.
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
