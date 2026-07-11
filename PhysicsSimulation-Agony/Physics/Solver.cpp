@@ -52,7 +52,7 @@ namespace PS_AGONY
 
         for (uint32_t i = 0; i < velocityIterations; i++)
         {
-            solveVelocityConstraints(narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
+            solveVelocityConstraints(i == 0, narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
         }
         for (uint32_t i = 0; i < positionIterations; i++)
         {
@@ -251,13 +251,12 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solveVelocityConstraints(
+    void Solver::applyWarmStarting(
         std::span<const BodyCollisionData> collisionDataContainer,
-        std::span<const VelocityConstraintData> constraintDataContainer,
-        std::span<const FrictionData> frictionDataContainer
+        std::span<const VelocityConstraintData> constraintDataContainer
     )
     {
-        TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
+        TRACY_SCOPE_NC("Apply warm starting", Ecstasy::Color::Violet);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -295,45 +294,103 @@ namespace PS_AGONY
 
             const Vec2 tangent = { -normal.y, normal.x };
 
+            //
             std::array<Vec2, 2> impulseArray{};
-            std::array<Real, 2> jnArray{};
-
-            // Warm starting.
-            if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
+            for (uint32_t i = 0; i < contactCount; i++)
             {
-                for (uint32_t i = 0; i < contactCount; i++)
-                {
-                    Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
-                    Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+                Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
+                Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
 
-                    const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
-                    const bool isValid = oldJn > Real(0) || std::fabs(oldJt) > Real(0); // TODO: Check if it's right!
+                const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
+                const bool isValid = oldJn > Real(0) || std::fabs(oldJt) > Real(0); // TODO: Check if it's right!
 
-                    impulseArray[i] = warmStartImpulse * Real(isValid);
-                }
-
-                { // Can apply sum of impulses, because they don't change outcome.
-                    const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
-
-                    linearVelocityA -= impulseSum * invMassA;
-                    linearVelocityB += impulseSum * invMassB;
-
-                    const Real dotSumA =
-                        glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
-                        glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
-
-                    const Real dotSumB =
-                        glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
-                        glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
-
-                    angularVelocityA -= dotSumA * invInertiaA;
-                    angularVelocityB += dotSumB * invInertiaB;
-
-                    // Reset impulse array for collision accumulation step.
-                    impulseArray[0] = Vec2();
-                    impulseArray[1] = Vec2();
-                }
+                impulseArray[i] = warmStartImpulse * Real(isValid);
             }
+            { // Can apply sum of impulses, because they don't change outcome.
+                const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
+
+                linearVelocityA -= impulseSum * invMassA;
+                linearVelocityB += impulseSum * invMassB;
+
+                const Real dotSumA =
+                    glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
+                    glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
+
+                const Real dotSumB =
+                    glm::dot(velocityConstraintData.points[0].rBPerp, impulseArray[0]) +
+                    glm::dot(velocityConstraintData.points[1].rBPerp, impulseArray[1]);
+
+                angularVelocityA -= dotSumA * invInertiaA;
+                angularVelocityB += dotSumB * invInertiaB;
+            }
+
+            // Store velocities.
+            velocityXPtr[bodyIndexA] = linearVelocityA.x;
+            velocityYPtr[bodyIndexA] = linearVelocityA.y;
+            velocityXPtr[bodyIndexB] = linearVelocityB.x;
+            velocityYPtr[bodyIndexB] = linearVelocityB.y;
+
+            angularVelocityPtr[bodyIndexA] = angularVelocityA;
+            angularVelocityPtr[bodyIndexB] = angularVelocityB;
+        }
+    }
+
+    void Solver::solveVelocityConstraints(
+        bool firstIteration,
+        std::span<const BodyCollisionData> collisionDataContainer,
+        std::span<const VelocityConstraintData> constraintDataContainer,
+        std::span<const FrictionData> frictionDataContainer
+    )
+    {
+        TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
+
+        // Optional warm-starting.
+        if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
+        {
+            if (firstIteration)
+            {
+                applyWarmStarting(collisionDataContainer, constraintDataContainer);
+            }
+        }
+
+        // Get pointers.
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+
+        // Main loop.
+        const size_t collisionCount = collisionDataContainer.size();
+        for (size_t c = 0; c < collisionCount; c++)
+        {
+            const BodyCollisionData& collisionData = collisionDataContainer[c];
+            const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
+
+            // Get body indices.
+            const BodyIndex bodyIndexA = collisionData.bodyA;
+            const BodyIndex bodyIndexB = collisionData.bodyB;
+
+            // Get body data.
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            const Real invInertiaA = invInertiaPtr[bodyIndexA];
+            const Real invInertiaB = invInertiaPtr[bodyIndexB];
+
+            Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
+            Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
+            Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+            Real angularVelocityB = angularVelocityPtr[bodyIndexB];
+
+            //
+            const Vec2 normal = collisionData.normal;
+            const uint32_t contactCount = collisionData.contactCount;
+
+            const Vec2 tangent = { -normal.y, normal.x };
+
+            [[maybe_unused]] std::array<Vec2, 2> impulseArray{};
+            std::array<Real, 2> jnArray{};
 
             // Collision impulses.
             bool noContacts = true;
@@ -638,7 +695,7 @@ namespace PS_AGONY
                             std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
                             std::span<const FrictionData> frictionDataSlice(frictionDataContainer.data() + passOffset.start, passOffset.size);
 
-                            solveVelocityConstraints(collisionSlice, constraintSlice, frictionDataSlice);
+                            solveVelocityConstraints(localTicket == 0, collisionSlice, constraintSlice, frictionDataSlice);
                         }
                     }
 
