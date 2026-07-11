@@ -46,6 +46,7 @@ namespace PS_AGONY
         renderBodies(viewProjectionMatrix);
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         renderContactPoints(simulation, viewProjectionMatrix);
+        renderSprings(simulation, viewProjectionMatrix);
     }
 
     void SimulationRenderer::initShaders()
@@ -86,6 +87,15 @@ namespace PS_AGONY
                 { GL_FRAGMENT_SHADER, "res/Shaders/aabb.frag" }
             };
             aabbResources.shader.create(sources);
+        }
+
+        // Spring.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/spring.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/spring.frag" }
+            };
+            springResources.shader.create(sources);
         }
     }
 
@@ -162,6 +172,11 @@ namespace PS_AGONY
 
             // Initial instance VBO capacity
             ensureAABBInstanceVboCapacity(64);
+        }
+
+        // Spring.
+        {
+            springResources.vao.create();
         }
     }
 
@@ -502,6 +517,86 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
+    void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    {
+        const auto& springs = simulation.getSprings();
+        const size_t springCount = springs.getCount();
+        if (springCount == 0) return;
+
+        const size_t vertexCount = springCount * 2;
+        ensureSpringBufferCapacity(vertexCount);
+
+        springResources.vertexData.resize(vertexCount);
+        LineVertex* ECSTASY_RESTRICT verts = springResources.vertexData.data();
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+
+        for (size_t i = 0; i < springCount; ++i)
+        {
+            const BodyIndex idxA = springs.bodyIndexA[i];
+            const BodyIndex idxB = springs.bodyIndexB[i];
+
+            const float rA = static_cast<float>(rotationPtr[idxA]);
+            const float cA = std::cos(rA);
+            const float sA = std::sin(rA);
+
+            const float rB = static_cast<float>(rotationPtr[idxB]);
+            const float cB = std::cos(rB);
+            const float sB = std::sin(rB);
+
+            // 1. Transform local coordinates into world space positions
+            const float wAx = static_cast<float>(positionXPtr[idxA]) + (springs.localAnchorA[i].x * cA - springs.localAnchorA[i].y * sA);
+            const float wAy = static_cast<float>(positionYPtr[idxA]) + (springs.localAnchorA[i].x * sA + springs.localAnchorA[i].y * cA);
+
+            const float wBx = static_cast<float>(positionXPtr[idxB]) + (springs.localAnchorB[i].x * cB - springs.localAnchorB[i].y * sB);
+            const float wBy = static_cast<float>(positionYPtr[idxB]) + (springs.localAnchorB[i].x * sB + springs.localAnchorB[i].y * cB);
+
+            // 2. Dynamic Strain Color-Coding Calculation
+            const float dx = wBx - wAx;
+            const float dy = wBy - wAy;
+            const float currentLength = std::sqrt(dx * dx + dy * dy);
+            const float restLength = static_cast<float>(springs.restLength[i]);
+            const float displacement = currentLength - restLength;
+
+            uint32_t color = 0xBBBBBB; // Default neutral state gray
+            if (displacement > 0.02f)
+            {
+                // Tension (Stretched) -> Interpolate to Red
+                float factor = std::min(displacement / (restLength + 0.001f), 1.0f);
+                uint32_t greenBlue = static_cast<uint32_t>(187.0f * (1.0f - factor));
+                color = (0xFF << 16) | (greenBlue << 8) | greenBlue;
+            }
+            else if (displacement < -0.02f)
+            {
+                // Compression (Squeezed) -> Interpolate to Blue
+                float factor = std::min(std::abs(displacement) / (restLength + 0.001f), 1.0f);
+                uint32_t redGreen = static_cast<uint32_t>(187.0f * (1.0f - factor));
+                color = (redGreen << 16) | (redGreen << 8) | 0xFF;
+            }
+
+            // 3. Stage Structural Vertex Data Pairs
+            size_t vIdx = i * 2;
+            verts[vIdx].x = wAx;
+            verts[vIdx].y = wAy;
+            verts[vIdx].color = color;
+
+            verts[vIdx + 1].x = wBx;
+            verts[vIdx + 1].y = wBy;
+            verts[vIdx + 1].color = color;
+        }
+
+        // 4. Stream and Bind to GPU Pipeline
+        springResources.vbo.write(springResources.vertexData.data(), vertexCount * sizeof(LineVertex));
+
+        springResources.shader.use();
+        springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        springResources.vao.bind();
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
+    }
+
     void SimulationRenderer::renderCircleShapes(const Mat4& viewProjectionMatrix)
     {
         const size_t count = circleResources.instanceData.size();
@@ -741,5 +836,31 @@ namespace PS_AGONY
         vao.enableAttribute(1);
         vao.setFloatAttribute(1, 4, 0, 1);
         vao.setAttributeDivisor(1, 1);
+    }
+    
+    void SimulationRenderer::ensureSpringBufferCapacity(size_t vertexCount)
+    {
+        constexpr size_t SIZEOF_VERTEX = sizeof(LineVertex);
+
+        auto& vao = springResources.vao;
+        auto& vbo = springResources.vbo;
+
+        const size_t neededBytes = vertexCount * SIZEOF_VERTEX;
+        if (neededBytes <= vbo.getCapacity()) return;
+
+        const size_t newCapacity = neededBytes + (neededBytes >> 1);
+
+        vbo.create();
+        vbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+        vao.bindVertexBuffer(0, vbo.getID(), 0, SIZEOF_VERTEX);
+
+        // Setup positions attribute (location = 0)
+        vao.enableAttribute(0);
+        vao.setFloatAttribute(0, 2, 0, 0);
+
+        // Setup packed Hex Color attribute (location = 1)
+        vao.enableAttribute(1);
+        vao.setIntAttribute(1, 1, sizeof(float) * 2, 0);
     }
 }

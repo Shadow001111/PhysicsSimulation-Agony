@@ -157,4 +157,34 @@ namespace PS_AGONY
 
         size_t getCount() const noexcept { return count; }
     };
+
+
+    class SpringSoAViewer
+    {
+        size_t count = 0;
+    public:
+        const BodyIndex* bodyIndexA = nullptr;
+        const BodyIndex* bodyIndexB = nullptr;
+        const Vec2* localAnchorA = nullptr;
+        const Vec2* localAnchorB = nullptr;
+        const Real* restLength = nullptr;
+        const Real* stiffness = nullptr;
+        const Real* damping = nullptr;
+
+        SpringSoAViewer() = default;
+
+        explicit SpringSoAViewer(const SpringSoA& data) noexcept :
+            count(data.getCount()),
+            bodyIndexA(data.bodyIndexA.data()),
+            bodyIndexB(data.bodyIndexB.data()),
+            localAnchorA(data.localAnchorA.data()),
+            localAnchorB(data.localAnchorB.data()),
+            restLength(data.restLength.data()),
+            stiffness(data.stiffness.data()),
+            damping(data.damping.data())
+        {
+        }
+
+        size_t getCount() const noexcept { return count; }
+    };
 }
