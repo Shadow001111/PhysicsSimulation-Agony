@@ -219,4 +219,69 @@ namespace PS_AGONY
 			return total;
 		}
 	};
+
+
+	struct SpringSoA
+	{
+		std::vector<BodyIndex> bodyIndexA;
+		std::vector<BodyIndex> bodyIndexB;
+		std::vector<Vec2> localAnchorA;
+		std::vector<Vec2> localAnchorB;
+		std::vector<Real> restLength;
+		std::vector<Real> stiffness;
+		std::vector<Real> damping;
+
+		void append(BodyIndex indexA, BodyIndex indexB, Vec2 anchorA, Vec2 anchorB, Real restLen, Real stifness, Real damping)
+		{
+			this->bodyIndexA.push_back(indexA);
+			this->bodyIndexB.push_back(indexB);
+			this->localAnchorA.push_back(anchorA);
+			this->localAnchorB.push_back(anchorB);
+			this->restLength.push_back(restLen);
+			this->stiffness.push_back(stifness);
+			this->damping.push_back(damping);
+		}
+
+		size_t getCount() const noexcept { return bodyIndexA.size(); }
+
+		void remapAfterDeletions(const std::vector<BodyDeletion>& deletedBodies)
+		{
+			for (const auto& deletion : deletedBodies)
+			{
+				auto [deletedIdx, swappedIdx] = deletion;
+
+				size_t i = 0;
+				while (i < bodyIndexA.size())
+				{
+					// If the spring is attached to the deleted body, destroy the constraint.
+					if (bodyIndexA[i] == deletedIdx || bodyIndexB[i] == deletedIdx)
+					{
+						if (i != bodyIndexA.size() - 1)
+						{
+							std::swap(bodyIndexA[i], bodyIndexA.back());
+							std::swap(bodyIndexB[i], bodyIndexB.back());
+							std::swap(localAnchorA[i], localAnchorA.back());
+							std::swap(localAnchorB[i], localAnchorB.back());
+							std::swap(restLength[i], restLength.back());
+							std::swap(stiffness[i], stiffness.back());
+							std::swap(damping[i], damping.back());
+						}
+						bodyIndexA.pop_back();
+						bodyIndexB.pop_back();
+						localAnchorA.pop_back();
+						localAnchorB.pop_back();
+						restLength.pop_back();
+						stiffness.pop_back();
+						damping.pop_back();
+						continue;
+					}
+
+					// If the spring is attached to the body that took the deleted body's place, update it.
+					if (bodyIndexA[i] == swappedIdx) bodyIndexA[i] = deletedIdx;
+					if (bodyIndexB[i] == swappedIdx) bodyIndexB[i] = deletedIdx;
+					i++;
+				}
+			}
+		}
+	};
 }

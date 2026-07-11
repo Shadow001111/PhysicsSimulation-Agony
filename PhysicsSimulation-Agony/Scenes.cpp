@@ -65,218 +65,6 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Random::Generator& rvg, s
 }
 
 
-
-void load_ALotOfCollisions(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg, float globalOffsetX, float globalOffsetY)
-{
-    constexpr float boundary = 20.0f;
-    constexpr float thickness = 5.0f;
-
-    constexpr int circleCount = 1000;// 2'500;
-    constexpr int boxCount = 1000;// 2'500;
-    constexpr int polygonCount = 1000;// 2'500;
-
-    PS_AGONY::Material material0 = {
-            .elasticity = 0.9,
-            .staticFriction = 1.0,
-            .dynamicFriction = 1.0
-    };
-
-    PS_AGONY::Material material1 = {
-        .elasticity = 0.5,
-        .staticFriction = 1.0,
-        .dynamicFriction = 1.0
-    };
-
-    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
-    PS_AGONY::MaterialIndex material1Index = simulation.createMaterial(material1);
-
-    constexpr float spawnBoundary = boundary - 1.0f;
-    {
-        constexpr float halfThickness = thickness * 0.5f;
-        constexpr float length = boundary * 2.0f + 2.0f;
-        const float angularVelocity = 0.0f;
-
-        const float b = boundary + halfThickness;
-
-        const PS_AGONY::Vec2 p1{ globalOffsetX - b, globalOffsetY };
-        const PS_AGONY::Vec2 p2{ globalOffsetX + b, globalOffsetY };
-        const PS_AGONY::Vec2 p3{ globalOffsetX, globalOffsetY - b };
-        const PS_AGONY::Vec2 p4{ globalOffsetX, globalOffsetY + b };
-
-        simulation.createBox({
-            .base.position = p1,
-            .base.angularVelocity = angularVelocity,
-            .base.mass = 0,
-            .base.centerOfMass = -p1,
-            .base.materialIndex = material0Index,
-            .size = { thickness, length }
-        });
-
-        simulation.createBox({
-            .base.position = p2,
-            .base.angularVelocity = angularVelocity,
-            .base.mass = 0,
-            .base.centerOfMass = -p2,
-            .base.materialIndex = material0Index,
-            .size = { thickness, length }
-            });
-
-        simulation.createBox({
-            .base.position = p3,
-            .base.angularVelocity = angularVelocity,
-            .base.mass = 0,
-            .base.centerOfMass = -p3,
-            .base.materialIndex = material0Index,
-            .size = { length, thickness }
-            });
-
-        simulation.createBox({
-            .base.position = p4,
-            .base.angularVelocity = angularVelocity,
-            .base.mass = 0,
-            .base.centerOfMass = -p4,
-            .base.materialIndex = material0Index,
-            .size = { length, thickness }
-            });
-    }
-    for (int i = 0; i < circleCount; i++)
-    {
-        const float x = globalOffsetX + rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float vx = rvg.real<float>(-2.0f, 2.0f);
-        const float vy = rvg.real<float>(-2.0f, 2.0f);
-        const float r = rvg.real<float>(0.1f, 0.15f);
-        const float mass = 3.14f * r * r;
-
-        simulation.createCircle({
-            .base.position = { x, y },
-            .base.velocity = { vx, vy },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = mass,
-            .base.materialIndex = material0Index,
-            .radius = r
-            });
-    }
-    for (int i = 0; i < boxCount; i++)
-    {
-        const float x = globalOffsetX + rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float vx = rvg.real<float>(-2.0f, 2.0f);
-        const float vy = rvg.real<float>(-2.0f, 2.0f);
-        const float rotation = rvg.real<float>(0.0f, 6.28f);
-        const float width = rvg.real<float>(0.2f, 0.4f);
-        const float height = rvg.real<float>(0.2f, 0.4f);
-        const float mass = width * height;
-
-        simulation.createBox({
-            .base.position = { x, y},
-            .base.velocity = { vx, vy},
-            .base.rotation = rotation,
-            .base.mass = mass,
-            .base.materialIndex = material0Index,
-            .size = { width, height }
-        });
-    }
-    for (int i = 0; i < polygonCount; i++)
-    {
-        const float x = globalOffsetX + rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float y = globalOffsetY + rvg.real<float>(-spawnBoundary, spawnBoundary);
-        const float vx = rvg.real<float>(-2.0f, 2.0f);
-        const float vy = rvg.real<float>(-2.0f, 2.0f);
-        const float rotation = 0;
-        const float r = rvg.real<float>(0.1f, 0.15f) * 2.0f;
-        const float mass = 1.0f;
-
-        constexpr size_t maxVerticesCount = 10;
-        const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
-
-        auto localVertices = makeConvexPolygon(rvg, verticesCount, r);
-
-        simulation.createPolygon({
-            .base.position = { x, y },
-            .base.velocity = { vx, vy},
-            .base.rotation = rotation,
-            .base.mass = mass,
-            .base.materialIndex = material0Index,
-            .localVertices = localVertices.data(),
-            .verticesCount = verticesCount
-            });
-    }
-
-    {
-        constexpr float radius = 4.0f;
-
-        simulation.createCircle({
-            .base.position = { 0, 0 },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = 100,
-            .base.materialIndex = material1Index,
-            .radius = radius
-        });
-    }
-}
-
-void load_CleanPerfomanceOfContactsTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
-{
-    constexpr int objectCount = 500;
-    constexpr float boxSize = 0.1f;
-    constexpr float boxPadding = 0.03f;
-
-    constexpr float paddingY = 5.0f;
-
-    constexpr float floorThickness = 1.0f;
-    constexpr float floorWidth = objectCount * (boxSize + boxPadding);
-
-
-    PS_AGONY::Material material0 = {
-            .elasticity = 0.9,
-            .staticFriction = 1.0,
-            .dynamicFriction = 1.0
-    };
-
-    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
-
-    simulation.createBox({
-        .base.position = { 0.0f,  -floorThickness * 0.5f},
-        .base.mass = 0,
-        .base.materialIndex = material0Index,
-        .size = { floorWidth, floorThickness }
-    });
-
-    simulation.createBox({
-        .base.position = { 0.0f,  -floorThickness * 0.5f + paddingY},
-        .base.mass = 0,
-        .base.materialIndex = material0Index,
-        .size = { floorWidth, floorThickness }
-    });
-
-    constexpr float dx = boxSize + boxPadding;
-    for (int i = 0; i < objectCount; i++)
-    {
-        const float x = (-floorWidth + boxSize + boxPadding) * 0.5f + i * dx;
-        
-        simulation.createBox({
-            .base.position = { x, boxSize * 0.5f},
-            .base.mass = 1,
-            .base.materialIndex = material0Index,
-            .size = { boxSize, boxSize }
-        });
-
-        simulation.createCircle({
-            .base.position = { x, boxSize * 0.5f + paddingY },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = 1,
-            .base.materialIndex = material0Index,
-            .radius = boxSize * 0.5f
-        });
-    }
-}
-
 void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr int ballCount = 1500;
@@ -431,72 +219,6 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generat
                 .radius = ballRadius
                 });
         }
-    }
-}
-
-void load_Planet(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
-{
-    constexpr float planetRadius = 40.0f;
-
-    constexpr int circleCount = 800;
-
-    PS_AGONY::Material material0 = {
-            .elasticity = 0.9,
-            .staticFriction = 1.0,
-            .dynamicFriction = 1.0
-    };
-
-    PS_AGONY::Material material1 = {
-        .elasticity = 0.0,
-        .staticFriction = 0.0,
-        .dynamicFriction = 0.0
-    };
-
-    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
-    PS_AGONY::MaterialIndex material1Index = simulation.createMaterial(material1);
-
-    simulation.createCircle({
-            .base.position = { 0, 0 },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = 0,
-            .base.materialIndex = material0Index,
-            .radius = planetRadius
-        });
-
-    for (int i = 0; i < circleCount; i++)
-    {
-        const float angle = rvg.real<float>(0.0f, 6.28f);
-        const float r = rvg.real<float>(0.1f, 1.0f);
-        const float mass = 3.14f * r * r;
-
-        const float dist = planetRadius + r;
-        const float x = std::cos(angle) * dist;
-        const float y = std::sin(angle) * dist;
-
-        simulation.createCircle({
-            .base.position = { x, y },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = mass,
-            .base.materialIndex = material0Index,
-            .radius = r
-            });
-    }
-
-    {
-        constexpr float radius = 4.0f;
-        simulation.createCircle({
-            .base.position = { 0.0, planetRadius + radius },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = 20000,
-            .base.materialIndex = material1Index,
-            .radius = radius
-            });
     }
 }
 
@@ -775,57 +497,143 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
     }
 }
 
-void load_StackedTower(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
-    constexpr int towerRows = 100;
-    constexpr float boxSize = 0.6f;
-    constexpr float boxMass = 1.0f;
+    // === 1. CONFIGURATION AND MATERIALS ===
+    constexpr float cliffWidth = 25.0f;
+    constexpr float cliffHeight = 30.0f;
+    constexpr float cliffY = -cliffHeight * 0.5f; // Top surface will align perfectly with Y = 0.0
+    constexpr float gapWidth = 32.0f;
 
-    constexpr float boundaryThickness = 2.0f;
-    constexpr float floorWidth = 100.0f;
+    constexpr int plankCount = 14;
+    constexpr float plankHeight = 0.5f;
+    constexpr float plankMass = 1.5f;
 
-    PS_AGONY::Material towerMaterial = {
-        .elasticity = 0.9f,
-        .staticFriction = 0.0f,
-        .dynamicFriction = 0.0f
+    // Calculate precise width per plank to span the gap with minor breathing spacing
+    constexpr float totalSpanWidth = gapWidth;
+    constexpr float plankStep = totalSpanWidth / static_cast<float>(plankCount);
+    constexpr float plankWidth = plankStep * 0.9f;
+
+    // Spring mechanics configuration variables
+    constexpr float springK = 2200.0f;  // Structural stiffness
+    constexpr float springD = 18.0f;    // Joint damping
+    constexpr float verticalOffset = plankHeight * 0.35f; // Dual-anchor separation to prevent torsional flipping
+
+    PS_AGONY::Material physicsMaterial = {
+        .elasticity = 0.2f,
+        .staticFriction = 0.7f,
+        .dynamicFriction = 0.5f
     };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(towerMaterial);
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
 
-
-    simulation.createBox({
-        .base.position = { 0.0f, -boundaryThickness * 0.5f },
-        .base.mass = 0,
+    // === 2. CREATE HUGE TERRAIN CLIFFS ===
+    const float leftCliffX = -(gapWidth * 0.5f + cliffWidth * 0.5f);
+    auto leftCliffOpt = simulation.createBox({
+        .base.position = { leftCliffX, cliffY },
+        .base.mass = 0, // Static Anchor
         .base.materialIndex = materialIdx,
-        .size = { floorWidth, boundaryThickness }
+        .size = { cliffWidth, cliffHeight }
         });
 
-    constexpr float wallHeight = towerRows * boxSize;
-    simulation.createBox({
-        .base.position = { -(boundaryThickness + boxSize) * 0.5f, wallHeight * 0.5f },
-        .base.mass = 0,
+    const float rightCliffX = (gapWidth * 0.5f + cliffWidth * 0.5f);
+    auto rightCliffOpt = simulation.createBox({
+        .base.position = { rightCliffX, cliffY },
+        .base.mass = 0, // Static Anchor
         .base.materialIndex = materialIdx,
-        .size = { boundaryThickness, wallHeight  }
-        });
-    simulation.createBox({
-        .base.position = {  (boundaryThickness + boxSize) * 0.5f, wallHeight * 0.5f },
-        .base.mass = 0,
-        .base.materialIndex = materialIdx,
-        .size = { boundaryThickness, wallHeight  }
+        .size = { cliffWidth, cliffHeight }
         });
 
+    // Halt if the terrain cliff allocations failed
+    if (!leftCliffOpt || !rightCliffOpt) return;
 
-    for (int i = 0; i < towerRows; ++i)
+    PS_AGONY::BodyIndex leftCliff = *leftCliffOpt;
+    PS_AGONY::BodyIndex rightCliff = *rightCliffOpt;
+
+    // === 3. SPAN BRIDGE PLANKS & CONNECT WITH SPRINGS ===
+    std::vector<PS_AGONY::BodyIndex> planks;
+    planks.reserve(plankCount);
+
+    const float spanStartX = -gapWidth * 0.5f;
+
+    for (int i = 0; i < plankCount; ++i)
     {
-        float y = (i + 0.5f) * boxSize;
+        float plankX = spanStartX + plankStep * (static_cast<float>(i) + 0.5f);
 
-        simulation.createBox({
-            .base.position = { 0.0f, y },
+        auto plankOpt = simulation.createBox({
+            .base.position = { plankX, 0.0f },
             .base.velocity = { 0.0f, 0.0f },
             .base.rotation = 0.0f,
             .base.angularVelocity = 0.0f,
-            .base.mass = boxMass,
+            .base.mass = plankMass,
             .base.materialIndex = materialIdx,
-            .size = { boxSize, boxSize }
+            .size = { plankWidth, plankHeight }
+            });
+
+        if (plankOpt)
+        {
+            planks.push_back(*plankOpt);
+        }
+    }
+
+    // Early out if no bridge planks could be generated
+    if (planks.empty()) return;
+
+    // Helper lambda to construct dual-anchor spring pairs cleanly between structural components
+    auto attachWithDualSprings = [&](PS_AGONY::BodyIndex bodyA, PS_AGONY::BodyIndex bodyB,
+        PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB,
+        float restLen) {
+            // Upper Support Spring
+            simulation.createSpring({
+                .bodyIndexA = bodyA,
+                .bodyIndexB = bodyB,
+                .localAnchorA = { localA.x, localA.y + verticalOffset },
+                .localAnchorB = { localB.x, localB.y + verticalOffset },
+                .restLength = restLen,
+                .stiffness = springK,
+                .damping = springD
+                });
+            // Lower Support Spring
+            simulation.createSpring({
+                .bodyIndexA = bodyA,
+                .bodyIndexB = bodyB,
+                .localAnchorA = { localA.x, localA.y - verticalOffset },
+                .localAnchorB = { localB.x, localB.y - verticalOffset },
+                .restLength = restLen,
+                .stiffness = springK,
+                .damping = springD
+                });
+        };
+
+    // Connect Left Cliff Anchor to First Plank
+    float cliffToPlankRestLen = std::abs((spanStartX + plankStep * 0.5f - plankWidth * 0.5f) - (-gapWidth * 0.5f));
+    attachWithDualSprings(leftCliff, planks.front(), { cliffWidth * 0.5f, cliffHeight * 0.5f }, { -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
+
+    // Connect Continuous Plank Sequence Chains
+    float interPlankRestLen = plankStep - plankWidth;
+    for (size_t i = 0; i < planks.size() - 1; ++i)
+    {
+        attachWithDualSprings(planks[i], planks[i + 1], { plankWidth * 0.5f, 0.0f }, { -plankWidth * 0.5f, 0.0f }, interPlankRestLen);
+    }
+
+    // Connect Last Plank to Right Cliff Anchor
+    attachWithDualSprings(planks.back(), rightCliff, { plankWidth * 0.5f, 0.0f }, { -cliffWidth * 0.5f, cliffHeight * 0.5f }, cliffToPlankRestLen);
+
+    // === 4. SPAWN INTERACTIONS (DECORATIVE INTERACTION BALLS) ===
+    for (int i = 0; i < 5; ++i)
+    {
+        float rx = rvg.real<float>(-gapWidth * 0.35f, gapWidth * 0.35f);
+        float ry = rvg.real<float>(4.0f, 12.0f);
+        float radius = rvg.real<float>(0.6f, 1.2f);
+        float mass = 3.14159f * radius * radius * 2.0f;
+
+        simulation.createCircle({
+            .base.position = { rx, ry },
+            .base.velocity = { 0.0f, -2.0f },
+            .base.rotation = 0.0f,
+            .base.angularVelocity = 0.0f,
+            .base.mass = mass,
+            .base.materialIndex = materialIdx,
+            .radius = radius
             });
     }
 }
@@ -837,36 +645,22 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
 
 	if (scene == 0)
 	{
-        load_ALotOfCollisions(simulation, rvg, 0.0f, 0.0f);
-		//load_ALotOfCollisions(simulation, rvg, -30.0f, 0.0f);
-        //load_ALotOfCollisions(simulation, rvg,  30.0f, 0.0f);
-	}
-	else if (scene == 1)
-	{
-		load_CleanPerfomanceOfContactsTest(simulation, rvg);
-	}
-	else if (scene == 2)
-	{
 		load_GaltonBoard(simulation, rvg);
 	}
-	else if (scene == 3)
-	{
-		load_Planet(simulation, rvg);
-	}
-    else if (scene == 4)
+    else if (scene == 1)
     {
         load_ALotOfNotTouching(simulation, rvg);
     }
-    else if (scene == 5)
+    else if (scene == 2)
     {
         load_LargeWorld(simulation, rvg);
     }
-    else if (scene == 6)
+    else if (scene == 3)
     {
         load_StackedPyramid(simulation, rvg);
     }
-    else if (scene == 7)
+    else if (scene == 4)
     {
-        load_StackedTower(simulation, rvg);
+        load_SpringBridge(simulation, rvg);
     }
 }
