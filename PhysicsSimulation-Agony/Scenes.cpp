@@ -560,7 +560,7 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
         float plankX = spanStartX + plankStep * (static_cast<float>(i) + 0.5f);
 
         auto plankOpt = simulation.createBox({
-            .base.position = { plankX, 0.0f },
+            .base.position = { plankX, plankHeight * -0.5f },
             .base.velocity = { 0.0f, 0.0f },
             .base.rotation = 0.0f,
             .base.angularVelocity = 0.0f,
@@ -606,7 +606,7 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
 
     // Connect Left Cliff Anchor to First Plank
     float cliffToPlankRestLen = std::abs((spanStartX + plankStep * 0.5f - plankWidth * 0.5f) - (-gapWidth * 0.5f));
-    attachWithDualSprings(leftCliff, planks.front(), { cliffWidth * 0.5f, cliffHeight * 0.5f }, { -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
+    attachWithDualSprings(leftCliff, planks.front(), { cliffWidth * 0.5f, cliffHeight * 0.5f - plankHeight * 0.5f }, { -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
 
     // Connect Continuous Plank Sequence Chains
     float interPlankRestLen = plankStep - plankWidth;
@@ -616,7 +616,7 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
     }
 
     // Connect Last Plank to Right Cliff Anchor
-    attachWithDualSprings(planks.back(), rightCliff, { plankWidth * 0.5f, 0.0f }, { -cliffWidth * 0.5f, cliffHeight * 0.5f }, cliffToPlankRestLen);
+    attachWithDualSprings(planks.back(), rightCliff, { plankWidth * 0.5f, 0.0f }, { -cliffWidth * 0.5f, cliffHeight * 0.5f - plankHeight * 0.5f }, cliffToPlankRestLen);
 
     // === 4. SPAWN INTERACTIONS (DECORATIVE INTERACTION BALLS) ===
     for (int i = 0; i < 5; ++i)
@@ -635,6 +635,117 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
             .base.materialIndex = materialIdx,
             .radius = radius
             });
+    }
+}
+
+void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    // === 1. CONFIGURATION AND VARIABLES ===
+    constexpr int gridWidth = 40;   // Number of horizontal particles
+    constexpr int gridHeight = 30;  // Number of vertical particles
+    constexpr float spacing = 0.22f;
+    constexpr float radius = 0.06f;
+    constexpr float particleMass = 0.2f;
+
+    // Spring constants chosen for elastic but stable structural behavior
+    constexpr float springK = 1800.0f;
+    constexpr float springD = 6.0f;
+
+    PS_AGONY::Material physicsMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 0.6f,
+        .dynamicFriction = 0.4f
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
+
+    // === 2. STATIC GROUND PLATFORM ===
+    simulation.createBox({
+        .base.position = { 0.0f, -8.0f },
+        .base.mass = 0, // Static platform
+        .base.materialIndex = materialIdx,
+        .size = { 40.0f, 2.0f }
+        });
+
+    // === 3. SPAWN PARTICLE GRID ===
+    // Array to store created IDs; standard flat vector mapping layout: index = y * gridWidth + x
+    std::vector<std::optional<PS_AGONY::BodyIndex>> gridNodeMap(gridWidth * gridHeight, std::nullopt);
+
+    const float startX = -static_cast<float>(gridWidth - 1) * spacing * 0.5f;
+    const float startY = 2.0f; // Elevate above the ground box
+
+    for (int y = 0; y < gridHeight; ++y)
+    {
+        for (int x = 0; x < gridWidth; ++x)
+        {
+            float posX = startX + static_cast<float>(x) * spacing;
+            float posY = startY + static_cast<float>(y) * spacing;
+
+            // Slight offset or initialization tilt to stimulate dynamic cloth folding deformation
+            auto ballOpt = simulation.createCircle({
+                .base.position = { posX, posY },
+                .base.velocity = { 1.5f, -3.0f }, // Initial throw velocity vector
+                .base.rotation = 0.0f,
+                .base.angularVelocity = 0.0f,
+                .base.mass = particleMass,
+                .base.materialIndex = materialIdx,
+                .radius = radius
+                });
+
+            gridNodeMap[y * gridWidth + x] = ballOpt;
+        }
+    }
+
+    // === 4. GENERATE MESH OF SPRING CONSTRAINTS ===
+    // Lambda helper to safely tie nodes center-to-center if both allocations succeeded
+    auto tryConnectSpring = [&](int x1, int y1, int x2, int y2, float restLength)
+        {
+            auto nodeA = gridNodeMap[y1 * gridWidth + x1];
+            auto nodeB = gridNodeMap[y2 * gridWidth + x2];
+
+            if (nodeA && nodeB)
+            {
+                simulation.createSpring({
+                    .bodyIndexA = *nodeA,
+                    .bodyIndexB = *nodeB,
+                    .localAnchorA = { 0.0f, 0.0f }, // Center anchor
+                    .localAnchorB = { 0.0f, 0.0f }, // Center anchor
+                    .restLength = restLength,
+                    .stiffness = springK,
+                    .damping = springD
+                    });
+            }
+        };
+
+    const float diagSpacing = std::sqrt(2.0f) * spacing;
+
+    for (int y = 0; y < gridHeight; ++y)
+    {
+        for (int x = 0; x < gridWidth; ++x)
+        {
+            // Structural Horizontal Constraints (Right)
+            if (x < gridWidth - 1)
+            {
+                tryConnectSpring(x, y, x + 1, y, spacing);
+            }
+
+            // Structural Vertical Constraints (Down)
+            if (y < gridHeight - 1)
+            {
+                tryConnectSpring(x, y, x, y + 1, spacing);
+            }
+
+            // Shear Diagonal Constraints (Down-Right)
+            if (x < gridWidth - 1 && y < gridHeight - 1)
+            {
+                tryConnectSpring(x, y, x + 1, y + 1, diagSpacing);
+            }
+
+            // Shear Diagonal Constraints (Down-Left)
+            if (x > 0 && y < gridHeight - 1)
+            {
+                tryConnectSpring(x, y, x - 1, y + 1, diagSpacing);
+            }
+        }
     }
 }
 
@@ -662,5 +773,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 4)
     {
         load_SpringBridge(simulation, rvg);
+    }
+    else if (scene == 5)
+    {
+        load_SoftBodyStressTest(simulation, rvg);
     }
 }
