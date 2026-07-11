@@ -709,8 +709,8 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
 {
     // === CONFIGURATION VARIABLES ===
     constexpr int pyramidRows = 40; // Number of rows in the pyramid
-    constexpr float boxWidth = 0.6f;
-    constexpr float boxHeight = 0.6f;
+    constexpr float boxWidth = 0.5f;
+    constexpr float boxHeight = 0.5f;
     constexpr float boxMass = 1.0f;
 
     constexpr float floorThickness = 2.0f;

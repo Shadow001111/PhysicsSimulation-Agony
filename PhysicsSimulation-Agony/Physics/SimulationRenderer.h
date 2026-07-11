@@ -111,9 +111,6 @@ namespace PS_AGONY
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
-
-		// Delete.
-		Texture hardcodedTexture;
 	public:
 		SimulationRenderer() = default;
 		~SimulationRenderer() = default;
