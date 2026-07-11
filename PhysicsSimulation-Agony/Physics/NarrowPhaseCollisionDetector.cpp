@@ -624,10 +624,10 @@ namespace PS_AGONY
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
                 uint32_t contactId = 0;
-                if      (circleLocalPosition.x >  halfWidthB)  contactId = 0;
-                else if (circleLocalPosition.x < -halfWidthB)  contactId = 1;
-                if      (circleLocalPosition.y >  halfHeightB) contactId = 2;
-                else if (circleLocalPosition.y < -halfHeightB) contactId = 3;
+                if      (circleLocalPosition.x >  halfWidthB)  contactId |= 1;
+                else if (circleLocalPosition.x < -halfWidthB)  contactId |= 2;
+                if      (circleLocalPosition.y >  halfHeightB) contactId |= 4;
+                else if (circleLocalPosition.y < -halfHeightB) contactId |= 8;
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
@@ -865,9 +865,9 @@ namespace PS_AGONY
             const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
             const Real projectedRadiusAOnUpB = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
 
-            Vec2 normal;
+            Vec2 normal{};
             Real depth = std::numeric_limits<Real>::max();
-            SATAxis bestAxis;
+            SATAxis bestAxis = SATAxis::A_RIGHT;
 
             auto sat = [&](Real radiusSum, Real centerDeltaOnAxis, Vec2 axis, SATAxis axisType) -> bool
                 {
@@ -1234,8 +1234,9 @@ namespace PS_AGONY
             if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
             if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
 
-            uint32_t id1 = incidentEdge;
-            uint32_t id2 = incidentEdge2;
+            const uint32_t bodyTag = refIsBox ? 0x80000000u : 0u;
+            uint32_t id1 = bodyTag | incidentEdge;
+            uint32_t id2 = bodyTag | incidentEdge2;
 
             Vec2 contactPoints[2];
             uint32_t contactIds[2];
@@ -1456,8 +1457,9 @@ namespace PS_AGONY
 
                 const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
 
-                const uint32_t id1 = incidentEdgeIndex;
-                const uint32_t id2 = (incidentEdgeIndex + 1) % uint32_t(incVerts.size());
+                const uint32_t bodyTag = refIsA ? 0x80000000u : 0u;
+                const uint32_t id1 = bodyTag | incidentEdgeIndex;
+                const uint32_t id2 = bodyTag | ((incidentEdgeIndex + 1) % uint32_t(incVerts.size()));
 
                 Vec2 contactPoints[2];
                 uint32_t contactIds[2];

@@ -33,8 +33,6 @@ namespace PS_AGONY
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
 			size_t solverMemoryUsage = 0;
-
-			//size_t scratchBufferMemoryUsage = 0;
 		};
 	private:
 		struct SimulationSettings
