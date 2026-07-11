@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <numeric>
+#include <cmath>
 
 namespace PS_AGONY
 {
@@ -1074,6 +1075,44 @@ namespace PS_AGONY
 
                 velocityXPtr[i] += accX * deltaTime;
                 velocityYPtr[i] += accY * deltaTime;
+            }
+        }
+
+        // Damp angular velocity.
+        if (simulationSettings.angularVelocityDamping >= 0 && simulationSettings.angularVelocityDamping < 1)
+        {
+            Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+            Real* ECSTASY_RESTRICT invInertiaPtr = bodies.invInertia.data();
+
+            const Real damping = std::pow(simulationSettings.angularVelocityDamping, deltaTime);
+            const RealSimd dampingV(damping);
+
+            size_t i = 0;
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
+
+                const RealSimd invInertiaV = RealSimd::load(invInertiaPtr + i);
+                const auto movableMask = invInertiaV != zeros;
+
+                RealSimd newAngVel = angVel * dampingV;
+
+                newAngVel = RealSimd::blendv(angVel, newAngVel, movableMask);
+
+                newAngVel.store(angularVelocityPtr + i);
+            }
+            for (; i < bodyCount; i++)
+            {
+                const Real invInertia = invInertiaPtr[i];
+                const Real movableMask = invInertia != Real(0.0);
+
+                const Real angVel = angularVelocityPtr[i];
+
+                Real newAngVel = angVel * damping;
+
+                newAngVel = movableMask * newAngVel + (Real(1) - movableMask) * angVel;
+
+                angularVelocityPtr[i] = newAngVel;
             }
         }
     }
