@@ -90,61 +90,15 @@ namespace PS_AGONY
 			MaterialIndex materialIndex,
 			BodyType bodyType,
 			BodyIndex shapeIndex
-		)
-		{
-			this->offsetX.push_back(pos.x);
-			this->offsetY.push_back(pos.y);
-			this->localCenterOfMassX.push_back(localCenterOfMass.x);
-			this->localCenterOfMassY.push_back(localCenterOfMass.y);
-			this->worldCenterX.push_back(0);
-			this->worldCenterY.push_back(0);
-			this->velocityX.push_back(vel.x);
-			this->velocityY.push_back(vel.y);
-			this->rotation.push_back(rot);
-			this->angularVelocity.push_back(anglVel);
-			this->mass.push_back(mass);
-			this->invMass.push_back(invMass);
-			this->inertia.push_back(inertia);
-			this->invInertia.push_back(invInertia);
-			this->rotationCos.push_back(std::cos(rot));
-			this->rotationSin.push_back(std::sin(rot));
-			this->isStatic.push_back(invMass == 0);
-			this->materialIndex.push_back(materialIndex);
-			this->aabb.minX.push_back(0);
-			this->aabb.minY.push_back(0);
-			this->aabb.maxX.push_back(0);
-			this->aabb.maxY.push_back(0);
-			this->bodyType.push_back(bodyType);
-			this->shapeIndex.push_back(shapeIndex);
-		}
+		);
+
+		void swapWithBack(size_t index);
+
+		void popBack();
 
 		size_t getCount() const noexcept { return offsetX.size(); }
 
-		size_t getMemoryUsage() const noexcept
-		{
-			return
-				PS_AGONY::getVectorMemoryUsage(offsetX) +
-				PS_AGONY::getVectorMemoryUsage(offsetY) +
-				PS_AGONY::getVectorMemoryUsage(localCenterOfMassX) +
-				PS_AGONY::getVectorMemoryUsage(localCenterOfMassY) +
-				PS_AGONY::getVectorMemoryUsage(worldCenterX) +
-				PS_AGONY::getVectorMemoryUsage(worldCenterY) +
-				PS_AGONY::getVectorMemoryUsage(velocityX) +
-				PS_AGONY::getVectorMemoryUsage(velocityY) +
-				PS_AGONY::getVectorMemoryUsage(rotation) +
-				PS_AGONY::getVectorMemoryUsage(angularVelocity) +
-				PS_AGONY::getVectorMemoryUsage(mass) +
-				PS_AGONY::getVectorMemoryUsage(invMass) +
-				PS_AGONY::getVectorMemoryUsage(inertia) +
-				PS_AGONY::getVectorMemoryUsage(invInertia) +
-				PS_AGONY::getVectorMemoryUsage(rotationCos) +
-				PS_AGONY::getVectorMemoryUsage(rotationSin) +
-				PS_AGONY::getVectorMemoryUsage(isStatic) +
-				PS_AGONY::getVectorMemoryUsage(materialIndex) +
-				aabb.getMemoryUsage() +
-				PS_AGONY::getVectorMemoryUsage(bodyType) +
-				PS_AGONY::getVectorMemoryUsage(shapeIndex);
-		}
+		size_t getMemoryUsage() const noexcept;
 	};
 
 	struct CircleSoA
