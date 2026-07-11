@@ -135,7 +135,7 @@ namespace PS_AGONY
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
 	public:
-		static constexpr bool ENABLE_WARM_STARTING = false;
+		static constexpr bool ENABLE_WARM_STARTING = true;
 
 		enum class ExecutionPolicy
 		{
