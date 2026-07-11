@@ -560,16 +560,16 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
 void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr float worldWidth = 125.0f;
+    constexpr float worldWidth = 35.0f;
     constexpr float terrainSegmentWidth = 16.0f;
     constexpr float wallThickness = 5.0f;
-    constexpr float wallHeight = 60.0f;
+    constexpr float wallHeight = 50.0f;
     constexpr float terrainBaseY = -20.0f;
 
     // Configurable object counts
-    constexpr int circleCount = 1200;
-    constexpr int boxCount = 1200;
-    constexpr int polygonCount = 1200;
+    constexpr int circleCount = 2;
+    constexpr int boxCount = 2;
+    constexpr int polygonCount = 2;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
@@ -639,7 +639,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     // === 4. EVENLY SPREAD DYNAMIC OBJECTS ===
     const float spawnBufferX = worldWidth * 0.45f; // Keep spawns slightly away from outer edge walls
     constexpr float spawnMaxY = wallHeight + terrainBaseY;
-    constexpr float spawnMinY = spawnMaxY - 25.0f;
+    constexpr float spawnMinY = terrainBaseY + 25.0f;
 
     // Spawn Circles
     for (int i = 0; i < circleCount; ++i) {
@@ -711,7 +711,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr int pyramidRows = 30; // Number of rows in the pyramid
+    constexpr int pyramidRows = 40; // Number of rows in the pyramid
     constexpr float boxWidth = 0.6f;
     constexpr float boxHeight = 0.6f;
     constexpr float boxMass = 1.0f;
@@ -764,20 +764,18 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
         }
     }
 
-    // === 4. OPTIONAL: INTERACTIVE PROJECTILE ===
-    // Adds a heavy dynamic sphere positioned above to drop or smash into the pyramid
-    //{
-    //    constexpr float ballRadius = 1.0f;
-    //    simulation.createCircle({
-    //        .base.position = { -((pyramidRows * boxWidth) * 0.5f + 2.0f), (pyramidRows * boxHeight) + 2.0f },
-    //        .base.velocity = { 8.0f, -4.0f }, // Launched towards the pyramid structure
-    //        .base.rotation = 0.0f,
-    //        .base.angularVelocity = 0.0f,
-    //        .base.mass = 50.0f, // Heavy weight to impact the structure
-    //        .base.materialIndex = materialIdx,
-    //        .radius = ballRadius
-    //        });
-    //}
+    {
+        constexpr float ballRadius = 1.0f;
+        simulation.createCircle({
+            .base.position = { -floorWidth * 0.5f + 2.0f, ballRadius },
+            .base.velocity = { 0.0f, 0.0f },
+            .base.rotation = 0.0f,
+            .base.angularVelocity = 0.0f,
+            .base.mass = 50.0f,
+            .base.materialIndex = materialIdx,
+            .radius = ballRadius
+            });
+    }
 }
 
 void load_StackedTower(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
