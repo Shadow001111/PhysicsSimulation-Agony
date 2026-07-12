@@ -2,6 +2,9 @@
 #include "../ContainerUtilities.h"
 
 #include <numeric>
+#include <iostream>
+#include <iomanip>
+#include <string>
 
 namespace PS_AGONY
 {
@@ -89,6 +92,33 @@ namespace PS_AGONY
             }
 
             remainingIndices.swap(nextRemainingIndices);
+        }
+    }
+
+    void SolvingPlanner::printExecutionPlan()
+    {
+        const size_t numWaves = (passOffsets.empty() ? 0 : passOffsets.size() / workerCount);
+        const int colWidth = 6;
+
+        // Header: wave IDs
+        std::cout << std::setw(colWidth) << " ";
+        for (size_t wave = 0; wave < numWaves; ++wave)
+            std::cout << std::setw(colWidth) << ("Wv" + std::to_string(wave));
+        std::cout << "\n";
+
+        // Rows: worker ID + pass sizes
+        for (size_t worker = 0; worker < workerCount; ++worker)
+        {
+            std::cout << std::setw(colWidth - 1) << ("Wk" + std::to_string(worker)) << " ";
+            for (size_t wave = 0; wave < numWaves; ++wave)
+            {
+                size_t idx = wave * workerCount + worker;
+                if (idx < passOffsets.size())
+                    std::cout << std::setw(colWidth) << passOffsets[idx].size;
+                else
+                    std::cout << std::setw(colWidth) << "-";
+            }
+            std::cout << "\n";
         }
     }
 

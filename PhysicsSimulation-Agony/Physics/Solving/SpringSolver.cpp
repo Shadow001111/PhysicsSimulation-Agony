@@ -4,6 +4,8 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
 	void SpringSolver::setDataViewers(
@@ -337,5 +339,7 @@ namespace PS_AGONY
 				solveVelocityConstraints(indexSlice, constraintSlice);
 			}
 		);
+
+		std::cout << solvingPlanner->computeEfficiency() << "\n";
 	}
 }
