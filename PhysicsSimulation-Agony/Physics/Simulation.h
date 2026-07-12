@@ -28,6 +28,8 @@ namespace PS_AGONY
 			size_t boxDataMemoryUsage = 0;
 			size_t polygonDataMemoryUsage = 0;
 
+			size_t springDataMemoryUsage = 0;
+
 			size_t materialDataMemoryUsage = 0;
 
 			size_t broadPhaseDetectorMemoryUsage = 0;

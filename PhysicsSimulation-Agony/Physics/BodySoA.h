@@ -244,6 +244,18 @@ namespace PS_AGONY
 
 		size_t getCount() const noexcept { return bodyIndexA.size(); }
 
+		size_t getMemoryUsage() const noexcept
+		{
+			return
+				PS_AGONY::getVectorMemoryUsage(bodyIndexA) +
+				PS_AGONY::getVectorMemoryUsage(bodyIndexB) +
+				PS_AGONY::getVectorMemoryUsage(localAnchorA) +
+				PS_AGONY::getVectorMemoryUsage(localAnchorB) +
+				PS_AGONY::getVectorMemoryUsage(restLength) +
+				PS_AGONY::getVectorMemoryUsage(stiffness) +
+				PS_AGONY::getVectorMemoryUsage(damping);
+		}
+
 		void remapAfterDeletions(const std::vector<BodyDeletion>& deletedBodies)
 		{
 			for (const auto& deletion : deletedBodies)

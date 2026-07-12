@@ -99,20 +99,31 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
 
     // Memory.
     {
-        const size_t total =
-            simulationData.bodyDataMemoryUsage +
+        const size_t shapeTotal =
             simulationData.circleDataMemoryUsage +
             simulationData.boxDataMemoryUsage +
+            simulationData.polygonDataMemoryUsage;
+
+        const size_t constraintTotal =
+            simulationData.springDataMemoryUsage;
+
+        const size_t total =
+            simulationData.bodyDataMemoryUsage +
+            shapeTotal +
+            constraintTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage +
             simulationData.solverMemoryUsage
             ;
 
         ss << "\nMemory: " << formatSizeBinary(total);
-        ss << "\n  Bodies data: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
-        ss << "\n  Circle data: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
-        ss << "\n  Box data: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
-        ss << "\n  Polygon data: " << formatSizeBinary(simulationData.polygonDataMemoryUsage);
+        ss << "\n  Bodies: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
+        ss << "\n  Shapes: " << formatSizeBinary(shapeTotal);
+        ss << "\n    Circles: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
+        ss << "\n    Boxes: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
+        ss << "\n    Polygons: " << formatSizeBinary(simulationData.polygonDataMemoryUsage);
+        ss << "\n  Constraints: " << formatSizeBinary(constraintTotal);
+        ss << "\n    Springs: " << formatSizeBinary(simulationData.springDataMemoryUsage);
         ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
         ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
         ss << "\n  Solver: " << formatSizeBinary(simulationData.solverMemoryUsage);
