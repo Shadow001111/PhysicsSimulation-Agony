@@ -145,85 +145,115 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT springDampingPtr = springs.damping;
         const Real* ECSTASY_RESTRICT springRestLengthPtr = springs.restLength;
 
+        constexpr Real FREQUENCY_HZ = 10;
+        constexpr Real W = 2.0 * 3.1415926535 * FREQUENCY_HZ;
+
         // Main loop.
         const size_t springCount = springs.getCount();
-        for (size_t i = 0; i < springCount; i++)
+        for (uint32_t iter = 0; iter < springIterations; iter++)
         {
-            const BodyIndex bodyIndexA = springs.bodyIndexA[i];
-            const BodyIndex bodyIndexB = springs.bodyIndexB[i];
-
-            const Real invMassA = invMassPtr[bodyIndexA];
-            const Real invMassB = invMassPtr[bodyIndexB];
-
-            // Check if both attachments are static anchors.
-            if (invMassA == Real(0) && invMassB == Real(0)) [[unlikely]] continue;
-
-            const Real invInertiaA = invInertiaPtr[bodyIndexA];
-            const Real invInertiaB = invInertiaPtr[bodyIndexB];
-
-            // Compute center of masses.
-            const Vec2 comA{ positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA], positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA] };
-            const Vec2 comB{ positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB], positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB] };
-
-            // Compute world-space anchors.
-            const Vec2 rA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-            const Vec2 rB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
-
-            const Vec2 wA = comA + rA;
-            const Vec2 wB = comB + rB;
-
-            // Compute current length and direction.
-            const Vec2 delta = wB - wA;
-            const Real currentLength = glm::length(delta);
-            if (currentLength < Real(1e-6)) continue;
-
-            const Vec2 dir = delta / currentLength;
-
-            // Get velocities.
-            Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
-            Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
-            Real angularVelocityA = angularVelocityPtr[bodyIndexA];
-            Real angularVelocityB = angularVelocityPtr[bodyIndexB];
-
-            // Compute linear velocities at points.
-            const Vec2 angularLinearVelA = Vec2(-rA.y, rA.x) * angularVelocityA;
-            const Vec2 angularLinearVelB = Vec2(-rB.y, rB.x) * angularVelocityB;
-
-            const Vec2 relativeVelocity =
-                (linearVelocityB + angularLinearVelB) -
-                (linearVelocityA + angularLinearVelA);
-
-            // Hooke's Spring Law along with linear damping factors.
-            const Real springForceMag = springStiffnessPtr[i] * (currentLength - springRestLengthPtr[i]);
-            const Real dampingForceMag = springDampingPtr[i] * glm::dot(relativeVelocity, dir);
-            const Real totalForceMag = springForceMag + dampingForceMag;
-
-            const Vec2 force = dir * (totalForceMag * deltaTime);
-
-            // Apply forces.
-            if (invMassA > Real(0))
+            for (size_t i = 0; i < springCount; i++)
             {
-                linearVelocityA += force * invMassA;
+                const BodyIndex bodyIndexA = springs.bodyIndexA[i];
+                const BodyIndex bodyIndexB = springs.bodyIndexB[i];
 
-                const Real torqueA = rA.x * force.y - rA.y * force.x;
-                angularVelocityA += torqueA * invInertiaA;
+                const Real invMassA = invMassPtr[bodyIndexA];
+                const Real invMassB = invMassPtr[bodyIndexB];
 
-                velocityXPtr[bodyIndexA] = linearVelocityA.x;
-                velocityYPtr[bodyIndexA] = linearVelocityA.y;
+                // Check if both attachments are static anchors.
+                if (invMassA == Real(0) && invMassB == Real(0)) [[unlikely]] continue;
 
-                angularVelocityPtr[bodyIndexA] = angularVelocityA;
-            }
-            if (invMassB > Real(0))
-            {
-                linearVelocityB -= force * invMassB;
+                const Real invInertiaA = invInertiaPtr[bodyIndexA];
+                const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
-                const Real torqueB = rB.x * force.y - rB.y * force.x;
-                angularVelocityB -= torqueB * invInertiaB;
+                // Compute center of masses.
+                const Vec2 comA{ positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA], positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA] };
+                const Vec2 comB{ positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB], positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB] };
 
-                velocityXPtr[bodyIndexB] = linearVelocityB.x;
-                velocityYPtr[bodyIndexB] = linearVelocityB.y;
+                // Compute world-space anchors.
+                const Vec2 rA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+                const Vec2 rB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
-                angularVelocityPtr[bodyIndexB] = angularVelocityB;
+                const Vec2 wA = comA + rA;
+                const Vec2 wB = comB + rB;
+
+                // Compute current length and direction.
+                const Vec2 delta = wB - wA;
+                const Real currentLengthSq = glm::dot(delta, delta);
+                if (currentLengthSq < Real(1e-8)) continue;
+
+                const Real currentLength = glm::sqrt(currentLengthSq);
+                const Vec2 dir = delta / currentLength;
+
+                // Get velocities.
+                Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
+                Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
+                Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+                Real angularVelocityB = angularVelocityPtr[bodyIndexB];
+
+                // Compute linear velocities at points.
+                const Vec2 angularLinearVelA = Vec2(-rA.y, rA.x) * angularVelocityA;
+                const Vec2 angularLinearVelB = Vec2(-rB.y, rB.x) * angularVelocityB;
+
+                const Vec2 relativeVelocity =
+                    (linearVelocityB + angularLinearVelB) -
+                    (linearVelocityA + angularLinearVelA);
+
+                // Constraint error.
+                const Real C = currentLength - springRestLengthPtr[i];
+                const Real Cdot = glm::dot(relativeVelocity, dir);
+
+                const Real raCn = (rA.x * dir.y) - (rA.y * dir.x);
+                const Real rbCn = (rB.x * dir.y) - (rB.y * dir.x);
+                
+                //
+                const Real invMassSum = invMassA + invMassB + invInertiaA * raCn * raCn + invInertiaB * rbCn * rbCn;
+                if (invMassSum <= Real(0)) [[unlikely]] continue;
+
+                // Soft constraint parameters from physical stiffness/damping.
+                const Real k = springStiffnessPtr[i];
+                const Real c = springDampingPtr[i];
+
+                Real gamma = 0;
+                Real beta = 0;
+                {
+                    const Real denom = deltaTime * (c + deltaTime * k);
+                    if (denom > Real(1e-12)) [[likely]]
+                    {
+                        gamma = Real(1) / denom;
+                        beta = deltaTime * k * gamma;
+                    }
+                }
+
+                // Compute impulse.
+                const Real impulseMag = (Cdot + beta * C) / (invMassSum + gamma);
+                const Vec2 impulse = dir * impulseMag;
+
+                // Apply forces.
+                if (invMassA > Real(0))
+                {
+                    linearVelocityA += impulse * invMassA;
+
+                    const Real torqueA = rA.x * impulse.y - rA.y * impulse.x;
+                    angularVelocityA += torqueA * invInertiaA;
+
+                    velocityXPtr[bodyIndexA] = linearVelocityA.x;
+                    velocityYPtr[bodyIndexA] = linearVelocityA.y;
+
+                    angularVelocityPtr[bodyIndexA] = angularVelocityA;
+                }
+                if (invMassB > Real(0))
+                {
+                    linearVelocityB -= impulse * invMassB;
+
+                    const Real torqueB = rB.x * impulse.y - rB.y * impulse.x;
+                    angularVelocityB -= torqueB * invInertiaB;
+
+                    velocityXPtr[bodyIndexB] = linearVelocityB.x;
+                    velocityYPtr[bodyIndexB] = linearVelocityB.y;
+
+                    angularVelocityPtr[bodyIndexB] = angularVelocityB;
+                }
             }
         }
     }

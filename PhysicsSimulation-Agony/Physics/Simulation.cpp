@@ -921,9 +921,6 @@ namespace PS_AGONY
 
         // Main stuff.
         integrateVelocities(bodyCount, deltaTime);
-
-        solver.solveSprings(deltaTime, 1);
-
         applyBodyHolderConstraint();
         integratePositions(bodyCount, deltaTime);
         wrapRotation();
@@ -934,6 +931,9 @@ namespace PS_AGONY
 
         // Rebuild AABBs.
         buildBodyAABBs();
+
+        // Springs.
+        solver.solveSprings(deltaTime, simulationSettings.springSolvingIterations);
 
         if (bodyCount >= 2)
         {
@@ -949,8 +949,8 @@ namespace PS_AGONY
             // Collision resolution.
             solver.solveCollisions(
                 narrowCollisionData,
-                simulationSettings.velocitySolvingIterations,
-                simulationSettings.positionSolvingIterations
+                simulationSettings.collisionVelocitySolvingIterations,
+                simulationSettings.collisionPositionSolvingIterations
             );
 
             // Updating persistent contact data.
