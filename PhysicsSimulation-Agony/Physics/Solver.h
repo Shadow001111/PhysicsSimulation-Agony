@@ -94,6 +94,7 @@ namespace PS_AGONY
 
 		BodySoA* bodies;
 		const std::vector<Material>* materials;
+		SpringSoAViewer springs;
 
 		WorkerResources workerResources;
 		SolvingPlanner solvingPlanner;
@@ -116,45 +117,45 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			BodySoA& bodies,
-			const std::vector<Material>& materials
+			const std::vector<Material>& materials,
+			const SpringSoAViewer& springs
 		);
 
 		size_t getMemoryUsage() const;
 
-		void solve(
+		void solveCollisions(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
 
-		void solveThreaded(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-			uint32_t velocityIterations,
-			uint32_t positionIterations
+		void solveSprings(
+			Real deltaTime,
+			uint32_t springIterations
 		);
 	private:
 		size_t planWorkerCount(size_t collisionCount);
 
 		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
-		void applyWarmStarting(
+		void applyWarmStartingForCollisions(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer
 		);
 
-		void solveVelocityConstraints(
+		void solveCollisionVelocityConstraints(
 			bool firstIteration,
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
 		);
 
-		void solvePositionConstraints(
+		void solveCollisionPositionConstraints(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const PositionConstraintData> constraintDataContainer
 		);
 
-		void solveConstraintsThreaded(
+		void solveCollisionConstraintsThreaded(
 			const std::vector<BodyCollisionData>& collisionDataContainer,
 			uint32_t velocityIterations,
 			uint32_t positionIterations

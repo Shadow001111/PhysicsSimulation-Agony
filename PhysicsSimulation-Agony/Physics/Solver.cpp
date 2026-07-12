@@ -18,11 +18,13 @@ namespace PS_AGONY
 {
     void Solver::setDataViewers(
         BodySoA& bodies,
-        const std::vector<Material>& materials
+        const std::vector<Material>& materials,
+        const SpringSoAViewer& springs
     )
     {
         this->bodies = &bodies;
         this->materials = &materials;
+        this->springs = springs;
     }
 
     size_t Solver::getMemoryUsage() const
@@ -40,46 +42,36 @@ namespace PS_AGONY
         return total;
     }
 
-    void Solver::solve(
+    void Solver::solveCollisions(
         const std::vector<BodyCollisionData>& narrowPhaseCollisions,
         uint32_t velocityIterations,
         uint32_t positionIterations
     )
     {
-        TRACY_SCOPE_NC("Solve constraints (Single-threaded)", Ecstasy::Color::OliveDrab);
-
-        computeConstantData(narrowPhaseCollisions);
-
-        for (uint32_t i = 0; i < velocityIterations; i++)
-        {
-            solveVelocityConstraints(i == 0, narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
-        }
-        for (uint32_t i = 0; i < positionIterations; i++)
-        {
-            solvePositionConstraints(narrowPhaseCollisions, positionConstraintContainer);
-        }
-    }
-
-    void Solver::solveThreaded(
-        const std::vector<BodyCollisionData>& narrowPhaseCollisions,
-        uint32_t velocityIterations,
-        uint32_t positionIterations
-    )
-    {
-        TRACY_SCOPE_NC("Solve constraints (Multi-threaded)", Ecstasy::Color::OliveDrab);
-
         const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
 
         // Single-threaded path.
         if (workerCount <= 1)
         {
-            solve(narrowPhaseCollisions, velocityIterations, positionIterations);
+            TRACY_SCOPE_NC("Solve collisions (Single-threaded)", Ecstasy::Color::OliveDrab);
+
+            computeConstantData(narrowPhaseCollisions);
+
+            for (uint32_t i = 0; i < velocityIterations; i++)
+            {
+                solveCollisionVelocityConstraints(i == 0, narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
+            }
+            for (uint32_t i = 0; i < positionIterations; i++)
+            {
+                solveCollisionPositionConstraints(narrowPhaseCollisions, positionConstraintContainer);
+            }
             return;
         }
 
         // Multi-threading path.
+        TRACY_SCOPE_NC("Solve collisions (Multi-threaded)", Ecstasy::Color::OliveDrab);
         {
-            TRACY_SCOPE_NC("Collect colliding body pairs from collision data", Ecstasy::Color::Red);
+            TRACY_SCOPE_NC("Collect body pairs from collision data", Ecstasy::Color::Red);
 
             const size_t collisionCount = narrowPhaseCollisions.size();
 
@@ -111,7 +103,7 @@ namespace PS_AGONY
         }
         computeConstantData(orderedCollisionData);
 
-        solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
+        solveCollisionConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
 
         // Scatter persistent contact data back to the detector's original container.
         if (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
@@ -124,6 +116,114 @@ namespace PS_AGONY
                 const size_t originalIndex = flatIndices[i];
                 // narrowPhaseCollisions is const&, but persistentContactData is mutable -> legal write.
                 narrowPhaseCollisions[originalIndex].persistentContactData = orderedCollisionData[i].persistentContactData;
+            }
+        }
+    }
+
+    void Solver::solveSprings(Real deltaTime, uint32_t springIterations)
+    {
+        auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2 {
+            return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
+            };
+
+        TRACY_SCOPE_N("Solve springs");
+
+        // Get pointers.
+        Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+        Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
+        Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
+        const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
+        const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
+        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
+        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
+
+        const Real* ECSTASY_RESTRICT springStiffnessPtr = springs.stiffness;
+        const Real* ECSTASY_RESTRICT springDampingPtr = springs.damping;
+        const Real* ECSTASY_RESTRICT springRestLengthPtr = springs.restLength;
+
+        // Main loop.
+        const size_t springCount = springs.getCount();
+        for (size_t i = 0; i < springCount; i++)
+        {
+            const BodyIndex bodyIndexA = springs.bodyIndexA[i];
+            const BodyIndex bodyIndexB = springs.bodyIndexB[i];
+
+            const Real invMassA = invMassPtr[bodyIndexA];
+            const Real invMassB = invMassPtr[bodyIndexB];
+
+            // Check if both attachments are static anchors.
+            if (invMassA == Real(0) && invMassB == Real(0)) [[unlikely]] continue;
+
+            const Real invInertiaA = invInertiaPtr[bodyIndexA];
+            const Real invInertiaB = invInertiaPtr[bodyIndexB];
+
+            // Compute center of masses.
+            const Vec2 comA{ positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA], positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA] };
+            const Vec2 comB{ positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB], positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB] };
+
+            // Compute world-space anchors.
+            const Vec2 rA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+            const Vec2 rB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+
+            const Vec2 wA = comA + rA;
+            const Vec2 wB = comB + rB;
+
+            // Compute current length and direction.
+            const Vec2 delta = wB - wA;
+            const Real currentLength = glm::length(delta);
+            if (currentLength < Real(1e-6)) continue;
+
+            const Vec2 dir = delta / currentLength;
+
+            // Get velocities.
+            Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
+            Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
+            Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+            Real angularVelocityB = angularVelocityPtr[bodyIndexB];
+
+            // Compute linear velocities at points.
+            const Vec2 angularLinearVelA = Vec2(-rA.y, rA.x) * angularVelocityA;
+            const Vec2 angularLinearVelB = Vec2(-rB.y, rB.x) * angularVelocityB;
+
+            const Vec2 relativeVelocity =
+                (linearVelocityB + angularLinearVelB) -
+                (linearVelocityA + angularLinearVelA);
+
+            // Hooke's Spring Law along with linear damping factors.
+            const Real springForceMag = springStiffnessPtr[i] * (currentLength - springRestLengthPtr[i]);
+            const Real dampingForceMag = springDampingPtr[i] * glm::dot(relativeVelocity, dir);
+            const Real totalForceMag = springForceMag + dampingForceMag;
+
+            const Vec2 force = dir * (totalForceMag * deltaTime);
+
+            // Apply forces.
+            if (invMassA > Real(0))
+            {
+                linearVelocityA += force * invMassA;
+
+                const Real torqueA = rA.x * force.y - rA.y * force.x;
+                angularVelocityA += torqueA * invInertiaA;
+
+                velocityXPtr[bodyIndexA] = linearVelocityA.x;
+                velocityYPtr[bodyIndexA] = linearVelocityA.y;
+
+                angularVelocityPtr[bodyIndexA] = angularVelocityA;
+            }
+            if (invMassB > Real(0))
+            {
+                linearVelocityB -= force * invMassB;
+
+                const Real torqueB = rB.x * force.y - rB.y * force.x;
+                angularVelocityB -= torqueB * invInertiaB;
+
+                velocityXPtr[bodyIndexB] = linearVelocityB.x;
+                velocityYPtr[bodyIndexB] = linearVelocityB.y;
+
+                angularVelocityPtr[bodyIndexB] = angularVelocityB;
             }
         }
     }
@@ -251,12 +351,12 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::applyWarmStarting(
+    void Solver::applyWarmStartingForCollisions(
         std::span<const BodyCollisionData> collisionDataContainer,
         std::span<const VelocityConstraintData> constraintDataContainer
     )
     {
-        TRACY_SCOPE_NC("Apply warm starting", Ecstasy::Color::Violet);
+        TRACY_SCOPE_NC("Apply warm starting for collisions", Ecstasy::Color::Violet);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -335,21 +435,21 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solveVelocityConstraints(
+    void Solver::solveCollisionVelocityConstraints(
         bool firstIteration,
         std::span<const BodyCollisionData> collisionDataContainer,
         std::span<const VelocityConstraintData> constraintDataContainer,
         std::span<const FrictionData> frictionDataContainer
     )
     {
-        TRACY_SCOPE_NC("Solve velocity constraints", Ecstasy::Color::Violet);
+        TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Color::Violet);
 
         // Optional warm-starting.
         if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
         {
             if (firstIteration)
             {
-                applyWarmStarting(collisionDataContainer, constraintDataContainer);
+                applyWarmStartingForCollisions(collisionDataContainer, constraintDataContainer);
             }
         }
 
@@ -556,12 +656,12 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solvePositionConstraints(
+    void Solver::solveCollisionPositionConstraints(
         std::span<const BodyCollisionData> collisionDataContainer,
         std::span<const PositionConstraintData> constraintDataContainer
     )
     {
-        TRACY_SCOPE_NC("Solve position constraints", Ecstasy::Color::Indigo);
+        TRACY_SCOPE_NC("Solve collision position constraints", Ecstasy::Color::Indigo);
 
         Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
         Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -630,7 +730,7 @@ namespace PS_AGONY
         }
     }
 
-    void Solver::solveConstraintsThreaded(
+    void Solver::solveCollisionConstraintsThreaded(
         const std::vector<BodyCollisionData>& collisionDataContainer,
         uint32_t velocityIterations,
         uint32_t positionIterations
@@ -688,14 +788,14 @@ namespace PS_AGONY
                         if (localTicket >= positionSolvingStartTick)
                         {
                             std::span<const PositionConstraintData> constraintSlice(positionConstraintContainer.data() + passOffset.start, passOffset.size);
-                            solvePositionConstraints(collisionSlice, constraintSlice);
+                            solveCollisionPositionConstraints(collisionSlice, constraintSlice);
                         }
                         else
                         {
                             std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
                             std::span<const FrictionData> frictionDataSlice(frictionDataContainer.data() + passOffset.start, passOffset.size);
 
-                            solveVelocityConstraints(localTicket == 0, collisionSlice, constraintSlice, frictionDataSlice);
+                            solveCollisionVelocityConstraints(localTicket == 0, collisionSlice, constraintSlice, frictionDataSlice);
                         }
                     }
 
