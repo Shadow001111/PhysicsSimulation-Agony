@@ -134,7 +134,9 @@ namespace PS_AGONY
 			uint32_t springIterations
 		);
 	private:
-		size_t planWorkerCount(size_t collisionCount);
+		// Collision constraint solving.
+
+		size_t planCollisionSolvingWorkerCount(size_t collisionCount);
 
 		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
@@ -160,5 +162,7 @@ namespace PS_AGONY
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
+
+		// Spring constraint solving.
 	};
 }
