@@ -641,20 +641,20 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
 void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === 1. CONFIGURATION AND VARIABLES ===
-    constexpr int gridWidth = 40;   // Number of horizontal particles
-    constexpr int gridHeight = 30;  // Number of vertical particles
-    constexpr float spacing = 0.22f;
-    constexpr float radius = 0.06f;
+    constexpr int gridWidth = 90;   // Number of horizontal particles
+    constexpr int gridHeight = 90;  // Number of vertical particles
+    constexpr float spacing = 0.3f;
+    constexpr float radius = spacing * 0.5f * 0.5;
     constexpr float particleMass = 0.2f;
 
     // Spring constants chosen for elastic but stable structural behavior
-    constexpr float springK = 1800.0f;
+    constexpr float springK = 4000.0f;
     constexpr float springD = 6.0f;
 
     PS_AGONY::Material physicsMaterial = {
         .elasticity = 0.1f,
-        .staticFriction = 0.6f,
-        .dynamicFriction = 0.4f
+        .staticFriction = 0.8f,
+        .dynamicFriction = 0.6f
     };
     PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
 
@@ -663,7 +663,7 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::
         .base.position = { 0.0f, -8.0f },
         .base.mass = 0, // Static platform
         .base.materialIndex = materialIdx,
-        .size = { 40.0f, 2.0f }
+        .size = { 2000.0f, 2.0f }
         });
 
     // === 3. SPAWN PARTICLE GRID ===
