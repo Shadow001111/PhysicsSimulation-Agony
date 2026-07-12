@@ -639,7 +639,7 @@ namespace PS_AGONY
 				const auto& passOffset = passOffsetsPtr[passGlobalIndex];
 
 				// Get work from current wave and execute it. If empty, skip.
-				if (passOffset.size == 0) [[unlikely]]  return;
+				if (passOffset.size == 0) [[unlikely]] return;
 
 				std::span<const BodyCollisionData> collisionSlice(collisionDataPtr + passOffset.start, passOffset.size);
 

@@ -55,7 +55,7 @@ namespace PS_AGONY
 					if (localTicket >= totalTicks) break;
 
 					const size_t waveIndex = localTicket % waveCount;
-
+					
 					taskFunc(waveIndex, workerIndex, localTicket);
 
 					// Decrease atomic counter; last one to finish advances the wave and wakes everyone.

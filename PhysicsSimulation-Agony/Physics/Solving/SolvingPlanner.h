@@ -35,6 +35,9 @@ namespace PS_AGONY
         void setWorkerCount(size_t workerCount) noexcept { this->workerCount = workerCount; };
 
         void planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount);
+
+        void printExecutionPlan();
+
         [[nodiscard]] double computeEfficiency() const;
         [[nodiscard]] bool validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const;
         [[nodiscard]] size_t getMemoryUsage() const;
