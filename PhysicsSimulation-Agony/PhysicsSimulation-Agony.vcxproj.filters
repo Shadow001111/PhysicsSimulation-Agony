@@ -90,19 +90,25 @@
     <ClCompile Include="Physics\Threading.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solver.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="EcstasyCore\Threading\ThreadUtils.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\FastCosSin.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SolvingPlanner.cpp">
+    <ClCompile Include="Physics\Solving\SolvingPlanner.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\BodySoA.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\SolverBase.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\SpringSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -230,9 +236,6 @@
     <ClInclude Include="Physics\FastCosSin.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solver.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="EcstasyCore\Threading\ThreadUtils.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -245,10 +248,19 @@
     <ClInclude Include="Physics\SharedScratchBuffers.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SolvingPlanner.h">
+    <ClInclude Include="Physics\Solving\SolvingPlanner.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\ContainerUtilities.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\SolverBase.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\BodyCollisionSolver.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\SpringSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

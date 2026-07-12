@@ -107,13 +107,18 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
         const size_t constraintTotal =
             simulationData.springDataMemoryUsage;
 
+        const size_t solvingTotal =
+            simulationData.solvingPlannerMemoryUsage +
+            simulationData.bodyCollisionSolverMemoryUsage +
+            simulationData.springSolverMemoryUsage;
+
         const size_t total =
             simulationData.bodyDataMemoryUsage +
             shapeTotal +
             constraintTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage +
-            simulationData.solverMemoryUsage
+            solvingTotal
             ;
 
         ss << "\nMemory: " << formatSizeBinary(total);
@@ -126,7 +131,10 @@ static void renderDebugText(float aspectRatio, const DebugData& debugData)
         ss << "\n    Springs: " << formatSizeBinary(simulationData.springDataMemoryUsage);
         ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
         ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
-        ss << "\n  Solver: " << formatSizeBinary(simulationData.solverMemoryUsage);
+        ss << "\n  Solving: " << formatSizeBinary(total);
+        ss << "\n    Solving planner: " << formatSizeBinary(simulationData.solvingPlannerMemoryUsage);
+        ss << "\n    Body collision solver: " << formatSizeBinary(simulationData.bodyCollisionSolverMemoryUsage);
+        ss << "\n    Spring solver: " << formatSizeBinary(simulationData.springSolverMemoryUsage);
     }
 
     // Convert stream to string.

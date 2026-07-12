@@ -180,7 +180,7 @@ namespace PS_AGONY
         variance /= static_cast<double>(sorted.size());
         stdDevOut = std::sqrt(variance);
     }
-    
+
 
     Simulation::Simulation()
     {
@@ -245,7 +245,7 @@ namespace PS_AGONY
         const BodyIndex newBodyIndex = bodies.getCount();
         const BodyIndex newShapeIndex = circles.getCount();
 
-        const Real mass   = std::fmax(Real(0), params.base.mass);
+        const Real mass = std::fmax(Real(0), params.base.mass);
         const Real radius = std::fmax(Real(0), params.radius);
         const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
@@ -260,18 +260,18 @@ namespace PS_AGONY
             params.base.velocity,
             params.base.rotation,
             params.base.angularVelocity,
-            mass,    invMass,
+            mass, invMass,
             inertia, invInertia,
-			centerOfMass,
+            centerOfMass,
             materialIndex,
             BodyType::Circle,
             newShapeIndex
-		);
+        );
 
         circles.append(
             newBodyIndex,
             radius
-		);
+        );
 
         return newBodyIndex;
     }
@@ -297,9 +297,9 @@ namespace PS_AGONY
             params.base.velocity,
             params.base.rotation,
             params.base.angularVelocity,
-            mass,    invMass,
+            mass, invMass,
             inertia, invInertia,
-			centerOfMass,
+            centerOfMass,
             materialIndex,
             BodyType::Box,
             newShapeIndex
@@ -307,7 +307,7 @@ namespace PS_AGONY
 
         boxes.append(
             newBodyIndex,
-            width  * Real(0.5),
+            width * Real(0.5),
             height * Real(0.5)
         );
 
@@ -357,7 +357,7 @@ namespace PS_AGONY
                 uniqueVertices.push_back(current);
             }
         }
-        
+
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
@@ -479,7 +479,7 @@ namespace PS_AGONY
             }
 
             // Record deletion.
-            deletedBodies.emplace_back( bodyIndex, static_cast<BodyIndex>(bodyCount - 1) );
+            deletedBodies.emplace_back(bodyIndex, static_cast<BodyIndex>(bodyCount - 1));
         }
 
         // Pop back all BodySoA vectors.
@@ -875,7 +875,7 @@ namespace PS_AGONY
 
     void Simulation::getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
     {
-		broadPhaseCollisionDetector.fetchAABBs(outAABBs);
+        broadPhaseCollisionDetector.fetchAABBs(outAABBs);
     }
 
     void Simulation::physicsStep(Real deltaTime)
@@ -908,10 +908,16 @@ namespace PS_AGONY
             PolygonSoAViewer(polygons)
         );
 
-        solver.setDataViewers(
+        bodyCollisionsSolver.setDataViewers(
             bodies,
             materials,
-            SpringSoAViewer(springs)
+            solvingPlanner
+        );
+
+        springSolver.setDataViewers(
+            bodies,
+            SpringSoAViewer(springs),
+            solvingPlanner
         );
 
         // Remap data if body was deleted.
@@ -933,7 +939,7 @@ namespace PS_AGONY
         buildBodyAABBs();
 
         // Springs.
-        solver.solveSprings(deltaTime, simulationSettings.springSolvingIterations);
+        springSolver.solveSprings(deltaTime, simulationSettings.springSolvingIterations);
 
         if (bodyCount >= 2)
         {
@@ -947,7 +953,7 @@ namespace PS_AGONY
             if (narrowCollisionData.empty()) return;
 
             // Collision resolution.
-            solver.solveCollisions(
+            bodyCollisionsSolver.solveCollisions(
                 narrowCollisionData,
                 simulationSettings.collisionVelocitySolvingIterations,
                 simulationSettings.collisionPositionSolvingIterations
@@ -1144,17 +1150,17 @@ namespace PS_AGONY
             size_t i = 0;
             for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
             {
-                const RealSimd velX   = RealSimd::load(velocityXPtr + i);
-                const RealSimd velY   = RealSimd::load(velocityYPtr + i);
+                const RealSimd velX = RealSimd::load(velocityXPtr + i);
+                const RealSimd velY = RealSimd::load(velocityYPtr + i);
                 const RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
 
                 RealSimd posX = RealSimd::load(positionXPtr + i);
                 RealSimd posY = RealSimd::load(positionYPtr + i);
-                RealSimd rot  = RealSimd::load(rotationPtr + i);
+                RealSimd rot = RealSimd::load(rotationPtr + i);
 
-                posX = RealSimd::mulAdd(velX,   deltaTimeV, posX);
-                posY = RealSimd::mulAdd(velY,   deltaTimeV, posY);
-                rot  = RealSimd::mulAdd(angVel, deltaTimeV, rot);
+                posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
+                posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
+                rot = RealSimd::mulAdd(angVel, deltaTimeV, rot);
 
                 posX.store(positionXPtr + i);
                 posY.store(positionYPtr + i);
@@ -1162,9 +1168,9 @@ namespace PS_AGONY
             }
             for (; i < bodyCount; i++)
             {
-                positionXPtr[i] += velocityXPtr[i]       * deltaTime;
-                positionYPtr[i] += velocityYPtr[i]       * deltaTime;
-                rotationPtr[i]  += angularVelocityPtr[i] * deltaTime;
+                positionXPtr[i] += velocityXPtr[i] * deltaTime;
+                positionYPtr[i] += velocityYPtr[i] * deltaTime;
+                rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
             }
         }
     }
@@ -1246,7 +1252,7 @@ namespace PS_AGONY
             for (size_t j = 0; j < RealSimd::lanes; j++)
             {
                 const BodyIndex bodyIndex = bodyIndexBatch[j];
-            
+
                 aabbMinXPtr[bodyIndex] = minXBatch[j];
                 aabbMinYPtr[bodyIndex] = minYBatch[j];
                 aabbMaxXPtr[bodyIndex] = maxXBatch[j];
@@ -1343,8 +1349,8 @@ namespace PS_AGONY
             const Vec2* verticesPtr = localVertsPtr[i].data();
             const size_t vertexCount = localVertsPtr[i].size();
 
-            Real minX =  std::numeric_limits<Real>::max();
-            Real minY =  std::numeric_limits<Real>::max();
+            Real minX = std::numeric_limits<Real>::max();
+            Real minY = std::numeric_limits<Real>::max();
             Real maxX = -std::numeric_limits<Real>::max();
             Real maxY = -std::numeric_limits<Real>::max();
 
@@ -1368,8 +1374,6 @@ namespace PS_AGONY
 
     void Simulation::wrapRotation()
     {
-        
-
         constexpr size_t LANES = RealSimd::lanes;
 
         TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Color::Cyan);
@@ -1413,18 +1417,11 @@ namespace PS_AGONY
             bodies.rotationSin.data(),
             bodies.getCount()
         );
-
-        //for (size_t i = 0; i < bodies.getCount(); i++)
-        //{
-        //    const Real angle = bodies.rotation[i];
-        //    bodies.rotationCos[i] = std::cos(angle);
-        //    bodies.rotationSin[i] = std::sin(angle);
-        //}
     }
 
     void Simulation::computeWorldCenters()
     {
-        
+
 
         TRACY_SCOPE_NC("Compute true positions", Ecstasy::Color::Magenta);
 
@@ -1452,9 +1449,9 @@ namespace PS_AGONY
             const RealSimd cosRot = RealSimd::load(rotationCosPtr + i);
             const RealSimd sinRot = RealSimd::load(rotationSinPtr + i);
 
-            const RealSimd truePositionX = RealSimd::negMulAdd(localCenterOfMassX, cosRot,     RealSimd::mulAdd(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
+            const RealSimd truePositionX = RealSimd::negMulAdd(localCenterOfMassX, cosRot, RealSimd::mulAdd(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
             const RealSimd truePositionY = RealSimd::negMulAdd(localCenterOfMassX, sinRot, RealSimd::negMulAdd(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
-        
+
             truePositionX.store(worldCenterXPtr + i);
             truePositionY.store(worldCenterYPtr + i);
         }
@@ -1506,6 +1503,8 @@ namespace PS_AGONY
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
-        data.solverMemoryUsage = solver.getMemoryUsage();
+        data.solvingPlannerMemoryUsage = solvingPlanner.getMemoryUsage();
+        data.bodyCollisionSolverMemoryUsage = bodyCollisionsSolver.getMemoryUsage();
+        data.springSolverMemoryUsage = springSolver.getMemoryUsage();
     }
 }
