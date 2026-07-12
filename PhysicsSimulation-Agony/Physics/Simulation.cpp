@@ -1496,8 +1496,10 @@ namespace PS_AGONY
             return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
             };
 
+        TRACY_SCOPE_N("Apply spring forces");
+
         const size_t springCount = springs.getCount();
-        for (size_t i = 0; i < springCount; ++i)
+        for (size_t i = 0; i < springCount; i++)
         {
             const BodyIndex idxA = springs.bodyIndexA[i];
             const BodyIndex idxB = springs.bodyIndexB[i];
