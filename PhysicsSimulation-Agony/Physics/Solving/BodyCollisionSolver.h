@@ -1,16 +1,15 @@
 #pragma once
-#include "NarrowPhaseCollisionDetector.h"
-#include "Material.h"
+#include "SolverBase.h"
+#include "../NarrowPhaseCollisionDetector.h"
+#include "../Material.h"
 
-#include "SolvingPlanner.h"
-
-#include <atomic>
-#include <vector>
+#include <array>
 #include <span>
+#include <vector>
 
 namespace PS_AGONY
 {
-	class Solver
+	class BodyCollisionSolver : public SolverBase
 	{
 		// Structures / classes.
 
@@ -45,40 +44,6 @@ namespace PS_AGONY
 			const Real positionCorrectionSlop = 0.001;
 		};
 
-		struct WorkerResources
-		{
-			struct alignas(64) WorkerData
-			{
-				std::atomic<bool> isDestroyed{ false };
-
-				WorkerData() = default;
-				~WorkerData() = default;
-
-				WorkerData(const WorkerData&) = delete;
-				WorkerData& operator=(const WorkerData&) = delete;
-
-				WorkerData(WorkerData&& other) noexcept
-				{
-					isDestroyed.store(true, std::memory_order_release);
-				}
-
-				WorkerData& operator=(WorkerData&& other) noexcept
-				{
-					if (this != &other)
-					{
-						isDestroyed.store(true, std::memory_order_release);
-					}
-					return *this;
-				}
-			};
-
-			static constexpr uint32_t STOP_WAVE = -1;
-
-			std::vector<WorkerData> workerData;
-			alignas(64) std::atomic<uint32_t> workNotDone{ 0 };
-			alignas(64) std::atomic<uint32_t> currentWaveTicket{ 0 };
-		};
-
 		enum class VelocitySolverType
 		{
 			ApplyImpulsesSequentially,
@@ -92,12 +57,7 @@ namespace PS_AGONY
 
 		// Memeber fields.
 
-		BodySoA* bodies;
-		const std::vector<Material>* materials;
-		SpringSoAViewer springs;
-
-		WorkerResources workerResources;
-		SolvingPlanner solvingPlanner;
+		const std::vector<Material>* materials = nullptr;
 
 		std::vector<BodyPair> collidingBodyPairs;
 		std::vector<BodyCollisionData> orderedCollisionData;
@@ -108,35 +68,30 @@ namespace PS_AGONY
 
 		SimulationSettings simulationSettings;
 	public:
-		Solver() = default;
-		~Solver() = default;
-		Solver(const Solver&) = delete;
-		Solver& operator=(const Solver&) = delete;
-		Solver(Solver&&) = delete;
-		Solver& operator=(Solver&&) = delete;
+		BodyCollisionSolver() = default;
+		~BodyCollisionSolver() override = default;
+		BodyCollisionSolver(const BodyCollisionSolver&) = delete;
+		BodyCollisionSolver& operator=(const BodyCollisionSolver&) = delete;
+		BodyCollisionSolver(BodyCollisionSolver&&) = delete;
+		BodyCollisionSolver& operator=(BodyCollisionSolver&&) = delete;
 
 		void setDataViewers(
 			BodySoA& bodies,
 			const std::vector<Material>& materials,
-			const SpringSoAViewer& springs
+			SolvingPlanner& solvingPlanner
 		);
 
-		size_t getMemoryUsage() const;
+		size_t getMemoryUsage() const override;
 
 		void solveCollisions(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
-
-		void solveSprings(
-			Real deltaTime,
-			uint32_t springIterations
-		);
 	private:
 		// Collision constraint solving.
 
-		size_t planCollisionSolvingWorkerCount(size_t collisionCount);
+		size_t planWorkerCount(size_t collisionCount) const;
 
 		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
@@ -145,24 +100,22 @@ namespace PS_AGONY
 			std::span<const VelocityConstraintData> constraintDataContainer
 		);
 
-		void solveCollisionVelocityConstraints(
+		void solveVelocityConstraints(
 			bool firstIteration,
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
 		);
 
-		void solveCollisionPositionConstraints(
+		void solvePositionConstraints(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const PositionConstraintData> constraintDataContainer
 		);
 
-		void solveCollisionConstraintsThreaded(
+		void solveConstraintsThreaded(
 			const std::vector<BodyCollisionData>& collisionDataContainer,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
-
-		// Spring constraint solving.
 	};
 }

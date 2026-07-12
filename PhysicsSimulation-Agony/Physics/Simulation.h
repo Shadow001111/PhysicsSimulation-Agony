@@ -6,7 +6,10 @@
 
 #include "BroadPhaseCollisionDetector.h"
 #include "NarrowPhaseCollisionDetector.h"
-#include "Solver.h"
+
+#include "Solving/SolvingPlanner.h"
+#include "Solving/BodyCollisionSolver.h"
+#include "Solving/SpringSolver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -34,7 +37,10 @@ namespace PS_AGONY
 
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
-			size_t solverMemoryUsage = 0;
+
+			size_t solvingPlannerMemoryUsage = 0;
+			size_t bodyCollisionSolverMemoryUsage = 0;
+			size_t springSolverMemoryUsage = 0;
 		};
 	private:
 		struct SimulationSettings
@@ -52,12 +58,12 @@ namespace PS_AGONY
 		};
 
 		enum class BenchmarkDensity
-        {
+		{
 			NoTouching,
 			Touching,
 			AllTouching,
 			COUNT
-        };
+		};
 
 		struct BodyCreateParams
 		{
@@ -101,7 +107,11 @@ namespace PS_AGONY
 		// Phases.
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
-		Solver solver;
+
+		// Shared between the two solvers below, so its memory isn't duplicated.
+		SolvingPlanner solvingPlanner;
+		BodyCollisionSolver bodyCollisionsSolver;
+		SpringSolver springSolver;
 
 		// Time.
 		Real simulationRunTimer = 0;
