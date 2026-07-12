@@ -192,8 +192,6 @@ namespace PS_AGONY
 
 		void applyBodyHolderConstraint();
 
-		void applySpringForces(Real deltaTime);
-
 		void collectMemoryUsage(DebugData& data) const;
 	};
 }

@@ -648,8 +648,8 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::
     constexpr float particleMass = 0.2f;
 
     // Spring constants chosen for elastic but stable structural behavior
-    constexpr float springK = 4000.0f;
-    constexpr float springD = 6.0f;
+    constexpr float springK = 1.0f;
+    constexpr float springD = 0.0f;
 
     PS_AGONY::Material physicsMaterial = {
         .elasticity = 0.1f,
