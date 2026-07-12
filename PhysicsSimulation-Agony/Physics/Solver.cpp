@@ -48,7 +48,7 @@ namespace PS_AGONY
         uint32_t positionIterations
     )
     {
-        const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
+        const size_t workerCount = planCollisionSolvingWorkerCount(narrowPhaseCollisions.size());
 
         // Single-threaded path.
         if (workerCount <= 1)
@@ -145,9 +145,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT springDampingPtr = springs.damping;
         const Real* ECSTASY_RESTRICT springRestLengthPtr = springs.restLength;
 
-        constexpr Real FREQUENCY_HZ = 10;
-        constexpr Real W = 2.0 * 3.1415926535 * FREQUENCY_HZ;
-
         // Main loop.
         const size_t springCount = springs.getCount();
         for (uint32_t iter = 0; iter < springIterations; iter++)
@@ -167,18 +164,18 @@ namespace PS_AGONY
                 const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
                 // Compute center of masses.
-                const Vec2 comA{ positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA], positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA] };
-                const Vec2 comB{ positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB], positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB] };
+                const Vec2 worldCOMA{ positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA], positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA] };
+                const Vec2 worldCOMB{ positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB], positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB] };
 
                 // Compute world-space anchors.
-                const Vec2 rA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-                const Vec2 rB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+                const Vec2 rotatedAnchorA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+                const Vec2 rotatedAnchorB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
-                const Vec2 wA = comA + rA;
-                const Vec2 wB = comB + rB;
+                const Vec2 worldAnchorA = worldCOMA + rotatedAnchorA;
+                const Vec2 worldAnchorB = worldCOMB + rotatedAnchorB;
 
                 // Compute current length and direction.
-                const Vec2 delta = wB - wA;
+                const Vec2 delta = worldAnchorB - worldAnchorA;
                 const Real currentLengthSq = glm::dot(delta, delta);
                 if (currentLengthSq < Real(1e-8)) continue;
 
@@ -192,8 +189,8 @@ namespace PS_AGONY
                 Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
                 // Compute linear velocities at points.
-                const Vec2 angularLinearVelA = Vec2(-rA.y, rA.x) * angularVelocityA;
-                const Vec2 angularLinearVelB = Vec2(-rB.y, rB.x) * angularVelocityB;
+                const Vec2 angularLinearVelA = Vec2(-rotatedAnchorA.y, rotatedAnchorA.x) * angularVelocityA;
+                const Vec2 angularLinearVelB = Vec2(-rotatedAnchorB.y, rotatedAnchorB.x) * angularVelocityB;
 
                 const Vec2 relativeVelocity =
                     (linearVelocityB + angularLinearVelB) -
@@ -203,12 +200,12 @@ namespace PS_AGONY
                 const Real C = currentLength - springRestLengthPtr[i];
                 const Real Cdot = glm::dot(relativeVelocity, dir);
 
-                const Real raCn = (rA.x * dir.y) - (rA.y * dir.x);
-                const Real rbCn = (rB.x * dir.y) - (rB.y * dir.x);
+                const Real raCn = (rotatedAnchorA.x * dir.y) - (rotatedAnchorA.y * dir.x);
+                const Real rbCn = (rotatedAnchorB.x * dir.y) - (rotatedAnchorB.y * dir.x);
                 
-                //
-                const Real invMassSum = invMassA + invMassB + invInertiaA * raCn * raCn + invInertiaB * rbCn * rbCn;
-                if (invMassSum <= Real(0)) [[unlikely]] continue;
+                // Compute effective mass.
+                const Real effectiveMass = invMassA + invMassB + invInertiaA * raCn * raCn + invInertiaB * rbCn * rbCn;
+                if (effectiveMass <= Real(0)) [[unlikely]] continue;
 
                 // Soft constraint parameters from physical stiffness/damping.
                 const Real k = springStiffnessPtr[i];
@@ -226,15 +223,15 @@ namespace PS_AGONY
                 }
 
                 // Compute impulse.
-                const Real impulseMag = (Cdot + beta * C) / (invMassSum + gamma);
+                const Real impulseMag = (Cdot + beta * C) / (effectiveMass + gamma);
                 const Vec2 impulse = dir * impulseMag;
 
-                // Apply forces.
+                // Apply impulse.
                 if (invMassA > Real(0))
                 {
                     linearVelocityA += impulse * invMassA;
 
-                    const Real torqueA = rA.x * impulse.y - rA.y * impulse.x;
+                    const Real torqueA = rotatedAnchorA.x * impulse.y - rotatedAnchorA.y * impulse.x;
                     angularVelocityA += torqueA * invInertiaA;
 
                     velocityXPtr[bodyIndexA] = linearVelocityA.x;
@@ -246,7 +243,7 @@ namespace PS_AGONY
                 {
                     linearVelocityB -= impulse * invMassB;
 
-                    const Real torqueB = rB.x * impulse.y - rB.y * impulse.x;
+                    const Real torqueB = rotatedAnchorB.x * impulse.y - rotatedAnchorB.y * impulse.x;
                     angularVelocityB -= torqueB * invInertiaB;
 
                     velocityXPtr[bodyIndexB] = linearVelocityB.x;
@@ -258,7 +255,7 @@ namespace PS_AGONY
         }
     }
 
-    size_t Solver::planWorkerCount(size_t collisionCount)
+    size_t Solver::planCollisionSolvingWorkerCount(size_t collisionCount)
     {
         static constexpr size_t COLLISION_COUNT_PER_WORKER = 830;
         static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
