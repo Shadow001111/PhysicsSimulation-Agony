@@ -31,7 +31,8 @@ namespace PS_AGONY
 
 	void SpringSolver::solveSprings(
 		Real deltaTime,
-		uint32_t springIterations
+		uint32_t springIterations,
+		bool updateSolvingPlan
 	)
 	{
 		const size_t springCount = springs.getCount();
@@ -68,6 +69,7 @@ namespace PS_AGONY
 				springBodyPairs[i] = { springs.bodyIndexA[i], springs.bodyIndexB[i] };
 			}
 		}
+		if (updateSolvingPlan || solvingPlanner->getFlatIndices().size() != springCount)
 		{
 			TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
 			solvingPlanner->setWorkerCount(workerCount);
