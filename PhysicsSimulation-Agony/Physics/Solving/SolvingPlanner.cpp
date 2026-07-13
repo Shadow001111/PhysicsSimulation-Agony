@@ -1,6 +1,8 @@
 #include "SolvingPlanner.h"
 #include "../ContainerUtilities.h"
 
+#include "EcstasyCore/TracyProfiler.h"
+
 #include <numeric>
 #include <iostream>
 #include <iomanip>
@@ -22,77 +24,131 @@ namespace PS_AGONY
         remainingIndices.resize(collisionCount);
         std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
 
-        usedBodies.assign(bodyCount, uint8_t(-1));
+        delayedIndices.clear();
         nextRemainingIndices.clear();
 
+        usedBodies.assign(bodyCount, uint8_t(-1));
+
         std::vector<std::vector<size_t>> waveAssignments(workerCount);
+
+        std::vector<size_t> workerLoad(workerCount);
 
         while (!remainingIndices.empty())
         {
             const size_t waveStartPass = passOffsets.size();
             passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
-            std::vector<size_t> workerLoad(workerCount, 0);
-            std::fill(usedBodies.begin(), usedBodies.end(), uint8_t(-1));
+            std::fill(workerLoad.begin(), workerLoad.end(), 0);
+
+            delayedIndices.clear();
             nextRemainingIndices.clear();
+
+            std::fill(usedBodies.begin(), usedBodies.end(), uint8_t(-1));
 
             for (auto& vec : waveAssignments)
                 vec.clear();
 
-            for (size_t idx : remainingIndices)
+            // Pass 1: Process unallocated or fully matching pairs.
             {
-                const BodyPair& c = collisions[idx];
-                const uint8_t ownerA = usedBodies[c.a];
-                const uint8_t ownerB = usedBodies[c.b];
-
-                size_t chosenWorker;
-
-                if (ownerA == ownerB)
+                TRACY_SCOPE_NC("Pass1", Ecstasy::Color::Cyan);
+                for (size_t idx : remainingIndices)
                 {
-                    if (ownerA == uint8_t(-1))
+                    const BodyPair& c = collisions[idx];
+                    const uint8_t ownerA = usedBodies[c.a];
+                    const uint8_t ownerB = usedBodies[c.b];
+
+                    size_t chosenWorker;
+
+                    if (ownerA == ownerB)
                     {
-                        auto it = std::min_element(workerLoad.begin(), workerLoad.end());
-                        chosenWorker = static_cast<size_t>(it - workerLoad.begin());
+                        if (ownerA == uint8_t(-1))
+                        {
+                            auto it = std::min_element(workerLoad.begin(), workerLoad.end());
+                            chosenWorker = static_cast<size_t>(it - workerLoad.begin());
+                        }
+                        else
+                        {
+                            chosenWorker = static_cast<size_t>(ownerA);
+                        }
+                    }
+                    else if (ownerA == uint8_t(-1) || ownerB == uint8_t(-1))
+                    {
+                        // Delay on second pass.
+                        delayedIndices.push_back(idx);
+                        continue;
                     }
                     else
                     {
-                        chosenWorker = static_cast<size_t>(ownerA);
+                        nextRemainingIndices.push_back(idx);
+                        continue;
                     }
-                }
-                else if (ownerA == uint8_t(-1))
-                {
-                    chosenWorker = static_cast<size_t>(ownerB);
-                }
-                else if (ownerB == uint8_t(-1))
-                {
-                    chosenWorker = static_cast<size_t>(ownerA);
-                }
-                else
-                {
-                    nextRemainingIndices.push_back(idx);
-                    continue;
-                }
 
-                waveAssignments[chosenWorker].push_back(idx);
-                workerLoad[chosenWorker]++;
+                    waveAssignments[chosenWorker].push_back(idx);
+                    workerLoad[chosenWorker]++;
 
-                usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
-                usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                    usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
+                    usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                }
             }
 
-            for (size_t w = 0; w < workerCount; ++w)
+            // Pass 2: Process the partially claimed pairs.
             {
-                const size_t passIndex = waveStartPass + w;
-                passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
-                passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+                TRACY_SCOPE_NC("Pass2", Ecstasy::Color::Yellow);
+                for (size_t idx : delayedIndices)
+                {
+                    const BodyPair& c = collisions[idx];
+                    const uint8_t ownerA = usedBodies[c.a];
+                    const uint8_t ownerB = usedBodies[c.b];
 
-                flatIndices.insert(flatIndices.end(),
-                    waveAssignments[w].begin(),
-                    waveAssignments[w].end());
+                    size_t chosenWorker;
+
+                    if (ownerA == ownerB)
+                    {
+                        chosenWorker = static_cast<size_t>(ownerA);
+                    }
+                    else if (ownerA == uint8_t(-1))
+                    {
+                        chosenWorker = static_cast<size_t>(ownerB);
+                    }
+                    else if (ownerB == uint8_t(-1))
+                    {
+                        chosenWorker = static_cast<size_t>(ownerA);
+                    }
+                    else
+                    {
+                        nextRemainingIndices.push_back(idx);
+                        continue;
+                    }
+
+                    waveAssignments[chosenWorker].push_back(idx);
+                    workerLoad[chosenWorker]++;
+
+                    usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
+                    usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                }
+            }
+
+            {
+                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Color::Magenta);
+                for (size_t w = 0; w < workerCount; w++)
+                {
+                    const size_t passIndex = waveStartPass + w;
+                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
+                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+
+                    flatIndices.insert(flatIndices.end(),
+                        waveAssignments[w].begin(),
+                        waveAssignments[w].end());
+                }
             }
 
             remainingIndices.swap(nextRemainingIndices);
         }
+    }
+
+    void SolvingPlanner::planSpacingAwareExecution(const std::vector<BodyPair>& collisions, size_t bodyCount, size_t chunkSize)
+    {
+        // TODO: Implement.
     }
 
     void SolvingPlanner::printExecutionPlan()
@@ -186,6 +242,7 @@ namespace PS_AGONY
         total += getVectorMemoryUsage(flatIndices);
         total += getVectorMemoryUsage(passOffsets);
         total += getVectorMemoryUsage(remainingIndices);
+        total += getVectorMemoryUsage(delayedIndices);
         total += getVectorMemoryUsage(nextRemainingIndices);
         total += getVectorMemoryUsage(usedBodies);
         return total;

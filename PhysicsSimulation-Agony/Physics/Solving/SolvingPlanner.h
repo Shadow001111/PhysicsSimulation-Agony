@@ -21,6 +21,7 @@ namespace PS_AGONY
         std::vector<Pass> passOffsets;
 
         std::vector<size_t> remainingIndices;
+        std::vector<size_t> delayedIndices;
         std::vector<size_t> nextRemainingIndices;
         std::vector<uint8_t> usedBodies;
     public:
@@ -35,6 +36,7 @@ namespace PS_AGONY
         void setWorkerCount(size_t workerCount) noexcept { this->workerCount = workerCount; };
 
         void planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount);
+        void planSpacingAwareExecution(const std::vector<BodyPair>& collisions, size_t bodyCount, size_t chunkSize);
 
         void printExecutionPlan();
 

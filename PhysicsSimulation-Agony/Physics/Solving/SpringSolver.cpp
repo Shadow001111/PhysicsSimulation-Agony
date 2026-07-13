@@ -339,7 +339,5 @@ namespace PS_AGONY
 				solveVelocityConstraints(indexSlice, constraintSlice);
 			}
 		);
-
-		std::cout << solvingPlanner->computeEfficiency() << "\n";
 	}
 }
