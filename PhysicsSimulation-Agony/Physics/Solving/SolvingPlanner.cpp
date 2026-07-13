@@ -57,14 +57,14 @@ namespace PS_AGONY
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
-                    size_t chosenWorker;
-
+                    size_t chosenWorker = -1;
                     if (ownerA == ownerB)
                     {
                         if (ownerA == uint8_t(-1))
                         {
-                            size_t minLoad = -1;
-                            for (size_t i = 0; i < workerCount; i++)
+                            size_t minLoad = workerLoad[0];
+                            chosenWorker = 0;
+                            for (size_t i = 1; i < workerCount; i++)
                             {
                                 size_t load = workerLoad[i];
                                 if (load < minLoad)

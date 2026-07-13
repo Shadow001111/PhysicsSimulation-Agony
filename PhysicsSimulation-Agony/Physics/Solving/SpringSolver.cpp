@@ -127,14 +127,6 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT springStiffnessPtr = springs.stiffness;
 		const Real* ECSTASY_RESTRICT springDampingPtr = springs.damping;
 
-		auto getWorldCenter = [&](BodyIndex bodyIndex) -> Vec2
-			{
-				return {
-					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
-					positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
-				};
-			};
-
 		// Resize container.
 		const size_t springCount = springIndices.size();
 		springConstraintContainer.resize(springCount);
@@ -160,8 +152,14 @@ namespace PS_AGONY
 				continue;
 			}
 
-			const Vec2 worldCenterA = getWorldCenter(bodyIndexA);
-			const Vec2 worldCenterB = getWorldCenter(bodyIndexB);
+			const Vec2 worldCenterA{
+				positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA],
+				positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA]
+			};
+			const Vec2 worldCenterB{
+				positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB],
+				positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB]
+			};
 
 			const Vec2 rotatedAnchorA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
 			const Vec2 rotatedAnchorB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
@@ -172,7 +170,7 @@ namespace PS_AGONY
 			// Compute current length and direction.
 			const Vec2 delta = worldAnchorB - worldAnchorA;
 			const Real currentLengthSq = glm::dot(delta, delta);
-			if (currentLengthSq < Real(1e-8)) [[unlikely]]
+			if (currentLengthSq < Real(1e-12)) [[unlikely]]
 			{
 				constraintData.invEffectiveMass = Real(0);
 				continue;
@@ -280,7 +278,7 @@ namespace PS_AGONY
 			const Vec2 impulse = dir * impulseMag;
 
 			// Apply impulse.
-			if (invMassA > Real(0))
+			if (invMassA > Real(0)) [[likely]]
 			{
 				linearVelocityA += impulse * invMassA;
 
@@ -292,7 +290,7 @@ namespace PS_AGONY
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (invMassB > Real(0))
+			if (invMassB > Real(0)) [[likely]]
 			{
 				linearVelocityB -= impulse * invMassB;
 

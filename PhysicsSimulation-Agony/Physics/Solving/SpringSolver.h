@@ -11,17 +11,12 @@ namespace PS_AGONY
 	{
 		// Structures / classes.
 
-		// Everything about a spring that stays constant across all springIterations of one
-		// solve() call, since only velocities (not positions/rotations) change between them.
-		// Precomputing this once - instead of re-deriving anchors/effective mass/soft-constraint
-		// terms every iteration like the original code did - mirrors how BodyCollisionsSolver
-		// splits constant data from the per-iteration velocity solve.
 		struct SpringConstraintData
 		{
 			Vec2 dir;
 			Vec2 rotatedAnchorA, rotatedAnchorB;
-			Real invEffectiveMass; // 1 / (effectiveMass + gamma). Zero means "skip this spring".
-			Real bias;             // beta * C, folded in so the per-iteration step is one FMA.
+			Real invEffectiveMass; // 1 / (effectiveMass + gamma).
+			Real bias; // beta * C.
 		};
 
 		// Memeber fields.
@@ -30,15 +25,9 @@ namespace PS_AGONY
 
 		std::vector<BodyPair> springBodyPairs;
 
-		// Position in this array -> original spring index. Identity for the single-threaded
-		// path (springs solved in their natural order); reordered via SolvingPlanner's graph
-		// coloring for the multi-threaded path. Kept as plain indices - rather than a full
-		// copy of the spring payload like BodyCollisionsSolver's orderedCollisionData - since
-		// the spring data already lives contiguously in the SoA and doesn't need duplicating.
 		std::vector<size_t> orderedSpringIndices;
 
 		std::vector<SpringConstraintData> springConstraintContainer;
-
 	public:
 		SpringSolver() = default;
 		~SpringSolver() override = default;
