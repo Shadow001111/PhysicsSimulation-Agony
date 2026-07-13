@@ -749,6 +749,77 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::
     }
 }
 
+void load_NewtonCradle(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    // === 1. CONFIGURATION AND MATERIALS ===
+    constexpr int ballCount = 5;
+    constexpr float radius = 0.6f;
+    constexpr float hangingLength = 5.0f;
+
+    // Perfectly elastic material with no friction to maximize momentum transfer
+    PS_AGONY::Material cradleMaterial = {
+        .elasticity = 1.0f,
+        .staticFriction = 0.0f,
+        .dynamicFriction = 0.0f
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(cradleMaterial);
+
+    // === 2. STATIC OVERHEAD FRAME ===
+    constexpr float frameWidth = (ballCount * radius * 2.0f) + 4.0f;
+    constexpr float frameHeight = 0.6f;
+    auto frameOpt = simulation.createBox({
+        .base.position = { 0.0f, hangingLength + (frameHeight * 0.5f) },
+        .base.mass = 0, // Static
+        .base.materialIndex = materialIdx,
+        .size = { frameWidth, frameHeight }
+        });
+
+    if (!frameOpt) return;
+
+    // === 3. SUSPENDED BALL GENERATION ===
+    const float startX = -static_cast<float>(ballCount - 1) * radius;
+
+    for (int i = 0; i < ballCount; ++i)
+    {
+        float anchorX = startX + i * (radius * 2.0f);
+        float ballX = anchorX;
+        float ballY = 0.0f;
+
+        // Pull back the first ball along its pendulum arc to prime the reaction
+        if (i == 0)
+        {
+            constexpr float releaseAngle = 0.7f; // ~40 degrees
+            ballX = anchorX - hangingLength * std::sin(releaseAngle);
+            ballY = hangingLength - hangingLength * std::cos(releaseAngle);
+        }
+
+        auto ballOpt = simulation.createCircle({
+            .base.position = { ballX, ballY },
+            .base.velocity = { 0.0f, 0.0f },
+            .base.rotation = 0.0f,
+            .base.angularVelocity = 0.0f,
+            .base.mass = 4.0f,
+            .base.materialIndex = materialIdx,
+            .radius = radius
+            });
+
+        if (ballOpt)
+        {
+            // Single vertical spring anchor per ball for pure 2D swinging
+            simulation.createSpring({
+                .bodyIndexA = *frameOpt,
+                .bodyIndexB = *ballOpt,
+                .localAnchorA = { anchorX, -(frameHeight * 0.5f) },
+                .localAnchorB = { 0.0f, 0.0f },
+                .restLength = hangingLength,
+                .stiffness = 15000.0f,
+                .damping = 0.0f
+                });
+        }
+    }
+}
+
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Random::Generator rvg; // Random value generator.
@@ -777,5 +848,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 5)
     {
         load_SoftBodyStressTest(simulation, rvg);
+    }
+    else if (scene == 6)
+    {
+        load_NewtonCradle(simulation, rvg);
     }
 }
