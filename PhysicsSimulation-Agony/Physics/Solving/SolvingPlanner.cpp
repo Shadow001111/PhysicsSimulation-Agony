@@ -63,8 +63,16 @@ namespace PS_AGONY
                     {
                         if (ownerA == uint8_t(-1))
                         {
-                            auto it = std::min_element(workerLoad.begin(), workerLoad.end());
-                            chosenWorker = static_cast<size_t>(it - workerLoad.begin());
+                            size_t minLoad = -1;
+                            for (size_t i = 0; i < workerCount; i++)
+                            {
+                                size_t load = workerLoad[i];
+                                if (load < minLoad)
+                                {
+                                    minLoad = load;
+                                    chosenWorker = i;
+                                }
+                            }
                         }
                         else
                         {
