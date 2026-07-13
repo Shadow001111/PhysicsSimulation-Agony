@@ -38,9 +38,10 @@ namespace PS_AGONY
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
 
-			size_t solvingPlannerMemoryUsage = 0;
 			size_t bodyCollisionSolverMemoryUsage = 0;
+			size_t bodyCollisionPlannerMemoryUsage = 0;
 			size_t springSolverMemoryUsage = 0;
+			size_t springPlannerMemoryUsage = 0;
 		};
 	private:
 		struct SimulationSettings
@@ -108,10 +109,12 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
 
-		// Shared between the two solvers below, so its memory isn't duplicated.
-		SolvingPlanner solvingPlanner;
-		BodyCollisionSolver bodyCollisionsSolver;
+		// Solvers and planners.
+		BodyCollisionSolver bodyCollisionSolver;
+		SolvingPlanner bodyCollisionPlanner;
+
 		SpringSolver springSolver;
+		SolvingPlanner springPlanner;
 
 		// Time.
 		Real simulationRunTimer = 0;
@@ -124,6 +127,9 @@ namespace PS_AGONY
 
 		// Interactivity.
 		Interactivity::BodyHolder mainBodyHolder;
+
+		// Booleans.
+		bool springsWereChanged = false;
 	public:
 		struct CircleCreateParams
 		{

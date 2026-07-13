@@ -46,7 +46,8 @@ namespace PS_AGONY
 
 		void solveSprings(
 			Real deltaTime,
-			uint32_t springIterations
+			uint32_t springIterations,
+			bool updateSolvingPlan
 		);
 	private:
 		// Spring constraint solving.

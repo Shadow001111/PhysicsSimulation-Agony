@@ -417,6 +417,25 @@ namespace PS_AGONY
         const BodyType type = bodies.bodyType[bodyIndex];
         const BodyIndex shapeIdx = bodies.shapeIndex[bodyIndex];
 
+        // Delete all springs attached to this body.
+        //size_t springIdx = 0;
+        //while (springIdx < springs.getCount())
+        //{
+        //    if (springs.bodyIndexA[springIdx] == bodyIndex || springs.bodyIndexB[springIdx] == bodyIndex)
+        //    {
+        //        if (springIdx != springs.getCount() - 1)
+        //        {
+        //            springs.swapWithBack(springIdx);
+        //        }
+        //        springs.popBack();
+        //        springsWereChanged = true;
+        //    }
+        //    else
+        //    {
+        //        springIdx++;
+        //    }
+        //}
+
         // Remove shape entry from the appropriate SoA.
         if (type == BodyType::Circle)
         {
@@ -497,6 +516,8 @@ namespace PS_AGONY
             params.stiffness,
             params.damping
         );
+
+        springsWereChanged = true;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -908,16 +929,16 @@ namespace PS_AGONY
             PolygonSoAViewer(polygons)
         );
 
-        bodyCollisionsSolver.setDataViewers(
+        bodyCollisionSolver.setDataViewers(
             bodies,
             materials,
-            solvingPlanner
+            bodyCollisionPlanner
         );
 
         springSolver.setDataViewers(
             bodies,
             SpringSoAViewer(springs),
-            solvingPlanner
+            springPlanner
         );
 
         // Remap data if body was deleted.
@@ -939,7 +960,12 @@ namespace PS_AGONY
         buildBodyAABBs();
 
         // Springs.
-        springSolver.solveSprings(deltaTime, simulationSettings.springSolvingIterations);
+        springSolver.solveSprings(
+            deltaTime,
+            simulationSettings.springSolvingIterations,
+            springsWereChanged
+        );
+        springsWereChanged = false;
 
         if (bodyCount >= 2)
         {
@@ -953,7 +979,7 @@ namespace PS_AGONY
             if (narrowCollisionData.empty()) return;
 
             // Collision resolution.
-            bodyCollisionsSolver.solveCollisions(
+            bodyCollisionSolver.solveCollisions(
                 narrowCollisionData,
                 simulationSettings.collisionVelocitySolvingIterations,
                 simulationSettings.collisionPositionSolvingIterations
@@ -1503,8 +1529,11 @@ namespace PS_AGONY
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
-        data.solvingPlannerMemoryUsage = solvingPlanner.getMemoryUsage();
-        data.bodyCollisionSolverMemoryUsage = bodyCollisionsSolver.getMemoryUsage();
+
+        data.bodyCollisionSolverMemoryUsage = bodyCollisionSolver.getMemoryUsage();
+        data.bodyCollisionPlannerMemoryUsage = bodyCollisionPlanner.getMemoryUsage();
+
         data.springSolverMemoryUsage = springSolver.getMemoryUsage();
+        data.springPlannerMemoryUsage = springPlanner.getMemoryUsage();
     }
 }
