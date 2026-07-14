@@ -155,6 +155,8 @@ namespace PS_AGONY
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
+		void fetchBodiesInRadius(Vec2 pos, Real radius, std::vector<ObjectIndex>& outBodies) const;
+
 		size_t getMemoryUsage() const;
 	private:
 		void computeCentroidsWithTransformations(uint32_t bodyCount, Vec2 globalMin, Vec2 scale, Real clampMax);
