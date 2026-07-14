@@ -4,7 +4,7 @@
 
 namespace PS_AGONY
 {
-    Vec2 Camera2D::screenToWorldSpace(const Vec2& screenPoint) noexcept
+    Vec2 Camera2D::screenToWorldSpace(const Vec2& screenPoint) const noexcept
     {
         const Real halfRange = viewRange * Real(0.5);
         const Real halfW = halfRange * aspectRatio;
