@@ -70,6 +70,7 @@ struct ObjectCreatorState
     PS_AGONY::BodyType bodyType;
     PS_AGONY::Simulation::CircleCreateParams circleParams;
     PS_AGONY::Simulation::BoxCreateParams boxParams;
+    PS_AGONY::Simulation::PolygonCreateParams polygonParams;
 };
 
 
@@ -186,7 +187,13 @@ ObjectCreatorState renderObjectCreatorUI(
     static float circleRadius = 1.0f;
     static float boxWidth = 1.0f, boxHeight = 1.0f;
 
-    ImGui::Combo("Shape Type", &selectedShape, "Circle\0Box\0");
+    static std::vector<PS_AGONY::Vec2> polyVertices = {
+        { -1.0f, -1.0f },
+        {  1.0f, -1.0f },
+        {  0.0f,  1.0f }
+    };
+
+    ImGui::Combo("Shape Type", &selectedShape, "Circle\0Box\0Polygon\0");
     ImGui::Separator();
 
     if (ImGui::CollapsingHeader("Common Physics Parameters", ImGuiTreeNodeFlags_DefaultOpen))
@@ -253,6 +260,130 @@ ObjectCreatorState renderObjectCreatorUI(
         state.bodyType = PS_AGONY::BodyType::Box;
         state.boxParams.base = buildBaseParams();
         state.boxParams.size = { static_cast<PS_AGONY::Real>(boxWidth), static_cast<PS_AGONY::Real>(boxHeight) };
+    }
+    else if (selectedShape == 2)
+    {
+        if (ImGui::CollapsingHeader("Polygon Interactive Canvas", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::TextWrapped("Click Grid: Add Point | Left-Drag: Move Point | Right-Click: Delete Point");
+
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+            ImVec2 canvas_sz(260.0f, 260.0f);
+
+            draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_sz.x, canvas_pos.y + canvas_sz.y), IM_COL32(25, 25, 30, 255));
+            draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_sz.x, canvas_pos.y + canvas_sz.y), IM_COL32(80, 80, 90, 255));
+
+            ImGui::InvisibleButton("poly_canvas", canvas_sz);
+            const bool is_hovered = ImGui::IsItemHovered();
+            const bool is_active = ImGui::IsItemActive();
+
+            ImVec2 center(canvas_pos.x + canvas_sz.x * 0.5f, canvas_pos.y + canvas_sz.y * 0.5f);
+            const float grid_scale = canvas_sz.x / 10.0f;
+
+            draw_list->AddLine(ImVec2(canvas_pos.x, center.y), ImVec2(canvas_pos.x + canvas_sz.x, center.y), IM_COL32(60, 60, 70, 255));
+            draw_list->AddLine(ImVec2(center.x, canvas_pos.y), ImVec2(center.x, canvas_pos.y + canvas_sz.y), IM_COL32(60, 60, 70, 255));
+
+            static int dragging_node_idx = -1;
+            ImVec2 mouse_pos = ImGui::GetIO().MousePos;
+
+            PS_AGONY::Vec2 mouse_local;
+            mouse_local.x = static_cast<PS_AGONY::Real>((mouse_pos.x - center.x) / grid_scale);
+            mouse_local.y = static_cast<PS_AGONY::Real>(-(mouse_pos.y - center.y) / grid_scale);
+
+            if (mouse_local.x < -5.0f) mouse_local.x = -5.0f;
+            if (mouse_local.x > 5.0f) mouse_local.x = 5.0f;
+            if (mouse_local.y < -5.0f) mouse_local.y = -5.0f;
+            if (mouse_local.y > 5.0f) mouse_local.y = 5.0f;
+
+            if (is_hovered && ImGui::IsMouseClicked(0))
+            {
+                dragging_node_idx = -1;
+                for (int i = 0; i < (int)polyVertices.size(); i++)
+                {
+                    float vx = center.x + static_cast<float>(polyVertices[i].x) * grid_scale;
+                    float vy = center.y - static_cast<float>(polyVertices[i].y) * grid_scale;
+                    float dx = mouse_pos.x - vx;
+                    float dy = mouse_pos.y - vy;
+                    if (dx * dx + dy * dy < 64.0f)
+                    {
+                        dragging_node_idx = i;
+                        break;
+                    }
+                }
+
+                if (dragging_node_idx == -1)
+                {
+                    polyVertices.push_back(mouse_local);
+                }
+            }
+
+            if (is_active && dragging_node_idx != -1 && ImGui::IsMouseDragging(0))
+            {
+                polyVertices[dragging_node_idx] = mouse_local;
+            }
+
+            if (ImGui::IsMouseReleased(0))
+            {
+                dragging_node_idx = -1;
+            }
+
+            if (is_hovered && ImGui::IsMouseClicked(1))
+            {
+                for (int i = 0; i < (int)polyVertices.size(); i++)
+                {
+                    float vx = center.x + static_cast<float>(polyVertices[i].x) * grid_scale;
+                    float vy = center.y - static_cast<float>(polyVertices[i].y) * grid_scale;
+                    float dx = mouse_pos.x - vx;
+                    float dy = mouse_pos.y - vy;
+                    if (dx * dx + dy * dy < 64.0f)
+                    {
+                        polyVertices.erase(polyVertices.begin() + i);
+                        break;
+                    }
+                }
+            }
+
+            if (polyVertices.size() >= 2)
+            {
+                for (size_t i = 0; i < polyVertices.size(); i++)
+                {
+                    size_t next = (i + 1) % polyVertices.size();
+                    ImVec2 p1(center.x + static_cast<float>(polyVertices[i].x) * grid_scale, center.y - static_cast<float>(polyVertices[i].y) * grid_scale);
+                    ImVec2 p2(center.x + static_cast<float>(polyVertices[next].x) * grid_scale, center.y - static_cast<float>(polyVertices[next].y) * grid_scale);
+                    draw_list->AddLine(p1, p2, IM_COL32(0, 255, 0, 255), 2.0f);
+                }
+            }
+
+            for (size_t i = 0; i < polyVertices.size(); i++)
+            {
+                ImVec2 p(center.x + static_cast<float>(polyVertices[i].x) * grid_scale, center.y - static_cast<float>(polyVertices[i].y) * grid_scale);
+                ImU32 node_color = (dragging_node_idx == (int)i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(0, 190, 255, 255);
+                draw_list->AddCircleFilled(p, 4.0f, node_color);
+            }
+        }
+
+        ImGui::Spacing();
+        if (polyVertices.size() < 3)
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Polygons require at least 3 vertices!");
+        }
+
+        ImGui::BeginDisabled(polyVertices.size() < 3);
+        if (ImGui::Button("Spawn Polygon", ImVec2(-1, 30)))
+        {
+            PS_AGONY::Simulation::PolygonCreateParams params;
+            params.base = buildBaseParams();
+            params.localVertices = polyVertices.data();
+            params.verticesCount = polyVertices.size();
+            simulation.createPolygon(params);
+        }
+        ImGui::EndDisabled();
+
+        state.bodyType = PS_AGONY::BodyType::Polygon;
+        state.polygonParams.base = buildBaseParams();
+        state.polygonParams.localVertices = polyVertices.data();
+        state.polygonParams.verticesCount = polyVertices.size();
     }
 
     ImGui::End();
@@ -466,7 +597,7 @@ static int gameFunc()
             simulationRenderer.renderSimulation(simulation);
 
             // Render debug data.
-            //renderDebugData(debugData, pauseSimulation);
+            renderDebugData(debugData, pauseSimulation);
 
             // Render object creator.
             ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
@@ -481,6 +612,10 @@ static int gameFunc()
                 else if (creatorState.bodyType == PS_AGONY::BodyType::Box)
                 {
                     previewParams = &creatorState.boxParams;
+                }
+                else if (creatorState.bodyType == PS_AGONY::BodyType::Polygon)
+                {
+                    previewParams = &creatorState.polygonParams;
                 }
 
                 simulationRenderer.renderObjectPreview(previewParams, creatorState.bodyType);
