@@ -143,7 +143,7 @@ namespace PS_AGONY
 		const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies->materialIndex.data();
 		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
 
-		auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
 			{
 				return {
 					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
@@ -253,8 +253,8 @@ namespace PS_AGONY
 			const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
 
 			// Get body indices.
-			const BodyIndex bodyIndexA = collisionData.bodyA;
-			const BodyIndex bodyIndexB = collisionData.bodyB;
+			const ObjectIndex bodyIndexA = collisionData.bodyA;
+			const ObjectIndex bodyIndexB = collisionData.bodyB;
 
 			// Get body data.
 			const Real invMassA = invMassPtr[bodyIndexA];
@@ -348,8 +348,8 @@ namespace PS_AGONY
 			const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
 
 			// Get body indices.
-			const BodyIndex bodyIndexA = collisionData.bodyA;
-			const BodyIndex bodyIndexB = collisionData.bodyB;
+			const ObjectIndex bodyIndexA = collisionData.bodyA;
+			const ObjectIndex bodyIndexB = collisionData.bodyB;
 
 			// Get body data.
 			const Real invMassA = invMassPtr[bodyIndexA];
@@ -551,7 +551,7 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 
-		auto getCenterOfMass = [&](BodyIndex bodyIndex) -> Vec2
+		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
 			{
 				return {
 					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
@@ -573,8 +573,8 @@ namespace PS_AGONY
 		for (size_t c = 0; c < collisionCount; c++)
 		{
 			const auto& data = collisionDataContainer[c];
-			const BodyIndex bodyIndexA = data.bodyA;
-			const BodyIndex bodyIndexB = data.bodyB;
+			const ObjectIndex bodyIndexA = data.bodyA;
+			const ObjectIndex bodyIndexB = data.bodyB;
 
 			const Real invMassA = invMassPtr[bodyIndexA];
 			const Real invMassB = invMassPtr[bodyIndexB];

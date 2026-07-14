@@ -10,7 +10,7 @@
 
 namespace PS_AGONY
 {
-    void SolvingPlanner::planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount)
+    void SolvingPlanner::planExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount)
     {
         const size_t collisionCount = collisions.size();
 
@@ -53,7 +53,7 @@ namespace PS_AGONY
                 TRACY_SCOPE_NC("Pass1", Ecstasy::Color::Cyan);
                 for (size_t idx : remainingIndices)
                 {
-                    const BodyPair& c = collisions[idx];
+                    const ObjectPair& c = collisions[idx];
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
@@ -104,7 +104,7 @@ namespace PS_AGONY
                 TRACY_SCOPE_NC("Pass2", Ecstasy::Color::Yellow);
                 for (size_t idx : delayedIndices)
                 {
-                    const BodyPair& c = collisions[idx];
+                    const ObjectPair& c = collisions[idx];
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
@@ -154,7 +154,7 @@ namespace PS_AGONY
         }
     }
 
-    void SolvingPlanner::planSpacingAwareExecution(const std::vector<BodyPair>& collisions, size_t bodyCount, size_t chunkSize)
+    void SolvingPlanner::planSpacingAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t chunkSize)
     {
         // TODO: Implement.
     }
@@ -208,7 +208,7 @@ namespace PS_AGONY
         return static_cast<double>(scheduled) / (static_cast<double>(workerCount) * maxLoad) * 100.0;
     }
 
-    bool SolvingPlanner::validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const
+    bool SolvingPlanner::validateNoCrossing(const std::vector<ObjectPair>& collisions, size_t bodyCount) const
     {
         if (workerCount == 0) return passOffsets.empty();
 
@@ -227,7 +227,7 @@ namespace PS_AGONY
                 for (size_t i = 0; i < static_cast<size_t>(pass.size); ++i)
                 {
                     size_t collisionIdx = flatIndices[static_cast<size_t>(pass.start) + i];
-                    const BodyPair& c = collisions[collisionIdx];
+                    const ObjectPair& c = collisions[collisionIdx];
 
                     const int32_t workerId = static_cast<int32_t>(worker);
                     if (bodyOwner[c.a] != -1 && bodyOwner[c.a] != workerId)

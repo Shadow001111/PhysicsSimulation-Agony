@@ -9,19 +9,19 @@ namespace PS_AGONY
 
 	// Can't be changed.
 
-	using BodyIndex = uint32_t;
+	using ObjectIndex = uint32_t;
 	using MaterialIndex = uint32_t;
 	using BodyTextureId = uint32_t;
 
-	struct BodyPair
+	struct ObjectPair
 	{
-		BodyIndex a, b;
+		ObjectIndex a, b;
 	};
 
-	struct BodyDeletion
+	struct ObjectDeletion
 	{
-		BodyIndex deletedIndex;
-		BodyIndex swappedFromIndex;
+		ObjectIndex deletedIndex;
+		ObjectIndex swappedFromIndex;
 	};
 
 	enum class BodyType : uint8_t
@@ -47,6 +47,6 @@ namespace PS_AGONY
 	struct BodyAttachment
 	{
 		ConstraintType type;
-		uint32_t objectIndex;
+		ObjectIndex objectIndex;
 	};
 }

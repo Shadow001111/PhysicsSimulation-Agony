@@ -55,7 +55,7 @@ namespace PS_AGONY
     }
 
     const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(
-        const std::vector<BodyPair>& bodyPairs,
+        const std::vector<ObjectPair>& bodyPairs,
         ExecutionPolicy executionPolicy
     )
     {
@@ -129,7 +129,7 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::remapPersistentContactData(const std::vector<BodyDeletion>& deletions)
+    void NarrowPhaseCollisionDetector::remapPersistentContactData(const std::vector<ObjectDeletion>& deletions)
     {
         if (deletions.empty() || previousContactDataContainer.empty())
         {
@@ -142,12 +142,12 @@ namespace PS_AGONY
         robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> newContainer;
         newContainer.reserve(previousContactDataContainer.size());
 
-        constexpr BodyIndex INVALID_INDEX = std::numeric_limits<BodyIndex>::max();
+        constexpr ObjectIndex INVALID_INDEX = std::numeric_limits<ObjectIndex>::max();
 
         for (const auto& [key, data] : previousContactDataContainer)
         {
-            BodyIndex a = key.bodyA;
-            BodyIndex b = key.bodyB;
+            ObjectIndex a = key.bodyA;
+            ObjectIndex b = key.bodyB;
             bool alive = true;
 
             // Sequentially replay the deletions/swaps exactly as they occurred.
@@ -208,7 +208,7 @@ namespace PS_AGONY
         return total;
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs)
+    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<ObjectPair>& bodyPairs)
     {
         TRACY_SCOPE_N("Single-threaded narrow phase");
 
@@ -221,7 +221,7 @@ namespace PS_AGONY
         allCollisionData.swap(cd.results);
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<BodyPair>& bodyPairs)
+    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& bodyPairs)
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
@@ -300,7 +300,7 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::processPairs(const std::vector<BodyPair>& pairs, ChunkData& chunkData)
+    void NarrowPhaseCollisionDetector::processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData)
     {
         TRACY_SCOPE_N("Process pair range");
 
@@ -447,14 +447,14 @@ namespace PS_AGONY
     };
 
     void NarrowPhaseCollisionDetector::collisionCircleCircle(
-        const std::vector<BodyPair>& pairs,
+        const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
@@ -462,7 +462,7 @@ namespace PS_AGONY
         size_t i = 0;
         if constexpr (true)
         {
-            BodyPair bodyPairsBatch[RealSimd::lanes];
+            ObjectPair bodyPairsBatch[RealSimd::lanes];
 
             alignas(RealSimd::bytes) Real positionAXBatch[RealSimd::lanes];
             alignas(RealSimd::bytes) Real positionAYBatch[RealSimd::lanes];
@@ -485,16 +485,16 @@ namespace PS_AGONY
                     const auto pair = pairs[i + j];
                     bodyPairsBatch[j] = pair;
 
-                    const BodyIndex indexA = pair.a;
-                    const BodyIndex indexB = pair.b;
+                    const ObjectIndex indexA = pair.a;
+                    const ObjectIndex indexB = pair.b;
 
                     positionAXBatch[j] = positionXPtr[indexA];
                     positionAYBatch[j] = positionYPtr[indexA];
                     positionBXBatch[j] = positionXPtr[indexB];
                     positionBYBatch[j] = positionYPtr[indexB];
 
-                    const BodyIndex shapeA = shapeIndexPtr[indexA];
-                    const BodyIndex shapeB = shapeIndexPtr[indexB];
+                    const ObjectIndex shapeA = shapeIndexPtr[indexA];
+                    const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
                     radiusABatch[j] = radiusPtr[shapeA];
                     radiusBBatch[j] = radiusPtr[shapeB];
@@ -546,7 +546,7 @@ namespace PS_AGONY
                         const int lane = std::countr_zero(collisionMask);
                         collisionMask &= collisionMask - 1;
 
-                        const BodyPair pair = bodyPairsBatch[lane];
+                        const ObjectPair pair = bodyPairsBatch[lane];
                         const Vec2 normal{ normalXBatch[lane], normalYBatch[lane] };
                         const Real depth = depthBatch[lane];
                         const Vec2 positionA{ positionAXBatch[lane], positionAYBatch[lane] };
@@ -573,8 +573,8 @@ namespace PS_AGONY
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
-            const BodyIndex shapeA = shapeIndexPtr[indexA];
-            const BodyIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
             const Real radiusA = radiusPtr[shapeA];
             const Real radiusB = radiusPtr[shapeB];
@@ -613,7 +613,7 @@ namespace PS_AGONY
     }
 
     void NarrowPhaseCollisionDetector::collisionCircleBox(
-        const std::vector<BodyPair>& pairs,
+        const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-box collision");
@@ -622,7 +622,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
@@ -636,8 +636,8 @@ namespace PS_AGONY
             const Real cosB = rotationCosPtr[indexB];
             const Real sinB = rotationSinPtr[indexB];
 
-            const BodyIndex shapeA = shapeIndexPtr[indexA];
-            const BodyIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
             const Real radiusA = radiusPtr[shapeA];
             const Real halfWidthB = halfWidthPtr[shapeB];
@@ -738,7 +738,7 @@ namespace PS_AGONY
     }
 
     void NarrowPhaseCollisionDetector::collisionCirclePolygon(
-        const std::vector<BodyPair>& pairs,
+        const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-polygon collision");
@@ -747,7 +747,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
@@ -769,8 +769,8 @@ namespace PS_AGONY
             const Real cosB = rotationCosPtr[indexB];
             const Real sinB = rotationSinPtr[indexB];
 
-            const BodyIndex shapeA = shapeIndexPtr[indexA];
-            const BodyIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
             const Real radiusA = radiusPtr[shapeA];
 
@@ -858,7 +858,7 @@ namespace PS_AGONY
     }
 
     void NarrowPhaseCollisionDetector::collisionBoxBox(
-        const std::vector<BodyPair>& pairs,
+        const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Box-box collision");
@@ -875,7 +875,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
@@ -890,8 +890,8 @@ namespace PS_AGONY
             const Real cosB = rotationCosPtr[indexB];
             const Real sinB = rotationSinPtr[indexB];
 
-            const BodyIndex shapeA = shapeIndexPtr[indexA];
-            const BodyIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
             const Real halfWidthA = halfWidthPtr[shapeA];
             const Real halfHeightA = halfHeightPtr[shapeA];
@@ -1058,7 +1058,7 @@ namespace PS_AGONY
     }
 
     void NarrowPhaseCollisionDetector::collisionBoxPolygon(
-        const std::vector<BodyPair>& pairs,
+        const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Box-polygon collision");
@@ -1074,7 +1074,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
@@ -1093,8 +1093,8 @@ namespace PS_AGONY
             const Real cosB = rotationCosPtr[indexB];
             const Real sinB = rotationSinPtr[indexB];
 
-            const BodyIndex shapeA = shapeIndexPtr[indexA];
-            const BodyIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
             const Real halfWidthA = halfWidthPtr[shapeA];
             const Real halfHeightA = halfHeightPtr[shapeA];
@@ -1323,7 +1323,7 @@ namespace PS_AGONY
     }
 
     void NarrowPhaseCollisionDetector::collisionPolygonPolygon(
-        const std::vector<BodyPair>& pairs,
+        const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Polygon-polygon collision");
@@ -1338,7 +1338,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const BodyIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
@@ -1355,8 +1355,8 @@ namespace PS_AGONY
             const Real cosB = rotationCosPtr[indexB];
             const Real sinB = rotationSinPtr[indexB];
 
-            const BodyIndex shapeA = shapeIndexPtr[indexA];
-            const BodyIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
             const VerticesContainer& localVertsAContainer = polyLocalVerticesPtr[shapeA];
             const VerticesContainer& localVertsBContainer = polyLocalVerticesPtr[shapeB];

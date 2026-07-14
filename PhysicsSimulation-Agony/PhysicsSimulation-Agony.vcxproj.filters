@@ -278,6 +278,9 @@
     <ClInclude Include="Physics\SoA\Constraints\SpringSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\ConstraintSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />

@@ -17,7 +17,7 @@ namespace PS_AGONY
 
 	struct BodyCollisionData
 	{
-		BodyIndex bodyA, bodyB;
+		ObjectIndex bodyA, bodyB;
 		Vec2 normal;
 		Real penetration;
 		uint32_t contactCount;
@@ -28,7 +28,7 @@ namespace PS_AGONY
 		BodyCollisionData() = default;
 
 		BodyCollisionData(
-			BodyIndex bodyA, BodyIndex bodyB,
+			ObjectIndex bodyA, ObjectIndex bodyB,
 			Vec2 normal,
 			Real depth,
 			uint32_t contactCount,
@@ -53,7 +53,7 @@ namespace PS_AGONY
 		struct alignas(64) ChunkData
 		{
 			size_t start = 0, end = 0;
-			SymmetricMatrix<std::vector<BodyPair>, BODY_TYPE_COUNT> pairs;
+			SymmetricMatrix<std::vector<ObjectPair>, BODY_TYPE_COUNT> pairs;
 			std::vector<BodyCollisionData> results;
 			alignas(64) std::atomic<bool> finished{ false };
 
@@ -98,8 +98,8 @@ namespace PS_AGONY
 
 		struct BodyPairKey
 		{
-			BodyIndex bodyA;
-			BodyIndex bodyB;
+			ObjectIndex bodyA;
+			ObjectIndex bodyB;
 
 			bool operator==(const BodyPairKey& other) const noexcept
 			{
@@ -119,7 +119,7 @@ namespace PS_AGONY
 		};
 
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
-			const std::vector<BodyPair>&, std::vector<BodyCollisionData>&
+			const std::vector<ObjectPair>&, std::vector<BodyCollisionData>&
 			);
 
 		// Static fields.
@@ -162,25 +162,25 @@ namespace PS_AGONY
 			const PolygonSoAViewer& polygons
 		);
 
-		const std::vector<BodyCollisionData>& findCollisions(const std::vector<BodyPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+		const std::vector<BodyCollisionData>& findCollisions(const std::vector<ObjectPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		void updatePersistentContactData();
-		void remapPersistentContactData(const std::vector<BodyDeletion>& deletions);
+		void remapPersistentContactData(const std::vector<ObjectDeletion>& deletions);
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 
 		size_t getMemoryUsage() const;
 	private:
-		void findCollisionsSingleThreaded(const std::vector<BodyPair>& bodyPairs);
-		void findCollisionsMultiThreaded(const std::vector<BodyPair>& bodyPairs);
+		void findCollisionsSingleThreaded(const std::vector<ObjectPair>& bodyPairs);
+		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& bodyPairs);
 
-		void processPairs(const std::vector<BodyPair>& pairs, ChunkData& chunkData);
+		void processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData);
 
-		void collisionCircleCircle(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCircleBox(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCirclePolygon(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxBox(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxPolygon(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionPolygonPolygon(const std::vector<BodyPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCircleCircle(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCircleBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCirclePolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxPolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionPolygonPolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 	};
 }

@@ -6,13 +6,13 @@ namespace PS_AGONY
 {
 	struct BoxSoA
 	{
-		SimdAlignedVector<BodyIndex> bodyIndices;
+		SimdAlignedVector<ObjectIndex> bodyIndices;
 
 		std::vector<Real> halfWidth;
 		std::vector<Real> halfHeight;
 
 		void append(
-			BodyIndex bodyIndex,
+			ObjectIndex bodyIndex,
 			Real halfWidth,
 			Real halfHeight
 		)
@@ -37,7 +37,7 @@ namespace PS_AGONY
 	{
 		size_t count = 0;
 	public:
-		const BodyIndex* bodyIndices = nullptr;
+		const ObjectIndex* bodyIndices = nullptr;
 		const Real* halfWidth = nullptr;
 		const Real* halfHeight = nullptr;
 

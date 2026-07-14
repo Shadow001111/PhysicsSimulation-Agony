@@ -304,13 +304,13 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
-        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices;
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices;
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
-            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const ObjectIndex bodyIndex = bodyIndexPtr[i];
 
             renderDataPtr[i].positionX = positionXPtr[bodyIndex];
             renderDataPtr[i].positionY = positionYPtr[bodyIndex];
@@ -342,13 +342,13 @@ namespace PS_AGONY
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
-        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices;
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices;
 
         BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
-            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const ObjectIndex bodyIndex = bodyIndexPtr[i];
 
             renderDataPtr[i].positionX = positionXPtr[bodyIndex];
             renderDataPtr[i].positionY = positionYPtr[bodyIndex];
@@ -377,7 +377,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
         // Polygon SoA pointers.
-        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices;
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices;
         const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices;
 
         // Count total vertices needed this frame.
@@ -400,7 +400,7 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-            const BodyIndex         bodyIndex = bodyIndexPtr[i];
+            const ObjectIndex         bodyIndex = bodyIndexPtr[i];
             const VerticesContainer& vc = localVertsPtr[i];
             const uint32_t           vertCount = static_cast<uint32_t>(vc.size());
             const Vec2* src = vc.data();
@@ -535,8 +535,8 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < springCount; ++i)
         {
-            const BodyIndex idxA = springs.bodyIndexA[i];
-            const BodyIndex idxB = springs.bodyIndexB[i];
+            const ObjectIndex idxA = springs.bodyIndexA[i];
+            const ObjectIndex idxB = springs.bodyIndexB[i];
 
             const float rA = static_cast<float>(rotationPtr[idxA]);
             const float cA = std::cos(rA);

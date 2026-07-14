@@ -113,7 +113,7 @@ namespace PS_AGONY
         bodiesAABB = aabbs;
     }
 
-    const std::vector<BodyPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild, ExecutionPolicy executionPolicy)
+    const std::vector<ObjectPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild, ExecutionPolicy executionPolicy)
     {
         TRACY_SCOPE_N("Broad phase");
 
@@ -409,7 +409,7 @@ namespace PS_AGONY
         }
 
         // Write sorted indices and keys(codes) back.
-        BodyIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
+        ObjectIndex* ECSTASY_RESTRICT indexPtr = bvhFunctionResources.mainBodyIndices.data();
         for (uint32_t i = 0; i < bodyCount; i++)
         {
             const PackedBodyIndex item = packedA[i];
@@ -576,7 +576,7 @@ namespace PS_AGONY
         // Setting mask. 'Set' stores in reverse order.
         const InternalRealSimd minMaxBlendMask = InternalUintSimd::set(-1, 0, -1, 0).as<InternalRealSimd>();
 
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+        const ObjectIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
         const Real* ECSTASY_RESTRICT bodyMinXPtr = bodiesAABB.minX;
         const Real* ECSTASY_RESTRICT bodyMaxXPtr = bodiesAABB.maxX;
         const Real* ECSTASY_RESTRICT bodyMinYPtr = bodiesAABB.minY;
@@ -645,7 +645,7 @@ namespace PS_AGONY
 
             for (uint32_t leafBodyIndex = 0; leafBodyIndex < nodeRange; leafBodyIndex++)
             {
-                const BodyIndex bodyIndex = indicesPtr[nodeStart + leafBodyIndex];
+                const ObjectIndex bodyIndex = indicesPtr[nodeStart + leafBodyIndex];
 
                 const Real bodyMinX = bodyMinXPtr[bodyIndex];
                 const Real bodyMaxX = bodyMaxXPtr[bodyIndex];
@@ -702,7 +702,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
         const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
         const BvhNode* ECSTASY_RESTRICT nodesPtr = bvhFunctionResources.nodes.data();
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+        const ObjectIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         // Initial traverse to get independent sub-trees.
         {
@@ -813,7 +813,7 @@ namespace PS_AGONY
                     // Masks and stack.
                     std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
 
-                    BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+                    ObjectPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
                     uint32_t localPushBufferSize = 0;
 
                     auto flush = [&]
@@ -1300,12 +1300,12 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
         const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
         const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
-        const BodyIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
+        const ObjectIndex* ECSTASY_RESTRICT indicesPtr = bvhFunctionResources.mainBodyIndices.data();
 
         //
         std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
 
-        BodyPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
+        ObjectPair localPushBuffer[PUSH_BUFFER_MAX_CAPACITY];
         uint32_t localPushBufferSize = 0;
 
         auto flush = [&] {

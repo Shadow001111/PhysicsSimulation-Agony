@@ -23,7 +23,7 @@ namespace PS_AGONY
 
 		SpringSoAViewer springs;
 
-		std::vector<BodyPair> springBodyPairs;
+		std::vector<ObjectPair> springBodyPairs;
 
 		std::vector<size_t> orderedSpringIndices;
 

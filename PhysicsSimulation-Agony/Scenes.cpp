@@ -122,7 +122,7 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
         });
 
     if (!chassisOpt) return;
-    PS_AGONY::BodyIndex chassis = *chassisOpt;
+    PS_AGONY::ObjectIndex chassis = *chassisOpt;
 
     auto leftWheelOpt = simulation.createCircle({
         .base.position = { leftX, leftY },
@@ -145,8 +145,8 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
         });
 
     if (!leftWheelOpt || !rightWheelOpt) return;
-    PS_AGONY::BodyIndex leftWheel = *leftWheelOpt;
-    PS_AGONY::BodyIndex rightWheel = *rightWheelOpt;
+    PS_AGONY::ObjectIndex leftWheel = *leftWheelOpt;
+    PS_AGONY::ObjectIndex rightWheel = *rightWheelOpt;
 
     // === 3. SUSPENSION (TRIANGULATED SPRINGS) ===
     constexpr float anchorSpread = 0.6f;
@@ -678,11 +678,11 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
     // Halt if the terrain cliff allocations failed
     if (!leftCliffOpt || !rightCliffOpt) return;
 
-    PS_AGONY::BodyIndex leftCliff = *leftCliffOpt;
-    PS_AGONY::BodyIndex rightCliff = *rightCliffOpt;
+    PS_AGONY::ObjectIndex leftCliff = *leftCliffOpt;
+    PS_AGONY::ObjectIndex rightCliff = *rightCliffOpt;
 
     // === 3. SPAN BRIDGE PLANKS & CONNECT WITH SPRINGS ===
-    std::vector<PS_AGONY::BodyIndex> planks;
+    std::vector<PS_AGONY::ObjectIndex> planks;
     planks.reserve(plankCount);
 
     const float spanStartX = -gapWidth * 0.5f;
@@ -711,7 +711,7 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
     if (planks.empty()) return;
 
     // Helper lambda to construct dual-anchor spring pairs cleanly between structural components
-    auto attachWithDualSprings = [&](PS_AGONY::BodyIndex bodyA, PS_AGONY::BodyIndex bodyB,
+    auto attachWithDualSprings = [&](PS_AGONY::ObjectIndex bodyA, PS_AGONY::ObjectIndex bodyB,
         PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB,
         float restLen) {
             // Upper Support Spring
@@ -800,7 +800,7 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::
 
     // === 3. SPAWN PARTICLE GRID ===
     // Array to store created IDs; standard flat vector mapping layout: index = y * gridWidth + x
-    std::vector<std::optional<PS_AGONY::BodyIndex>> gridNodeMap(gridWidth * gridHeight, std::nullopt);
+    std::vector<std::optional<PS_AGONY::ObjectIndex>> gridNodeMap(gridWidth * gridHeight, std::nullopt);
 
     const float startX = -static_cast<float>(gridWidth - 1) * spacing * 0.5f;
     const float startY = 2.0f; // Elevate above the ground box
