@@ -155,7 +155,7 @@ namespace PS_AGONY
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
-		void fetchBodiesInRadius(Vec2 pos, Real radius, std::vector<ObjectIndex>& outBodies) const;
+		void fetchBodiesInCircle(Vec2 pos, Real radius, std::vector<ObjectIndex>& outBodies) const;
 
 		size_t getMemoryUsage() const;
 	private:

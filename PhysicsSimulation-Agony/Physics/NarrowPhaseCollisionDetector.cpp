@@ -37,6 +37,72 @@ namespace PS_AGONY
         return mat;
         }();
 
+    /* HELPER METHODS */
+
+    constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
+    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
+    constexpr Real SAT_EPSILON = 1e-4;
+
+    static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
+    {
+        using Int = std::conditional_t<sizeof(Real) == 8,
+            uint64_t,
+            uint32_t>;
+
+        constexpr Int signBit = 1ull << (sizeof(Real) * 8 - 1);
+
+        const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
+        reinterpret_cast<Int&>(v.x) ^= signMask;
+        reinterpret_cast<Int&>(v.y) ^= signMask;
+    }
+
+    [[nodiscard]] static bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
+    {
+        const Real d1 = glm::dot(p1 - planePoint, planeNormal);
+        const Real d2 = glm::dot(p2 - planePoint, planeNormal);
+
+        if (d1 >= 0 && d2 >= 0) return false; // Both inside.
+        if (d1  < 0 && d2  < 0) return true;  // Both outside.
+
+        const Real t = d1 / (d1 - d2);
+        const Vec2 dir = p2 - p1;
+        const Vec2 intersect = p1 + dir * t;
+
+        if (d1 >= 0) p2 = intersect;
+        else         p1 = intersect;
+
+        return false;
+    };
+
+    static void projectVerticesOnAxis(const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
+    {
+        minOut =  std::numeric_limits<Real>::max();
+        maxOut = -std::numeric_limits<Real>::max();
+
+        for (const Vec2& v : vertices)
+        {
+            const Real proj = glm::dot(v, axis);
+            minOut = std::fmin(minOut, proj);
+            maxOut = std::fmax(maxOut, proj);
+        }
+    };
+
+    [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
+    {
+        const Vec2 p0 = vertsPtr[edgeIndex];
+        const Vec2 p1 = vertsPtr[(edgeIndex + 1) % verticesCount];
+        const Vec2 edge = p1 - p0;
+
+        Vec2 n = Vec2{ edge.y, -edge.x };
+        const Real lenSquared = glm::dot(n, n);
+        if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
+        {
+            n *= Real(1) / std::sqrt(lenSquared);
+        }
+        return n;
+    };
+
+    /*               */
     NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
     {
     }
@@ -96,6 +162,119 @@ namespace PS_AGONY
         }
 
         return allCollisionData;
+    }
+
+    void NarrowPhaseCollisionDetector::findCollisionsInCircle(
+        const std::vector<ObjectIndex>& bodiesToCheck,
+        Vec2 pos, Real radius,
+        std::vector<std::pair<ObjectIndex, Real>>& outColliding
+    ) const
+    {
+        constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
+
+        // Lambda to find the closest point on an edge segment
+        auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
+            {
+                const Vec2 ab = b - a;
+                const Real denom = glm::dot(ab, ab);
+                if (denom < ZERO_DIVISION_BOUNDARY) return a;
+                const Real t = glm::dot(p - a, ab) / denom;
+                return a + ab * glm::clamp(t, Real(0), Real(1));
+            };
+
+        for (ObjectIndex index : bodiesToCheck)
+        {
+            const BodyType type = bodies.bodyType[index];
+            const ObjectIndex shapeIdx = bodies.shapeIndex[index];
+            const Vec2 bodyPos = { bodies.worldCenterX[index], bodies.worldCenterY[index] };
+
+            Real sdf = std::numeric_limits<Real>::max();
+
+            if (type == BodyType::Circle)
+            {
+                const Real otherRadius = circles.radius[shapeIdx];
+                const Vec2 delta = bodyPos - pos;
+                const Real dist = std::sqrt(glm::dot(delta, delta));
+                sdf = dist - otherRadius;
+            }
+            else if (type == BodyType::Box)
+            {
+                const Real cosB = bodies.rotationCos[index];
+                const Real sinB = bodies.rotationSin[index];
+                const Real halfWidthB = boxes.halfWidth[shapeIdx];
+                const Real halfHeightB = boxes.halfHeight[shapeIdx];
+
+                const Vec2 right = { cosB, sinB };
+                const Vec2 up = { -sinB, cosB };
+
+                const Vec2 d = pos - bodyPos;
+                const Vec2 circleLocalPosition = {
+                    glm::dot(d, right),
+                    glm::dot(d, up)
+                };
+
+                // Exact 2D Box Signed Distance Field (SDF) representation
+                const Real dx = std::fabs(circleLocalPosition.x) - halfWidthB;
+                const Real dy = std::fabs(circleLocalPosition.y) - halfHeightB;
+
+                const Real extX = std::max(Real(0), dx);
+                const Real extY = std::max(Real(0), dy);
+                const Real distOutside = std::sqrt(extX * extX + extY * extY);
+                const Real distInside = std::min(Real(0), std::max(dx, dy));
+
+                sdf = distInside + distOutside;
+            }
+            else if (type == BodyType::Polygon)
+            {
+                const Real cosB = bodies.rotationCos[index];
+                const Real sinB = bodies.rotationSin[index];
+                const VerticesContainer& localPolygonVertices = polygons.localVertices[shapeIdx];
+                const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
+                const size_t vertexCount = localPolygonVertices.size();
+                if (vertexCount < 3) [[unlikely]] continue;
+
+                const Vec2 rightB = { cosB,  sinB };
+                const Vec2 upB = { -sinB, cosB };
+
+                const Vec2 circleLocal = {
+                    glm::dot(pos - bodyPos, rightB),
+                    glm::dot(pos - bodyPos, upB)
+                };
+
+                Real maxSeparation = -std::numeric_limits<Real>::max();
+                uint32_t supportEdge = 0;
+                for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
+                {
+                    const Vec2 normal = edgeOutwardNormal(localVerts, vertexCount, i);
+                    const Real separation = glm::dot(normal, circleLocal - localVerts[i]);
+                    if (separation > maxSeparation)
+                    {
+                        maxSeparation = separation;
+                        supportEdge = i;
+                    }
+                }
+
+                if (maxSeparation >= ZERO_DIVISION_BOUNDARY)
+                {
+                    const Vec2 a = localVerts[supportEdge];
+                    const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
+                    const Vec2 q = closestPointOnSegment(circleLocal, a, b);
+                    const Vec2 d = circleLocal - q;
+                    sdf = std::sqrt(glm::dot(d, d));
+                }
+                else
+                {
+                    // Point is inside the polygon; maxSeparation represents negative depth
+                    sdf = maxSeparation;
+                }
+            }
+
+            // Check if the body collides with the query circle
+            if (sdf < radius)
+            {
+                outColliding.emplace_back( index, sdf );
+            }
+        }
     }
 
     void NarrowPhaseCollisionDetector::updatePersistentContactData()
@@ -382,69 +561,6 @@ namespace PS_AGONY
 
 
     /*===COLLISION METHODS===*/
-
-    constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
-    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
-    constexpr Real SAT_EPSILON = 1e-4;
-
-    static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
-    {
-        using Int = std::conditional_t<sizeof(Real) == 8,
-            uint64_t,
-            uint32_t>;
-
-        constexpr Int signBit = 1ull << (sizeof(Real) * 8 - 1);
-
-        const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
-        reinterpret_cast<Int&>(v.x) ^= signMask;
-        reinterpret_cast<Int&>(v.y) ^= signMask;
-    }
-
-    [[nodiscard]] static bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
-    {
-        const Real d1 = glm::dot(p1 - planePoint, planeNormal);
-        const Real d2 = glm::dot(p2 - planePoint, planeNormal);
-
-        if (d1 >= 0 && d2 >= 0) return false; // Both inside.
-        if (d1  < 0 && d2  < 0) return true;  // Both outside.
-
-        const Real t = d1 / (d1 - d2);
-        const Vec2 dir = p2 - p1;
-        const Vec2 intersect = p1 + dir * t;
-
-        if (d1 >= 0) p2 = intersect;
-        else         p1 = intersect;
-
-        return false;
-    };
-
-    static void projectVerticesOnAxis(const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
-    {
-        minOut =  std::numeric_limits<Real>::max();
-        maxOut = -std::numeric_limits<Real>::max();
-
-        for (const Vec2& v : vertices)
-        {
-            const Real proj = glm::dot(v, axis);
-            minOut = std::fmin(minOut, proj);
-            maxOut = std::fmax(maxOut, proj);
-        }
-    };
-
-    [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
-    {
-        const Vec2 p0 = vertsPtr[edgeIndex];
-        const Vec2 p1 = vertsPtr[(edgeIndex + 1) % verticesCount];
-        const Vec2 edge = p1 - p0;
-
-        Vec2 n = Vec2{ edge.y, -edge.x };
-        const Real lenSquared = glm::dot(n, n);
-        if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
-        {
-            n *= Real(1) / std::sqrt(lenSquared);
-        }
-        return n;
-    };
 
     void NarrowPhaseCollisionDetector::collisionCircleCircle(
         const std::vector<ObjectPair>& pairs,

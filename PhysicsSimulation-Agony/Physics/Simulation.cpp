@@ -567,64 +567,65 @@ namespace PS_AGONY
     {
         if (mainBodyHolder.heldBody.has_value()) return;
 
-        TRACY_SCOPE_N("Try grab");
+        TRACY_SCOPE_N("Try grab body");
 
-        constexpr Real MAX_GRAB_DISTANCE = 4.0;
-        constexpr Real MAX_GRAB_DISTANCE_SQ = MAX_GRAB_DISTANCE * MAX_GRAB_DISTANCE;
+        constexpr Real MAX_GRAB_DISTANCE = 1.0;
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
         const Real* ECSTASY_RESTRICT worldCenterXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT worldCenterYPtr = bodies.worldCenterY.data();
         const Real* ECSTASY_RESTRICT massPtr = bodies.mass.data();
 
-        Real minSqDistance = FLT_MAX;
-        ObjectIndex closestBody;
-        Vec2 closestBodyDelta;
+        // Broad-phase.
+        std::vector<ObjectIndex> broadPhaseBodies; // TODO: Get rid of allocation.
+        broadPhaseBodies.reserve(128);
+        broadPhaseCollisionDetector.fetchBodiesInCircle(grabPosition, MAX_GRAB_DISTANCE, broadPhaseBodies);
+        if (broadPhaseBodies.empty()) return;
 
-        std::vector<ObjectIndex> bodiesToTry; // TODO: Get rid of allocation.
-        bodiesToTry.reserve(64);
-        broadPhaseCollisionDetector.fetchBodiesInRadius(grabPosition, MAX_GRAB_DISTANCE, bodiesToTry);
+        // Narrow phase.
+        std::vector<std::pair<ObjectIndex, Real>> narrowPhaseBodies; // TODO: Get rid of allocation.
+        narrowPhaseBodies.reserve(broadPhaseBodies.size());
+        narrowPhaseCollisionDetector.findCollisionsInCircle(broadPhaseBodies, grabPosition, MAX_GRAB_DISTANCE, narrowPhaseBodies);
+        if (narrowPhaseBodies.empty()) return;
 
-        for (ObjectIndex bodyIndex : bodiesToTry)
-        {
-            if (massPtr[bodyIndex] == 0) continue;
-
-            const Vec2 bodyTruePosition = { worldCenterXPtr[bodyIndex], worldCenterYPtr[bodyIndex] };
-
-            const Vec2 delta = bodyTruePosition - grabPosition;
-
-            const Real sqDistance = glm::dot(delta, delta);
-
-            if (sqDistance > MAX_GRAB_DISTANCE_SQ) continue;
-            else if (sqDistance < minSqDistance)
+        // Sort bodies by distance to the surface.
+        std::sort(
+            narrowPhaseBodies.begin(),
+            narrowPhaseBodies.end(),
+            [](const auto& a, const auto& b) -> bool
             {
-                const Vec2 bodyPosition = { positionXPtr[bodyIndex], positionYPtr[bodyIndex] };
+                return a.second < b.second;
+            }
+        );
 
-                minSqDistance = sqDistance;
+        // Get closest body.
+        ObjectIndex closestBody;
+        bool foundAnyBody = false;
+        for (const auto [bodyIndex, distance] : narrowPhaseBodies)
+        {
+            if (massPtr[bodyIndex] > 0)
+            {
                 closestBody = bodyIndex;
-                closestBodyDelta = bodyPosition - grabPosition;
+                foundAnyBody = true;
+                break;
             }
         }
+        if (!foundAnyBody) return;
 
         // Grab.
-        if (minSqDistance < FLT_MAX)
-        {
-            mainBodyHolder.heldBody = closestBody;
+        mainBodyHolder.heldBody = closestBody;
 
-            // Grab vector in world space.
-            const Vec2 worldGrabVec = grabPosition - Vec2(worldCenterXPtr[closestBody], worldCenterYPtr[closestBody]);
+        // Grab vector in world space.
+        const Vec2 worldGrabVec = grabPosition - Vec2(worldCenterXPtr[closestBody], worldCenterYPtr[closestBody]);
 
-            // Rotate grab vector into the body's local space.
-            const Real cosRot = bodies.rotationCos[closestBody];
-            const Real sinRot = bodies.rotationSin[closestBody];
+        // Rotate grab vector into the body's local space.
+        const Real cosRot = bodies.rotationCos[closestBody];
+        const Real sinRot = bodies.rotationSin[closestBody];
 
-            // Inverse rotation.
-            mainBodyHolder.localBodyOffset = Vec2(
-                worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
-               -worldGrabVec.x * sinRot + worldGrabVec.y * cosRot
-            );
-        }
+        // Inverse rotation.
+        mainBodyHolder.localBodyOffset = Vec2(
+            worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
+            -worldGrabVec.x * sinRot + worldGrabVec.y * cosRot
+        );
     }
 
     void Simulation::mainBodyHolderRelease()

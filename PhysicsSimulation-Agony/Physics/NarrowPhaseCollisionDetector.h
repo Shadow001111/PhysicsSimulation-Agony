@@ -164,6 +164,13 @@ namespace PS_AGONY
 
 		const std::vector<BodyCollisionData>& findCollisions(const std::vector<ObjectPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
+		void findCollisionsInCircle(
+			const std::vector<ObjectIndex>& bodiesToCheck,
+			Vec2 pos,
+			Real radius,
+			std::vector<std::pair<ObjectIndex, Real>>& outColliding
+		) const;
+
 		void updatePersistentContactData();
 		void remapPersistentContactData(const std::vector<ObjectDeletion>& deletions);
 
