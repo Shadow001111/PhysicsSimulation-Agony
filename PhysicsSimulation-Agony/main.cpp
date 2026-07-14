@@ -9,6 +9,10 @@
 
 #include "EcstasyGraphics/TextRenderer.h"
 
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 #include <iostream>
 #include <iomanip>
 
@@ -60,94 +64,94 @@ struct DebugData
     PS_AGONY::Simulation::DebugData simulationDebugData;
 };
 
-static void renderDebugText(float aspectRatio, const DebugData& debugData)
+static void renderDebugData(const DebugData& debugData, bool& pauseSimulation)
 {
-    constexpr float rowHeight = 0.06f;
-    constexpr float sideOffset = 0.014f;
+    ImGui::Begin("Simulation Diagnostics");
 
-    // References.
     const auto& simulationData = debugData.simulationDebugData;
 
-    // Push data on stream.
-
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(1);
-
-    // App.
+    // App/Performance Section
+    if (ImGui::CollapsingHeader("Application Performance", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ss << "App:";
-
         const float smoothedDelta = debugData.smoothedDelta;
+        const float FPS = smoothedDelta > 0.0f ? 1.0f / smoothedDelta : 0.0f;
+        ImGui::Text("FPS: %.1f (%.1f ms)", FPS, smoothedDelta * 1000.0f);
 
-        const float FPS = smoothedDelta > 0.0f
-            ? 1.0f / smoothedDelta
+        float upsPercent = (simulationData.updatesSupposedToHappen > 0)
+            ? (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen
             : 0.0f;
-        ss << "\n  FPS: " << FPS << " (" << smoothedDelta * 1000.0f << " ms)";
-
-        
-    }
-
-    // Simulation.
-    {
-        ss << "\nSimulation:";
-
-        float upsPercent = (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen;
         upsPercent = std::fmin(upsPercent, 1.0f);
-        ss << "\n  UPS: " << simulationData.updatesHappened << " / " << simulationData.updatesSupposedToHappen
-            << " (" << upsPercent * 100.0f << "%)";
+
+        ImGui::Text("UPS: %u / %u (%.1f%%)",
+            simulationData.updatesHappened,
+            simulationData.updatesSupposedToHappen,
+            upsPercent * 100.0f);
+
+        ImGui::Separator();
+        ImGui::Checkbox("Pause Simulation (P)", &pauseSimulation);
     }
 
-    // Memory.
+    // Memory Hierarchy Section
+    const size_t shapeTotal =
+        simulationData.circleDataMemoryUsage +
+        simulationData.boxDataMemoryUsage +
+        simulationData.polygonDataMemoryUsage;
+
+    const size_t constraintTotal =
+        simulationData.springDataMemoryUsage;
+
+    const size_t solvingTotal =
+        simulationData.bodyCollisionSolverMemoryUsage +
+        simulationData.bodyCollisionPlannerMemoryUsage +
+        simulationData.springSolverMemoryUsage +
+        simulationData.springPlannerMemoryUsage;
+
+    const size_t totalMemory =
+        simulationData.bodyDataMemoryUsage +
+        shapeTotal +
+        constraintTotal +
+        simulationData.broadPhaseDetectorMemoryUsage +
+        simulationData.narrowPhaseDetectorMemoryUsage +
+        solvingTotal;
+
+    if (ImGui::CollapsingHeader("Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        const size_t shapeTotal =
-            simulationData.circleDataMemoryUsage +
-            simulationData.boxDataMemoryUsage +
-            simulationData.polygonDataMemoryUsage;
+        ImGui::Text("Total System Footprint: %s", formatSizeBinary(totalMemory).c_str());
+        ImGui::Separator();
 
-        const size_t constraintTotal =
-            simulationData.springDataMemoryUsage;
+        ImGui::Text("Bodies: %s", formatSizeBinary(simulationData.bodyDataMemoryUsage).c_str());
 
-        const size_t solvingTotal =
-            simulationData.bodyCollisionSolverMemoryUsage +
-            simulationData.bodyCollisionPlannerMemoryUsage +
-            simulationData.springSolverMemoryUsage +
-            simulationData.springPlannerMemoryUsage;
+        if (ImGui::TreeNode("Shapes"))
+        {
+            ImGui::Text("Total Shapes: %s", formatSizeBinary(shapeTotal).c_str());
+            ImGui::BulletText("Circles: %s", formatSizeBinary(simulationData.circleDataMemoryUsage).c_str());
+            ImGui::BulletText("Boxes: %s", formatSizeBinary(simulationData.boxDataMemoryUsage).c_str());
+            ImGui::BulletText("Polygons: %s", formatSizeBinary(simulationData.polygonDataMemoryUsage).c_str());
+            ImGui::TreePop();
+        }
 
-        const size_t total =
-            simulationData.bodyDataMemoryUsage +
-            shapeTotal +
-            constraintTotal +
-            simulationData.broadPhaseDetectorMemoryUsage +
-            simulationData.narrowPhaseDetectorMemoryUsage +
-            solvingTotal
-            ;
+        if (ImGui::TreeNode("Constraints"))
+        {
+            ImGui::Text("Total Constraints: %s", formatSizeBinary(constraintTotal).c_str());
+            ImGui::BulletText("Springs: %s", formatSizeBinary(simulationData.springDataMemoryUsage).c_str());
+            ImGui::TreePop();
+        }
 
-        ss << "\nMemory: " << formatSizeBinary(total);
-        ss << "\n  Bodies: " << formatSizeBinary(simulationData.bodyDataMemoryUsage);
-        ss << "\n  Shapes: " << formatSizeBinary(shapeTotal);
-        ss << "\n    Circles: " << formatSizeBinary(simulationData.circleDataMemoryUsage);
-        ss << "\n    Boxes: " << formatSizeBinary(simulationData.boxDataMemoryUsage);
-        ss << "\n    Polygons: " << formatSizeBinary(simulationData.polygonDataMemoryUsage);
-        ss << "\n  Constraints: " << formatSizeBinary(constraintTotal);
-        ss << "\n    Springs: " << formatSizeBinary(simulationData.springDataMemoryUsage);
-        ss << "\n  Broad collision detector: " << formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage);
-        ss << "\n  Narrow collision detector: " << formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage);
-        ss << "\n  Solving: " << formatSizeBinary(total);
-        ss << "\n    Body collision solver: " << formatSizeBinary(simulationData.bodyCollisionSolverMemoryUsage);
-        ss << "\n    Body collision planner: " << formatSizeBinary(simulationData.bodyCollisionPlannerMemoryUsage);
-        ss << "\n    Spring solver: " << formatSizeBinary(simulationData.springSolverMemoryUsage);
-        ss << "\n    Spring planner: " << formatSizeBinary(simulationData.springPlannerMemoryUsage);
+        ImGui::Text("Broad Phase Detector: %s", formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage).c_str());
+        ImGui::Text("Narrow Phase Detector: %s", formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage).c_str());
+
+        if (ImGui::TreeNode("Solver Allocations"))
+        {
+            ImGui::Text("Total Solving: %s", formatSizeBinary(solvingTotal).c_str());
+            ImGui::BulletText("Body Collision Solver: %s", formatSizeBinary(simulationData.bodyCollisionSolverMemoryUsage).c_str());
+            ImGui::BulletText("Body Collision Planner: %s", formatSizeBinary(simulationData.bodyCollisionPlannerMemoryUsage).c_str());
+            ImGui::BulletText("Spring Solver: %s", formatSizeBinary(simulationData.springSolverMemoryUsage).c_str());
+            ImGui::BulletText("Spring Planner: %s", formatSizeBinary(simulationData.springPlannerMemoryUsage).c_str());
+            ImGui::TreePop();
+        }
     }
 
-    // Convert stream to string.
-    const std::string text = ss.str();
-
-    // Prepare.
-    TextRenderer::setCustomCoordinateSpace(-aspectRatio, aspectRatio, -1.0f, 1.0f);
-    TextRenderer::startTextRendering();
-
-    // Render
-    TextRenderer::renderText(text, -aspectRatio + sideOffset, 1.0f - sideOffset, rowHeight, glm::vec3(1.0f, 0.0f, 0.0f));
+    ImGui::End();
 }
 
 static int gameFunc()
@@ -167,6 +171,16 @@ static int gameFunc()
 
     InputManager windowInputManager;
     wnd.linkInputManager(&windowInputManager);
+
+    // ImGui context.
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(wnd.getWindow(), true);
+    ImGui_ImplOpenGL3_Init("#version 460");
 
     // Textures.
     Texture::initGlobalData();
@@ -214,7 +228,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 7);
+    loadScene(simulation, 3);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
@@ -237,6 +251,11 @@ static int gameFunc()
         wnd.pollEvents();
         windowInputManager.processInput();
 
+        // Start the ImGui frame.
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
         // Check if window is visible.
         const bool iconified = wnd.isZeroSize();
 
@@ -248,6 +267,7 @@ static int gameFunc()
         debugData.deltaTime = deltaTime;
 
 		// Handle input.
+        if (!io.WantCaptureKeyboard)
         {
             const PS_AGONY::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
 			const PS_AGONY::Real zoomSpeed = 2.0 * deltaTime;
@@ -267,6 +287,8 @@ static int gameFunc()
 
             pauseSimulation ^= windowInputManager.isKeyJustPressed(GLFW_KEY_P);
         }
+        const bool isHoldingBody = mainBodyHolder.heldBody.has_value();
+        if (!io.WantCaptureMouse || isHoldingBody)
         {
             PS_AGONY::Vec2 mouseWorldPosition;
             {
@@ -286,12 +308,12 @@ static int gameFunc()
             {
                 simulation.mainBodyHolderRelease();
             }
-            else if (windowInputManager.isMouseButtonJustPressed(0))
+            else if (windowInputManager.isMouseButtonJustPressed(0) && !io.WantCaptureMouse)
             {
                 simulation.mainBodyHolderGrabAt(mouseWorldPosition);
             }
 
-            if (mainBodyHolder.heldBody.has_value())
+            if (isHoldingBody)
             {
                 if (windowInputManager.isMouseButtonPressed(1))
                 {
@@ -340,7 +362,9 @@ static int gameFunc()
             simulationRenderer.render(simulation);
 
             // Render debug data.
-            renderDebugText(wnd.getAspectRatio(), debugData);
+            renderDebugData(debugData, pauseSimulation);
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
             // Blitting FBO to default FBO.
             framebuffer.setReadBuffer("color");
@@ -354,6 +378,11 @@ static int gameFunc()
             std::cerr << "[main]: FBO is not complete!\n";
         }
     }
+
+    // Cleanup ImGui contexts.
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     return 0;
 }

@@ -13,6 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ImGui">
+      <UniqueIdentifier>{794e956f-e11b-4a5d-bd72-7ba276707dc7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ImGui\Core">
+      <UniqueIdentifier>{b04132d0-37ec-42cd-964f-7fc120d55384}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ImGui\Backends">
+      <UniqueIdentifier>{491596da-3ada-402c-ae84-cb1be2283cdb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp">
@@ -110,6 +119,27 @@
     </ClCompile>
     <ClCompile Include="Physics\SoA\BodySoA.cpp">
       <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\imgui.cpp">
+      <Filter>ImGui\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\imgui_demo.cpp">
+      <Filter>ImGui\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp">
+      <Filter>ImGui\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp">
+      <Filter>ImGui\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp">
+      <Filter>ImGui\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_glfw.cpp">
+      <Filter>ImGui\Backends</Filter>
+    </ClCompile>
+    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.cpp">
+      <Filter>ImGui\Backends</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -280,6 +310,33 @@
     </ClInclude>
     <ClInclude Include="Physics\ConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\imconfig.h">
+      <Filter>ImGui\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\imgui.h">
+      <Filter>ImGui\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\imgui_internal.h">
+      <Filter>ImGui\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h">
+      <Filter>ImGui\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h">
+      <Filter>ImGui\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h">
+      <Filter>ImGui\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_glfw.h">
+      <Filter>ImGui\Backends</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.h">
+      <Filter>ImGui\Backends</Filter>
+    </ClInclude>
+    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3_loader.h">
+      <Filter>ImGui\Backends</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

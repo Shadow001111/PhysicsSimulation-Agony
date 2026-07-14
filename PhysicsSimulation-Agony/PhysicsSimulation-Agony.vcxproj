@@ -147,7 +147,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;$(SolutionDir)thirdparty\imgui;$(SolutionDir)thirdparty\imgui\backends</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
       <AssemblerListingLocation>$(IntDir)%(RelativeDir)\</AssemblerListingLocation>
@@ -178,7 +178,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;$(SolutionDir)thirdparty\imgui;$(SolutionDir)thirdparty\imgui\backends</AdditionalIncludeDirectories>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -211,7 +211,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;$(SolutionDir)thirdparty\imgui;$(SolutionDir)thirdparty\imgui\backends</AdditionalIncludeDirectories>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -236,6 +236,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Physics\SoA\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
     <ClCompile Include="EcstasyCore\FileStream.cpp" />
@@ -269,6 +276,15 @@
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.h" />
+    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="..\thirdparty\imgui\imconfig.h" />
+    <ClInclude Include="..\thirdparty\imgui\imgui.h" />
+    <ClInclude Include="..\thirdparty\imgui\imgui_internal.h" />
+    <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
+    <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
+    <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />
     <ClInclude Include="Physics\SoA\AABBSoA.h" />
     <ClInclude Include="Physics\SoA\BodySoA.h" />

@@ -1601,6 +1601,9 @@ namespace PS_AGONY
             const Real torque = worldR.x * force.y - worldR.y * force.x;
             bodies.angularVelocity[bodyIndex] += (torque * invInertia) * deltaTime;
         }
+
+        // Apply strong angular velocity damping.
+        bodies.angularVelocity[bodyIndex] *= std::pow(Real(0.1), deltaTime);
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const
