@@ -581,11 +581,6 @@ namespace PS_AGONY
         const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
-        const Vec2 newBodyVelocity = mainBodyHolder.getVelocity();
-
-        bodies.velocityX[bodyIndex] = newBodyVelocity.x;
-        bodies.velocityY[bodyIndex] = newBodyVelocity.y;
-
         mainBodyHolder.heldBody = std::nullopt;
     }
 
@@ -948,7 +943,7 @@ namespace PS_AGONY
 
         // Main stuff.
         integrateVelocities(bodyCount, deltaTime);
-        applyBodyHolderConstraint();
+        applyBodyHolderConstraint(deltaTime);
         integratePositions(bodyCount, deltaTime);
         wrapRotation();
         computeRotationCosSin();
@@ -1494,26 +1489,43 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::applyBodyHolderConstraint()
+    void Simulation::applyBodyHolderConstraint(Real deltaTime)
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
         const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
-        const Vec2 newBodyPosition = mainBodyHolder.getPosition() + mainBodyHolder.bodyOffset;
-        const Vec2 newBodyVelocity = mainBodyHolder.getVelocity();
+        // Target state defined by the grabber.
+        const Vec2 targetPosition = mainBodyHolder.getPosition() + mainBodyHolder.bodyOffset;
+        const Vec2 targetVelocity = mainBodyHolder.getVelocity();
 
-        Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
-        Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
         Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
 
-        positionXPtr[bodyIndex] = newBodyPosition.x;
-        positionYPtr[bodyIndex] = newBodyPosition.y;
+        // Current state of the grabbed body.
+        const Vec2 currentPosition = { positionXPtr[bodyIndex], positionYPtr[bodyIndex] };
+        const Vec2 currentVelocity = { velocityXPtr[bodyIndex], velocityYPtr[bodyIndex] };
 
-        velocityXPtr[bodyIndex] = newBodyVelocity.x;
-        velocityYPtr[bodyIndex] = newBodyVelocity.y;
+        // PD Controller parameters.
+        // 'frequency' controls the strength of the pull (higher = snappier).
+        // 'damping' is set to 2 * frequency for critical damping (no oscillation/overshoot).
+        constexpr Real frequency = 30.0;
+        constexpr Real stiffness = frequency * frequency;
+        constexpr Real damping = Real(2.0)* frequency;
+
+        // Error vectors.
+        const Vec2 positionError = targetPosition - currentPosition;
+        const Vec2 velocityError = targetVelocity - currentVelocity;
+
+        // Calculate acceleration.
+        const Vec2 acceleration = (stiffness * positionError) + (damping * velocityError);
+
+        // Apply acceleration directly to the velocity.
+        velocityXPtr[bodyIndex] += acceleration.x * deltaTime;
+        velocityYPtr[bodyIndex] += acceleration.y * deltaTime;
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const

@@ -209,7 +209,7 @@ namespace PS_AGONY
 
 		void computeWorldCenters();
 
-		void applyBodyHolderConstraint();
+		void applyBodyHolderConstraint(Real deltaTime);
 
 		void collectMemoryUsage(DebugData& data) const;
 	};

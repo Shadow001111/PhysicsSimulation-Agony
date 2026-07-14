@@ -65,6 +65,138 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Random::Generator& rvg, s
 }
 
 
+void load_ObjectCar(PS_AGONY::Simulation& simulation,
+    float positionX,
+    float positionY,
+    float rotation
+)
+{
+    // === CONFIGURATION ===
+    constexpr float frameWidth = 6.0f;
+    constexpr float frameHeight = 1.2f;
+    constexpr float chassisMass = 150.0f;
+
+    constexpr float wheelRadius = 0.9f;
+    constexpr float wheelMass = 3.0f;
+    constexpr float wheelOffset = 2.2f;      // Horizontal distance from chassis center
+    constexpr float suspensionDrop = 2.2f;   // Vertical distance down to wheel center
+
+    constexpr float suspensionK = 6000.0f;
+    constexpr float suspensionD = 45.0f;
+
+    PS_AGONY::Material carMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 0.8f,
+        .dynamicFriction = 0.6f
+    };
+    PS_AGONY::MaterialIndex carMatIdx = simulation.createMaterial(carMaterial);
+
+    PS_AGONY::Material wheelMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 1.2f,
+        .dynamicFriction = 0.9f
+    };
+    PS_AGONY::MaterialIndex wheelMatIdx = simulation.createMaterial(wheelMaterial);
+
+    // === 1. CALCULATE ROTATED WHEEL POSITIONS ===
+    float cosR = std::cos(rotation);
+    float sinR = std::sin(rotation);
+
+    // Left wheel center relative to chassis is (-wheelOffset, -suspensionDrop)
+    float leftX = positionX + (-wheelOffset * cosR - (-suspensionDrop) * sinR);
+    float leftY = positionY + (-wheelOffset * sinR + (-suspensionDrop) * cosR);
+
+    // Right wheel center relative to chassis is (wheelOffset, -suspensionDrop)
+    float rightX = positionX + (wheelOffset * cosR - (-suspensionDrop) * sinR);
+    float rightY = positionY + (wheelOffset * sinR + (-suspensionDrop) * cosR);
+
+    // === 2. CREATE CHASSIS & WHEELS ===
+    auto chassisOpt = simulation.createBox({
+        .base.position = { positionX, positionY },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = rotation,
+        .base.angularVelocity = 0.0f,
+        .base.mass = chassisMass,
+        .base.materialIndex = carMatIdx,
+        .size = { frameWidth, frameHeight }
+        });
+
+    if (!chassisOpt) return;
+    PS_AGONY::BodyIndex chassis = *chassisOpt;
+
+    auto leftWheelOpt = simulation.createCircle({
+        .base.position = { leftX, leftY },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = rotation,
+        .base.angularVelocity = 0.0f,
+        .base.mass = wheelMass,
+        .base.materialIndex = wheelMatIdx,
+        .radius = wheelRadius
+        });
+
+    auto rightWheelOpt = simulation.createCircle({
+        .base.position = { rightX, rightY },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = rotation,
+        .base.angularVelocity = 0.0f,
+        .base.mass = wheelMass,
+        .base.materialIndex = wheelMatIdx,
+        .radius = wheelRadius
+        });
+
+    if (!leftWheelOpt || !rightWheelOpt) return;
+    PS_AGONY::BodyIndex leftWheel = *leftWheelOpt;
+    PS_AGONY::BodyIndex rightWheel = *rightWheelOpt;
+
+    // === 3. SUSPENSION (TRIANGULATED SPRINGS) ===
+    constexpr float anchorSpread = 0.6f;
+
+    // FIX: Account for the local anchor frame offset to completely eliminate initial spring tension popping
+    const float deltaY = suspensionDrop - (frameHeight * 0.5f);
+    const float diagonalRestLength = std::sqrt((anchorSpread * anchorSpread) + (deltaY * deltaY));
+
+    // Left Suspension
+    simulation.createSpring({
+        .bodyIndexA = chassis,
+        .bodyIndexB = leftWheel,
+        .localAnchorA = { -wheelOffset - anchorSpread, -frameHeight * 0.5f },
+        .localAnchorB = { 0.0f, 0.0f },
+        .restLength = diagonalRestLength,
+        .stiffness = suspensionK,
+        .damping = suspensionD
+        });
+    simulation.createSpring({
+        .bodyIndexA = chassis,
+        .bodyIndexB = leftWheel,
+        .localAnchorA = { -wheelOffset + anchorSpread, -frameHeight * 0.5f },
+        .localAnchorB = { 0.0f, 0.0f },
+        .restLength = diagonalRestLength,
+        .stiffness = suspensionK,
+        .damping = suspensionD
+        });
+
+    // Right Suspension
+    simulation.createSpring({
+        .bodyIndexA = chassis,
+        .bodyIndexB = rightWheel,
+        .localAnchorA = { wheelOffset - anchorSpread, -frameHeight * 0.5f },
+        .localAnchorB = { 0.0f, 0.0f },
+        .restLength = diagonalRestLength,
+        .stiffness = suspensionK,
+        .damping = suspensionD
+        });
+    simulation.createSpring({
+        .bodyIndexA = chassis,
+        .bodyIndexB = rightWheel,
+        .localAnchorA = { wheelOffset + anchorSpread, -frameHeight * 0.5f },
+        .localAnchorB = { 0.0f, 0.0f },
+        .restLength = diagonalRestLength,
+        .stiffness = suspensionK,
+        .damping = suspensionD
+        });
+}
+
+
 void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     constexpr int ballCount = 1500;
@@ -430,7 +562,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
-    constexpr int pyramidRows = 40; // Number of rows in the pyramid
+    constexpr int pyramidRows = 45; // Number of rows in the pyramid
     constexpr float boxWidth = 0.5f;
     constexpr float boxHeight = 0.5f;
     constexpr float boxMass = 1.0f;
@@ -503,16 +635,16 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
     constexpr float cliffWidth = 25.0f;
     constexpr float cliffHeight = 30.0f;
     constexpr float cliffY = -cliffHeight * 0.5f; // Top surface will align perfectly with Y = 0.0
-    constexpr float gapWidth = 32.0f;
+    constexpr float gapWidth = 150.0f;
 
-    constexpr int plankCount = 14;
+    constexpr int plankCount = 100;
     constexpr float plankHeight = 0.5f;
     constexpr float plankMass = 1.5f;
 
     // Calculate precise width per plank to span the gap with minor breathing spacing
     constexpr float totalSpanWidth = gapWidth;
     constexpr float plankStep = totalSpanWidth / static_cast<float>(plankCount);
-    constexpr float plankWidth = plankStep * 0.9f;
+    constexpr float plankWidth = plankStep * 1.0f;
 
     // Spring mechanics configuration variables
     constexpr float springK = 2200.0f;  // Structural stiffness
@@ -749,71 +881,100 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::
     }
 }
 
-void load_NewtonCradle(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
 {
-    // === 1. CONFIGURATION AND MATERIALS ===
-    constexpr int ballCount = 5;
-    constexpr float radius = 0.6f;
-    constexpr float hangingLength = 5.0f;
+    // === CONFIGURATION ===
+    constexpr int rampSegments = 120;        // 120 segments ensures an incredibly silky continuous slide
+    constexpr float R = 65.0f;               // WAY BIGGER: Massive scaling factor for the cycloid curve
+    constexpr float xStart = -180.0f;        // Shifted deep left to host the long drop
+    constexpr float yStart = 90.0f;          // Sky-high peak starting height
+    constexpr float terrainBaseY = -60.0f;   // Secure bottom baseline for static ground polygons[cite: 1]
 
-    // Perfectly elastic material with no friction to maximize momentum transfer
-    PS_AGONY::Material cradleMaterial = {
-        .elasticity = 1.0f,
-        .staticFriction = 0.0f,
-        .dynamicFriction = 0.0f
+    PS_AGONY::Material envMaterial = {
+        .elasticity = 0.05f,
+        .staticFriction = 0.9f,
+        .dynamicFriction = 0.7f
     };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(cradleMaterial);
+    PS_AGONY::MaterialIndex envMatIdx = simulation.createMaterial(envMaterial);
 
-    // === 2. STATIC OVERHEAD FRAME ===
-    constexpr float frameWidth = (ballCount * radius * 2.0f) + 4.0f;
-    constexpr float frameHeight = 0.6f;
-    auto frameOpt = simulation.createBox({
-        .base.position = { 0.0f, hangingLength + (frameHeight * 0.5f) },
-        .base.mass = 0, // Static
-        .base.materialIndex = materialIdx,
-        .size = { frameWidth, frameHeight }
+    // === 1. GENERATE MONUMENTAL SMOOTH SLIDE ===
+    for (int i = 0; i < rampSegments; ++i)
+    {
+        float theta1 = (static_cast<float>(i) / rampSegments) * 3.14159265359f;
+        float theta2 = (static_cast<float>(i + 1) / rampSegments) * 3.14159265359f;
+
+        float x1 = xStart + R * (theta1 - std::sin(theta1));
+        float y1 = yStart - R * (1.0f - std::cos(theta1));
+
+        float x2 = xStart + R * (theta2 - std::sin(theta2));
+        float y2 = yStart - R * (1.0f - std::cos(theta2));
+
+        float posX = (x1 + x2) * 0.5f;
+        float posY = terrainBaseY;
+        float halfSegmentWidth = (x2 - x1) * 0.5f;
+
+        PS_AGONY::Vec2 localVertices[4] = {
+            { -halfSegmentWidth, 0.0f },
+            {  halfSegmentWidth, 0.0f },
+            {  halfSegmentWidth, y2 - terrainBaseY },
+            { -halfSegmentWidth, y1 - terrainBaseY }
+        };
+
+        simulation.createPolygon({
+            .base.position = { posX, posY },
+            .base.mass = 0,
+            .base.materialIndex = envMatIdx,
+            .localVertices = localVertices,
+            .verticesCount = 4
+            });
+    }
+
+    // === 2. EXTEND FLAT RUNOUT GROUND ===
+    float flatStartX = xStart + R * 3.14159265359f;
+    float flatWidth = 350.0f;              // Super long runway to catch extreme speeds
+    float flatGroundY = yStart - 2.0f * R; // Flat runway sits perfectly at the bottom of the cycloidal arc
+
+    simulation.createBox({
+        .base.position = { flatStartX + flatWidth * 0.5f, flatGroundY - 2.0f },
+        .base.mass = 0,
+        .base.materialIndex = envMatIdx,
+        .size = { flatWidth, 4.0f }
         });
 
-    if (!frameOpt) return;
+    // === 3. CALCULATE CAR SPAWN POSITION AND ROTATION ===
+    // Spawning slightly down the peak (theta = 0.35) where the descent begins safely
+    float spawnTheta = 0.35f;
+    float carX = xStart + 0.7f + R * (spawnTheta - std::sin(spawnTheta));
+    float carY = yStart + 20.4f - R * (1.0f - std::cos(spawnTheta));
 
-    // === 3. SUSPENDED BALL GENERATION ===
-    const float startX = -static_cast<float>(ballCount - 1) * radius;
+    // Calculate instantaneous slope tangent angle
+    float carRotation = std::atan2(-std::sin(spawnTheta), 1.0f - std::cos(spawnTheta));
 
-    for (int i = 0; i < ballCount; ++i)
+    // FIX: Lift distance perfectly calculated to prevent clipping or dropping (Drop + Radius + Margin)
+    float suspensionLift = 1.2f + 0.9f + 0.02f;
+    carX += -std::sin(carRotation) * suspensionLift;
+    carY += std::cos(carRotation) * suspensionLift;
+
+    load_ObjectCar(simulation, carX, carY, carRotation);
+
+    // === 4. GIANT IMPACT TARGET WALL ===
+    constexpr int wallRows = 12; // Tall destructible structure to fully absorb the collision
+    constexpr int wallCols = 4;
+    constexpr float boxSize = 2.0f;
+    const float targetStartX = flatStartX + 230.0f;
+    const float targetStartY = flatGroundY + (boxSize * 0.5f);
+
+    for (int r = 0; r < wallRows; ++r)
     {
-        float anchorX = startX + i * (radius * 2.0f);
-        float ballX = anchorX;
-        float ballY = 0.0f;
-
-        // Pull back the first ball along its pendulum arc to prime the reaction
-        if (i == 0)
+        for (int c = 0; c < wallCols; ++c)
         {
-            constexpr float releaseAngle = 0.7f; // ~40 degrees
-            ballX = anchorX - hangingLength * std::sin(releaseAngle);
-            ballY = hangingLength - hangingLength * std::cos(releaseAngle);
-        }
-
-        auto ballOpt = simulation.createCircle({
-            .base.position = { ballX, ballY },
-            .base.velocity = { 0.0f, 0.0f },
-            .base.rotation = 0.0f,
-            .base.angularVelocity = 0.0f,
-            .base.mass = 4.0f,
-            .base.materialIndex = materialIdx,
-            .radius = radius
-            });
-
-        if (ballOpt)
-        {
-            // Single vertical spring anchor per ball for pure 2D swinging
-            simulation.createSpring({
-                .bodyIndexA = *frameOpt,
-                .bodyIndexB = *ballOpt,
-                .localAnchorA = { anchorX, -(frameHeight * 0.5f) },
-                .localAnchorB = { 0.0f, 0.0f },
-                .restLength = hangingLength,
-                .stiffness = 15000.0f,
-                .damping = 0.0f
+            simulation.createBox({
+                .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
+                .base.velocity = { 0.0f, 0.0f },
+                .base.rotation = 0.0f,
+                .base.mass = 2.5f,
+                .base.materialIndex = envMatIdx,
+                .size = { boxSize, boxSize }
                 });
         }
     }
@@ -851,6 +1012,6 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 6)
     {
-        load_NewtonCradle(simulation, rvg);
+        load_CarRamp(simulation, rvg);
     }
 }
