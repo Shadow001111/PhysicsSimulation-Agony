@@ -1,6 +1,7 @@
 #pragma once
 #include "GlmTypes.h"
 #include "ObjectSoA.h"
+#include "ConstraintSystem.h"
 #include "Material.h"
 #include "Constants.h"
 
@@ -15,6 +16,7 @@
 
 #include <vector>
 #include <optional>
+#include <array>
 
 namespace PS_AGONY
 {
@@ -79,8 +81,8 @@ namespace PS_AGONY
 
 		struct SpringCreateParams
 		{
-			BodyIndex bodyIndexA;
-			BodyIndex bodyIndexB;
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Real restLength;
@@ -94,10 +96,13 @@ namespace PS_AGONY
 		BoxSoA boxes;
 		PolygonSoA polygons;
 
-		std::vector<BodyDeletion> deletedBodies;
+		std::vector<ObjectDeletion> deletedBodies;
 
 		// Constraints.
 		SpringSoA springs;
+		SpringConstraintSystem springConstraintSystem{ springs };
+
+		std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)> constraintSystems{};
 
 		// Materials.
 		std::vector<Material> materials;
@@ -159,11 +164,11 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		std::optional<BodyIndex> createCircle(const CircleCreateParams& params);
-		std::optional<BodyIndex> createBox(const BoxCreateParams& params);
-		std::optional<BodyIndex> createPolygon(const PolygonCreateParams& params);
+		std::optional<ObjectIndex> createCircle(const CircleCreateParams& params);
+		std::optional<ObjectIndex> createBox(const BoxCreateParams& params);
+		std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params);
 
-		void destroyBody(BodyIndex bodyIndex);
+		void destroyBody(ObjectIndex bodyIndex);
 
 		void createSpring(const SpringCreateParams& params);
 

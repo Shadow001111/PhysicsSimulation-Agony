@@ -59,7 +59,7 @@ namespace PS_AGONY
 
 		const std::vector<Material>* materials = nullptr;
 
-		std::vector<BodyPair> collidingBodyPairs;
+		std::vector<ObjectPair> collidingBodyPairs;
 		std::vector<BodyCollisionData> orderedCollisionData;
 
 		std::vector<PositionConstraintData> positionConstraintContainer;

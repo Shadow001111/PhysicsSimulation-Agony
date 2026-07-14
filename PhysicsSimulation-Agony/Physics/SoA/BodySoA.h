@@ -27,7 +27,9 @@ namespace PS_AGONY
 		std::vector<MaterialIndex> materialIndex;
 		AABBSoA aabb;
 		std::vector<BodyType> bodyType;
-		std::vector<BodyIndex> shapeIndex;
+		std::vector<ObjectIndex> shapeIndex;
+
+        std::vector<std::vector<BodyAttachment>> attachments;
 
 		void append(
 			Vec2 pos,
@@ -39,15 +41,17 @@ namespace PS_AGONY
 			Vec2 localCenterOfMass,
 			MaterialIndex materialIndex,
 			BodyType bodyType,
-			BodyIndex shapeIndex
+			ObjectIndex shapeIndex
 		);
 
 		void swapWithBack(size_t index);
 
 		void popBack();
 
-		size_t getCount() const noexcept { return offsetX.size(); }
+        void addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex);
+        void removeAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex);
 
+		size_t getCount() const noexcept { return offsetX.size(); }
 		size_t getMemoryUsage() const noexcept;
 	};
 
@@ -94,7 +98,9 @@ namespace PS_AGONY
         const MaterialIndex* materialIndex = nullptr;
         AABBSoAViewer_Internal aabb;
         const BodyType* bodyType = nullptr;
-        const BodyIndex* shapeIndex = nullptr;
+        const ObjectIndex* shapeIndex = nullptr;
+
+        const std::vector<BodyAttachment>* attachments = nullptr;
     public:
         BodySoAViewer() = default;
 
@@ -120,7 +126,8 @@ namespace PS_AGONY
             materialIndex(data.materialIndex.data()),
             aabb(data.aabb),
             bodyType(data.bodyType.data()),
-            shapeIndex(data.shapeIndex.data())
+            shapeIndex(data.shapeIndex.data()),
+            attachments(data.attachments.data())
         {}
 
         size_t getCount() const noexcept { return count; }

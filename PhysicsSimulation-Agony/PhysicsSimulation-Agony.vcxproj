@@ -269,6 +269,7 @@
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Physics\ConstraintSystem.h" />
     <ClInclude Include="Physics\SoA\AABBSoA.h" />
     <ClInclude Include="Physics\SoA\BodySoA.h" />
     <ClInclude Include="Physics\SoA\Constraints\SpringSoA.h" />

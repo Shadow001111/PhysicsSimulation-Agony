@@ -35,13 +35,13 @@ namespace PS_AGONY
 
         void setWorkerCount(size_t workerCount) noexcept { this->workerCount = workerCount; };
 
-        void planExecution(const std::vector<BodyPair>& collisions, size_t bodyCount);
-        void planSpacingAwareExecution(const std::vector<BodyPair>& collisions, size_t bodyCount, size_t chunkSize);
+        void planExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount);
+        void planSpacingAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t chunkSize);
 
         void printExecutionPlan();
 
         [[nodiscard]] double computeEfficiency() const;
-        [[nodiscard]] bool validateNoCrossing(const std::vector<BodyPair>& collisions, size_t bodyCount) const;
+        [[nodiscard]] bool validateNoCrossing(const std::vector<ObjectPair>& collisions, size_t bodyCount) const;
         [[nodiscard]] size_t getMemoryUsage() const;
         [[nodiscard]] size_t getWorkerCount() const noexcept { return workerCount; };
         [[nodiscard]] const auto& getFlatIndices() const noexcept { return flatIndices; }

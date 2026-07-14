@@ -10,7 +10,7 @@ namespace PS_AGONY::Interactivity
 		Vec2 holderPosition;
 		Vec2 holderVelocity;
 	public:
-		std::optional<BodyIndex> heldBody;
+		std::optional<ObjectIndex> heldBody;
 		Vec2 bodyOffset;
 
 		void setPosition(const Vec2& newPosition, Real deltaTime)

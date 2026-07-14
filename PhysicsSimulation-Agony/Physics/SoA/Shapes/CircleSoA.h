@@ -6,12 +6,12 @@ namespace PS_AGONY
 {
 	struct CircleSoA
 	{
-		SimdAlignedVector<BodyIndex> bodyIndices;
+		SimdAlignedVector<ObjectIndex> bodyIndices;
 
 		SimdAlignedVector<Real> radius;
 
 		void append(
-			BodyIndex bodyIndex,
+			ObjectIndex bodyIndex,
 			Real radius
 		)
 		{
@@ -33,7 +33,7 @@ namespace PS_AGONY
 	{
 		size_t count = 0;
 	public:
-		const BodyIndex* bodyIndices = nullptr;
+		const ObjectIndex* bodyIndices = nullptr;
 		const Real* radius = nullptr;
 
 		CircleSoAViewer() = default;

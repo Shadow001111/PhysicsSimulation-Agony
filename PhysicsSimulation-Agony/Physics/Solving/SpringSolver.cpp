@@ -141,8 +141,8 @@ namespace PS_AGONY
 			const size_t i = springIndicesPtr[springIndex];
 			SpringConstraintData& constraintData = springConstraintContainer[springIndex];
 
-			const BodyIndex bodyIndexA = springs.bodyIndexA[i];
-			const BodyIndex bodyIndexB = springs.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
+			const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
 
 			const Real invMassA = invMassPtr[bodyIndexA];
 			const Real invMassB = invMassPtr[bodyIndexB];
@@ -247,8 +247,8 @@ namespace PS_AGONY
 			const size_t i = springIndicesPtr[c];
 
 			// Get body indices.
-			const BodyIndex bodyIndexA = springs.bodyIndexA[i];
-			const BodyIndex bodyIndexB = springs.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
+			const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
 
 			// Get body data.
 			const Real invMassA = invMassPtr[bodyIndexA];

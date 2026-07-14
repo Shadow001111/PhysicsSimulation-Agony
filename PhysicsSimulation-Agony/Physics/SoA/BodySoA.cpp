@@ -14,7 +14,7 @@ namespace PS_AGONY
 		Vec2 localCenterOfMass,
 		MaterialIndex materialIndex,
 		BodyType bodyType,
-		BodyIndex shapeIndex
+		ObjectIndex shapeIndex
 	)
 	{
 		this->offsetX.push_back(pos.x);
@@ -41,6 +41,7 @@ namespace PS_AGONY
 		this->aabb.maxY.push_back(0);
 		this->bodyType.push_back(bodyType);
 		this->shapeIndex.push_back(shapeIndex);
+		this->attachments.emplace_back();
 	}
 
 	void BodySoA::swapWithBack(size_t index)
@@ -74,6 +75,7 @@ namespace PS_AGONY
 		std::swap(aabb.maxY[index], aabb.maxY.back());
 		std::swap(bodyType[index], bodyType.back());
 		std::swap(shapeIndex[index], shapeIndex.back());
+		std::swap(attachments[index], attachments.back());
 	}
 
 	void BodySoA::popBack()
@@ -107,31 +109,66 @@ namespace PS_AGONY
 		aabb.maxY.pop_back();
 		bodyType.pop_back();
 		shapeIndex.pop_back();
+		attachments.pop_back();
+	}
+
+	void BodySoA::addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
+	{
+		if (bodyIndex >= attachments.size()) [[unlikely]]
+		{
+			return;
+		}
+		attachments[bodyIndex].push_back({ type, objectIndex });
+	}
+
+	void BodySoA::removeAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
+	{
+		if (bodyIndex >= attachments.size()) [[unlikely]]
+		{
+			return;
+		}
+		auto& list = attachments[bodyIndex];
+		for (size_t i = 0; i < list.size(); i++)
+		{
+			if (list[i].type == type && list[i].objectIndex == objectIndex)
+			{
+				list[i] = list.back();
+				list.pop_back();
+				return;
+			}
+		}
 	}
 
 	size_t BodySoA::getMemoryUsage() const noexcept
 	{
-		return
-			PS_AGONY::getVectorMemoryUsage(offsetX) +
-			PS_AGONY::getVectorMemoryUsage(offsetY) +
-			PS_AGONY::getVectorMemoryUsage(localCenterOfMassX) +
-			PS_AGONY::getVectorMemoryUsage(localCenterOfMassY) +
-			PS_AGONY::getVectorMemoryUsage(worldCenterX) +
-			PS_AGONY::getVectorMemoryUsage(worldCenterY) +
-			PS_AGONY::getVectorMemoryUsage(velocityX) +
-			PS_AGONY::getVectorMemoryUsage(velocityY) +
-			PS_AGONY::getVectorMemoryUsage(rotation) +
-			PS_AGONY::getVectorMemoryUsage(angularVelocity) +
-			PS_AGONY::getVectorMemoryUsage(mass) +
-			PS_AGONY::getVectorMemoryUsage(invMass) +
-			PS_AGONY::getVectorMemoryUsage(inertia) +
-			PS_AGONY::getVectorMemoryUsage(invInertia) +
-			PS_AGONY::getVectorMemoryUsage(rotationCos) +
-			PS_AGONY::getVectorMemoryUsage(rotationSin) +
-			PS_AGONY::getVectorMemoryUsage(isStatic) +
-			PS_AGONY::getVectorMemoryUsage(materialIndex) +
+		size_t total = getVectorMemoryUsage(offsetX) +
+			getVectorMemoryUsage(offsetY) +
+			getVectorMemoryUsage(localCenterOfMassX) +
+			getVectorMemoryUsage(localCenterOfMassY) +
+			getVectorMemoryUsage(worldCenterX) +
+			getVectorMemoryUsage(worldCenterY) +
+			getVectorMemoryUsage(velocityX) +
+			getVectorMemoryUsage(velocityY) +
+			getVectorMemoryUsage(rotation) +
+			getVectorMemoryUsage(angularVelocity) +
+			getVectorMemoryUsage(mass) +
+			getVectorMemoryUsage(invMass) +
+			getVectorMemoryUsage(inertia) +
+			getVectorMemoryUsage(invInertia) +
+			getVectorMemoryUsage(rotationCos) +
+			getVectorMemoryUsage(rotationSin) +
+			getVectorMemoryUsage(isStatic) +
+			getVectorMemoryUsage(materialIndex) +
 			aabb.getMemoryUsage() +
-			PS_AGONY::getVectorMemoryUsage(bodyType) +
-			PS_AGONY::getVectorMemoryUsage(shapeIndex);
+			getVectorMemoryUsage(bodyType) +
+			getVectorMemoryUsage(shapeIndex);
+
+		total += getVectorMemoryUsage(attachments);
+		for (const auto& bodyAttachments : attachments)
+		{
+			total += getVectorMemoryUsage(bodyAttachments);
+		}
+
+		return total;
 	}
 }

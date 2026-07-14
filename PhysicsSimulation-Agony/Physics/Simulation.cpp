@@ -187,6 +187,8 @@ namespace PS_AGONY
         materials.reserve(16);
         materials.emplace_back(); // Default material.
 
+        constraintSystems[static_cast<size_t>(ConstraintType::Spring)] = &springConstraintSystem;
+
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
         (void)threadPool;
@@ -240,10 +242,10 @@ namespace PS_AGONY
         }
     }
 
-    std::optional<BodyIndex> Simulation::createCircle(const CircleCreateParams& params)
+    std::optional<ObjectIndex> Simulation::createCircle(const CircleCreateParams& params)
     {
-        const BodyIndex newBodyIndex = bodies.getCount();
-        const BodyIndex newShapeIndex = circles.getCount();
+        const ObjectIndex newBodyIndex = bodies.getCount();
+        const ObjectIndex newShapeIndex = circles.getCount();
 
         const Real mass = std::fmax(Real(0), params.base.mass);
         const Real radius = std::fmax(Real(0), params.radius);
@@ -276,10 +278,10 @@ namespace PS_AGONY
         return newBodyIndex;
     }
 
-    std::optional<BodyIndex> Simulation::createBox(const BoxCreateParams& params)
+    std::optional<ObjectIndex> Simulation::createBox(const BoxCreateParams& params)
     {
-        const BodyIndex newBodyIndex = bodies.getCount();
-        const BodyIndex newShapeIndex = boxes.getCount();
+        const ObjectIndex newBodyIndex = bodies.getCount();
+        const ObjectIndex newShapeIndex = boxes.getCount();
 
         const Real mass = std::fmax(Real(0), params.base.mass);
         const Real width = std::fmax(Real(0), params.size.x);
@@ -314,7 +316,7 @@ namespace PS_AGONY
         return newBodyIndex;
     }
 
-    std::optional<BodyIndex> Simulation::createPolygon(const PolygonCreateParams& params)
+    std::optional<ObjectIndex> Simulation::createPolygon(const PolygonCreateParams& params)
     {
         if (params.localVertices == nullptr)
         {
@@ -364,8 +366,8 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        const BodyIndex newBodyIndex = bodies.getCount();
-        const BodyIndex newShapeIndex = polygons.getCount();
+        const ObjectIndex newBodyIndex = bodies.getCount();
+        const ObjectIndex newShapeIndex = polygons.getCount();
 
         const Real mass = std::fmax(Real(0), params.base.mass);
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
@@ -409,32 +411,20 @@ namespace PS_AGONY
         return newBodyIndex;
     }
 
-    void Simulation::destroyBody(BodyIndex bodyIndex)
+    void Simulation::destroyBody(ObjectIndex bodyIndex)
     {
         const size_t bodyCount = bodies.getCount();
         if (bodyIndex >= bodyCount) return;
 
         const BodyType type = bodies.bodyType[bodyIndex];
-        const BodyIndex shapeIdx = bodies.shapeIndex[bodyIndex];
+        const ObjectIndex shapeIdx = bodies.shapeIndex[bodyIndex];
 
-        // Delete all springs attached to this body.
-        //size_t springIdx = 0;
-        //while (springIdx < springs.getCount())
-        //{
-        //    if (springs.bodyIndexA[springIdx] == bodyIndex || springs.bodyIndexB[springIdx] == bodyIndex)
-        //    {
-        //        if (springIdx != springs.getCount() - 1)
-        //        {
-        //            springs.swapWithBack(springIdx);
-        //        }
-        //        springs.popBack();
-        //        springsWereChanged = true;
-        //    }
-        //    else
-        //    {
-        //        springIdx++;
-        //    }
-        //}
+        // Cascade-delete everything attached to this body.
+        while (!bodies.attachments[bodyIndex].empty())
+        {
+            const BodyAttachment attachment = bodies.attachments[bodyIndex].back();
+            constraintSystems[static_cast<size_t>(attachment.type)]->removeConstraint(attachment.objectIndex, bodies);
+        }
 
         // Remove shape entry from the appropriate SoA.
         if (type == BodyType::Circle)
@@ -450,7 +440,7 @@ namespace PS_AGONY
                     std::swap(circles.radius[shapeIdx], circles.radius.back());
 
                     // Update the body that now occupies shapeIdx to point to the new shape index.
-                    const BodyIndex swappedBody = circles.bodyIndices[shapeIdx];
+                    const ObjectIndex swappedBody = circles.bodyIndices[shapeIdx];
                     bodies.shapeIndex[swappedBody] = shapeIdx;
                 }
                 circles.bodyIndices.pop_back();
@@ -468,7 +458,7 @@ namespace PS_AGONY
                     std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth.back());
                     std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight.back());
 
-                    const BodyIndex swappedBody = boxes.bodyIndices[shapeIdx];
+                    const ObjectIndex swappedBody = boxes.bodyIndices[shapeIdx];
                     bodies.shapeIndex[swappedBody] = shapeIdx;
                 }
                 boxes.bodyIndices.pop_back();
@@ -480,12 +470,14 @@ namespace PS_AGONY
         // Remove body entry from BodySoA.
         if (bodyIndex != bodyCount - 1)
         {
+            const ObjectIndex oldBackIndex = bodyCount - 1;
+
             // Swap all vectors in BodySoA.
             bodies.swapWithBack(bodyIndex);
 
             // Update the shape entry that refers to the swapped body (if any).
             const BodyType swappedType = bodies.bodyType[bodyIndex];
-            const BodyIndex swappedShapeIdx = bodies.shapeIndex[bodyIndex];
+            const ObjectIndex swappedShapeIdx = bodies.shapeIndex[bodyIndex];
             if (swappedType == BodyType::Circle)
             {
                 if (swappedShapeIdx < circles.getCount())
@@ -497,8 +489,13 @@ namespace PS_AGONY
                     boxes.bodyIndices[swappedShapeIdx] = bodyIndex;
             }
 
+            // The body that moved into bodyIndex may still have constraints
+            // referencing its old (back) index - point them at the new one.
+            for (const BodyAttachment& attachment : bodies.attachments[bodyIndex])
+                constraintSystems[static_cast<size_t>(attachment.type)]->remapBodyIndex(attachment.objectIndex, oldBackIndex, bodyIndex);
+
             // Record deletion.
-            deletedBodies.emplace_back(bodyIndex, static_cast<BodyIndex>(bodyCount - 1));
+            deletedBodies.emplace_back(bodyIndex, static_cast<ObjectIndex>(bodyCount - 1));
         }
 
         // Pop back all BodySoA vectors.
@@ -507,14 +504,15 @@ namespace PS_AGONY
 
     void Simulation::createSpring(const SpringCreateParams& params)
     {
-        springs.append(
+        springConstraintSystem.createSpring(
             params.bodyIndexA,
             params.bodyIndexB,
             params.localAnchorA,
             params.localAnchorB,
             params.restLength,
             params.stiffness,
-            params.damping
+            params.damping,
+            bodies
         );
 
         springsWereChanged = true;
@@ -541,7 +539,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT massPtr = bodies.mass.data();
 
         Real minSqDistance = FLT_MAX;
-        BodyIndex closestBody;
+        ObjectIndex closestBody;
         Vec2 closestBodyDelta;
 
         const uint32_t bodyCount = bodies.getCount();
@@ -578,7 +576,7 @@ namespace PS_AGONY
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
-        const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
+        const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
         mainBodyHolder.heldBody = std::nullopt;
@@ -588,7 +586,7 @@ namespace PS_AGONY
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
-        const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
+        const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
         bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
@@ -938,7 +936,6 @@ namespace PS_AGONY
 
         // Remap data if body was deleted.
         narrowPhaseCollisionDetector.remapPersistentContactData(deletedBodies);
-        springs.remapAfterDeletions(deletedBodies);
         deletedBodies.clear();
 
         // Main stuff.
@@ -966,7 +963,7 @@ namespace PS_AGONY
         {
             // Broad phase.
             // TODO: Refit instead of rebuilding each time.
-            const std::vector<BodyPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
+            const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
             if (broadCollisionData.empty()) return;
 
             // Narrow phase.
@@ -1220,7 +1217,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
 
-        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius.data();
 
         Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
@@ -1228,7 +1225,7 @@ namespace PS_AGONY
         Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
 
-        alignas(IndexSimd::bytes) BodyIndex bodyIndexBatch[IndexSimd::lanes];
+        alignas(IndexSimd::bytes) ObjectIndex bodyIndexBatch[IndexSimd::lanes];
         alignas(RealSimd::bytes) Real xBatch[RealSimd::lanes];
         alignas(RealSimd::bytes) Real yBatch[RealSimd::lanes];
 
@@ -1255,7 +1252,7 @@ namespace PS_AGONY
             {
                 for (size_t j = 0; j < RealSimd::lanes; j++)
                 {
-                    const BodyIndex bodyIndex = bodyIndexBatch[j];
+                    const ObjectIndex bodyIndex = bodyIndexBatch[j];
                     xBatch[j] = positionXPtr[bodyIndex];
                     yBatch[j] = positionYPtr[bodyIndex];
                 }
@@ -1272,7 +1269,7 @@ namespace PS_AGONY
 
             for (size_t j = 0; j < RealSimd::lanes; j++)
             {
-                const BodyIndex bodyIndex = bodyIndexBatch[j];
+                const ObjectIndex bodyIndex = bodyIndexBatch[j];
 
                 aabbMinXPtr[bodyIndex] = minXBatch[j];
                 aabbMinYPtr[bodyIndex] = minYBatch[j];
@@ -1282,7 +1279,7 @@ namespace PS_AGONY
         }
         for (; i < count; i++)
         {
-            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const ObjectIndex bodyIndex = bodyIndexPtr[i];
             const Real radius = radiusPtr[i];
 
             const Real x = positionXPtr[bodyIndex];
@@ -1307,7 +1304,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
 
-        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth.data();
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight.data();
 
@@ -1318,7 +1315,7 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const ObjectIndex bodyIndex = bodyIndexPtr[i];
             const Real halfWidth = halfWidthPtr[i];
             const Real halfHeight = halfHeightPtr[i];
 
@@ -1351,7 +1348,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
         const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
-        const BodyIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices.data();
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices.data();
         const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices.data();
 
         Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
@@ -1361,7 +1358,7 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-            const BodyIndex bodyIndex = bodyIndexPtr[i];
+            const ObjectIndex bodyIndex = bodyIndexPtr[i];
             const Real x = positionXPtr[bodyIndex];
             const Real y = positionYPtr[bodyIndex];
             const Real cos = rotationCosPtr[bodyIndex];
@@ -1493,7 +1490,7 @@ namespace PS_AGONY
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
-        const BodyIndex bodyIndex = mainBodyHolder.heldBody.value();
+        const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
         // Target state defined by the grabber.

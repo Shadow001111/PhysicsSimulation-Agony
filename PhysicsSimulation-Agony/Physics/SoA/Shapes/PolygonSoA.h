@@ -51,11 +51,11 @@ namespace PS_AGONY
 
 	struct PolygonSoA
 	{
-		SimdAlignedVector<BodyIndex> bodyIndices;
+		SimdAlignedVector<ObjectIndex> bodyIndices;
 		std::vector<VerticesContainer> localVertices;
 
 		void append(
-			BodyIndex bodyIndex,
+			ObjectIndex bodyIndex,
 			VerticesContainer&& vertices
 		)
 		{
@@ -80,7 +80,7 @@ namespace PS_AGONY
 	{
 		size_t count = 0;
 	public:
-		const BodyIndex* bodyIndices = nullptr;
+		const ObjectIndex* bodyIndices = nullptr;
 		const VerticesContainer* localVertices = nullptr;
 
 		PolygonSoAViewer() = default;

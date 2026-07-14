@@ -52,13 +52,13 @@ namespace PS_AGONY
 
 		struct alignas(64) PairVector
 		{
-			std::vector<BodyPair> pairs;
+			std::vector<ObjectPair> pairs;
 		};
 
 		struct PackedBodyIndex
 		{
 			uint32_t key;
-			BodyIndex index;
+			ObjectIndex index;
 		};
 
 		struct BvhFunctionResources
@@ -66,7 +66,7 @@ namespace PS_AGONY
 			// Must keep their state between frames:
 
 			std::vector<BvhNode> nodes;
-			std::vector<BodyIndex> mainBodyIndices;
+			std::vector<ObjectIndex> mainBodyIndices;
 
 			// The rest (Build):
 
@@ -89,7 +89,7 @@ namespace PS_AGONY
 			{
 				std::vector<BvhNodePair> nodePairsToTraverse;
 				std::vector<BvhNodePair> leafPairsToTestCollisions;
-				std::vector<BodyPair> collisionData;
+				std::vector<ObjectPair> collisionData;
 
 				std::atomic<bool> isDone{ false };
 
@@ -138,7 +138,7 @@ namespace PS_AGONY
 
 		LeafBodyAABBSoA leafBodyAABBs;
 
-		std::vector<BodyPair> collisionData;
+		std::vector<ObjectPair> collisionData;
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;
@@ -151,7 +151,7 @@ namespace PS_AGONY
 			const AABBSoAViewer& aabbs
 		);
 
-		const std::vector<BodyPair>& findCollisions(bool rebuild, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+		const std::vector<ObjectPair>& findCollisions(bool rebuild, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
