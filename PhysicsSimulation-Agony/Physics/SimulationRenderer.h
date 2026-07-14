@@ -135,7 +135,9 @@ namespace PS_AGONY
 		SimulationRenderer& operator=(SimulationRenderer&&) = delete;
 
 		void init();
-		void render(const Simulation& simulation);
+		void renderSimulation(const Simulation& simulation);
+
+		void renderObjectPreview(const void* params, BodyType type);
 
 		Camera2D& getCamera() noexcept { return camera; }
 	private:

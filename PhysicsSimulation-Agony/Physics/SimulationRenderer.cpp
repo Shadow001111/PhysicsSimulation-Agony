@@ -27,7 +27,7 @@ namespace PS_AGONY
         initBuffers();
     }
 
-    void SimulationRenderer::render(const Simulation& simulation)
+    void SimulationRenderer::renderSimulation(const Simulation& simulation)
     {
         TRACY_SCOPE_N("SimulationRenderer render");
 
@@ -47,6 +47,55 @@ namespace PS_AGONY
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         //renderContactPoints(simulation, viewProjectionMatrix);
         renderSprings(simulation, viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
+    {
+        if (params == nullptr) return;
+
+        // Get matrices.
+        const Mat4 viewMatrix = camera.getViewMatrix();
+        const Mat4 projectionMatrix = camera.getProjectionMatrix();
+        const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+        // Draw body depending on the type.
+        if (type == BodyType::Circle)
+        {
+            const auto* circleParams = static_cast<const Simulation::CircleCreateParams*>(params);
+
+            circleResources.instanceData.resize(1);
+            CircleInstanceData& data = circleResources.instanceData[0];
+
+            data.positionX = static_cast<float>(circleParams->base.position.x);
+            data.positionY = static_cast<float>(circleParams->base.position.y);
+            data.localCOMX = 0.0f;
+            data.localCOMY = 0.0f;
+            data.rotation = static_cast<float>(circleParams->base.rotation);
+            data.radius = static_cast<float>(circleParams->radius);
+
+            data.color = 0x00FF00;
+
+            renderCircleShapes(viewProjectionMatrix);
+        }
+        else if (type == BodyType::Box)
+        {
+            const auto* boxParams = static_cast<const Simulation::BoxCreateParams*>(params);
+
+            boxResources.instanceData.resize(1);
+            BoxInstanceData& data = boxResources.instanceData[0];
+
+            data.positionX = static_cast<float>(boxParams->base.position.x);
+            data.positionY = static_cast<float>(boxParams->base.position.y);
+            data.localCOMX = 0.0f;
+            data.localCOMY = 0.0f;
+            data.rotation = static_cast<float>(boxParams->base.rotation);
+            data.halfWidth = static_cast<float>(boxParams->size.x * 0.5);
+            data.halfHeight = static_cast<float>(boxParams->size.y * 0.5);
+
+            data.color = 0x00FF00;
+
+            renderBoxShapes(viewProjectionMatrix);
+        }
     }
 
     void SimulationRenderer::initShaders()

@@ -64,6 +64,15 @@ struct DebugData
     PS_AGONY::Simulation::DebugData simulationDebugData;
 };
 
+struct ObjectCreatorState
+{
+    bool isFocused = false;
+    PS_AGONY::BodyType bodyType;
+    PS_AGONY::Simulation::CircleCreateParams circleParams;
+    PS_AGONY::Simulation::BoxCreateParams boxParams;
+};
+
+
 static void renderDebugData(const DebugData& debugData, bool& pauseSimulation)
 {
     ImGui::Begin("Simulation Diagnostics");
@@ -154,50 +163,46 @@ static void renderDebugData(const DebugData& debugData, bool& pauseSimulation)
     ImGui::End();
 }
 
-void renderObjectCreatorUI(
+ObjectCreatorState renderObjectCreatorUI(
     PS_AGONY::Simulation& simulation,
     const PS_AGONY::Camera2D camera
 )
 {
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 20.0f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
+
     ImGui::Begin("Object Creator");
 
-    // Persist state between frames using static variables
-    static int selectedShape = 0; // 0 = Circle, 1 = Box
+    bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-    // Common Body Parameters
-    static float velX = 0.0f, velY = 0.0f;
+    static int selectedShape = 0;
+
+    static float vel[2] = { 0.0f, 0.0f };
     static float rotation = 0.0f;
     static float angularVelocity = 0.0f;
     static float mass = 1.0f;
     static int materialIndex = 0;
 
-    // Shape-specific Parameters
     static float circleRadius = 1.0f;
     static float boxWidth = 1.0f, boxHeight = 1.0f;
 
-    // 1. Selector for shape type
     ImGui::Combo("Shape Type", &selectedShape, "Circle\0Box\0");
     ImGui::Separator();
 
-    // 2. Common properties (BodyCreateParams)
     if (ImGui::CollapsingHeader("Common Physics Parameters", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::DragFloat2("Initial Velocity", &velX, 0.1f);
+        ImGui::DragFloat2("Initial Velocity", vel, 0.1f);
         ImGui::DragFloat("Rotation (rad)", &rotation, 0.05f);
         ImGui::DragFloat("Angular Velocity", &angularVelocity, 0.05f);
-
-        // Prevent 0 or negative mass unless you explicitly want static bodies (mass = 0)
         ImGui::DragFloat("Mass", &mass, 0.1f, 0.0f, 1000.0f, "%.3f");
-
         ImGui::InputInt("Material ID", &materialIndex);
     }
     ImGui::Separator();
 
-    // Helper closure to build the base common parameters
     auto buildBaseParams = [&]() {
         PS_AGONY::Simulation::BodyCreateParams base;
         base.position = camera.screenToWorldSpace({ 0.0, 0.0 });
-        base.velocity = { static_cast<PS_AGONY::Real>(velX), static_cast<PS_AGONY::Real>(velY) };
+        base.velocity = { static_cast<PS_AGONY::Real>(vel[0]), static_cast<PS_AGONY::Real>(vel[1])};
         base.rotation = static_cast<PS_AGONY::Real>(rotation);
         base.angularVelocity = static_cast<PS_AGONY::Real>(angularVelocity);
         base.mass = static_cast<PS_AGONY::Real>(mass);
@@ -205,8 +210,10 @@ void renderObjectCreatorUI(
         return base;
         };
 
-    // 3. Shape-specific fields and Spawn Buttons
-    if (selectedShape == 0) // Circle
+    ObjectCreatorState state;
+    state.isFocused = isFocused;
+
+    if (selectedShape == 0)
     {
         if (ImGui::CollapsingHeader("Circle Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -214,16 +221,19 @@ void renderObjectCreatorUI(
         }
 
         ImGui::Spacing();
-        if (ImGui::Button("Spawn Circle", ImVec2(-1, 30))) // Full-width button
+        if (ImGui::Button("Spawn Circle", ImVec2(-1, 30)))
         {
             PS_AGONY::Simulation::CircleCreateParams params;
             params.base = buildBaseParams();
             params.radius = static_cast<PS_AGONY::Real>(circleRadius);
-
-            auto objId = simulation.createCircle(params);
+            simulation.createCircle(params);
         }
+
+        state.bodyType = PS_AGONY::BodyType::Circle;
+        state.circleParams.base = buildBaseParams();
+        state.circleParams.radius = static_cast<PS_AGONY::Real>(circleRadius);
     }
-    else if (selectedShape == 1) // Box
+    else if (selectedShape == 1)
     {
         if (ImGui::CollapsingHeader("Box Parameters", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -237,12 +247,16 @@ void renderObjectCreatorUI(
             PS_AGONY::Simulation::BoxCreateParams params;
             params.base = buildBaseParams();
             params.size = { static_cast<PS_AGONY::Real>(boxWidth), static_cast<PS_AGONY::Real>(boxHeight) };
-
-            auto objId = simulation.createBox(params);
+            simulation.createBox(params);
         }
+
+        state.bodyType = PS_AGONY::BodyType::Box;
+        state.boxParams.base = buildBaseParams();
+        state.boxParams.size = { static_cast<PS_AGONY::Real>(boxWidth), static_cast<PS_AGONY::Real>(boxHeight) };
     }
 
     ImGui::End();
+    return state;
 }
 
 static int gameFunc()
@@ -449,13 +463,28 @@ static int gameFunc()
             framebuffer.clearDrawBuffer("color", bgColor);
 
             // Render simulation.
-            simulationRenderer.render(simulation);
+            simulationRenderer.renderSimulation(simulation);
 
             // Render debug data.
-            renderDebugData(debugData, pauseSimulation);
+            //renderDebugData(debugData, pauseSimulation);
 
             // Render object creator.
-            renderObjectCreatorUI(simulation, camera);
+            ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
+
+            if (creatorState.isFocused)
+            {
+                const void* previewParams = nullptr;
+                if (creatorState.bodyType == PS_AGONY::BodyType::Circle)
+                {
+                    previewParams = &creatorState.circleParams;
+                }
+                else if (creatorState.bodyType == PS_AGONY::BodyType::Box)
+                {
+                    previewParams = &creatorState.boxParams;
+                }
+
+                simulationRenderer.renderObjectPreview(previewParams, creatorState.bodyType);
+            }
 
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
