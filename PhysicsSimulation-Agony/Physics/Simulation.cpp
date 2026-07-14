@@ -567,6 +567,8 @@ namespace PS_AGONY
     {
         if (mainBodyHolder.heldBody.has_value()) return;
 
+        TRACY_SCOPE_N("Try grab");
+
         constexpr Real MAX_GRAB_DISTANCE = 4.0;
         constexpr Real MAX_GRAB_DISTANCE_SQ = MAX_GRAB_DISTANCE * MAX_GRAB_DISTANCE;
 
@@ -580,12 +582,15 @@ namespace PS_AGONY
         ObjectIndex closestBody;
         Vec2 closestBodyDelta;
 
-        const uint32_t bodyCount = bodies.getCount();
-        for (uint32_t i = 0; i < bodyCount; i++)
-        {
-            if (massPtr[i] == 0) continue;
+        std::vector<ObjectIndex> bodiesToTry; // TODO: Get rid of allocation.
+        bodiesToTry.reserve(64);
+        broadPhaseCollisionDetector.fetchBodiesInRadius(grabPosition, MAX_GRAB_DISTANCE, bodiesToTry);
 
-            const Vec2 bodyTruePosition = { worldCenterXPtr[i], worldCenterYPtr[i] };
+        for (ObjectIndex bodyIndex : bodiesToTry)
+        {
+            if (massPtr[bodyIndex] == 0) continue;
+
+            const Vec2 bodyTruePosition = { worldCenterXPtr[bodyIndex], worldCenterYPtr[bodyIndex] };
 
             const Vec2 delta = bodyTruePosition - grabPosition;
 
@@ -594,10 +599,10 @@ namespace PS_AGONY
             if (sqDistance > MAX_GRAB_DISTANCE_SQ) continue;
             else if (sqDistance < minSqDistance)
             {
-                const Vec2 bodyPosition = { positionXPtr[i], positionYPtr[i] };
+                const Vec2 bodyPosition = { positionXPtr[bodyIndex], positionYPtr[bodyIndex] };
 
                 minSqDistance = sqDistance;
-                closestBody = i;
+                closestBody = bodyIndex;
                 closestBodyDelta = bodyPosition - grabPosition;
             }
         }

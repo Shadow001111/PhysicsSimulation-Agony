@@ -182,6 +182,81 @@ namespace PS_AGONY
         }
     }
 
+    void BroadPhaseCollisionDetector::fetchBodiesInRadius(Vec2 pos, Real radius, std::vector<ObjectIndex>& outBodies) const
+    {
+        TRACY_SCOPE_N("Fetch bodies in radius");
+
+        if (bvhFunctionResources.nodes.empty()) return;
+
+        // Clamp negative radius to 0.
+        const Real clampedRadius = std::max(Real(0), radius);
+        const Real radiusSq = clampedRadius * clampedRadius;
+
+        // Lambda to check overlap between a BVH node's AABB and the query circle.
+        auto overlapsCircle = [&](const BvhNode& node) noexcept -> bool
+            {
+                const Real dx = std::max(node.minX - pos.x, std::max(Real(0), pos.x - node.maxX));
+                const Real dy = std::max(node.minY - pos.y, std::max(Real(0), pos.y - node.maxY));
+                return (dx * dx + dy * dy) <= radiusSq;
+            };
+
+        // Quick escape if root doesn't even overlap.
+        if (!overlapsCircle(bvhFunctionResources.nodes[0])) return;
+
+        // Local traversal stack.
+        constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+
+        uint32_t stack[MAX_STACK_CAPACITY];
+        uint32_t stackSize = 0;
+
+        stack[stackSize++] = 0;
+
+        while (stackSize > 0)
+        {
+            const uint32_t nodeIdx = stack[--stackSize];
+
+            const BvhNode& node = bvhFunctionResources.nodes[nodeIdx];
+
+            if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf node.
+            {
+                const uint32_t count = node.end - node.start;
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    TRACY_SCOPE_N("Cross test");
+
+                    const ObjectIndex bodyIndex = bvhFunctionResources.mainBodyIndices[node.start + i];
+                    const Real bodyMinX = bodiesAABB.minX[bodyIndex];
+                    const Real bodyMaxX = bodiesAABB.maxX[bodyIndex];
+                    const Real bodyMinY = bodiesAABB.minY[bodyIndex];
+                    const Real bodyMaxY = bodiesAABB.maxY[bodyIndex];
+
+                    // Check if individual body AABB overlaps the query circle.
+                    const Real bdx = std::max(bodyMinX - pos.x, std::max(Real(0), pos.x - bodyMaxX));
+                    const Real bdy = std::max(bodyMinY - pos.y, std::max(Real(0), pos.y - bodyMaxY));
+                    if (bdx * bdx + bdy * bdy <= radiusSq)
+                    {
+                        outBodies.push_back(bodyIndex);
+                    }
+                }
+            }
+            else // Internal node.
+            {
+                const BvhNode& left = bvhFunctionResources.nodes[node.leftChildIndex];
+                const BvhNode& right = bvhFunctionResources.nodes[node.leftChildIndex + 1];
+
+                // Check overlap with children before pushing to the stack.
+                if (overlapsCircle(right))
+                {
+                    stack[stackSize++] = node.leftChildIndex + 1;
+                }
+                if (overlapsCircle(left))
+                {
+                    stack[stackSize++] = node.leftChildIndex;
+                }
+            }
+        }
+    }
+
     size_t BroadPhaseCollisionDetector::getMemoryUsage() const
     {
         size_t total = sizeof(BroadPhaseCollisionDetector);
