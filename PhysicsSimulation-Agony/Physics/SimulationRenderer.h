@@ -6,7 +6,7 @@
 #include "OpenGLWrappers/VertexArray.h"
 #include "OpenGLWrappers/Texture.h"
 
-#include "BodySoAViewer.h"
+#include "ObjectSoA.h"
 
 namespace PS_AGONY
 {

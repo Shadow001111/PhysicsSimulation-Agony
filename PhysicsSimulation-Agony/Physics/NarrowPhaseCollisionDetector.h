@@ -1,6 +1,6 @@
 #pragma once
 #include "GlmTypes.h"
-#include "BodySoAViewer.h"
+#include "ObjectSoA.h"
 #include "SymmetricMatrix.h"
 
 #include <atomic>

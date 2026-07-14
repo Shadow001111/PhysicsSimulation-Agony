@@ -1,5 +1,5 @@
 #pragma once
-#include "BodySoAViewer.h"
+#include "ObjectSoA.h"
 
 #include <vector>
 #include <atomic>

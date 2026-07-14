@@ -236,11 +236,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
+    <ClCompile Include="Physics\SoA\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
     <ClCompile Include="EcstasyCore\FileStream.cpp" />
     <ClCompile Include="EcstasyCore\Threading\ThreadPool.cpp" />
     <ClCompile Include="EcstasyCore\Threading\ThreadUtils.cpp" />
-    <ClCompile Include="Physics\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp" />
     <ClCompile Include="Physics\FastCosSin.cpp" />
     <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
@@ -269,6 +269,12 @@
     <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Physics\SoA\AABBSoA.h" />
+    <ClInclude Include="Physics\SoA\BodySoA.h" />
+    <ClInclude Include="Physics\SoA\Constraints\SpringSoA.h" />
+    <ClInclude Include="Physics\SoA\Shapes\BoxSoA.h" />
+    <ClInclude Include="Physics\SoA\Shapes\CircleSoA.h" />
+    <ClInclude Include="Physics\SoA\Shapes\PolygonSoA.h" />
     <ClInclude Include="Physics\Solving\BodyCollisionSolver.h" />
     <ClInclude Include="EcstasyCore\FileStream.h" />
     <ClInclude Include="EcstasyCore\Algorithm\RadixSort.h" />
@@ -285,9 +291,8 @@
     <ClInclude Include="Physics\FastCosSin.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
-    <ClInclude Include="Physics\BodySoAViewer.h" />
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
-    <ClInclude Include="Physics\BodySoA.h" />
+    <ClInclude Include="Physics\ObjectSoA.h" />
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="EcstasyCore\ResourceManagment\BlockAllocator.h" />
     <ClInclude Include="EcstasyCore\Decoding\UTFDecoder.h" />
