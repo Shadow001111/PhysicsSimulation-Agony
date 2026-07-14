@@ -1546,6 +1546,9 @@ namespace PS_AGONY
         const Real mass = bodies.mass[bodyIndex];
         if (mass == 0.0) return; // Static objects can't be dragged.
 
+        const Real invMass = bodies.invMass[bodyIndex];
+        const Real invInertia = bodies.invInertia[bodyIndex];
+
         const Real cosRot = bodies.rotationCos[bodyIndex];
         const Real sinRot = bodies.rotationSin[bodyIndex];
 
@@ -1588,16 +1591,32 @@ namespace PS_AGONY
         const Vec2 positionError = targetPosition - worldGrabPoint;
         const Vec2 velocityError = targetVelocity - grabPointVelocity;
         const Vec2 desiredAccel = (stiffness * positionError) + (damping * velocityError);
+        
+        // Compute K matrix.
+        const Real k00 = invMass + (worldR.y * worldR.y) * invInertia;
+        const Real k11 = invMass + (worldR.x * worldR.x) * invInertia;
+        const Real k01 = -worldR.x * worldR.y * invInertia;
+
+        const Real det = k00 * k11 - k01 * k01;
+        Vec2 force(0.0);
+        if (det > 0.0)
+        {
+            const Real invDet = 1.0 / det;
+            const Real mEff00 = k11 * invDet;
+            const Real mEff11 = k00 * invDet;
+            const Real mEff01 = -k01 * invDet;
+
+            force.x = mEff00 * desiredAccel.x + mEff01 * desiredAccel.y;
+            force.y = mEff01 * desiredAccel.x + mEff11 * desiredAccel.y;
+        }
 
         // Apply linear force.
-        bodies.velocityX[bodyIndex] += desiredAccel.x * deltaTime;
-        bodies.velocityY[bodyIndex] += desiredAccel.y * deltaTime;
+        bodies.velocityX[bodyIndex] += force.x * invMass * deltaTime;
+        bodies.velocityY[bodyIndex] += force.y * invMass * deltaTime;
 
         // Apply torque.
-        const Real invInertia = bodies.invInertia[bodyIndex];
         if (invInertia > 0.0)
         {
-            const Vec2 force = desiredAccel * mass;
             const Real torque = worldR.x * force.y - worldR.y * force.x;
             bodies.angularVelocity[bodyIndex] += (torque * invInertia) * deltaTime;
         }
