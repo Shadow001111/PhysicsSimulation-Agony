@@ -45,28 +45,6 @@ namespace PS_AGONY
 			size_t springSolverMemoryUsage = 0;
 			size_t springPlannerMemoryUsage = 0;
 		};
-	private:
-		struct SimulationSettings
-		{
-			Real updateInterval = 1.0 / 300.0;
-			uint32_t collisionVelocitySolvingIterations = 6;
-			uint32_t collisionPositionSolvingIterations = 3;
-			uint32_t springSolvingIterations = 6;
-			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
-
-			// Environment.
-			Real timeScale = 1.0;
-			Vec2 gravity{ 0.0, -9.81 };
-			Real angularVelocityDamping = 1.0; // Per second.
-		};
-
-		enum class BenchmarkDensity
-		{
-			NoTouching,
-			Touching,
-			AllTouching,
-			COUNT
-		};
 
 		struct BodyCreateParams
 		{
@@ -88,6 +66,28 @@ namespace PS_AGONY
 			Real restLength;
 			Real stiffness;
 			Real damping;
+		};
+	private:
+		struct SimulationSettings
+		{
+			Real updateInterval = 1.0 / 300.0;
+			uint32_t collisionVelocitySolvingIterations = 6;
+			uint32_t collisionPositionSolvingIterations = 3;
+			uint32_t springSolvingIterations = 6;
+			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
+
+			// Environment.
+			Real timeScale = 1.0;
+			Vec2 gravity{ 0.0, -9.81 };
+			Real angularVelocityDamping = 1.0; // Per second.
+		};
+
+		enum class BenchmarkDensity
+		{
+			NoTouching,
+			Touching,
+			AllTouching,
+			COUNT
 		};
 
 		// Bodies.

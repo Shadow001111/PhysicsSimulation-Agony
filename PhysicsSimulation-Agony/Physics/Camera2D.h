@@ -13,7 +13,7 @@ namespace PS_AGONY
 		// Transformation.
 
 		// NDC space.
-		Vec2 screenToWorldSpace(const Vec2& screenPoint) noexcept;
+		Vec2 screenToWorldSpace(const Vec2& screenPoint) const noexcept;
 
 		// Setters
 		void setViewRangeW(Real w, Real ratio);
