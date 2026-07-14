@@ -419,6 +419,12 @@ namespace PS_AGONY
         const BodyType type = bodies.bodyType[bodyIndex];
         const ObjectIndex shapeIdx = bodies.shapeIndex[bodyIndex];
 
+        // Check main body holder constraint.
+        if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == bodyIndex)
+        {
+            mainBodyHolderRelease();
+        }
+
         // Cascade-delete everything attached to this body.
         while (!bodies.attachments[bodyIndex].empty())
         {
@@ -466,6 +472,23 @@ namespace PS_AGONY
                 boxes.halfHeight.pop_back();
             }
         }
+        else if (type == BodyType::Polygon)
+        {
+            const size_t polygonCount = polygons.getCount();
+            if (shapeIdx < polygonCount)
+            {
+                if (shapeIdx != polygonCount - 1)
+                {
+                    std::swap(polygons.bodyIndices[shapeIdx], polygons.bodyIndices.back());
+                    std::swap(polygons.localVertices[shapeIdx], polygons.localVertices.back());
+
+                    const ObjectIndex swappedBody = polygons.bodyIndices[shapeIdx];
+                    bodies.shapeIndex[swappedBody] = shapeIdx;
+                }
+                polygons.bodyIndices.pop_back();
+                polygons.localVertices.pop_back();
+            }
+        }
 
         // Remove body entry from BodySoA.
         if (bodyIndex != bodyCount - 1)
@@ -488,6 +511,17 @@ namespace PS_AGONY
                 if (swappedShapeIdx < boxes.getCount())
                     boxes.bodyIndices[swappedShapeIdx] = bodyIndex;
             }
+            else if (swappedType == BodyType::Polygon)
+            {
+                if (swappedShapeIdx < polygons.getCount())
+                    polygons.bodyIndices[swappedShapeIdx] = bodyIndex;
+            }
+
+            // Remap the held body index if the swapped back body was being held
+            if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == oldBackIndex)
+            {
+                mainBodyHolder.heldBody = bodyIndex;
+            }
 
             // The body that moved into bodyIndex may still have constraints
             // referencing its old (back) index - point them at the new one.
@@ -496,6 +530,10 @@ namespace PS_AGONY
 
             // Record deletion.
             deletedBodies.emplace_back(bodyIndex, static_cast<ObjectIndex>(bodyCount - 1));
+        }
+        else
+        {
+            deletedBodies.emplace_back(bodyIndex, bodyIndex);
         }
 
         // Pop back all BodySoA vectors.
