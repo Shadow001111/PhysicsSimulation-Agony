@@ -6,6 +6,8 @@
 
 #include "EcstasyGraphics/TextureLoader.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
     [[nodiscard]] static uint32_t idToHexColor(uint32_t x) noexcept
@@ -95,6 +97,42 @@ namespace PS_AGONY
             data.color = 0x00FF00;
 
             renderBoxShapes(viewProjectionMatrix);
+        }
+        else if (type == BodyType::Polygon)
+        {
+            const auto* polyParams = static_cast<const Simulation::PolygonCreateParams*>(params);
+
+            const size_t vertCount = polyParams->verticesCount;
+            if (vertCount < 3) return;
+
+            ensurePolygonBufferCapacity(vertCount, 1);
+
+            polygonResources.vertexData.resize(vertCount);
+            polygonResources.instanceData.resize(1);
+            polygonResources.drawCommands.resize(1);
+
+            glm::vec2* verts = polygonResources.vertexData.data();
+            for (size_t i = 0; i < vertCount; i++)
+            {
+                verts[i].x = static_cast<float>(polyParams->localVertices[i].x);
+                verts[i].y = static_cast<float>(polyParams->localVertices[i].y);
+            }
+
+            PolygonInstanceData& inst = polygonResources.instanceData[0];
+            inst.positionX = static_cast<float>(polyParams->base.position.x);
+            inst.positionY = static_cast<float>(polyParams->base.position.y);
+            inst.localCOMX = 0.0f;
+            inst.localCOMY = 0.0f;
+            inst.rotation = static_cast<float>(polyParams->base.rotation);
+            inst.color = 0x00FF00;
+
+            DrawArraysIndirectCommand& cmd = polygonResources.drawCommands[0];
+            cmd.count = static_cast<uint32_t>(vertCount);
+            cmd.instanceCount = 1;
+            cmd.first = 0;
+            cmd.baseInstance = 0;
+
+            renderPolygonShapes(viewProjectionMatrix);
         }
     }
 
