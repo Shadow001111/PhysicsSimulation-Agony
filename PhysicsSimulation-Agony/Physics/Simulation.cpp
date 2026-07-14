@@ -606,7 +606,19 @@ namespace PS_AGONY
         if (minSqDistance < FLT_MAX)
         {
             mainBodyHolder.heldBody = closestBody;
-            mainBodyHolder.bodyOffset = closestBodyDelta;
+
+            // Grab vector in world space.
+            const Vec2 worldGrabVec = grabPosition - Vec2(worldCenterXPtr[closestBody], worldCenterYPtr[closestBody]);
+
+            // Rotate grab vector into the body's local space.
+            const Real cosRot = bodies.rotationCos[closestBody];
+            const Real sinRot = bodies.rotationSin[closestBody];
+
+            // Inverse rotation.
+            mainBodyHolder.localBodyOffset = Vec2(
+                worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
+               -worldGrabVec.x * sinRot + worldGrabVec.y * cosRot
+            );
         }
     }
 
@@ -1531,36 +1543,64 @@ namespace PS_AGONY
         const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
         if (bodyIndex >= bodies.getCount()) return;
 
-        // Target state defined by the grabber.
-        const Vec2 targetPosition = mainBodyHolder.getPosition() + mainBodyHolder.bodyOffset;
+        const Real mass = bodies.mass[bodyIndex];
+        if (mass == 0.0) return; // Static objects can't be dragged.
+
+        const Real cosRot = bodies.rotationCos[bodyIndex];
+        const Real sinRot = bodies.rotationSin[bodyIndex];
+
+        // Calculate current world position of the grab point.
+        const Vec2 worldCenter = { bodies.worldCenterX[bodyIndex], bodies.worldCenterY[bodyIndex] };
+        const Vec2 localOffset = mainBodyHolder.localBodyOffset;
+
+        const Vec2 rotatedOffset = Vec2(
+            localOffset.x * cosRot - localOffset.y * sinRot,
+            localOffset.x * sinRot + localOffset.y * cosRot
+        );
+        const Vec2 worldGrabPoint = worldCenter + rotatedOffset;
+
+        // Calculate vector (worldR) from the World COM to the world Grab Point.
+        const Vec2 localCenterOfMass = { bodies.localCenterOfMassX[bodyIndex], bodies.localCenterOfMassY[bodyIndex] };
+        const Vec2 localR = localOffset - localCenterOfMass;
+
+        const Vec2 worldR = Vec2(
+            localR.x * cosRot - localR.y * sinRot,
+            localR.x * sinRot + localR.y * cosRot
+        );
+
+        // Target position and velocity.
+        const Vec2 targetPosition = mainBodyHolder.getPosition();
         const Vec2 targetVelocity = mainBodyHolder.getVelocity();
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
-        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
+        // Calculate grab point velocity on the rotating body.
+        const Vec2 linearVelocity = { bodies.velocityX[bodyIndex], bodies.velocityY[bodyIndex] };
+        const Real angularVelocity = bodies.angularVelocity[bodyIndex];
+        const Vec2 grabPointVelocity = Vec2(
+            linearVelocity.x - angularVelocity * worldR.y,
+            linearVelocity.y + angularVelocity * worldR.x
+        );
 
-        // Current state of the grabbed body.
-        const Vec2 currentPosition = { positionXPtr[bodyIndex], positionYPtr[bodyIndex] };
-        const Vec2 currentVelocity = { velocityXPtr[bodyIndex], velocityYPtr[bodyIndex] };
-
-        // PD Controller parameters.
-        // 'frequency' controls the strength of the pull (higher = snappier).
-        // 'damping' is set to 2 * frequency for critical damping (no oscillation/overshoot).
+        // PD Controller for target acceleration at the grab point.
         constexpr Real frequency = 30.0;
         constexpr Real stiffness = frequency * frequency;
-        constexpr Real damping = Real(2.0)* frequency;
+        constexpr Real damping = 2.0 * frequency;
 
-        // Error vectors.
-        const Vec2 positionError = targetPosition - currentPosition;
-        const Vec2 velocityError = targetVelocity - currentVelocity;
+        const Vec2 positionError = targetPosition - worldGrabPoint;
+        const Vec2 velocityError = targetVelocity - grabPointVelocity;
+        const Vec2 desiredAccel = (stiffness * positionError) + (damping * velocityError);
 
-        // Calculate acceleration.
-        const Vec2 acceleration = (stiffness * positionError) + (damping * velocityError);
+        // Apply linear force.
+        bodies.velocityX[bodyIndex] += desiredAccel.x * deltaTime;
+        bodies.velocityY[bodyIndex] += desiredAccel.y * deltaTime;
 
-        // Apply acceleration directly to the velocity.
-        velocityXPtr[bodyIndex] += acceleration.x * deltaTime;
-        velocityYPtr[bodyIndex] += acceleration.y * deltaTime;
+        // Apply torque.
+        const Real invInertia = bodies.invInertia[bodyIndex];
+        if (invInertia > 0.0)
+        {
+            const Vec2 force = desiredAccel * mass;
+            const Real torque = worldR.x * force.y - worldR.y * force.x;
+            bodies.angularVelocity[bodyIndex] += (torque * invInertia) * deltaTime;
+        }
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const

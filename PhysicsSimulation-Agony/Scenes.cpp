@@ -980,6 +980,45 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& 
     }
 }
 
+void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+{
+    // === 1. MATERIAL SETUP ===
+    PS_AGONY::Material material = {
+        .elasticity = 0.2f,
+        .staticFriction = 0.6f,
+        .dynamicFriction = 0.4f
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(material);
+
+    // === 2. STATIC FLOOR ===
+    constexpr float floorWidth = 60.0f;
+    constexpr float floorHeight = 2.0f;
+    simulation.createBox({
+        .base.position = { 0.0f, -floorHeight * 0.5f },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = 0.0f,
+        .base.angularVelocity = 0.0f,
+        .base.mass = 0.0f, // Static
+        .base.materialIndex = materialIdx,
+        .size = { floorWidth, floorHeight }
+        });
+
+    // === 3. SINGLE DYNAMIC LONG PLANK ===
+    constexpr float plankWidth = 14.0f;
+    constexpr float plankHeight = 0.4f;
+    constexpr float plankMass = 8.0f;
+
+    simulation.createBox({
+        .base.position = { 0.0f, 6.0f },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = 0.25f, // Slightly tilted to make the drop and collision interesting
+        .base.angularVelocity = 0.0f,
+        .base.mass = plankMass,
+        .base.materialIndex = materialIdx,
+        .size = { plankWidth, plankHeight }
+        });
+}
+
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
@@ -1013,5 +1052,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 6)
     {
         load_CarRamp(simulation, rvg);
+    }
+    else if (scene == 7)
+    {
+        load_Test(simulation, rvg);
     }
 }
