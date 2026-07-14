@@ -67,7 +67,7 @@ namespace PS_AGONY
 			Real stiffness;
 			Real damping;
 		};
-	private:
+
 		struct SimulationSettings
 		{
 			Real updateInterval = 1.0 / 300.0;
@@ -81,7 +81,7 @@ namespace PS_AGONY
 			Vec2 gravity{ 0.0, -9.81 };
 			Real angularVelocityDamping = 1.0; // Per second.
 		};
-
+	private:
 		enum class BenchmarkDensity
 		{
 			NoTouching,
@@ -183,7 +183,8 @@ namespace PS_AGONY
 
 		void getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const;
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }
-
+		
+		SimulationSettings& getSimulationSettings() noexcept { return simulationSettings; }
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }

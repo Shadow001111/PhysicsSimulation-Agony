@@ -74,13 +74,13 @@ struct ObjectCreatorState
 };
 
 
-static void renderDebugData(const DebugData& debugData, bool& pauseSimulation)
+static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugData, bool& pauseSimulation)
 {
     ImGui::Begin("Simulation Diagnostics");
 
     const auto& simulationData = debugData.simulationDebugData;
 
-    // App/Performance Section
+    // App/Performance Section.
     if (ImGui::CollapsingHeader("Application Performance", ImGuiTreeNodeFlags_DefaultOpen))
     {
         const float smoothedDelta = debugData.smoothedDelta;
@@ -101,7 +101,37 @@ static void renderDebugData(const DebugData& debugData, bool& pauseSimulation)
         ImGui::Checkbox("Pause Simulation (P)", &pauseSimulation);
     }
 
-    // Memory Hierarchy Section
+    // Interactive Simulation Settings.
+    auto& settings = simulation.getSimulationSettings();
+    if (ImGui::CollapsingHeader("Simulation Settings", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // Display and modify update rate in terms of Frequency (Hz).
+        float hz = static_cast<float>(1.0 / settings.updateInterval);
+        if (ImGui::SliderFloat("Update Rate (Hz)", &hz, 10.0f, 1000.0f, "%.0f Hz"))
+        {
+            settings.updateInterval = static_cast<PS_AGONY::Real>(1.0 / hz);
+        }
+
+        int velIter = static_cast<int>(settings.collisionVelocitySolvingIterations);
+        if (ImGui::SliderInt("Velocity Iterations", &velIter, 1, 50))
+        {
+            settings.collisionVelocitySolvingIterations = static_cast<uint32_t>(velIter);
+        }
+
+        int posIter = static_cast<int>(settings.collisionPositionSolvingIterations);
+        if (ImGui::SliderInt("Position Iterations", &posIter, 1, 50))
+        {
+            settings.collisionPositionSolvingIterations = static_cast<uint32_t>(posIter);
+        }
+
+        int springIter = static_cast<int>(settings.springSolvingIterations);
+        if (ImGui::SliderInt("Spring Iterations", &springIter, 1, 50))
+        {
+            settings.springSolvingIterations = static_cast<uint32_t>(springIter);
+        }
+    }
+
+    // Memory Hierarchy Section (Redesigned as an auto-aligning data grid)
     const size_t shapeTotal =
         simulationData.circleDataMemoryUsage +
         simulationData.boxDataMemoryUsage +
@@ -129,35 +159,55 @@ static void renderDebugData(const DebugData& debugData, bool& pauseSimulation)
         ImGui::Text("Total System Footprint: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
 
-        ImGui::Text("Bodies: %s", formatSizeBinary(simulationData.bodyDataMemoryUsage).c_str());
-
-        if (ImGui::TreeNode("Shapes"))
+        if (ImGui::BeginTable("MemoryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
-            ImGui::Text("Total Shapes: %s", formatSizeBinary(shapeTotal).c_str());
-            ImGui::BulletText("Circles: %s", formatSizeBinary(simulationData.circleDataMemoryUsage).c_str());
-            ImGui::BulletText("Boxes: %s", formatSizeBinary(simulationData.boxDataMemoryUsage).c_str());
-            ImGui::BulletText("Polygons: %s", formatSizeBinary(simulationData.polygonDataMemoryUsage).c_str());
-            ImGui::TreePop();
-        }
+            ImGui::TableSetupColumn("Component", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Allocated Size", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+            ImGui::TableSetupColumn("% Total", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableHeadersRow();
 
-        if (ImGui::TreeNode("Constraints"))
-        {
-            ImGui::Text("Total Constraints: %s", formatSizeBinary(constraintTotal).c_str());
-            ImGui::BulletText("Springs: %s", formatSizeBinary(simulationData.springDataMemoryUsage).c_str());
-            ImGui::TreePop();
-        }
+            // Helper to quickly format table rows cleanly with support for hierarchical indenting.
+            auto addMemoryRow = [&](const char* name, size_t bytes, bool indent = false) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                if (indent)
+                {
+                    ImGui::Indent(12.0f);
+                    ImGui::TextDisabled("* %s", name);
+                    ImGui::Unindent(12.0f);
+                }
+                else
+                {
+                    ImGui::TextUnformatted(name);
+                }
 
-        ImGui::Text("Broad Phase Detector: %s", formatSizeBinary(simulationData.broadPhaseDetectorMemoryUsage).c_str());
-        ImGui::Text("Narrow Phase Detector: %s", formatSizeBinary(simulationData.narrowPhaseDetectorMemoryUsage).c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(formatSizeBinary(bytes).c_str());
 
-        if (ImGui::TreeNode("Solver Allocations"))
-        {
-            ImGui::Text("Total Solving: %s", formatSizeBinary(solvingTotal).c_str());
-            ImGui::BulletText("Body Collision Solver: %s", formatSizeBinary(simulationData.bodyCollisionSolverMemoryUsage).c_str());
-            ImGui::BulletText("Body Collision Planner: %s", formatSizeBinary(simulationData.bodyCollisionPlannerMemoryUsage).c_str());
-            ImGui::BulletText("Spring Solver: %s", formatSizeBinary(simulationData.springSolverMemoryUsage).c_str());
-            ImGui::BulletText("Spring Planner: %s", formatSizeBinary(simulationData.springPlannerMemoryUsage).c_str());
-            ImGui::TreePop();
+                ImGui::TableSetColumnIndex(2);
+                double percentage = totalMemory > 0 ? (static_cast<double>(bytes) / totalMemory) * 100.0 : 0.0;
+                ImGui::Text("%.1f%%", percentage);
+                };
+
+            addMemoryRow("Bodies (Base Data)", simulationData.bodyDataMemoryUsage);
+
+            addMemoryRow("Shapes (Total Group)", shapeTotal);
+            addMemoryRow("Circles", simulationData.circleDataMemoryUsage, true);
+            addMemoryRow("Boxes", simulationData.boxDataMemoryUsage, true);
+            addMemoryRow("Polygons", simulationData.polygonDataMemoryUsage, true);
+
+            addMemoryRow("Constraints (Springs)", constraintTotal);
+
+            addMemoryRow("Broad Phase Detector", simulationData.broadPhaseDetectorMemoryUsage);
+            addMemoryRow("Narrow Phase Detector", simulationData.narrowPhaseDetectorMemoryUsage);
+
+            addMemoryRow("Solver Pipelines (Total)", solvingTotal);
+            addMemoryRow("Body Collision Solver", simulationData.bodyCollisionSolverMemoryUsage, true);
+            addMemoryRow("Body Collision Planner", simulationData.bodyCollisionPlannerMemoryUsage, true);
+            addMemoryRow("Spring Solver", simulationData.springSolverMemoryUsage, true);
+            addMemoryRow("Spring Planner", simulationData.springPlannerMemoryUsage, true);
+
+            ImGui::EndTable();
         }
     }
 
@@ -597,7 +647,7 @@ static int gameFunc()
             simulationRenderer.renderSimulation(simulation);
 
             // Render debug data.
-            renderDebugData(debugData, pauseSimulation);
+            renderGUI(simulation, debugData, pauseSimulation);
 
             // Render object creator.
             ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
