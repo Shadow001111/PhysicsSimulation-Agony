@@ -182,9 +182,9 @@ namespace PS_AGONY
         }
     }
 
-    void BroadPhaseCollisionDetector::fetchBodiesInRadius(Vec2 pos, Real radius, std::vector<ObjectIndex>& outBodies) const
+    void BroadPhaseCollisionDetector::fetchBodiesInCircle(Vec2 pos, Real radius, std::vector<ObjectIndex>& outBodies) const
     {
-        TRACY_SCOPE_N("Fetch bodies in radius");
+        TRACY_SCOPE_N("Fetch bodies in circle");
 
         if (bvhFunctionResources.nodes.empty()) return;
 
