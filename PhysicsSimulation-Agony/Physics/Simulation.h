@@ -1,6 +1,6 @@
 #pragma once
 #include "GlmTypes.h"
-#include "BodySoA.h"
+#include "ObjectSoA.h"
 #include "Material.h"
 #include "Constants.h"
 

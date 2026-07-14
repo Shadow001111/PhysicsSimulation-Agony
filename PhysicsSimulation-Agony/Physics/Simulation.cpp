@@ -985,7 +985,7 @@ namespace PS_AGONY
         }
         else
         {
-            // Call manual reset for data that can be displayed.
+            // TODO: Call manual reset for data that can be displayed.
         }
     }
 

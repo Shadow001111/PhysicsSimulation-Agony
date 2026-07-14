@@ -31,4 +31,22 @@ namespace PS_AGONY
 		Polygon,
 		COUNT
 	};
+
+	struct AABB
+	{
+		Real minX, minY;
+		Real maxX, maxY;
+	};
+
+	enum class ConstraintType : uint32_t
+	{
+		Spring,
+		COUNT
+	};
+
+	struct BodyAttachment
+	{
+		ConstraintType type;
+		uint32_t objectIndex;
+	};
 }

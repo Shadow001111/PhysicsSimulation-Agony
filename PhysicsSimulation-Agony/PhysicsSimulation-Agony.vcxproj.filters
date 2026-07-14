@@ -99,9 +99,6 @@
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\BodySoA.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Physics\Solving\SolverBase.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -109,6 +106,9 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\Solving\SpringSolver.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\SoA\BodySoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -176,16 +176,13 @@
     <ClInclude Include="Physics\GlmTypes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\BodySoA.h">
+    <ClInclude Include="Physics\ObjectSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Material.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Physics\BodySoAViewer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="EcstasyCore\Portablity.h">
@@ -261,6 +258,24 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Solving\SpringSolver.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\AABBSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\BodySoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Shapes\CircleSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Shapes\BoxSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Shapes\PolygonSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Constraints\SpringSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
