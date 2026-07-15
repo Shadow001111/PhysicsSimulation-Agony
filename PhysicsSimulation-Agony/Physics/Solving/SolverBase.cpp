@@ -4,14 +4,6 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
-#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
-#include <immintrin.h>
-#define SPIN_PAUSE() _mm_pause()
-#else
-#include <thread>
-#define SPIN_PAUSE() std::this_thread::yield()
-#endif
-
 namespace PS_AGONY
 {
 	void SolverBase::setResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn)
@@ -72,7 +64,7 @@ namespace PS_AGONY
 						// Wait for new wave.
 						for (int i = 0; i < 2'000; i++)
 						{
-							SPIN_PAUSE();
+							ECSTASY_SPIN_PAUSE();
 							if (workerResources.currentWaveTicket.load(std::memory_order_acquire) != localTicket)
 								break;
 						}
