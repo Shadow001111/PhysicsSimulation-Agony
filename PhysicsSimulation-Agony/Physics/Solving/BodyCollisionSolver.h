@@ -93,7 +93,7 @@ namespace PS_AGONY
 
 		size_t planWorkerCount(size_t collisionCount) const;
 
-		void computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer);
+		void computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
 		void applyWarmStartingForCollisions(
 			std::span<const BodyCollisionData> collisionDataContainer,
