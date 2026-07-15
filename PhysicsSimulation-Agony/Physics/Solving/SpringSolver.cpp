@@ -98,7 +98,7 @@ namespace PS_AGONY
 	size_t SpringSolver::planWorkerCount(size_t springCount) const
 	{
 		// Note: tuned for collisions; re-profile once springs are a bottleneck on their own.
-		static constexpr size_t SPRING_COUNT_PER_WORKER = 830;
+		static constexpr size_t SPRING_COUNT_PER_WORKER = 7'000;
 		static constexpr size_t MIN_SPRING_COUNT_FOR_THREADING = SPRING_COUNT_PER_WORKER * 3;
 
 		// Single-threaded path.

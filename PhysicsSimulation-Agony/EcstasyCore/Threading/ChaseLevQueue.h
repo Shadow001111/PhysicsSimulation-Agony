@@ -2,6 +2,7 @@
 #include "Task.h"
 
 #include "../TracyProfiler.h"
+#include "../Portablity.h"
 
 #include <atomic>
 #include <utility>
@@ -72,7 +73,7 @@ namespace Ecstasy::Threading
             // Wait until the stealer has released the slot.
             {
                 while (mSlots[slotIndex].flag.load(std::memory_order_acquire))
-                    std::this_thread::yield();
+                    ECSTASY_SPIN_PAUSE();
             }
 
             // Move task.
@@ -97,7 +98,7 @@ namespace Ecstasy::Threading
             while (!try_push(std::move(task)))
             {
                 TracyMessage("Queue can't push!", 17);
-                std::this_thread::yield();
+                ECSTASY_SPIN_PAUSE();
             }
         }
 
@@ -165,7 +166,7 @@ namespace Ecstasy::Threading
                 taskSource += written;
 
                 TracyMessage("Queue can't bulk push all!", 26);
-                std::this_thread::yield();
+                ECSTASY_SPIN_PAUSE();
             }
         }
 

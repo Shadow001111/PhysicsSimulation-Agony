@@ -165,14 +165,6 @@ namespace Ecstasy::Threading
         //TracyMessage("Worker start", 12);
         while (!stop.load(std::memory_order_relaxed))
         {
-            // Possibly sleep now, so it won't sleep during executing task.
-            // This still sucks, but the cause sucks more, probably scheduler.
-            // TODO: Fix.
-            {
-                //TRACY_SCOPE_NC("Thread yield", Ecstasy::Color::Chocolate);
-                std::this_thread::yield();
-            }
-
             // Try to get task from queue.
             Task task;
             {
@@ -240,7 +232,7 @@ namespace Ecstasy::Threading
                 {
                     for (int spin = 0; spin < MAX_SPIN_COUNT; spin++)
                     {
-                        _mm_pause();
+                        ECSTASY_SPIN_PAUSE();
                         if (pool->getQueuedTasks() > 0 || stop.load(std::memory_order_relaxed))
                         {
                             returnToStart = true;

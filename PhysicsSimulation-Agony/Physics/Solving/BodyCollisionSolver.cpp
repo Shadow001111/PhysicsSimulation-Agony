@@ -119,7 +119,7 @@ namespace PS_AGONY
 
 	size_t BodyCollisionSolver::planWorkerCount(size_t collisionCount) const
 	{
-		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830;
+		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830 * 2;
 		static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
 
 		// Single-threaded path.
