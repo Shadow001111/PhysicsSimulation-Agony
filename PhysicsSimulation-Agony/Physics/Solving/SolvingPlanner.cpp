@@ -156,7 +156,223 @@ namespace PS_AGONY
 
     void SolvingPlanner::planSpacingAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t chunkSize)
     {
-        // TODO: Implement.
+        const size_t collisionCount = collisions.size();
+
+        flatIndices.clear();
+        flatIndices.reserve(collisionCount);
+        passOffsets.clear();
+
+        if (collisionCount == 0 || workerCount == 0)
+            return;
+
+        remainingIndices.resize(collisionCount);
+        std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
+
+        delayedIndices.clear();
+        nextRemainingIndices.clear();
+
+        usedBodies.assign(bodyCount, uint8_t(-1));
+
+        std::vector<std::vector<size_t>> waveAssignments(workerCount);
+
+        std::vector<size_t> workerLoad(workerCount);
+
+        std::vector<size_t> wavePool;
+        std::vector<size_t> simdRetry;
+
+        while (!remainingIndices.empty())
+        {
+            const size_t waveStartPass = passOffsets.size();
+            passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+
+            std::fill(workerLoad.begin(), workerLoad.end(), 0);
+
+            nextRemainingIndices.clear();
+
+            std::fill(usedBodies.begin(), usedBodies.end(), uint8_t(-1));
+
+            for (auto& vec : waveAssignments)
+                vec.clear();
+
+            // The pool of items currently being evaluated for this wave.
+            wavePool = remainingIndices;
+
+            while (true)
+            {
+                bool placedAny = false;
+                delayedIndices.clear();
+                simdRetry.clear();
+
+                // Pass 1: Process unallocated or fully matching pairs first.
+                {
+                    TRACY_SCOPE_NC("Pass1", Ecstasy::Color::Cyan);
+                    for (size_t idx : wavePool)
+                    {
+                        const ObjectPair& c = collisions[idx];
+                        const uint8_t ownerA = usedBodies[c.a];
+                        const uint8_t ownerB = usedBodies[c.b];
+
+                        size_t chosenWorker = -1;
+                        if (ownerA == ownerB)
+                        {
+                            if (ownerA == uint8_t(-1))
+                            {
+                                size_t minLoad = workerLoad[0];
+                                chosenWorker = 0;
+                                for (size_t i = 1; i < workerCount; i++)
+                                {
+                                    size_t load = workerLoad[i];
+                                    if (load < minLoad)
+                                    {
+                                        minLoad = load;
+                                        chosenWorker = i;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                chosenWorker = static_cast<size_t>(ownerA);
+                            }
+                        }
+                        else if (ownerA == uint8_t(-1) || ownerB == uint8_t(-1))
+                        {
+                            // Defer partially claimed pairs to Pass 2
+                            delayedIndices.push_back(idx);
+                            continue;
+                        }
+                        else
+                        {
+                            // Direct wave structural conflict (different workers)
+                            nextRemainingIndices.push_back(idx);
+                            continue;
+                        }
+
+                        // Evaluate intra-chunk SIMD safety constraints
+                        const size_t currSize = waveAssignments[chosenWorker].size();
+                        const size_t chunkRem = currSize % chunkSize;
+                        bool simdConflict = false;
+                        if (chunkRem > 0)
+                        {
+                            for (size_t i = currSize - chunkRem; i < currSize; ++i)
+                            {
+                                const size_t prevIdx = waveAssignments[chosenWorker][i];
+                                const ObjectPair& pc = collisions[prevIdx];
+                                if (c.a == pc.a || c.a == pc.b || c.b == pc.a || c.b == pc.b)
+                                {
+                                    simdConflict = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (simdConflict)
+                        {
+                            simdRetry.push_back(idx);
+                        }
+                        else
+                        {
+                            waveAssignments[chosenWorker].push_back(idx);
+                            workerLoad[chosenWorker]++;
+
+                            usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
+                            usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                            placedAny = true;
+                        }
+                    }
+                }
+
+                // Pass 2: Process the partially claimed pairs later in the loop.
+                {
+                    TRACY_SCOPE_NC("Pass2", Ecstasy::Color::Yellow);
+                    for (size_t idx : delayedIndices)
+                    {
+                        const ObjectPair& c = collisions[idx];
+                        const uint8_t ownerA = usedBodies[c.a];
+                        const uint8_t ownerB = usedBodies[c.b];
+
+                        size_t chosenWorker = -1;
+                        if (ownerA == ownerB)
+                        {
+                            chosenWorker = static_cast<size_t>(ownerA);
+                        }
+                        else if (ownerA == uint8_t(-1))
+                        {
+                            chosenWorker = static_cast<size_t>(ownerB);
+                        }
+                        else if (ownerB == uint8_t(-1))
+                        {
+                            chosenWorker = static_cast<size_t>(ownerA);
+                        }
+                        else
+                        {
+                            nextRemainingIndices.push_back(idx);
+                            continue;
+                        }
+
+                        // Evaluate intra-chunk SIMD safety constraints
+                        const size_t currSize = waveAssignments[chosenWorker].size();
+                        const size_t chunkRem = currSize % chunkSize;
+                        bool simdConflict = false;
+                        if (chunkRem > 0)
+                        {
+                            for (size_t i = currSize - chunkRem; i < currSize; ++i)
+                            {
+                                const size_t prevIdx = waveAssignments[chosenWorker][i];
+                                const ObjectPair& pc = collisions[prevIdx];
+                                if (c.a == pc.a || c.a == pc.b || c.b == pc.a || c.b == pc.b)
+                                {
+                                    simdConflict = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (simdConflict)
+                        {
+                            simdRetry.push_back(idx);
+                        }
+                        else
+                        {
+                            waveAssignments[chosenWorker].push_back(idx);
+                            workerLoad[chosenWorker]++;
+
+                            usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
+                            usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                            placedAny = true;
+                        }
+                    }
+                }
+
+                // Convergence check: if we couldn't place anything new this loop iteration,
+                // any remaining simdRetry elements must wait for the next execution wave.
+                if (!placedAny)
+                {
+                    nextRemainingIndices.insert(nextRemainingIndices.end(), simdRetry.begin(), simdRetry.end());
+                    break;
+                }
+                else
+                {
+                    // Retry the SIMD-deferred items because chunk boundaries have shifted!
+                    wavePool = simdRetry;
+                }
+            }
+
+            {
+                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Color::Magenta);
+                for (size_t w = 0; w < workerCount; w++)
+                {
+                    const size_t passIndex = waveStartPass + w;
+                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
+                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+
+                    flatIndices.insert(flatIndices.end(),
+                        waveAssignments[w].begin(),
+                        waveAssignments[w].end());
+                }
+            }
+
+            remainingIndices.swap(nextRemainingIndices);
+        }
     }
 
     void SolvingPlanner::printExecutionPlan()
