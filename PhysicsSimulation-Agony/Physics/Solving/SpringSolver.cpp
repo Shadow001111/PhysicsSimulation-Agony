@@ -60,20 +60,21 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		TRACY_SCOPE_NC("Solve springs (Multi-threaded)", Ecstasy::Color::OliveDrab);
-		{
-			TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Color::Red);
-
-			springBodyPairs.resize(springCount);
-			for (size_t i = 0; i < springCount; i++)
-			{
-				springBodyPairs[i] = { springs.bodyIndexA[i], springs.bodyIndexB[i] };
-			}
-		}
 		if (springsWereChanged || solvingPlanner->getFlatIndices().size() != springCount)
 		{
-			TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
-			solvingPlanner->setWorkerCount(workerCount);
-			solvingPlanner->planExecution(springBodyPairs, bodies->getCount());
+			{
+				TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Color::Red);
+				springBodyPairs.resize(springCount);
+				for (size_t i = 0; i < springCount; i++)
+				{
+					springBodyPairs[i] = { springs.bodyIndexA[i], springs.bodyIndexB[i] };
+				}
+			}
+			{
+				TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
+				solvingPlanner->setWorkerCount(workerCount);
+				solvingPlanner->planExecution(springBodyPairs, bodies->getCount());
+			}
 		}
 		{
 			TRACY_SCOPE_N("Reorder spring indices");

@@ -501,19 +501,19 @@ static int gameFunc()
         framebuffer.bind();
     }
 
-    // Text renderer
+    // Text renderer.
     TextRenderer::init();
     TextRenderer::loadFont("RusEngMinecraft", 8);
     TextRenderer::setCurrentFont("RusEngMinecraft");
     TextRenderer::setGlyphInstanceBatchSize(1024);
 
-    // Simulation
+    // Simulation.
     PS_AGONY::Simulation simulation{};
     bool pauseSimulation = false;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 5);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
