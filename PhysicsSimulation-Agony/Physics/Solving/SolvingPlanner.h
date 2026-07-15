@@ -6,7 +6,6 @@
 
 namespace PS_AGONY
 {
-    // (Least-loaded) solving planner.
     class SolvingPlanner
     {
         struct Pass
@@ -35,8 +34,13 @@ namespace PS_AGONY
 
         void setWorkerCount(size_t workerCount) noexcept { this->workerCount = workerCount; };
 
-        void planExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount);
-        void planSpacingAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t chunkSize);
+        void planStandardExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount);
+        void planSimdAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t chunkSize);
+        void planCacheLineAwareExecution(
+            const std::vector<ObjectPair>& collisions,
+            size_t bodyCount,
+            size_t bodyStrideBytes,
+            size_t cacheLineBytes);
 
         void printExecutionPlan();
 

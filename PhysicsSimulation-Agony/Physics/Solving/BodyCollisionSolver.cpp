@@ -73,7 +73,7 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
 			solvingPlanner->setWorkerCount(workerCount);
-			solvingPlanner->planExecution(collidingBodyPairs, bodies->getCount());
+			solvingPlanner->planStandardExecution(collidingBodyPairs, bodies->getCount());
 		}
 		{
 			TRACY_SCOPE_N("Reorder collision data");

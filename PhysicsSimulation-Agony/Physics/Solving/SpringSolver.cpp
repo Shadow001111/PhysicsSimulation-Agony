@@ -76,7 +76,7 @@ namespace PS_AGONY
 			{
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
 				solvingPlanner->setWorkerCount(workerCount);
-				solvingPlanner->planExecution(springBodyPairs, bodies->getCount());
+				solvingPlanner->planStandardExecution(springBodyPairs, bodies->getCount());
 			}
 		}
 		{
