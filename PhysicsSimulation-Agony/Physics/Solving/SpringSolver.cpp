@@ -53,7 +53,7 @@ namespace PS_AGONY
 
 			for (uint32_t i = 0; i < springIterations; i++)
 			{
-				solveVelocityConstraints(orderedSpringIndices, springConstraintContainer);
+				solveVelocityConstraints(springConstraintContainer);
 			}
 			return;
 		}
@@ -145,6 +145,9 @@ namespace PS_AGONY
 			const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
 			const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
 
+			constraintData.bodyIndexA = bodyIndexA;
+			constraintData.bodyIndexB = bodyIndexB;
+
 			const Real invMassA = invMassPtr[bodyIndexA];
 			const Real invMassB = invMassPtr[bodyIndexB];
 
@@ -223,7 +226,6 @@ namespace PS_AGONY
 	}
 
 	void SpringSolver::solveVelocityConstraints(
-		std::span<const size_t> springIndices,
 		std::span<const SpringConstraintData> constraintDataContainer
 	)
 	{
@@ -237,19 +239,16 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		// Main loop.
-		const size_t springCount = springIndices.size();
-		const size_t* ECSTASY_RESTRICT springIndicesPtr = springIndices.data();
+		const size_t springCount = constraintDataContainer.size();
 
 		for (size_t c = 0; c < springCount; c++)
 		{
 			const SpringConstraintData& constraintData = constraintDataContainer[c];
 			if (constraintData.invEffectiveMass == Real(0)) continue;
 
-			const size_t i = springIndicesPtr[c];
-
 			// Get body indices.
-			const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = constraintData.bodyIndexA;
+			const ObjectIndex bodyIndexB = constraintData.bodyIndexB;
 
 			// Get body data.
 			const Real invMassA = invMassPtr[bodyIndexA];
@@ -334,10 +333,9 @@ namespace PS_AGONY
 				// Get work from current wave and execute it. If empty, skip.
 				if (passOffset.size == 0) return;
 
-				std::span<const size_t> indexSlice(orderedSpringIndicesPtr + passOffset.start, passOffset.size);
 				std::span<const SpringConstraintData> constraintSlice(springConstraintContainer.data() + passOffset.start, passOffset.size);
 
-				solveVelocityConstraints(indexSlice, constraintSlice);
+				solveVelocityConstraints(constraintSlice);
 			}
 		);
 	}

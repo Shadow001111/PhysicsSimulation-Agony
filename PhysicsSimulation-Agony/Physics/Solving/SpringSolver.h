@@ -13,6 +13,7 @@ namespace PS_AGONY
 
 		struct SpringConstraintData
 		{
+			ObjectIndex bodyIndexA, bodyIndexB;
 			Vec2 dir;
 			Vec2 rotatedAnchorA, rotatedAnchorB;
 			Real invEffectiveMass; // 1 / (effectiveMass + gamma).
@@ -57,7 +58,6 @@ namespace PS_AGONY
 		void computeConstantData(Real deltaTime, std::span<const size_t> springIndices);
 
 		void solveVelocityConstraints(
-			std::span<const size_t> springIndices,
 			std::span<const SpringConstraintData> constraintDataContainer
 		);
 
