@@ -70,7 +70,7 @@ namespace PS_AGONY
 
 		struct SimulationSettings
 		{
-			Real updateInterval = 1.0 / 60.0;
+			Real updateInterval = 1.0 / 300.0;
 			uint32_t collisionVelocitySolvingIterations = 6;
 			uint32_t collisionPositionSolvingIterations = 3;
 			uint32_t springSolvingIterations = 6;

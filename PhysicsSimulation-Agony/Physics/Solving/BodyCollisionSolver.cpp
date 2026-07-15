@@ -47,13 +47,16 @@ namespace PS_AGONY
 
 			computeConstraintData(narrowPhaseCollisions);
 
-			for (uint32_t i = 0; i < velocityIterations; i++)
 			{
-				solveVelocityConstraints(i == 0, narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
-			}
-			for (uint32_t i = 0; i < positionIterations; i++)
-			{
-				solvePositionConstraints(narrowPhaseCollisions, positionConstraintContainer);
+				TRACY_SCOPE_N("Solve collision constraints (Single-threaded)");
+				for (uint32_t i = 0; i < velocityIterations; i++)
+				{
+					solveVelocityConstraints(i == 0, narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
+				}
+				for (uint32_t i = 0; i < positionIterations; i++)
+				{
+					solvePositionConstraints(narrowPhaseCollisions, positionConstraintContainer);
+				}
 			}
 			return;
 		}
@@ -100,7 +103,10 @@ namespace PS_AGONY
 		}
 		computeConstraintData(orderedCollisionData);
 
-		solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
+		{
+			TRACY_SCOPE_N("Solve collision constraints (Multi-threaded)");
+			solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
+		}
 
 		// Scatter persistent contact data back to the detector's original container.
 		if (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
