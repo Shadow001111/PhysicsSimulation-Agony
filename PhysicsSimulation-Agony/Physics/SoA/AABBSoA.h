@@ -6,10 +6,10 @@ namespace PS_AGONY
 {
 	struct AABBSoA
 	{
-		SimdAlignedVector<Real> minX;
-		SimdAlignedVector<Real> minY;
-		SimdAlignedVector<Real> maxX;
-		SimdAlignedVector<Real> maxY;
+		CacheLineAlignedVector<Real> minX;
+		CacheLineAlignedVector<Real> minY;
+		CacheLineAlignedVector<Real> maxX;
+		CacheLineAlignedVector<Real> maxY;
 
 		size_t getCount() const noexcept { return minX.size(); }
 
