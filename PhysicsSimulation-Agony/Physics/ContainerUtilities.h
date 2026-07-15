@@ -3,6 +3,8 @@
 
 #include "EcstasyCore/Simd.h"
 
+#include "Types.h"
+
 #include <vector>
 
 namespace PS_AGONY
@@ -18,6 +20,9 @@ namespace PS_AGONY
 
 	template<typename T>
 	using RealSimdAlignedVector = AlignedVector<T, Ecstasy::Simd<Real>::bytes>;
+
+	template<typename T>
+	using CacheLineAlignedVector = AlignedVector<T, std::hardware_destructive_interference_size>;
 
 
 	template<typename Container>

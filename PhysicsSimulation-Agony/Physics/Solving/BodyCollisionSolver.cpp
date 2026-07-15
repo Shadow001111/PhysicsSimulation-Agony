@@ -4,6 +4,8 @@
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
 	void BodyCollisionSolver::setDataViewers(
@@ -73,7 +75,14 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
 			solvingPlanner->setWorkerCount(workerCount);
+
 			solvingPlanner->planStandardExecution(collidingBodyPairs, bodies->getCount());
+
+			//solvingPlanner->planCacheLineAwareExecution(
+			//	collidingBodyPairs, bodies->getCount(),
+			//	sizeof(Real),
+			//	std::hardware_destructive_interference_size
+			//);
 		}
 		{
 			TRACY_SCOPE_N("Reorder collision data");

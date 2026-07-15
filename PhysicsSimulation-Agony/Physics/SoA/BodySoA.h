@@ -5,31 +5,31 @@ namespace PS_AGONY
 {
 	struct BodySoA
 	{
-		SimdAlignedVector<Real> offsetX;
-		SimdAlignedVector<Real> offsetY;
-		SimdAlignedVector<Real> localCenterOfMassX;
-		SimdAlignedVector<Real> localCenterOfMassY;
-		SimdAlignedVector<Real> worldCenterX;
-		SimdAlignedVector<Real> worldCenterY;
+		CacheLineAlignedVector<Real> offsetX;
+		CacheLineAlignedVector<Real> offsetY;
+		CacheLineAlignedVector<Real> localCenterOfMassX;
+		CacheLineAlignedVector<Real> localCenterOfMassY;
+		CacheLineAlignedVector<Real> worldCenterX;
+		CacheLineAlignedVector<Real> worldCenterY;
 
-		SimdAlignedVector<Real> velocityX;
-		SimdAlignedVector<Real> velocityY;
-		SimdAlignedVector<Real> rotation;
-		SimdAlignedVector<Real> angularVelocity;
-		SimdAlignedVector<Real> mass;
-		SimdAlignedVector<Real> invMass;
-		SimdAlignedVector<Real> inertia;
-		SimdAlignedVector<Real> invInertia;
-		SimdAlignedVector<Real> rotationCos;
-		SimdAlignedVector<Real> rotationSin;
+		CacheLineAlignedVector<Real> velocityX;
+		CacheLineAlignedVector<Real> velocityY;
+		CacheLineAlignedVector<Real> rotation;
+		CacheLineAlignedVector<Real> angularVelocity;
+		CacheLineAlignedVector<Real> mass;
+		CacheLineAlignedVector<Real> invMass;
+		CacheLineAlignedVector<Real> inertia;
+		CacheLineAlignedVector<Real> invInertia;
+		CacheLineAlignedVector<Real> rotationCos;
+		CacheLineAlignedVector<Real> rotationSin;
 
-		std::vector<uint8_t> isStatic; // TODO: Maybe use 1 bit?
-		std::vector<MaterialIndex> materialIndex;
+		CacheLineAlignedVector<uint8_t> isStatic; // TODO: Maybe use 1 bit?
+		CacheLineAlignedVector<MaterialIndex> materialIndex;
 		AABBSoA aabb;
-		std::vector<BodyType> bodyType;
-		std::vector<ObjectIndex> shapeIndex;
+		CacheLineAlignedVector<BodyType> bodyType;
+		CacheLineAlignedVector<ObjectIndex> shapeIndex;
 
-        std::vector<std::vector<BodyAttachment>> attachments;
+        CacheLineAlignedVector<std::vector<BodyAttachment>> attachments;
 
 		void append(
 			Vec2 pos,
