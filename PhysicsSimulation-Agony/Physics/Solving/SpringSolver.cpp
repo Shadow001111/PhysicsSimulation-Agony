@@ -14,7 +14,7 @@ namespace PS_AGONY
 		SolvingPlanner& solvingPlannerIn
 	)
 	{
-		setSharedResources(bodiesIn, solvingPlannerIn);
+		setResources(bodiesIn, solvingPlannerIn);
 		springs = springsIn;
 	}
 
@@ -43,13 +43,16 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_NC("Solve springs (Single-threaded)", Ecstasy::Color::OliveDrab);
 
-			orderedSpringIndices.resize(springCount);
-			for (size_t i = 0; i < springCount; i++)
+			if (orderedSpringIndices.size() != springCount)
 			{
-				orderedSpringIndices[i] = i;
+				orderedSpringIndices.resize(springCount);
+				for (size_t i = 0; i < springCount; i++)
+				{
+					orderedSpringIndices[i] = i;
+				}
 			}
 
-			computeConstantData(deltaTime, orderedSpringIndices);
+			computeConstraintData(deltaTime, orderedSpringIndices);
 
 			for (uint32_t i = 0; i < springIterations; i++)
 			{
@@ -82,7 +85,7 @@ namespace PS_AGONY
 			const auto& flatIndices = solvingPlanner->getFlatIndices();
 			orderedSpringIndices.assign(flatIndices.begin(), flatIndices.end());
 		}
-		computeConstantData(deltaTime, orderedSpringIndices);
+		computeConstraintData(deltaTime, orderedSpringIndices);
 
 		solveConstraintsThreaded(springIterations);
 	}
@@ -108,9 +111,9 @@ namespace PS_AGONY
 		return std::min(availableWorkerCount, neededWorkerCount);
 	}
 
-	void SpringSolver::computeConstantData(Real deltaTime, std::span<const size_t> springIndices)
+	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices)
 	{
-		TRACY_SCOPE_NC("Compute constant data", Ecstasy::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -321,8 +324,6 @@ namespace PS_AGONY
 		}
 
 		const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * springIterations;
-
-		const size_t* ECSTASY_RESTRICT orderedSpringIndicesPtr = orderedSpringIndices.data();
 
 		runThreadedWaves(workerCount, waveCount, totalTicks,
 			[&](size_t waveIndex, size_t workerIndex, uint32_t /*passTicket*/)

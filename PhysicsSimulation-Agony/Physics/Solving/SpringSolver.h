@@ -55,7 +55,7 @@ namespace PS_AGONY
 
 		size_t planWorkerCount(size_t springCount) const;
 
-		void computeConstantData(Real deltaTime, std::span<const size_t> springIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> springIndices);
 
 		void solveVelocityConstraints(
 			std::span<const SpringConstraintData> constraintDataContainer

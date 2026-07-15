@@ -10,18 +10,6 @@ namespace PS_AGONY
 {
 	struct BodySoA;
 
-	// Common base for the constraint solvers (BodyCollisionsSolver, SpringSolver).
-	//
-	// Everything that is identical between them lives here:
-	//   - the atomic worker bookkeeping for the threaded wave scheduler
-	//   - a generic wave-based threaded dispatcher (runThreadedWaves), used by both
-	//     solvers whenever they plan their work through SolvingPlanner's graph coloring
-	//   - the shared BodySoA viewer and the shared SolvingPlanner instance
-	//
-	// The SolvingPlanner is *shared* between sibling solvers (set once via
-	// setSharedResources by whoever owns it, e.g. a PhysicsWorld) so its memory
-	// footprint isn't duplicated per-solver. Since collision solving and spring
-	// solving never run concurrently, this is safe.
 	class SolverBase
 	{
 	protected:
@@ -73,7 +61,7 @@ namespace PS_AGONY
 
 		WorkerResources workerResources;
 
-		void setSharedResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn);
+		void setResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn);
 
 		// Drives `workerCount` workers through `waveCount` waves, `totalTicks` times in total
 		// (wave index wraps naturally via passTicket % waveCount). Blocks until every worker
@@ -86,7 +74,6 @@ namespace PS_AGONY
 			uint32_t totalTicks,
 			const WaveTaskFunc& taskFunc
 		);
-
 	public:
 		SolverBase() = default;
 		virtual ~SolverBase() = default;
@@ -96,9 +83,6 @@ namespace PS_AGONY
 		SolverBase(SolverBase&&) = delete;
 		SolverBase& operator=(SolverBase&&) = delete;
 
-		// Note: intentionally does NOT include solvingPlanner->getMemoryUsage() since the
-		// planner is shared between sibling solvers - whoever owns/creates the shared
-		// SolvingPlanner should account for it exactly once.
 		virtual size_t getMemoryUsage() const = 0;
 	};
 }

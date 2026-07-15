@@ -12,7 +12,7 @@ namespace PS_AGONY
 		SolvingPlanner& solvingPlannerIn
 	)
 	{
-		SolverBase::setSharedResources(bodiesIn, solvingPlannerIn);
+		SolverBase::setResources(bodiesIn, solvingPlannerIn);
 		materials = &materialsIn;
 	}
 
@@ -43,7 +43,7 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_NC("Solve collisions (Single-threaded)", Ecstasy::Color::OliveDrab);
 
-			computeConstantData(narrowPhaseCollisions);
+			computeConstraintData(narrowPhaseCollisions);
 
 			for (uint32_t i = 0; i < velocityIterations; i++)
 			{
@@ -89,7 +89,7 @@ namespace PS_AGONY
 				orderedCollisionData[i] = narrowPhaseCollisions[originalIndex];
 			}
 		}
-		computeConstantData(orderedCollisionData);
+		computeConstraintData(orderedCollisionData);
 
 		solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
 
@@ -128,9 +128,9 @@ namespace PS_AGONY
 		return std::min(availableWorkerCount, neededWorkerCount);
 	}
 
-	void BodyCollisionSolver::computeConstantData(const std::vector<BodyCollisionData>& collisionDataContainer)
+	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer)
 	{
-		TRACY_SCOPE_NC("Compute constant data", Ecstasy::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Color::Chocolate);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();

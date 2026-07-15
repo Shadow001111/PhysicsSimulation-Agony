@@ -14,7 +14,7 @@
 
 namespace PS_AGONY
 {
-	void SolverBase::setSharedResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn)
+	void SolverBase::setResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn)
 	{
 		bodies = &bodiesIn;
 		solvingPlanner = &solvingPlannerIn;
