@@ -70,7 +70,7 @@ namespace PS_AGONY
 					else
 					{
 						// Wait for new wave.
-						for (int i = 0; i < 2000; i++)
+						for (int i = 0; i < 2'000; i++)
 						{
 							SPIN_PAUSE();
 							if (workerResources.currentWaveTicket.load(std::memory_order_acquire) != localTicket)
