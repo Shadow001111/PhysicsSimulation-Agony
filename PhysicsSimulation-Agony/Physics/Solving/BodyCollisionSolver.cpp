@@ -116,12 +116,12 @@ namespace PS_AGONY
 		debugCollisionDataContainer = {};
 	}
 
-	Real BodyCollisionSolver::computeBodyPenetrationSum() const
+	Vec2 BodyCollisionSolver::computeConstraintErrors() const
 	{
-		TRACY_SCOPE_NC("Get body penetration sum", Ecstasy::Color::Gray);
+		TRACY_SCOPE_NC("Compute (body collision) constraint errors", Ecstasy::Color::Gray);
 
 		const size_t collisionCount = debugCollisionDataContainer.size();
-		if (collisionCount == 0) return Real(0);
+		if (collisionCount == 0) return { Real(0), Real(0) };
 
 		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -129,6 +129,9 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
 		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
+		const Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
+		const Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
+		const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 
 		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
 			{
@@ -143,6 +146,7 @@ namespace PS_AGONY
 				return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
 			};
 
+		Real totalApproachSpeed = Real(0);
 		Real totalPenetration = Real(0);
 
 		for (size_t c = 0; c < collisionCount; c++)
@@ -151,25 +155,44 @@ namespace PS_AGONY
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
-			// Re-derive the world anchors from the current transforms
+			// Compute centers of mass.
 			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
 			const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
+			// Position error.
 			const PositionConstraintData& positionConstraintData = positionConstraintContainer[c];
 			const Vec2 worldAnchorA = centerOfMassA + rotate(positionConstraintData.localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
 			const Vec2 worldAnchorB = centerOfMassB + rotate(positionConstraintData.localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
-			// Calculate the drift that has been resolved since initial detection
+			// Compute drift.
 			const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
 			const Real currentPenetration = data.penetration - drift;
 
-			if (currentPenetration > Real(0))
+			totalPenetration += currentPenetration * (currentPenetration > Real(0));
+
+			// Velocity error: sum of remaining closing speed along the normal at each active contact point.
+			const VelocityConstraintData& velocityConstraintData = velocityConstraintContainer[c];
+
+			const Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
+			const Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
+			const Real angularVelocityA = angularVelocityPtr[bodyIndexA];
+			const Real angularVelocityB = angularVelocityPtr[bodyIndexB];
+
+			for (uint32_t i = 0; i < data.contactCount; i++)
 			{
-				totalPenetration += currentPenetration;
+				const auto& contactData = velocityConstraintData.points[i];
+
+				const Vec2 relativeVelocity = (linearVelocityB + contactData.rBPerp * angularVelocityB) -
+					(linearVelocityA + contactData.rAPerp * angularVelocityA);
+
+				const Real velocityAlongNormal = glm::dot(relativeVelocity, data.normal);
+				const Real approachSpeed = -velocityAlongNormal; // Positive when bodies are still closing.
+
+				totalApproachSpeed += approachSpeed * (approachSpeed > Real(0));
 			}
 		}
 
-		return totalPenetration;
+		return { totalApproachSpeed, totalPenetration };
 	}
 
 	size_t BodyCollisionSolver::getMemoryUsage() const

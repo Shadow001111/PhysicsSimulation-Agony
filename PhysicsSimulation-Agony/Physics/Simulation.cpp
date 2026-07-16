@@ -241,13 +241,14 @@ namespace PS_AGONY
             runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
 
             // Track body penetration.
-            if (simulationSettings.trackBodyPenetrationSum)
             {
-                runtimeDebugData.bodyPenetrationSum = bodyCollisionSolver.computeBodyPenetrationSum();
-            }
-            else
-            {
-                runtimeDebugData.bodyPenetrationSum = 0;
+                Vec2 errors{ 0 };
+                if (simulationSettings.trackBodyCollisionSolverConstraintErrors)
+                {
+                    errors = bodyCollisionSolver.computeConstraintErrors();
+                }
+                runtimeDebugData.bodyCollisionSolverVelocityError = errors.x;
+                runtimeDebugData.bodyCollisionSolverPositionError = errors.y;
             }
 
             // Track body kinetic energy.
