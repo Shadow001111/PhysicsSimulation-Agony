@@ -47,8 +47,9 @@ namespace PS_AGONY
 			size_t springSolverMemoryUsage = 0;
 			size_t springPlannerMemoryUsage = 0;
 
-			// Solver.
+			// Debug.
 			Real bodyPenetrationSum = 0;
+			Real bodyKineticEnergySum = 0;
 		};
 
 		struct BodyCreateParams
@@ -88,6 +89,7 @@ namespace PS_AGONY
 
 			// Debug.
 			bool trackBodyPenetrationSum = false;
+			bool trackBodyKineticEnergySum = false;
 		};
 	private:
 		enum class BenchmarkDensity
@@ -224,6 +226,8 @@ namespace PS_AGONY
 		void computeWorldCenters();
 
 		void applyBodyHolderConstraint(Real deltaTime);
+
+		Real computeBodyTotalKineticEnergy();
 
 		void collectMemoryUsage(DebugData& data) const;
 	};

@@ -133,16 +133,24 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
     // Physics diagnostics.
     if (ImGui::CollapsingHeader("Physics Diagnostics", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        // Checkbox to toggle the profiling/calculation overhead
-        ImGui::Checkbox("Track Penetration", &settings.trackBodyPenetrationSum);
-
+        ImGui::Checkbox("Track penetration", &settings.trackBodyPenetrationSum);
         if (settings.trackBodyPenetrationSum)
         {
-            ImGui::Text("Total Penetration Sum: %.4f", simulationData.bodyPenetrationSum);
+            ImGui::Text("Total penetration: %.4f", simulationData.bodyPenetrationSum);
         }
         else
         {
             ImGui::TextDisabled("Penetration tracking is disabled.");
+        }
+
+        ImGui::Checkbox("Track Kinetic Energy", &settings.trackBodyKineticEnergySum);
+        if (settings.trackBodyKineticEnergySum)
+        {
+            ImGui::Text("Total kinetic knergy: %.4f", simulationData.bodyKineticEnergySum);
+        }
+        else
+        {
+            ImGui::TextDisabled("Kinetic energy tracking is disabled.");
         }
     }
 
@@ -528,7 +536,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 3);
+    loadScene(simulation, 2);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();

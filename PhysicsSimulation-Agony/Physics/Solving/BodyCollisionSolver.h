@@ -48,13 +48,12 @@ namespace PS_AGONY
 		{
 			// Perfomance on two contact constraints:
 			Sequential, // First contact has error, second contact error is zero.
-			CombinedImpulses, // Both contacts have error.
 			Block // Both contacts have no error.
 		};
 
 		// Static memeber fields.
 
-		static constexpr VelocitySolverType VELOCITY_SOLVER_TYPE = VelocitySolverType::Sequential;
+		static constexpr VelocitySolverType VELOCITY_SOLVER_TYPE = VelocitySolverType::Block;
 
 		// Memeber fields.
 
@@ -115,12 +114,6 @@ namespace PS_AGONY
 		);
 
 		void solveVelocityConstraintsSequential(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer,
-			std::span<const FrictionData> frictionDataContainer
-		);
-
-		void solveVelocityConstraintsCombined(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
