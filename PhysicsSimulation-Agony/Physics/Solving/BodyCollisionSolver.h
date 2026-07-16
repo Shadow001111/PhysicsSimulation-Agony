@@ -66,6 +66,8 @@ namespace PS_AGONY
 		std::vector<VelocityConstraintData> velocityConstraintContainer;
 		std::vector<FrictionData> frictionDataContainer;
 
+		std::span<const BodyCollisionData> debugCollisionDataContainer;
+
 		SimulationSettings simulationSettings;
 	public:
 		BodyCollisionSolver() = default;
@@ -81,13 +83,17 @@ namespace PS_AGONY
 			SolvingPlanner& solvingPlanner
 		);
 
-		size_t getMemoryUsage() const override;
-
 		void solveCollisions(
 			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
+
+		void reportNoCollisions();
+
+		Real computeBodyPenetrationSum() const;
+
+		size_t getMemoryUsage() const override;
 	private:
 		// Collision constraint solving.
 

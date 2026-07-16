@@ -18,20 +18,6 @@ namespace PS_AGONY
 		materials = &materialsIn;
 	}
 
-	size_t BodyCollisionSolver::getMemoryUsage() const
-	{
-		size_t total = sizeof(BodyCollisionSolver);
-
-		total += getVectorMemoryUsage(positionConstraintContainer);
-		total += getVectorMemoryUsage(velocityConstraintContainer);
-		total += getVectorMemoryUsage(frictionDataContainer);
-
-		total += getVectorMemoryUsage(collidingBodyPairs);
-		total += getVectorMemoryUsage(orderedCollisionData);
-
-		return total;
-	}
-
 	void BodyCollisionSolver::solveCollisions(
 		const std::vector<BodyCollisionData>& narrowPhaseCollisions,
 		uint32_t velocityIterations,
@@ -45,6 +31,7 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_NC("Solve collisions (Single-threaded)", Ecstasy::Color::OliveDrab);
 
+			debugCollisionDataContainer = narrowPhaseCollisions;
 			computeConstraintData(narrowPhaseCollisions);
 
 			{
@@ -101,6 +88,7 @@ namespace PS_AGONY
 				orderedCollisionData[i] = narrowPhaseCollisions[originalIndex];
 			}
 		}
+		debugCollisionDataContainer = orderedCollisionData;
 		computeConstraintData(orderedCollisionData);
 
 		{
@@ -121,6 +109,81 @@ namespace PS_AGONY
 				narrowPhaseCollisions[originalIndex].persistentContactData = orderedCollisionData[i].persistentContactData;
 			}
 		}
+	}
+
+	void BodyCollisionSolver::reportNoCollisions()
+	{
+		debugCollisionDataContainer = {};
+	}
+
+	Real BodyCollisionSolver::computeBodyPenetrationSum() const
+	{
+		TRACY_SCOPE_NC("Get body penetration sum", Ecstasy::Color::Gray);
+
+		const size_t collisionCount = debugCollisionDataContainer.size();
+		if (collisionCount == 0) return Real(0);
+
+		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
+		const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
+		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
+		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
+
+		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
+			{
+				return {
+					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
+					positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
+				};
+			};
+
+		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
+			{
+				return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
+			};
+
+		Real totalPenetration = Real(0);
+
+		for (size_t c = 0; c < collisionCount; c++)
+		{
+			const auto& data = debugCollisionDataContainer[c];
+			const ObjectIndex bodyIndexA = data.bodyA;
+			const ObjectIndex bodyIndexB = data.bodyB;
+
+			// Re-derive the world anchors from the current transforms
+			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
+			const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+
+			const PositionConstraintData& positionConstraintData = positionConstraintContainer[c];
+			const Vec2 worldAnchorA = centerOfMassA + rotate(positionConstraintData.localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+			const Vec2 worldAnchorB = centerOfMassB + rotate(positionConstraintData.localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+
+			// Calculate the drift that has been resolved since initial detection
+			const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
+			const Real currentPenetration = data.penetration - drift;
+
+			if (currentPenetration > Real(0))
+			{
+				totalPenetration += currentPenetration;
+			}
+		}
+
+		return totalPenetration;
+	}
+
+	size_t BodyCollisionSolver::getMemoryUsage() const
+	{
+		size_t total = sizeof(BodyCollisionSolver);
+
+		total += getVectorMemoryUsage(positionConstraintContainer);
+		total += getVectorMemoryUsage(velocityConstraintContainer);
+		total += getVectorMemoryUsage(frictionDataContainer);
+
+		total += getVectorMemoryUsage(collidingBodyPairs);
+		total += getVectorMemoryUsage(orderedCollisionData);
+
+		return total;
 	}
 
 	size_t BodyCollisionSolver::planWorkerCount(size_t collisionCount) const

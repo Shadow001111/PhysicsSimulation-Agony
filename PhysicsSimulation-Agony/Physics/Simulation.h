@@ -25,9 +25,11 @@ namespace PS_AGONY
 	public:
 		struct DebugData
 		{
+			// UPS.
 			uint32_t updatesHappened = 0;
 			uint32_t updatesSupposedToHappen = 0;
 
+			// Memory.
 			size_t bodyDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
 			size_t boxDataMemoryUsage = 0;
@@ -44,6 +46,9 @@ namespace PS_AGONY
 			size_t bodyCollisionPlannerMemoryUsage = 0;
 			size_t springSolverMemoryUsage = 0;
 			size_t springPlannerMemoryUsage = 0;
+
+			// Solver.
+			Real bodyPenetrationSum = 0;
 		};
 
 		struct BodyCreateParams
@@ -80,6 +85,9 @@ namespace PS_AGONY
 			Real timeScale = 1.0;
 			Vec2 gravity{ 0.0, -9.81 };
 			Real angularVelocityDamping = 1.0; // Per second.
+
+			// Debug.
+			bool trackBodyPenetrationSum = false;
 		};
 	private:
 		enum class BenchmarkDensity
