@@ -48,7 +48,9 @@ namespace PS_AGONY
 			size_t springPlannerMemoryUsage = 0;
 
 			// Debug.
-			Real bodyPenetrationSum = 0;
+			Real bodyCollisionSolverVelocityError = 0;
+			Real bodyCollisionSolverPositionError = 0;
+
 			Real bodyKineticEnergySum = 0;
 		};
 
@@ -88,7 +90,7 @@ namespace PS_AGONY
 			Real angularVelocityDamping = 1.0; // Per second.
 
 			// Debug.
-			bool trackBodyPenetrationSum = false;
+			bool trackBodyCollisionSolverConstraintErrors = false;
 			bool trackBodyKineticEnergySum = false;
 		};
 	private:

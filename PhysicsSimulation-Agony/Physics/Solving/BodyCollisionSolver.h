@@ -91,7 +91,8 @@ namespace PS_AGONY
 
 		void reportNoCollisions();
 
-		Real computeBodyPenetrationSum() const;
+		// (Velocity, Position).
+		Vec2 computeConstraintErrors() const;
 
 		size_t getMemoryUsage() const override;
 	private:

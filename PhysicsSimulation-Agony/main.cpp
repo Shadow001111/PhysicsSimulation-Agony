@@ -133,14 +133,15 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
     // Physics diagnostics.
     if (ImGui::CollapsingHeader("Physics Diagnostics", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::Checkbox("Track penetration", &settings.trackBodyPenetrationSum);
-        if (settings.trackBodyPenetrationSum)
+        ImGui::Checkbox("Track body collision solver constraint errors", &settings.trackBodyCollisionSolverConstraintErrors);
+        if (settings.trackBodyCollisionSolverConstraintErrors)
         {
-            ImGui::Text("Total penetration: %.4f", simulationData.bodyPenetrationSum);
+            ImGui::Text("Total velocity constraint error: %.4f", simulationData.bodyCollisionSolverVelocityError);
+            ImGui::Text("Total position constraint error: %.4f", simulationData.bodyCollisionSolverPositionError);
         }
         else
         {
-            ImGui::TextDisabled("Penetration tracking is disabled.");
+            ImGui::TextDisabled("Disabled.");
         }
 
         ImGui::Checkbox("Track Kinetic Energy", &settings.trackBodyKineticEnergySum);
@@ -150,7 +151,7 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
         }
         else
         {
-            ImGui::TextDisabled("Kinetic energy tracking is disabled.");
+            ImGui::TextDisabled("Disabled.");
         }
     }
 
@@ -536,7 +537,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 3);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
