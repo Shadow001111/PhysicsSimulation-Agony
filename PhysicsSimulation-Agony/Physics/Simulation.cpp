@@ -239,6 +239,15 @@ namespace PS_AGONY
 
             runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
             runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
+
+            if (simulationSettings.trackBodyPenetrationSum)
+            {
+                runtimeDebugData.bodyPenetrationSum = bodyCollisionSolver.computeBodyPenetrationSum();
+            }
+            else
+            {
+                runtimeDebugData.bodyPenetrationSum = 0;
+            }
         }
     }
 
@@ -954,6 +963,9 @@ namespace PS_AGONY
 
         // Update timer.
         simulationRunTimer += deltaTime;
+
+        // Reset stuff.
+        bodyCollisionSolver.reportNoCollisions();
 
         // Check if any body exist.
         const size_t bodyCount = bodies.getCount();

@@ -105,11 +105,10 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
     auto& settings = simulation.getSimulationSettings();
     if (ImGui::CollapsingHeader("Simulation Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        // Display and modify update rate in terms of Frequency (Hz).
         float hz = static_cast<float>(1.0 / settings.updateInterval);
         if (ImGui::SliderFloat("Update Rate (Hz)", &hz, 10.0f, 1000.0f, "%.0f Hz"))
         {
-            settings.updateInterval = static_cast<PS_AGONY::Real>(1.0 / hz);
+            settings.updateInterval = static_cast<PS_AGONY::Real>(1.0f / hz);
         }
 
         int velIter = static_cast<int>(settings.collisionVelocitySolvingIterations);
@@ -131,31 +130,47 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
         }
     }
 
-    // Memory Hierarchy Section (Redesigned as an auto-aligning data grid)
-    const size_t shapeTotal =
-        simulationData.circleDataMemoryUsage +
-        simulationData.boxDataMemoryUsage +
-        simulationData.polygonDataMemoryUsage;
+    // Physics diagnostics.
+    if (ImGui::CollapsingHeader("Physics Diagnostics", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // Checkbox to toggle the profiling/calculation overhead
+        ImGui::Checkbox("Track Penetration", &settings.trackBodyPenetrationSum);
 
-    const size_t constraintTotal =
-        simulationData.springDataMemoryUsage;
+        if (settings.trackBodyPenetrationSum)
+        {
+            ImGui::Text("Total Penetration Sum: %.4f", simulationData.bodyPenetrationSum);
+        }
+        else
+        {
+            ImGui::TextDisabled("Penetration tracking is disabled.");
+        }
+    }
 
-    const size_t solvingTotal =
-        simulationData.bodyCollisionSolverMemoryUsage +
-        simulationData.bodyCollisionPlannerMemoryUsage +
-        simulationData.springSolverMemoryUsage +
-        simulationData.springPlannerMemoryUsage;
-
-    const size_t totalMemory =
-        simulationData.bodyDataMemoryUsage +
-        shapeTotal +
-        constraintTotal +
-        simulationData.broadPhaseDetectorMemoryUsage +
-        simulationData.narrowPhaseDetectorMemoryUsage +
-        solvingTotal;
-
+    // Memory hierarchy.
     if (ImGui::CollapsingHeader("Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
     {
+        const size_t shapeTotal =
+            simulationData.circleDataMemoryUsage +
+            simulationData.boxDataMemoryUsage +
+            simulationData.polygonDataMemoryUsage;
+
+        const size_t constraintTotal =
+            simulationData.springDataMemoryUsage;
+
+        const size_t solvingTotal =
+            simulationData.bodyCollisionSolverMemoryUsage +
+            simulationData.bodyCollisionPlannerMemoryUsage +
+            simulationData.springSolverMemoryUsage +
+            simulationData.springPlannerMemoryUsage;
+
+        const size_t totalMemory =
+            simulationData.bodyDataMemoryUsage +
+            shapeTotal +
+            constraintTotal +
+            simulationData.broadPhaseDetectorMemoryUsage +
+            simulationData.narrowPhaseDetectorMemoryUsage +
+            solvingTotal;
+
         ImGui::Text("Total System Footprint: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
 
@@ -513,7 +528,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 3);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
