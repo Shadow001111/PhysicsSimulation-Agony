@@ -240,6 +240,7 @@ namespace PS_AGONY
             runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
             runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
 
+            // Track body penetration.
             if (simulationSettings.trackBodyPenetrationSum)
             {
                 runtimeDebugData.bodyPenetrationSum = bodyCollisionSolver.computeBodyPenetrationSum();
@@ -247,6 +248,16 @@ namespace PS_AGONY
             else
             {
                 runtimeDebugData.bodyPenetrationSum = 0;
+            }
+
+            // Track body kinetic energy.
+            if (simulationSettings.trackBodyKineticEnergySum)
+            {
+                runtimeDebugData.bodyKineticEnergySum = computeBodyTotalKineticEnergy();
+            }
+            else
+            {
+                runtimeDebugData.bodyKineticEnergySum = 0;
             }
         }
     }
@@ -1641,6 +1652,61 @@ namespace PS_AGONY
 
         // Apply strong angular velocity damping.
         bodies.angularVelocity[bodyIndex] *= std::pow(Real(0.1), deltaTime);
+    }
+
+    Real Simulation::computeBodyTotalKineticEnergy()
+    {
+        TRACY_SCOPE_N("Compute body total kinetic energy");
+
+        const Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
+        const Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
+        const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+
+        const Real* ECSTASY_RESTRICT massPtr = bodies.mass.data();
+        const Real* ECSTASY_RESTRICT inertiaPtr = bodies.inertia.data();
+
+        const size_t bodyCount = bodies.getCount();
+
+        Real totalKineticEnergy = 0;
+
+        size_t i = 0;
+        if (bodyCount >= RealSimd::lanes)
+        {
+            const RealSimd half{ 0.5 };
+            RealSimd totalKineticEnergyV{ 0 };
+            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+            {
+                const RealSimd velocityX = RealSimd::load(velocityXPtr + i);
+                const RealSimd velocityY = RealSimd::load(velocityYPtr + i);
+                const RealSimd angularVelocity = RealSimd::load(angularVelocityPtr + i);
+            
+                const RealSimd mass = RealSimd::load(massPtr + i);
+                const RealSimd inertia = RealSimd::load(inertiaPtr + i);
+            
+                const RealSimd linearVelocitySquared = RealSimd::mulAdd(velocityX, velocityX, velocityY * velocityY);
+                const RealSimd angularVelocitySquared = angularVelocity * angularVelocity;
+            
+                const RealSimd kineticEnergy = RealSimd::mulAdd(linearVelocitySquared, mass, angularVelocitySquared * inertia) * half;
+                totalKineticEnergyV += kineticEnergy;
+            }
+            totalKineticEnergy += RealSimd::horizontalAdd(totalKineticEnergyV);
+        }
+        for (; i < bodyCount; i++)
+        {
+            const Real velocityX = velocityXPtr[i];
+            const Real velocityY = velocityYPtr[i];
+            const Real angularVelocity = angularVelocityPtr[i];
+
+            const Real mass = massPtr[i];
+            const Real inertia = inertiaPtr[i];
+
+            const Real linearVelocitySquared = std::fma(velocityX, velocityX, velocityY * velocityY);
+            const Real angularVelocitySquared = angularVelocity * angularVelocity;
+
+            const Real kineticEnergy = std::fma(linearVelocitySquared, mass, angularVelocitySquared * inertia) * Real(0.5);
+            totalKineticEnergy += kineticEnergy;
+        }
+        return totalKineticEnergy;
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const
