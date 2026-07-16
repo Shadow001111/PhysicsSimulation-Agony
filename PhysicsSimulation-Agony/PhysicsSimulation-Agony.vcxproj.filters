@@ -348,6 +348,5 @@
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />
     <None Include="FitContainers.py" />
-    <None Include="GraphViewer.py" />
   </ItemGroup>
 </Project>
