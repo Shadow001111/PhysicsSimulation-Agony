@@ -6,6 +6,7 @@
 
 #include "Physics/Simulation.h"
 #include "Physics/SimulationRenderer.h"
+#include "Physics/GraphUtilities.h"
 
 #include "EcstasyGraphics/TextRenderer.h"
 

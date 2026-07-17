@@ -1,5 +1,6 @@
 #include "BodyCollisionSolver.h"
 #include "../Threading.h"
+#include "../GraphUtilities.h"
 
 #include "EcstasyCore/TracyProfiler.h"
 #include "EcstasyCore/Portablity.h"
@@ -67,12 +68,6 @@ namespace PS_AGONY
 			solvingPlanner->setWorkerCount(workerCount);
 
 			solvingPlanner->planStandardExecution(collidingBodyPairs, bodies->getCount());
-
-			//solvingPlanner->planCacheLineAwareExecution(
-			//	collidingBodyPairs, bodies->getCount(),
-			//	sizeof(Real),
-			//	std::hardware_destructive_interference_size
-			//);
 		}
 		{
 			TRACY_SCOPE_N("Reorder collision data");

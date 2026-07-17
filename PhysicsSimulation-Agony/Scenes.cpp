@@ -425,8 +425,8 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
         .elasticity = 0.9f,
-        .staticFriction = 1.0f,
-        .dynamicFriction = 0.5f
+        .staticFriction = 0.8f,
+        .dynamicFriction = 0.6f
     };
     PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(worldMaterial);
 
@@ -573,7 +573,7 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
     // === 1. MATERIAL SETUP ===
     // High friction and lower elasticity help the pyramid remain stable upon initialization
     PS_AGONY::Material pyramidMaterial = {
-        .elasticity = 0.1f,
+        .elasticity = 0.9f,
         .staticFriction = 0.8f,
         .dynamicFriction = 0.6f
     };
