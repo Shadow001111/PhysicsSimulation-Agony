@@ -544,7 +544,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 3);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();

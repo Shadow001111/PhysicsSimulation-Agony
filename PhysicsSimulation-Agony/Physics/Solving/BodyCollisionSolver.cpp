@@ -332,11 +332,12 @@ namespace PS_AGONY
 
 					const Vec2 linearVelocityA = { velocityXPtr[data.bodyA], velocityYPtr[data.bodyA] };
 					const Vec2 linearVelocityB = { velocityXPtr[data.bodyB], velocityYPtr[data.bodyB] };
-					const Vec2 angularLinearVelocityA = point.rAPerp * angularVelocityPtr[data.bodyA];
-					const Vec2 angularLinearVelocityB = point.rBPerp * angularVelocityPtr[data.bodyB];
+					const Real angularVelocityA = angularVelocityPtr[data.bodyA];
+					const Real angularVelocityB = angularVelocityPtr[data.bodyB];
 					const Vec2 relativeVelocity =
-						(linearVelocityB + angularLinearVelocityB) -
-						(linearVelocityA + angularLinearVelocityA);
+						(linearVelocityB + point.rBPerp * angularVelocityB) -
+						(linearVelocityA + point.rAPerp * angularVelocityA);
+
 					const Real negVelocityAlongNormal = -glm::dot(relativeVelocity, normal);
 
 					point.velocityBias = (negVelocityAlongNormal > SimulationSettings::RESTITUTION_VELOCITY_THRESHOLD) ? elasticity * negVelocityAlongNormal : Real(0);
@@ -481,7 +482,6 @@ namespace PS_AGONY
 			const Vec2 tangent = { -normal.y, normal.x };
 
 			std::array<Real, 2> jnArray{};
-			bool noContacts = true;
 
 			for (uint32_t i = 0; i < contactCount; i++)
 			{
@@ -489,13 +489,14 @@ namespace PS_AGONY
 				const Vec2 rAPerp = contactData.rAPerp;
 				const Vec2 rBPerp = contactData.rBPerp;
 
-				const Vec2 relativeVelocity = (linearVelocityB + rBPerp * angularVelocityB) -
+				const Vec2 relativeVelocity =
+					(linearVelocityB + rBPerp * angularVelocityB) -
 					(linearVelocityA + rAPerp * angularVelocityA);
 
 				const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 				Real& accumulatedJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
 
-				if (velocityAlongNormal > Real(0) && accumulatedJn <= Real(0)) continue;
+				if (velocityAlongNormal > Real(0) && accumulatedJn == Real(0)) continue;
 
 				const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
 				const Real oldJn = accumulatedJn;
@@ -503,22 +504,12 @@ namespace PS_AGONY
 				const Real deltaJn = accumulatedJn - oldJn;
 
 				jnArray[i] = accumulatedJn;
-				noContacts = false;
 
 				const Vec2 impulse = deltaJn * normal;
 				linearVelocityA -= impulse * invMassA;
 				angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
 				linearVelocityB += impulse * invMassB;
 				angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
-			}
-
-			if (noContacts)
-			{
-				velocityXPtr[bodyIndexA] = linearVelocityA.x;
-				velocityYPtr[bodyIndexA] = linearVelocityA.y;
-				velocityXPtr[bodyIndexB] = linearVelocityB.x;
-				velocityYPtr[bodyIndexB] = linearVelocityB.y;
-				continue;
 			}
 
 			const FrictionData& frictionData = frictionDataContainer[c];
@@ -531,7 +522,8 @@ namespace PS_AGONY
 				const Vec2 rAPerp = contactData.rAPerp;
 				const Vec2 rBPerp = contactData.rBPerp;
 
-				const Vec2 relativeVelocity = (linearVelocityB + rBPerp * angularVelocityB) -
+				const Vec2 relativeVelocity =
+					(linearVelocityB + rBPerp * angularVelocityB) -
 					(linearVelocityA + rAPerp * angularVelocityA);
 
 				const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
@@ -606,7 +598,6 @@ namespace PS_AGONY
 			const Vec2 tangent = { -normal.y, normal.x };
 
 			std::array<Real, 2> jnArray{};
-			bool noContacts = true;
 
 			if (contactCount == 1)
 			{
@@ -614,12 +605,13 @@ namespace PS_AGONY
 				const Vec2 rAPerp = contactData.rAPerp;
 				const Vec2 rBPerp = contactData.rBPerp;
 
-				const Vec2 relativeVelocity = (linearVelocityB + rBPerp * angularVelocityB) -
+				const Vec2 relativeVelocity =
+					(linearVelocityB + rBPerp * angularVelocityB) -
 					(linearVelocityA + rAPerp * angularVelocityA);
 				const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 
 				Real& accumulatedJn = collisionData.persistentContactData[0].normalImpulseAccumulator;
-				if (!(velocityAlongNormal > Real(0) && accumulatedJn <= Real(0)))
+				if (!(velocityAlongNormal > Real(0) && accumulatedJn == Real(0)))
 				{
 					const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
 					const Real oldJn = accumulatedJn;
@@ -627,7 +619,6 @@ namespace PS_AGONY
 					const Real deltaJn = accumulatedJn - oldJn;
 
 					jnArray[0] = accumulatedJn;
-					noContacts = false;
 
 					const Vec2 impulse = deltaJn * normal;
 					linearVelocityA -= impulse * invMassA;
@@ -638,70 +629,66 @@ namespace PS_AGONY
 			}
 			else if (contactCount == 2)
 			{
-				const auto& cp0 = velocityConstraintData.points[0];
-				const auto& cp1 = velocityConstraintData.points[1];
+				const auto& contactData0 = velocityConstraintData.points[0];
+				const auto& contactData1 = velocityConstraintData.points[1];
 
-				const Vec2 vRel0 = (linearVelocityB + cp0.rBPerp * angularVelocityB) -
-					(linearVelocityA + cp0.rAPerp * angularVelocityA);
-				const Vec2 vRel1 = (linearVelocityB + cp1.rBPerp * angularVelocityB) -
-					(linearVelocityA + cp1.rAPerp * angularVelocityA);
+				const Vec2 relativeVelocity0 =
+					(linearVelocityB + contactData0.rBPerp * angularVelocityB) -
+					(linearVelocityA + contactData0.rAPerp * angularVelocityA);
+				const Vec2 relativeVelocity1 =
+					(linearVelocityB + contactData1.rBPerp * angularVelocityB) -
+					(linearVelocityA + contactData1.rAPerp * angularVelocityA);
 
-				const Real vn0 = glm::dot(vRel0, normal);
-				const Real vn1 = glm::dot(vRel1, normal);
+				const Real velocityAlongNormal0 = glm::dot(relativeVelocity0, normal);
+				const Real velocityAlongNormal1 = glm::dot(relativeVelocity1, normal);
 
 				Real& a0 = collisionData.persistentContactData[0].normalImpulseAccumulator;
 				Real& a1 = collisionData.persistentContactData[1].normalImpulseAccumulator;
 
 				const Real effectiveMass = invMassA + invMassB;
-				const Real rnA0 = glm::dot(cp0.rAPerp, normal);
-				const Real rnB0 = glm::dot(cp0.rBPerp, normal);
-				const Real rnA1 = glm::dot(cp1.rAPerp, normal);
-				const Real rnB1 = glm::dot(cp1.rBPerp, normal);
+				const Real rnA0 = glm::dot(contactData0.rAPerp, normal);
+				const Real rnB0 = glm::dot(contactData0.rBPerp, normal);
+				const Real rnA1 = glm::dot(contactData1.rAPerp, normal);
+				const Real rnB1 = glm::dot(contactData1.rBPerp, normal);
 
 				const Real K00 = effectiveMass + rnA0 * rnA0 * invInertiaA + rnB0 * rnB0 * invInertiaB;
 				const Real K11 = effectiveMass + rnA1 * rnA1 * invInertiaA + rnB1 * rnB1 * invInertiaB;
 				const Real K01 = effectiveMass + rnA0 * rnA1 * invInertiaA + rnB0 * rnB1 * invInertiaB;
 				const Real K10 = K01;
 
-				const Real b0 = cp0.velocityBias - vn0;
-				const Real b1 = cp1.velocityBias - vn1;
+				const Real b0 = contactData0.velocityBias - velocityAlongNormal0;
+				const Real b1 = contactData1.velocityBias - velocityAlongNormal1;
 
-				const Real b_prime0 = b0 + K00 * a0 + K01 * a1;
-				const Real b_prime1 = b1 + K10 * a0 + K11 * a1;
+				const Real bPrime0 = b0 + K00 * a0 + K01 * a1;
+				const Real bPrime1 = b1 + K10 * a0 + K11 * a1;
 
 				Real x0 = Real(0), x1 = Real(0);
-				bool solved = false;
 
 				const Real det = K00 * K11 - K01 * K10;
 				if (std::fabs(det) > Real(1e-6))
 				{
 					const Real invDet = Real(1.0) / det;
-					x0 = (K11 * b_prime0 - K01 * b_prime1) * invDet;
-					x1 = (K00 * b_prime1 - K10 * b_prime0) * invDet;
-
-					if (x0 >= Real(0) && x1 >= Real(0)) solved = true;
+					x0 = (K11 * bPrime0 - K01 * bPrime1) * invDet;
+					x1 = (K00 * bPrime1 - K10 * bPrime0) * invDet;
+					if (x0 >= Real(0) && x1 >= Real(0)) goto solved;
 				}
-
-				if (!solved)
 				{
 					x0 = Real(0);
-					x1 = K11 > Real(0) ? b_prime1 / K11 : Real(0);
-					if (x1 >= Real(0) && (K01 * x1 - b_prime0) >= Real(0)) solved = true;
+					x1 = K11 > Real(0) ? bPrime1 / K11 : Real(0);
+					if (x1 >= Real(0) && (K01 * x1 - bPrime0) >= Real(0)) goto solved;
 				}
-
-				if (!solved)
 				{
+					x0 = K00 > Real(0) ? bPrime0 / K00 : Real(0);
 					x1 = Real(0);
-					x0 = K00 > Real(0) ? b_prime0 / K00 : Real(0);
-					if (x0 >= Real(0) && (K10 * x0 - b_prime1) >= Real(0)) solved = true;
+					if (x0 >= Real(0) && (K10 * x0 - bPrime1) >= Real(0)) goto solved;
 				}
-
-				if (!solved)
 				{
 					x0 = Real(0);
 					x1 = Real(0);
-					if (b_prime0 <= Real(0) && b_prime1 <= Real(0)) solved = true;
+					if (bPrime0 <= Real(0) && bPrime1 <= Real(0)) goto solved;
 				}
+
+				solved:
 
 				const Real deltaJn0 = x0 - a0;
 				const Real deltaJn1 = x1 - a1;
@@ -711,7 +698,6 @@ namespace PS_AGONY
 
 				jnArray[0] = x0;
 				jnArray[1] = x1;
-				noContacts = (x0 == Real(0) && x1 == Real(0));
 
 				const Vec2 impulse0 = deltaJn0 * normal;
 				const Vec2 impulse1 = deltaJn1 * normal;
@@ -720,17 +706,8 @@ namespace PS_AGONY
 				linearVelocityA -= impulseSum * invMassA;
 				linearVelocityB += impulseSum * invMassB;
 
-				angularVelocityA -= (glm::dot(cp0.rAPerp, impulse0) + glm::dot(cp1.rAPerp, impulse1)) * invInertiaA;
-				angularVelocityB += (glm::dot(cp0.rBPerp, impulse0) + glm::dot(cp1.rBPerp, impulse1)) * invInertiaB;
-			}
-
-			if (noContacts)
-			{
-				velocityXPtr[bodyIndexA] = linearVelocityA.x;
-				velocityYPtr[bodyIndexA] = linearVelocityA.y;
-				velocityXPtr[bodyIndexB] = linearVelocityB.x;
-				velocityYPtr[bodyIndexB] = linearVelocityB.y;
-				continue;
+				angularVelocityA -= (glm::dot(contactData0.rAPerp, impulse0) + glm::dot(contactData1.rAPerp, impulse1)) * invInertiaA;
+				angularVelocityB += (glm::dot(contactData0.rBPerp, impulse0) + glm::dot(contactData1.rBPerp, impulse1)) * invInertiaB;
 			}
 
 			const FrictionData& frictionData = frictionDataContainer[c];
@@ -743,7 +720,8 @@ namespace PS_AGONY
 				const Vec2 rAPerp = contactData.rAPerp;
 				const Vec2 rBPerp = contactData.rBPerp;
 
-				const Vec2 relativeVelocity = (linearVelocityB + rBPerp * angularVelocityB) -
+				const Vec2 relativeVelocity =
+					(linearVelocityB + rBPerp * angularVelocityB) -
 					(linearVelocityA + rAPerp * angularVelocityA);
 
 				const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
