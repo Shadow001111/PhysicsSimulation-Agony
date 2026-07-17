@@ -106,6 +106,12 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
     auto& settings = simulation.getSimulationSettings();
     if (ImGui::CollapsingHeader("Simulation Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
+        float timeScale = static_cast<float>(settings.timeScale);
+        if (ImGui::SliderFloat("Time scale", &timeScale, 0.0f, 1.0f, "%.3f"))
+        {
+            settings.timeScale = static_cast<PS_AGONY::Real>(timeScale);
+        }
+
         float hz = static_cast<float>(1.0 / settings.updateInterval);
         if (ImGui::SliderFloat("Update Rate (Hz)", &hz, 10.0f, 1000.0f, "%.0f Hz"))
         {
