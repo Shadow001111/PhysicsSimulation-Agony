@@ -18,8 +18,9 @@ namespace PS_AGONY
 			struct ContactData
 			{
 				Vec2 rAPerp, rBPerp;
-				Real normalMassXElasticityFactor;
+				Real normalMass;
 				Real tangentMass;
+				Real velocityBias;
 			};
 
 			std::array<ContactData, 2> points;
@@ -39,6 +40,8 @@ namespace PS_AGONY
 
 		struct SimulationSettings
 		{
+			static constexpr Real RESTITUTION_VELOCITY_THRESHOLD = 0.0;
+
 			// Baumgarte stabilization.
 			const Real positionCorrectionPercent = 0.5;
 			const Real positionCorrectionSlop = 0.001;

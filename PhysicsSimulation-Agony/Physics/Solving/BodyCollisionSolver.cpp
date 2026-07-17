@@ -234,6 +234,9 @@ namespace PS_AGONY
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+		const Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
+		const Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
+		const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
 		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
 		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
@@ -285,7 +288,7 @@ namespace PS_AGONY
 				const Material* materialA = materialPtr + materialIndexA;
 				const Material* materialB = materialPtr + materialIndexB;
 
-				const Real elasticityPlusOne = (materialA->elasticity + materialB->elasticity) * Real(0.5) + Real(1.0);
+				const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5);
 				frictionData.staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
 				frictionData.dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
@@ -318,7 +321,7 @@ namespace PS_AGONY
 					const Real normalDenom = effectiveMass
 						+ rAPerpDotN * rAPerpDotN * invInertiaA
 						+ rBPerpDotN * rBPerpDotN * invInertiaB;
-					point.normalMassXElasticityFactor = normalDenom > Real(0) ? elasticityPlusOne / normalDenom : Real(0);
+					point.normalMass = normalDenom > Real(0) ? Real(1) / normalDenom : Real(0);
 
 					const Real rAPerpDotT = glm::dot(point.rAPerp, tangent);
 					const Real rBPerpDotT = glm::dot(point.rBPerp, tangent);
@@ -326,6 +329,17 @@ namespace PS_AGONY
 						+ rAPerpDotT * rAPerpDotT * invInertiaA
 						+ rBPerpDotT * rBPerpDotT * invInertiaB;
 					point.tangentMass = tangentDenom > Real(0) ? Real(1) / tangentDenom : Real(0);
+
+					const Vec2 linearVelocityA = { velocityXPtr[data.bodyA], velocityYPtr[data.bodyA] };
+					const Vec2 linearVelocityB = { velocityXPtr[data.bodyB], velocityYPtr[data.bodyB] };
+					const Vec2 angularLinearVelocityA = point.rAPerp * angularVelocityPtr[data.bodyA];
+					const Vec2 angularLinearVelocityB = point.rBPerp * angularVelocityPtr[data.bodyB];
+					const Vec2 relativeVelocity =
+						(linearVelocityB + angularLinearVelocityB) -
+						(linearVelocityA + angularLinearVelocityA);
+					const Real negVelocityAlongNormal = -glm::dot(relativeVelocity, normal);
+
+					point.velocityBias = (negVelocityAlongNormal > SimulationSettings::RESTITUTION_VELOCITY_THRESHOLD) ? elasticity * negVelocityAlongNormal : Real(0);
 				}
 			}
 		}
@@ -483,7 +497,7 @@ namespace PS_AGONY
 
 				if (velocityAlongNormal > Real(0) && accumulatedJn <= Real(0)) continue;
 
-				const Real jn = -velocityAlongNormal * contactData.normalMassXElasticityFactor;
+				const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
 				const Real oldJn = accumulatedJn;
 				accumulatedJn = std::fmax(Real(0), oldJn + jn);
 				const Real deltaJn = accumulatedJn - oldJn;
@@ -607,7 +621,7 @@ namespace PS_AGONY
 				Real& accumulatedJn = collisionData.persistentContactData[0].normalImpulseAccumulator;
 				if (!(velocityAlongNormal > Real(0) && accumulatedJn <= Real(0)))
 				{
-					const Real jn = -velocityAlongNormal * contactData.normalMassXElasticityFactor;
+					const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
 					const Real oldJn = accumulatedJn;
 					accumulatedJn = std::fmax(Real(0), oldJn + jn);
 					const Real deltaJn = accumulatedJn - oldJn;
@@ -638,9 +652,6 @@ namespace PS_AGONY
 				Real& a0 = collisionData.persistentContactData[0].normalImpulseAccumulator;
 				Real& a1 = collisionData.persistentContactData[1].normalImpulseAccumulator;
 
-				const Real elasticityPlusOne = (materials->at(bodies->materialIndex.data()[bodyIndexA]).elasticity +
-					materials->at(bodies->materialIndex.data()[bodyIndexB]).elasticity) * Real(0.5) + Real(1.0);
-
 				const Real effectiveMass = invMassA + invMassB;
 				const Real rnA0 = glm::dot(cp0.rAPerp, normal);
 				const Real rnB0 = glm::dot(cp0.rBPerp, normal);
@@ -652,8 +663,8 @@ namespace PS_AGONY
 				const Real K01 = effectiveMass + rnA0 * rnA1 * invInertiaA + rnB0 * rnB1 * invInertiaB;
 				const Real K10 = K01;
 
-				const Real b0 = -vn0 * elasticityPlusOne;
-				const Real b1 = -vn1 * elasticityPlusOne;
+				const Real b0 = cp0.velocityBias - vn0;
+				const Real b1 = cp1.velocityBias - vn1;
 
 				const Real b_prime0 = b0 + K00 * a0 + K01 * a1;
 				const Real b_prime1 = b1 + K10 * a0 + K11 * a1;
