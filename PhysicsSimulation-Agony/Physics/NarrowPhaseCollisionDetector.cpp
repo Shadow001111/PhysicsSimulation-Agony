@@ -148,7 +148,7 @@ namespace PS_AGONY
         }
         else
         {
-            useThreading = bodyPairs.size() > 635;
+            useThreading = bodyPairs.size() > 6000;
         }
         
         // Find collisions.

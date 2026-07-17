@@ -153,7 +153,7 @@ namespace PS_AGONY
         }
         else
         {
-            useThreading = bvhFunctionResources.nodes.size() > 120;
+            useThreading = bvhFunctionResources.nodes.size() > 400;
         }
 
         if (useThreading)
