@@ -25,21 +25,24 @@ namespace PS_AGONY
 		uint32_t positionIterations
 	)
 	{
+		TRACY_SCOPE_NC("Solve collisions", Ecstasy::Color::OliveDrab);
+
 		const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
 
 		// Single-threaded path.
 		if (workerCount <= 1)
 		{
-			TRACY_SCOPE_NC("Solve collisions (Single-threaded)", Ecstasy::Color::OliveDrab);
-
 			debugCollisionDataContainer = narrowPhaseCollisions;
 			computeConstraintData(narrowPhaseCollisions);
 
 			{
 				TRACY_SCOPE_N("Solve collision constraints (Single-threaded)");
+
+				applyWarmStarting(narrowPhaseCollisions, velocityConstraintContainer);
+
 				for (uint32_t i = 0; i < velocityIterations; i++)
 				{
-					solveVelocityConstraints(i == 0, narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
+					solveVelocityConstraints(narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
 				}
 				for (uint32_t i = 0; i < positionIterations; i++)
 				{
@@ -50,7 +53,6 @@ namespace PS_AGONY
 		}
 
 		// Multi-threading path.
-		TRACY_SCOPE_NC("Solve collisions (Multi-threaded)", Ecstasy::Color::OliveDrab);
 		{
 			TRACY_SCOPE_NC("Collect body pairs from collision data", Ecstasy::Color::Red);
 
@@ -206,8 +208,8 @@ namespace PS_AGONY
 
 	size_t BodyCollisionSolver::planWorkerCount(size_t collisionCount) const
 	{
-		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830 * 2;
-		static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 3;
+		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830 * 4;
+		static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 2;
 
 		// Single-threaded path.
 		if (collisionCount < MIN_COLLISION_COUNT_FOR_THREADING)
@@ -327,12 +329,12 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::applyWarmStartingForCollisions(
+	void BodyCollisionSolver::applyWarmStarting(
 		std::span<const BodyCollisionData> collisionDataContainer,
 		std::span<const VelocityConstraintData> constraintDataContainer
 	)
 	{
-		TRACY_SCOPE_NC("Apply warm starting for collisions", Ecstasy::Color::Violet);
+		TRACY_SCOPE_NC("Apply warm starting (body collisions)", Ecstasy::Color::Violet);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -377,10 +379,7 @@ namespace PS_AGONY
 				Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
 				Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
 
-				const Vec2 warmStartImpulse = (oldJn * normal) + (oldJt * tangent);
-				const bool isValid = oldJn > Real(0) || std::fabs(oldJt) > Real(0); // TODO: Check if it's right!
-
-				impulseArray[i] = warmStartImpulse * Real(isValid);
+				impulseArray[i] = (oldJn * normal) + (oldJt * tangent);
 			}
 			{ // Can apply sum of impulses, because they don't change outcome.
 				const Vec2 impulseSum = impulseArray[0] + impulseArray[1];
@@ -412,22 +411,12 @@ namespace PS_AGONY
 	}
 
 	void BodyCollisionSolver::solveVelocityConstraints(
-		bool firstIteration,
 		std::span<const BodyCollisionData> collisionDataContainer,
 		std::span<const VelocityConstraintData> constraintDataContainer,
 		std::span<const FrictionData> frictionDataContainer
 	)
 	{
 		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Color::Violet);
-
-		// Optional warm-starting.
-		if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
-		{
-			if (firstIteration)
-			{
-				applyWarmStartingForCollisions(collisionDataContainer, constraintDataContainer);
-			}
-		}
 
 		// Compile-time strategy dispatch
 		if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::Sequential)
@@ -876,6 +865,23 @@ namespace PS_AGONY
 
 		const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
 
+		if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
+		{
+			runThreadedWaves(workerCount, waveCount, static_cast<uint32_t>(waveCount),
+				[&](size_t waveIndex, size_t workerIndex, uint32_t passTicket)
+				{
+					const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
+					const auto& passOffset = passOffsetsPtr[passGlobalIndex];
+					if (passOffset.size == 0) return;
+
+					std::span<const BodyCollisionData> collisionSlice(collisionDataPtr + passOffset.start, passOffset.size);
+					std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
+
+					applyWarmStarting(collisionSlice, constraintSlice);
+				}
+			);
+		}
+
 		runThreadedWaves(workerCount, waveCount, totalTicks,
 			[&](size_t waveIndex, size_t workerIndex, uint32_t passTicket)
 			{
@@ -897,7 +903,7 @@ namespace PS_AGONY
 					std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
 					std::span<const FrictionData> frictionDataSlice(frictionDataContainer.data() + passOffset.start, passOffset.size);
 
-					solveVelocityConstraints(passTicket == 0, collisionSlice, constraintSlice, frictionDataSlice);
+					solveVelocityConstraints(collisionSlice, constraintSlice, frictionDataSlice);
 				}
 			}
 		);

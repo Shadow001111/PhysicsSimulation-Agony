@@ -68,10 +68,12 @@ namespace PS_AGONY
 							if (workerResources.currentWaveTicket.load(std::memory_order_acquire) != localTicket)
 								break;
 						}
+
 						if (workerResources.currentWaveTicket.load(std::memory_order_acquire) == localTicket)
 						{
 							workerResources.currentWaveTicket.wait(localTicket, std::memory_order_acquire);
 						}
+
 						localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
 					}
 

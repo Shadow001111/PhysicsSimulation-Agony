@@ -7,6 +7,13 @@
 #include <cmath>
 
 
+struct SceneOrientation
+{
+    float offsetX = 0;
+    float offsetY = 0;
+};
+
+
 static PS_AGONY::Real cross(
     const PS_AGONY::Vec2& a,
     const PS_AGONY::Vec2& b,
@@ -408,7 +415,12 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
         });
 }
 
-void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_LargeWorld(
+    PS_AGONY::Simulation& simulation,
+    Ecstasy::Random::Generator& rvg,
+    SceneOrientation sceneOrientation,
+    const int bodyCountPerType
+)
 {
     // === CONFIGURATION VARIABLES ===
     constexpr float worldWidth = 125.0f;
@@ -416,11 +428,6 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     constexpr float wallThickness = 5.0f;
     constexpr float wallHeight = 80.0f;
     constexpr float terrainBaseY = -20.0f;
-
-    // Configurable object counts
-    constexpr int circleCount = 2500;
-    constexpr int boxCount = 2500;
-    constexpr int polygonCount = 2500;
 
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material worldMaterial = {
@@ -433,7 +440,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     // === 2. HIGH BOUNDS (SIDE WALLS) ===
     // Left Bounding Wall
     simulation.createBox({
-        .base.position = { -worldWidth * 0.5f - wallThickness * 0.5f, wallHeight * 0.5f + terrainBaseY },
+        .base.position = { -worldWidth * 0.5f - wallThickness * 0.5f + sceneOrientation.offsetX, wallHeight * 0.5f + terrainBaseY + sceneOrientation.offsetY },
         .base.mass = 0, // Static
         .base.materialIndex = materialIdx,
         .size = { wallThickness, wallHeight }
@@ -441,7 +448,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
 
     // Right Bounding Wall
     simulation.createBox({
-        .base.position = { worldWidth * 0.5f + wallThickness * 0.5f, wallHeight * 0.5f + terrainBaseY },
+        .base.position = { worldWidth * 0.5f + wallThickness * 0.5f + sceneOrientation.offsetX, wallHeight * 0.5f + terrainBaseY + sceneOrientation.offsetY },
         .base.mass = 0, // Static
         .base.materialIndex = materialIdx,
         .size = { wallThickness, wallHeight }
@@ -479,7 +486,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
         };
 
         simulation.createPolygon({
-            .base.position = { posX, posY },
+            .base.position = { posX + sceneOrientation.offsetX, posY + sceneOrientation.offsetY },
             .base.mass = 0,
             .base.materialIndex = materialIdx,
             .localVertices = localVertices,
@@ -493,7 +500,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     constexpr float spawnMinY = terrainBaseY + 25.0f;
 
     // Spawn Circles
-    for (int i = 0; i < circleCount; ++i) {
+    for (int i = 0; i < bodyCountPerType; ++i) {
         float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
         float y = rvg.real<float>(spawnMinY, spawnMaxY);
         float vx = rvg.real<float>(-1.5f, 1.5f);
@@ -502,7 +509,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
         float mass = 3.14159f * r * r;
 
         simulation.createCircle({
-            .base.position = { x, y },
+            .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = 0.0f,
             .base.angularVelocity = 0.0f,
@@ -513,7 +520,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     }
 
     // Spawn Boxes
-    for (int i = 0; i < boxCount; ++i) {
+    for (int i = 0; i < bodyCountPerType; ++i) {
         float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
         float y = rvg.real<float>(spawnMinY, spawnMaxY);
         float vx = rvg.real<float>(-1.5f, 1.5f);
@@ -524,7 +531,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
         float mass = width * height;
 
         simulation.createBox({
-            .base.position = { x, y },
+            .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = rotation,
             .base.mass = mass,
@@ -534,7 +541,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
     }
 
     // Spawn Random Convex Polygons
-    for (int i = 0; i < polygonCount; i++) {
+    for (int i = 0; i < bodyCountPerType; i++) {
         float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
         float y = rvg.real<float>(spawnMinY, spawnMaxY);
         float vx = rvg.real<float>(-1.5f, 1.5f);
@@ -548,7 +555,7 @@ void load_LargeWorld(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generato
         auto localVertices = makeConvexPolygon(rvg, verticesCount, radius);
 
         simulation.createPolygon({
-            .base.position = { x, y },
+            .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = rotation,
             .base.mass = mass,
@@ -1035,7 +1042,7 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 2)
     {
-        load_LargeWorld(simulation, rvg);
+        load_LargeWorld(simulation, rvg, {}, 2500);
     }
     else if (scene == 3)
     {

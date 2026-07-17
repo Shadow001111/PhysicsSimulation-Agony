@@ -102,13 +102,12 @@ namespace PS_AGONY
 
 		void computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
-		void applyWarmStartingForCollisions(
+		void applyWarmStarting(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer
 		);
 
 		void solveVelocityConstraints(
-			bool firstIteration,
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
