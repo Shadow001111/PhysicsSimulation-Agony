@@ -36,6 +36,8 @@ namespace PS_AGONY
 	)
 	{
 		const size_t springCount = springs.getCount();
+		if (springCount == 0) return;
+
 		const size_t workerCount = planWorkerCount(springCount);
 
 		// Single-threaded path.

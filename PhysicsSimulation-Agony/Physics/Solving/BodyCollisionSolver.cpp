@@ -208,6 +208,8 @@ namespace PS_AGONY
 
 	size_t BodyCollisionSolver::planWorkerCount(size_t collisionCount) const
 	{
+		return 0; // Disabled multi-threading.
+
 		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830 * 4;
 		static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 2;
 
