@@ -24,4 +24,12 @@ namespace PS_AGONY::GraphUtilities
     // Writes the graph to `filepath`, creating any missing parent
     // directories first. Returns false on failure.
     bool exportGraph(const Graph& graph, const std::filesystem::path& filepath);
+
+    // Reads the graph from `filepath` into the provided `graph` reference.
+    // Returns false if the file cannot be read or is corrupted.
+    bool importGraph(Graph& graph, const std::filesystem::path& filepath);
+
+    // Writes the graph links to a CSV file optimized for Cosmograph.
+    // Creates missing parent directories first. Returns false on failure.
+    bool exportGraphToCSV(const Graph& graph, const std::filesystem::path& filepath);
 }
