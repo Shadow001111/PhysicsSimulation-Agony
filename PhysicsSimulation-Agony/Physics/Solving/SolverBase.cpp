@@ -1,8 +1,8 @@
 #include "SolverBase.h"
 #include "../Threading.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
 {
@@ -92,7 +92,7 @@ namespace PS_AGONY
 
 		// Wait for all workers to finish every iteration and terminate.
 		{
-			TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Color::Brown);
+			TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Core::Color::Brown);
 			for (size_t i = 1; i < workerResources.workerData.size(); i++)
 			{
 				workerResources.workerData[i].isDestroyed.wait(false, std::memory_order_acquire);

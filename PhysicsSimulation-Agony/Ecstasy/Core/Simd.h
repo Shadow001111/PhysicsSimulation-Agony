@@ -3,7 +3,7 @@
 #include <type_traits>
 #include <immintrin.h>
 
-namespace Ecstasy
+namespace Ecstasy::Core
 {
     // Compile-time register width
     #if defined(__AVX2__)

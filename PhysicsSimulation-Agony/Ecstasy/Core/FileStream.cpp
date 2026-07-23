@@ -1,7 +1,7 @@
 #include "FileStream.h"
 #include <cstring>
 
-namespace Ecstasy
+namespace Ecstasy::Core
 {
     FileStream::FileStream(const std::filesystem::path& filepath, Mode mode)
     {

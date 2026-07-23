@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace Ecstasy::Threading
+namespace Ecstasy::Core::Threading
 {
     void pinCurrentThreadToCpu(size_t cpuIndex)
     {

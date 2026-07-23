@@ -1,7 +1,7 @@
 #pragma once
 #include "Types.h"
 
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY::FastCosSin
 {

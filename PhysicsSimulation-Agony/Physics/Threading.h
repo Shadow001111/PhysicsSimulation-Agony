@@ -1,9 +1,9 @@
 #pragma once
-#include "EcstasyCore/Threading/ThreadPool.h"
+#include "Ecstasy/Core/Threading/ThreadPool.h"
 
 namespace PS_AGONY::Threading
 {
-	using ThreadPool = Ecstasy::Threading::ThreadPool;
+	using ThreadPool = Ecstasy::Core::Threading::ThreadPool;
 
 	ThreadPool& getGlobalThreadPool();
 }

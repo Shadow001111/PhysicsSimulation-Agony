@@ -1,9 +1,9 @@
 ﻿#include "BroadPhaseCollisionDetector.h"
 #include "Threading.h"
 
-#include "EcstasyCore/Portablity.h"
-#include "EcstasyCore/Simd.h"
-#include "EcstasyCore/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
+#include "Ecstasy/Core/Simd.h"
+#include "Ecstasy/Core/TracyProfiler.h"
 
 #include <numeric>
 #include <bit>
@@ -14,20 +14,20 @@
 
 namespace PS_AGONY
 {
-    using RealSimd = Ecstasy::Simd<Real>;
+    using RealSimd = Ecstasy::Core::Simd<Real>;
 
-    static_assert(Ecstasy::Simd<uint32_t>::lanes == 8, "Double works with morton codes only when AVX enabled");
+    static_assert(Ecstasy::Core::Simd<uint32_t>::lanes == 8, "Double works with morton codes only when AVX enabled");
 
     using MortonU32Simd = std::conditional_t<
         std::is_same_v<Real, float>,
-        Ecstasy::Simd<uint32_t>,
-        Ecstasy::Simd<uint32_t, 128> // Double.
+        Ecstasy::Core::Simd<uint32_t>,
+        Ecstasy::Core::Simd<uint32_t, 128> // Double.
     >;
 
     using MortonI32Simd = std::conditional_t<
         std::is_same_v<Real, float>,
-        Ecstasy::Simd<int32_t>,
-        Ecstasy::Simd<int32_t, 128> // Double.
+        Ecstasy::Core::Simd<int32_t>,
+        Ecstasy::Core::Simd<int32_t, 128> // Double.
     >;
 
 
@@ -390,7 +390,7 @@ namespace PS_AGONY
     template<std::floating_point TReal>
     void BroadPhaseCollisionDetector::computeMortonCodes(uint32_t bodyCount)
     {
-        using TRealSimd = Ecstasy::Simd<TReal>;
+        using TRealSimd = Ecstasy::Core::Simd<TReal>;
 
         bvhFunctionResources.mortonCodes.resize(bodyCount);
 
@@ -667,14 +667,14 @@ namespace PS_AGONY
         // InternalRealSimd must hold exactly 4 Reals.
         using InternalRealSimd = std::conditional_t<
             std::is_same_v<Real, float>,
-            Ecstasy::Simd<Real, 128>,
-            Ecstasy::Simd<Real, 256>
+            Ecstasy::Core::Simd<Real, 128>,
+            Ecstasy::Core::Simd<Real, 256>
         >;
 
         using InternalUintSimd = std::conditional_t<
             std::is_same_v<Real, float>,
-            Ecstasy::Simd<uint32_t, 128>,
-            Ecstasy::Simd<uint64_t, 256>
+            Ecstasy::Core::Simd<uint32_t, 128>,
+            Ecstasy::Core::Simd<uint64_t, 256>
         >;
 
         // Setting mask. 'Set' stores in reverse order.
@@ -1223,7 +1223,7 @@ namespace PS_AGONY
             }
 
             // Launch workers.
-            std::vector<Ecstasy::Threading::Task> tasks;
+            std::vector<Ecstasy::Core::Threading::Task> tasks;
             tasks.reserve(workerCount);
 
             for (size_t i = 0; i < workerCount; i++)

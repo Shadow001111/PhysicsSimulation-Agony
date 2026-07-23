@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <concepts>
 
-namespace Ecstasy::Threading
+namespace Ecstasy::Core::Threading
 {
     template <class>
     class move_only_function;

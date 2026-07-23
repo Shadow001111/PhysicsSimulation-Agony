@@ -2,15 +2,15 @@
 #include "Threading.h"
 #include "PrintUtilities.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
 
 #include <iostream>
 #include <bit>
 
 namespace PS_AGONY
 {
-    using RealSimd = Ecstasy::Simd<Real>;
+    using RealSimd = Ecstasy::Core::Simd<Real>;
 
 
     template <typename Map>
@@ -409,7 +409,7 @@ namespace PS_AGONY
         auto& threadPool = Threading::getGlobalThreadPool();
         const size_t workerCount = threadPool.getThreadCount();
 
-        auto [chunkCount, chunkSize] = Ecstasy::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
+        auto [chunkCount, chunkSize] = Ecstasy::Core::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
             threadPool, bodyPairs.size(), LOAD_BALANCING_FACTOR);
 
         chunks.resize(chunkCount);
@@ -422,7 +422,7 @@ namespace PS_AGONY
             cd.finished = false;
         }
 
-        std::vector<Ecstasy::Threading::Task> tasks;
+        std::vector<Ecstasy::Core::Threading::Task> tasks;
         tasks.reserve(workerCount);
 
         alignas(64) std::atomic<uint32_t> workerChunkIndex{ 0 };

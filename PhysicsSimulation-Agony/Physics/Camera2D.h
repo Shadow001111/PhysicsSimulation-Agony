@@ -1,30 +1,9 @@
 #pragma once
-#include "GlmTypes.h"
+#include "Types.h"
+
+#include "Ecstasy/Graphics/Camera2D.h"
 
 namespace PS_AGONY
 {
-	class Camera2D
-	{
-	public:
-		Vec2 position{ 0.0, 0.0 };
-		Real aspectRatio{ 1.0} ;
-		Real viewRange{ 1.0 }; // Inverse zoom.
-
-		// Transformation.
-
-		// NDC space.
-		Vec2 screenToWorldSpace(const Vec2& screenPoint) const noexcept;
-
-		// Setters
-		void setViewRangeW(Real w, Real ratio);
-		void setViewRangeH(Real h, Real ratio);
-
-		// Getters
-		[[nodiscard]]
-		Mat4 getViewMatrix() const noexcept;
-
-		[[nodiscard]]
-		Mat4 getProjectionMatrix() const noexcept;
-	};
+	using Camera2D = Ecstasy::Graphics::Camera2D<Ecstasy::Graphics::FloatingPointSystem<Real>>;
 }
-

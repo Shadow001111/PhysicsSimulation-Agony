@@ -2,9 +2,9 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/FileStream.h"
-#include "EcstasyCore/Decoding/UTFDecoder.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/FileStream.h"
+#include "Ecstasy/Core/Decoding/UTFDecoder.h"
 
 
 #include <iostream>
@@ -109,24 +109,24 @@ TextRenderer& TextRenderer::getInstance()
 
 uint32_t TextRenderer::decodeStdString(const void* byteBuffer, size_t bufferLength, size_t& index)
 {
-    if (index >= bufferLength) return Ecstasy::Decoding::INVALID_UTF_CODEPOINT;
+    if (index >= bufferLength) return Ecstasy::Core::Decoding::INVALID_UTF_CODEPOINT;
     const uint8_t* text_ = static_cast<const uint8_t*>(byteBuffer);
     return text_[index++];
 }
 
 uint32_t TextRenderer::decodeUTF8(const void* byteBuffer, size_t bufferLength, size_t& index)
 {
-    return Ecstasy::Decoding::decodeUTF8CodePoint(static_cast<const char8_t*>(byteBuffer), bufferLength, index);
+    return Ecstasy::Core::Decoding::decodeUTF8CodePoint(static_cast<const char8_t*>(byteBuffer), bufferLength, index);
 }
 
 uint32_t TextRenderer::decodeUTF16(const void* byteBuffer, size_t bufferLength, size_t& index)
 {
-    return Ecstasy::Decoding::decodeUTF16CodePoint(static_cast<const char16_t*>(byteBuffer), bufferLength, index);
+    return Ecstasy::Core::Decoding::decodeUTF16CodePoint(static_cast<const char16_t*>(byteBuffer), bufferLength, index);
 }
 
 uint32_t TextRenderer::decodeUTF32(const void* byteBuffer, size_t bufferLength, size_t& index)
 {
-    return Ecstasy::Decoding::decodeUTF32CodePoint(static_cast<const char32_t*>(byteBuffer), bufferLength, index);
+    return Ecstasy::Core::Decoding::decodeUTF32CodePoint(static_cast<const char32_t*>(byteBuffer), bufferLength, index);
 }
 
 TextRenderer::TextRenderer() :
@@ -344,7 +344,7 @@ bool TextRenderer::saveFontCache(const std::string& cachePath, const Font& font,
         return false;
     }
 
-    Ecstasy::FileStream file(cachePath, Ecstasy::FileStream::Mode::Write);
+    Ecstasy::Core::FileStream file(cachePath, Ecstasy::Core::FileStream::Mode::Write);
     if (!file)
     {
         std::cerr << "[TextRenderer][saveFontCache]: Failed to create/open file\n";
@@ -376,7 +376,7 @@ bool TextRenderer::loadFontCache(const std::string& cachePath, Font& font)
 {
     TRACY_SCOPE_N("Load font cache");
 
-    Ecstasy::FileStream file(cachePath, Ecstasy::FileStream::Mode::Read);
+    Ecstasy::Core::FileStream file(cachePath, Ecstasy::Core::FileStream::Mode::Read);
     if (!file) return false;
 
     CacheHeader header;
@@ -481,7 +481,7 @@ void TextRenderer::renderTextInternal(const void* text, size_t textLength, UTFDe
         while (index < textLength)
         {
             uint32_t codepoint = decoder(text, textLength, index);
-            if (codepoint == Ecstasy::Decoding::INVALID_UTF_CODEPOINT) break;
+            if (codepoint == Ecstasy::Core::Decoding::INVALID_UTF_CODEPOINT) break;
             else if (codepoint == '\n')
             {
                 // Update max line width for current line

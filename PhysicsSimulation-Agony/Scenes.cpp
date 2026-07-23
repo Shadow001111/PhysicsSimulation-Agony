@@ -1,6 +1,6 @@
 #include "Scenes.h"
 
-#include "EcstasyCore/Random.h"
+#include "Ecstasy/Core/Random.h"
 
 #include "Physics/Simulation.h"
 
@@ -22,7 +22,7 @@ static PS_AGONY::Real cross(
     return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
-std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Random::Generator& rvg, size_t targetVertices, float radius)
+std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& rvg, size_t targetVertices, float radius)
 {
     const size_t sampleCount = std::max<size_t>(targetVertices * 4, 12);
 
@@ -204,7 +204,7 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
 }
 
 
-void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     constexpr int ballCount = 1500;
     constexpr float ballRadius = 0.05f;
@@ -361,7 +361,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generat
     }
 }
 
-void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     constexpr int rowCount = 40;
     constexpr int columnCount = 40;
@@ -417,7 +417,7 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Random::G
 
 void load_LargeWorld(
     PS_AGONY::Simulation& simulation,
-    Ecstasy::Random::Generator& rvg,
+    Ecstasy::Core::Random::Generator& rvg,
     SceneOrientation sceneOrientation,
     const int bodyCountPerType
 )
@@ -566,7 +566,7 @@ void load_LargeWorld(
     }
 }
 
-void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
     constexpr int pyramidRows = 60;
@@ -636,7 +636,7 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Random::Gene
     }
 }
 
-void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === 1. CONFIGURATION AND MATERIALS ===
     constexpr float cliffWidth = 25.0f;
@@ -777,7 +777,7 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Random::Genera
     }
 }
 
-void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === 1. CONFIGURATION AND VARIABLES ===
     constexpr int gridWidth = 90;   // Number of horizontal particles
@@ -888,7 +888,7 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Random::
     }
 }
 
-void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === CONFIGURATION ===
     constexpr int rampSegments = 120;        // 120 segments ensures an incredibly silky continuous slide
@@ -987,7 +987,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& 
     }
 }
 
-void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg)
+void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === 1. MATERIAL SETUP ===
     PS_AGONY::Material material = {
@@ -1029,7 +1029,7 @@ void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Random::Generator& rvg
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
-    Ecstasy::Random::Generator rvg; // Random value generator.
+    Ecstasy::Core::Random::Generator rvg; // Random value generator.
     rvg.setSeed(0);
 
 	if (scene == 0)

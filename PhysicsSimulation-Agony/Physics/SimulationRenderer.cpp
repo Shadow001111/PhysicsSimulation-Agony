@@ -1,10 +1,10 @@
 #include "SimulationRenderer.h"
 #include "Simulation.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
 
-#include "EcstasyGraphics/TextureLoader.h"
+#include "Ecstasy/Graphics/TextureLoader.h"
 
 #include <iostream>
 

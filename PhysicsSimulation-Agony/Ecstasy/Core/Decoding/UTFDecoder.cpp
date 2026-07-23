@@ -1,6 +1,6 @@
 #include "UTFDecoder.h"
 
-namespace Ecstasy::Decoding
+namespace Ecstasy::Core::Decoding
 {
     std::vector<uint32_t> decodeUTF8(const std::u8string& str)
     {
