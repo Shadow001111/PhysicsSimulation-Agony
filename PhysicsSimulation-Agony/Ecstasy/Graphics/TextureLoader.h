@@ -4,7 +4,7 @@
 #include <vector>
 #include <filesystem>
 
-namespace TextureLoader
+namespace Ecstasy::Graphics::TextureLoader
 {
     struct TextureLoadParams
     {

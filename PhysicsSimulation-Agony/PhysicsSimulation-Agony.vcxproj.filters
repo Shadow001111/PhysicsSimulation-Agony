@@ -51,7 +51,7 @@
     <ClCompile Include="Ecstasy\Graphics\TextureLoader.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Input\InputManager.cpp">
+    <ClCompile Include="Ecstasy\Graphics\Input\InputManager.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="OpenGLWrappers\FrameBuffer.cpp">
@@ -173,7 +173,7 @@
     <ClInclude Include="Ecstasy\Graphics\TextureLoader.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Input\InputManager.h">
+    <ClInclude Include="Ecstasy\Graphics\Input\InputManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="OpenGLWrappers\FrameBuffer.h">

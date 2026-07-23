@@ -474,7 +474,7 @@ ObjectCreatorState renderObjectCreatorUI(
 static int gameFunc()
 {
     // Window.
-    WindowManager wnd({
+    Ecstasy::Graphics::WindowManager wnd({
         .width = 1600,
         .height = 900,
         .title = "Physics simulation - AGONY",
@@ -486,7 +486,7 @@ static int gameFunc()
         .strictAspectRatio = false
         });
 
-    InputManager windowInputManager;
+    Ecstasy::Graphics::Input::InputManager windowInputManager;
     wnd.linkInputManager(&windowInputManager);
 
     // ImGui context.
@@ -533,10 +533,10 @@ static int gameFunc()
     }
 
     // Text renderer.
-    TextRenderer::init();
-    TextRenderer::loadFont("RusEngMinecraft", 8);
-    TextRenderer::setCurrentFont("RusEngMinecraft");
-    TextRenderer::setGlyphInstanceBatchSize(1024);
+    Ecstasy::Graphics::TextRenderer::init();
+    Ecstasy::Graphics::TextRenderer::loadFont("RusEngMinecraft", 8);
+    Ecstasy::Graphics::TextRenderer::setCurrentFont("RusEngMinecraft");
+    Ecstasy::Graphics::TextRenderer::setGlyphInstanceBatchSize(1024);
 
     // Simulation.
     PS_AGONY::Simulation simulation{};
