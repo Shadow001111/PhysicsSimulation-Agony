@@ -9,7 +9,7 @@
 
 #include "../TracyProfiler.h"
 
-namespace Ecstasy::Threading
+namespace Ecstasy::Core::Threading
 {
     class ThreadPool;  // forward declaration
 

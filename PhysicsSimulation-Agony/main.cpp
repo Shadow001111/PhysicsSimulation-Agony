@@ -1,14 +1,14 @@
-#include "WindowManager.h"
 #include "Scenes.h"
 
 #include "Core/FileLogger.h"
-#include "EcstasyCore/TracyProfiler.h"
+#include "Ecstasy/Core/TracyProfiler.h"
 
 #include "Physics/Simulation.h"
 #include "Physics/SimulationRenderer.h"
 #include "Physics/GraphUtilities.h"
 
-#include "EcstasyGraphics/TextRenderer.h"
+#include "Ecstasy/Graphics/WindowManager.h"
+#include "Ecstasy/Graphics/TextRenderer.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"

@@ -4,7 +4,7 @@
 #include <string>
 #include <type_traits>
 
-namespace Ecstasy
+namespace Ecstasy::Core
 {
     class FileStream
     {

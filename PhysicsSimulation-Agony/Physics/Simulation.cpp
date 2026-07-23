@@ -2,8 +2,8 @@
 #include "Threading.h"
 #include "FastCosSin.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
 
 #include <iostream>
 #include <chrono>
@@ -14,7 +14,7 @@
 
 namespace PS_AGONY
 {
-    using RealSimd = Ecstasy::Simd<Real>;
+    using RealSimd = Ecstasy::Core::Simd<Real>;
 
 
     static Real calculateCircleInertia(Real mass, Real radius, Vec2 centerOfMass)
@@ -196,7 +196,7 @@ namespace PS_AGONY
 
     void Simulation::update(Real deltaTime)
     {
-        TRACY_SCOPE_NC("Simulation update", Ecstasy::Color::Wheat);
+        TRACY_SCOPE_NC("Simulation update", Ecstasy::Core::Color::Wheat);
 
         // Delta time check.
         if (deltaTime <= 0) return;
@@ -676,7 +676,7 @@ namespace PS_AGONY
 
     void Simulation::physicsStep(Real deltaTime)
     {
-        TRACY_SCOPE_NC("Physics step", Ecstasy::Color::Orange);
+        TRACY_SCOPE_NC("Physics step", Ecstasy::Core::Color::Orange);
 
         // Update timer.
         simulationRunTimer += deltaTime;
@@ -780,7 +780,7 @@ namespace PS_AGONY
 
     void Simulation::integrateVelocities(size_t bodyCount, Real deltaTime)
     {
-        TRACY_SCOPE_NC("Integrate velocities", Ecstasy::Color::Red);
+        TRACY_SCOPE_NC("Integrate velocities", Ecstasy::Core::Color::Red);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
@@ -936,7 +936,7 @@ namespace PS_AGONY
 
     void Simulation::integratePositions(size_t bodyCount, Real deltaTime)
     {
-        TRACY_SCOPE_NC("Intergrate positions", Ecstasy::Color::Blue);
+        TRACY_SCOPE_NC("Intergrate positions", Ecstasy::Core::Color::Blue);
 
         const RealSimd deltaTimeV{ deltaTime };
 
@@ -980,7 +980,7 @@ namespace PS_AGONY
 
     void Simulation::buildBodyAABBs()
     {
-        TRACY_SCOPE_NC("Build body AABBs", Ecstasy::Color::Green);
+        TRACY_SCOPE_NC("Build body AABBs", Ecstasy::Core::Color::Green);
         buildCircleAABBs();
         buildBoxAABBs();
         buildPolygonAABBs();
@@ -991,12 +991,12 @@ namespace PS_AGONY
         const size_t count = circles.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Core::Color::DarkGreen);
 
         using IndexSimd = std::conditional_t<
             std::is_same_v<Real, float>,
-            Ecstasy::Simd<int32_t, 256>,
-            Ecstasy::Simd<int32_t, 128>
+            Ecstasy::Core::Simd<int32_t, 256>,
+            Ecstasy::Core::Simd<int32_t, 128>
         >;
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
@@ -1082,7 +1082,7 @@ namespace PS_AGONY
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Core::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
@@ -1127,7 +1127,7 @@ namespace PS_AGONY
         const size_t count = polygons.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build polygon AABBs", Ecstasy::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build polygon AABBs", Ecstasy::Core::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
@@ -1179,7 +1179,7 @@ namespace PS_AGONY
     {
         constexpr size_t LANES = RealSimd::lanes;
 
-        TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Color::Cyan);
+        TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Core::Color::Cyan);
 
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
@@ -1212,7 +1212,7 @@ namespace PS_AGONY
 
     void Simulation::computeRotationCosSin()
     {
-        TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Color::Teal);
+        TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Core::Color::Teal);
 
         FastCosSin::order4CosSin(
             bodies.rotation.data(),
@@ -1226,7 +1226,7 @@ namespace PS_AGONY
     {
 
 
-        TRACY_SCOPE_NC("Compute true positions", Ecstasy::Color::Magenta);
+        TRACY_SCOPE_NC("Compute true positions", Ecstasy::Core::Color::Magenta);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();

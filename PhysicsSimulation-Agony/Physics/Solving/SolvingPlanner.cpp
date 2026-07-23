@@ -1,7 +1,7 @@
 #include "SolvingPlanner.h"
 #include "../ContainerUtilities.h"
 
-#include "EcstasyCore/TracyProfiler.h"
+#include "Ecstasy/Core/TracyProfiler.h"
 
 #include <numeric>
 #include <iostream>
@@ -50,7 +50,7 @@ namespace PS_AGONY
 
             // Pass 1: Process unallocated or fully matching pairs.
             {
-                TRACY_SCOPE_NC("Pass1", Ecstasy::Color::Cyan);
+                TRACY_SCOPE_NC("Pass1", Ecstasy::Core::Color::Cyan);
                 for (size_t idx : remainingIndices)
                 {
                     const ObjectPair& c = collisions[idx];
@@ -101,7 +101,7 @@ namespace PS_AGONY
 
             // Pass 2: Process the partially claimed pairs.
             {
-                TRACY_SCOPE_NC("Pass2", Ecstasy::Color::Yellow);
+                TRACY_SCOPE_NC("Pass2", Ecstasy::Core::Color::Yellow);
                 for (size_t idx : delayedIndices)
                 {
                     const ObjectPair& c = collisions[idx];
@@ -137,7 +137,7 @@ namespace PS_AGONY
             }
 
             {
-                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Color::Magenta);
+                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Core::Color::Magenta);
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;
@@ -205,7 +205,7 @@ namespace PS_AGONY
 
                 // Pass 1: Process unallocated or fully matching pairs first.
                 {
-                    TRACY_SCOPE_NC("Pass1", Ecstasy::Color::Cyan);
+                    TRACY_SCOPE_NC("Pass1", Ecstasy::Core::Color::Cyan);
                     for (size_t idx : wavePool)
                     {
                         const ObjectPair& c = collisions[idx];
@@ -283,7 +283,7 @@ namespace PS_AGONY
 
                 // Pass 2: Process the partially claimed pairs later in the loop.
                 {
-                    TRACY_SCOPE_NC("Pass2", Ecstasy::Color::Yellow);
+                    TRACY_SCOPE_NC("Pass2", Ecstasy::Core::Color::Yellow);
                     for (size_t idx : delayedIndices)
                     {
                         const ObjectPair& c = collisions[idx];
@@ -358,7 +358,7 @@ namespace PS_AGONY
             }
 
             {
-                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Color::Magenta);
+                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Core::Color::Magenta);
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;
@@ -424,7 +424,7 @@ namespace PS_AGONY
 
             // Pass 1: Process unallocated or fully matching cache-line groups.
             {
-                TRACY_SCOPE_NC("Pass1", Ecstasy::Color::Cyan);
+                TRACY_SCOPE_NC("Pass1", Ecstasy::Core::Color::Cyan);
                 for (size_t idx : remainingIndices)
                 {
                     const ObjectPair& c = collisions[idx];
@@ -478,7 +478,7 @@ namespace PS_AGONY
 
             // Pass 2: Process the partially claimed groups.
             {
-                TRACY_SCOPE_NC("Pass2", Ecstasy::Color::Yellow);
+                TRACY_SCOPE_NC("Pass2", Ecstasy::Core::Color::Yellow);
                 for (size_t idx : delayedIndices)
                 {
                     const ObjectPair& c = collisions[idx];
@@ -517,7 +517,7 @@ namespace PS_AGONY
             }
 
             {
-                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Color::Magenta);
+                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Core::Color::Magenta);
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;

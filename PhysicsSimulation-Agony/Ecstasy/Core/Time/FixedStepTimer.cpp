@@ -1,6 +1,6 @@
 #include "FixedStepTimer.h"
 
-namespace Ecstasy::Time
+namespace Ecstasy::Core::Time
 {
 	FixedStepTimer::FixedStepTimer(double updatesPerSecond) :
 		accumulatedTime(0.0), updateInterval(updatesPerSecond > 0.0 ? 1.0 / updatesPerSecond : 0.0)

@@ -1,7 +1,7 @@
 #pragma once
 #include "Core/MemoryAllocation/AlignedAllocator.h"
 
-#include "EcstasyCore/Simd.h"
+#include "Ecstasy/Core/Simd.h"
 
 #include "Types.h"
 
@@ -16,10 +16,10 @@ namespace PS_AGONY
 	using AlignedVector64 = std::vector<T, AlignedAllocator<T, 64>>;
 
 	template<typename T>
-	using SimdAlignedVector = AlignedVector<T, Ecstasy::Simd<T>::bytes>;
+	using SimdAlignedVector = AlignedVector<T, Ecstasy::Core::Simd<T>::bytes>;
 
 	template<typename T>
-	using RealSimdAlignedVector = AlignedVector<T, Ecstasy::Simd<Real>::bytes>;
+	using RealSimdAlignedVector = AlignedVector<T, Ecstasy::Core::Simd<Real>::bytes>;
 
 	template<typename T>
 	using CacheLineAlignedVector = AlignedVector<T, std::hardware_destructive_interference_size>;

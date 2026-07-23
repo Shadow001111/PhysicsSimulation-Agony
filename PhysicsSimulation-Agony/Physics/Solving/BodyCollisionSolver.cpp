@@ -2,8 +2,8 @@
 #include "../Threading.h"
 #include "../GraphUtilities.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
 
 #include <iostream>
 
@@ -25,7 +25,7 @@ namespace PS_AGONY
 		uint32_t positionIterations
 	)
 	{
-		TRACY_SCOPE_NC("Solve collisions", Ecstasy::Color::OliveDrab);
+		TRACY_SCOPE_NC("Solve collisions", Ecstasy::Core::Color::OliveDrab);
 
 		const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
 
@@ -54,7 +54,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		{
-			TRACY_SCOPE_NC("Collect body pairs from collision data", Ecstasy::Color::Red);
+			TRACY_SCOPE_NC("Collect body pairs from collision data", Ecstasy::Core::Color::Red);
 
 			const size_t collisionCount = narrowPhaseCollisions.size();
 
@@ -66,7 +66,7 @@ namespace PS_AGONY
 			}
 		}
 		{
-			TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
+			TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
 			solvingPlanner->setWorkerCount(workerCount);
 
 			solvingPlanner->planStandardExecution(collidingBodyPairs, bodies->getCount());
@@ -115,7 +115,7 @@ namespace PS_AGONY
 
 	Vec2 BodyCollisionSolver::computeConstraintErrors() const
 	{
-		TRACY_SCOPE_NC("Compute (body collision) constraint errors", Ecstasy::Color::Gray);
+		TRACY_SCOPE_NC("Compute (body collision) constraint errors", Ecstasy::Core::Color::Gray);
 
 		const size_t collisionCount = debugCollisionDataContainer.size();
 		if (collisionCount == 0) return { Real(0), Real(0) };
@@ -230,7 +230,7 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer)
 	{
-		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -351,7 +351,7 @@ namespace PS_AGONY
 		std::span<const VelocityConstraintData> constraintDataContainer
 	)
 	{
-		TRACY_SCOPE_NC("Apply warm starting (body collisions)", Ecstasy::Color::Violet);
+		TRACY_SCOPE_NC("Apply warm starting (body collisions)", Ecstasy::Core::Color::Violet);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -433,7 +433,7 @@ namespace PS_AGONY
 		std::span<const FrictionData> frictionDataContainer
 	)
 	{
-		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Color::Violet);
+		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Core::Color::Violet);
 
 		// Compile-time strategy dispatch
 		if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::Sequential)
@@ -765,7 +765,7 @@ namespace PS_AGONY
 		std::span<const PositionConstraintData> constraintDataContainer
 	)
 	{
-		TRACY_SCOPE_NC("Solve collision position constraints", Ecstasy::Color::Indigo);
+		TRACY_SCOPE_NC("Solve collision position constraints", Ecstasy::Core::Color::Indigo);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();

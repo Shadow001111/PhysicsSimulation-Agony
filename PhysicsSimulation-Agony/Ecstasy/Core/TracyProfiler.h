@@ -2,7 +2,7 @@
 #include <tracy/Tracy.hpp>
 #include <cstdint>
 
-namespace Ecstasy
+namespace Ecstasy::Core
 {
     enum class Color : uint32_t
     {

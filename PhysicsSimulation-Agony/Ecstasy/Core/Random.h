@@ -3,7 +3,7 @@
 #include <concepts>
 #include <limits>
 
-namespace Ecstasy::Random
+namespace Ecstasy::Core::Random
 {
     class Generator
     {

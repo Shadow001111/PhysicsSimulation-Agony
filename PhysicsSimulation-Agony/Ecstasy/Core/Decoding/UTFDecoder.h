@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-namespace Ecstasy::Decoding
+namespace Ecstasy::Core::Decoding
 {
     constexpr uint32_t INVALID_UTF_CODEPOINT = -1;
 

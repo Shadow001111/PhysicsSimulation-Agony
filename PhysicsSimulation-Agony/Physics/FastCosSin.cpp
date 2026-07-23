@@ -1,16 +1,16 @@
 #include "FastCosSin.h"
 #include "Constants.h"
 
-#include "EcstasyCore/Simd.h"
+#include "Ecstasy/Core/Simd.h"
 
 #include <cmath>
 
 namespace PS_AGONY::FastCosSin
 {
-	using RealSimd = Ecstasy::Simd<Real>;
+	using RealSimd = Ecstasy::Core::Simd<Real>;
 	using IntSimd = std::conditional_t<sizeof(Real) == 8,
-		Ecstasy::Simd<int64_t>,
-		Ecstasy::Simd<int32_t>>;
+		Ecstasy::Core::Simd<int64_t>,
+		Ecstasy::Core::Simd<int32_t>>;
 
 	void order4CosSin(
 		const Real* ECSTASY_RESTRICT inAngleArray,

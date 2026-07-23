@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Ecstasy::Time
+namespace Ecstasy::Core::Time
 {
 	class FixedStepTimer
 	{

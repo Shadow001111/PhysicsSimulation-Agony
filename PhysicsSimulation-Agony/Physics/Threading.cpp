@@ -4,8 +4,8 @@ namespace PS_AGONY::Threading
 {
 	ThreadPool& getGlobalThreadPool()
 	{
-		static Ecstasy::Threading::ThreadPool pool(
-			std::thread::hardware_concurrency(), Ecstasy::Threading::ThreadPool::CoreMode::AnyCores
+		static Ecstasy::Core::Threading::ThreadPool pool(
+			std::thread::hardware_concurrency(), Ecstasy::Core::Threading::ThreadPool::CoreMode::AnyCores
 		);
 		return pool;
 	}

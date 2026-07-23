@@ -1,8 +1,8 @@
 #include "SpringSolver.h"
 #include "../Threading.h"
 
-#include "EcstasyCore/TracyProfiler.h"
-#include "EcstasyCore/Portablity.h"
+#include "Ecstasy/Core/TracyProfiler.h"
+#include "Ecstasy/Core/Portablity.h"
 
 #include <iostream>
 
@@ -43,7 +43,7 @@ namespace PS_AGONY
 		// Single-threaded path.
 		if (workerCount <= 1)
 		{
-			TRACY_SCOPE_NC("Solve springs (Single-threaded)", Ecstasy::Color::OliveDrab);
+			TRACY_SCOPE_NC("Solve springs (Single-threaded)", Ecstasy::Core::Color::OliveDrab);
 
 			if (orderedSpringIndices.size() != springCount)
 			{
@@ -64,11 +64,11 @@ namespace PS_AGONY
 		}
 
 		// Multi-threading path.
-		TRACY_SCOPE_NC("Solve springs (Multi-threaded)", Ecstasy::Color::OliveDrab);
+		TRACY_SCOPE_NC("Solve springs (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
 		if (springsWereChanged || solvingPlanner->getFlatIndices().size() != springCount)
 		{
 			{
-				TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Color::Red);
+				TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Core::Color::Red);
 				springBodyPairs.resize(springCount);
 				for (size_t i = 0; i < springCount; i++)
 				{
@@ -76,7 +76,7 @@ namespace PS_AGONY
 				}
 			}
 			{
-				TRACY_SCOPE_NC("Plan execution", Ecstasy::Color::Blue);
+				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
 				solvingPlanner->setWorkerCount(workerCount);
 
 				solvingPlanner->planCacheLineAwareExecution(
@@ -120,7 +120,7 @@ namespace PS_AGONY
 
 	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices)
 	{
-		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -239,7 +239,7 @@ namespace PS_AGONY
 		std::span<const SpringConstraintData> constraintDataContainer
 	)
 	{
-		TRACY_SCOPE_NC("Solve spring velocity constraints", Ecstasy::Color::Violet);
+		TRACY_SCOPE_NC("Solve spring velocity constraints", Ecstasy::Core::Color::Violet);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();

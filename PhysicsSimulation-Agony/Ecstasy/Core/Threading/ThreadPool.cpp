@@ -8,7 +8,7 @@
 #include <bit>
 #include <immintrin.h>
 
-namespace Ecstasy::Threading
+namespace Ecstasy::Core::Threading
 {
     ThreadPool::ThreadPool(size_t numThreads, CoreMode coreMode)
     {
@@ -168,14 +168,14 @@ namespace Ecstasy::Threading
             // Try to get task from queue.
             Task task;
             {
-                //TRACY_SCOPE_NC("Try pop", Ecstasy::Color::Gray);
+                //TRACY_SCOPE_NC("Try pop", Ecstasy::Core::Color::Gray);
                 task = tasks.steal();
             }
             if (task)
             {
                 pool->onTaskClaimed();
 
-                //TRACY_SCOPE_NC("Execute task", Ecstasy::Color::NavajoWhite);
+                //TRACY_SCOPE_NC("Execute task", Ecstasy::Core::Color::NavajoWhite);
                 try
                 {
                     task();
@@ -192,7 +192,7 @@ namespace Ecstasy::Threading
             {
                 bool taskStolen = false;
                 {
-                    //TRACY_SCOPE_NC("Try steal", Ecstasy::Color::Gray);
+                    //TRACY_SCOPE_NC("Try steal", Ecstasy::Core::Color::Gray);
                     for (size_t i = 1; i < workerCount; i++)
                     {
                         size_t victimIdx = (threadId + i) % workerCount;
@@ -208,7 +208,7 @@ namespace Ecstasy::Threading
                 }
                 if (taskStolen)
                 {
-                    //TRACY_SCOPE_NC("Execute task", Ecstasy::Color::NavajoWhite);
+                    //TRACY_SCOPE_NC("Execute task", Ecstasy::Core::Color::NavajoWhite);
                     try
                     {
                         task();
@@ -225,7 +225,7 @@ namespace Ecstasy::Threading
             // No work found.
             if (!task)
             {
-                //TRACY_SCOPE_NC("Thread spin/sleep", Ecstasy::Color::Black);
+                //TRACY_SCOPE_NC("Thread spin/sleep", Ecstasy::Core::Color::Black);
 
                 // Spin.
                 bool returnToStart = false;

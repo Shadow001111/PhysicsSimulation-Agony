@@ -8,7 +8,7 @@
 #include <utility>
 #include <thread>
 
-namespace Ecstasy::Threading
+namespace Ecstasy::Core::Threading
 {
     class ChaseLevQueue
     {
