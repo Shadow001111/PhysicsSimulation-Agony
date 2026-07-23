@@ -260,7 +260,7 @@
     <ClCompile Include="OpenGLWrappers\DrawCommands.cpp" />
     <ClCompile Include="Ecstasy\Graphics\TextRenderer.cpp" />
     <ClCompile Include="Ecstasy\Graphics\TextureLoader.cpp" />
-    <ClCompile Include="Input\InputManager.cpp" />
+    <ClCompile Include="Ecstasy\Graphics\Input\InputManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="OpenGLWrappers\FrameBuffer.cpp" />
     <ClCompile Include="OpenGLWrappers\ImmutableBuffer.cpp" />
@@ -322,7 +322,7 @@
     <ClInclude Include="OpenGLWrappers\DrawCommands.h" />
     <ClInclude Include="Ecstasy\Graphics\TextRenderer.h" />
     <ClInclude Include="Ecstasy\Graphics\TextureLoader.h" />
-    <ClInclude Include="Input\InputManager.h" />
+    <ClInclude Include="Ecstasy\Graphics\Input\InputManager.h" />
     <ClInclude Include="OpenGLWrappers\FrameBuffer.h" />
     <ClInclude Include="OpenGLWrappers\ImmutableBuffer.h" />
     <ClInclude Include="OpenGLWrappers\Shader.h" />

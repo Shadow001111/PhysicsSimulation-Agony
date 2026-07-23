@@ -8,7 +8,7 @@
 
 namespace fs = std::filesystem;
 
-namespace TextureLoader
+namespace Ecstasy::Graphics::TextureLoader
 {
     namespace
     {
