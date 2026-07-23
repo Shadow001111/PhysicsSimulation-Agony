@@ -1,5 +1,5 @@
 #pragma once
-#include "OpenGLWrappers/FrameBuffer.h"
+#include "Ecstasy/OpenGL/FrameBuffer.h"
 
 #include "Input/InputManager.h"
 
@@ -22,7 +22,7 @@ namespace Ecstasy::Graphics
     {
         GLFWwindow* window = nullptr;
 
-        robin_hood::unordered_flat_set<FrameBuffer*> linkedFramebuffers;
+        robin_hood::unordered_flat_set<OpenGL::FrameBuffer*> linkedFramebuffers;
         robin_hood::unordered_flat_set<Input::InputManager*> linkedInputManagers;
 
         int width = 0, height = 0;
@@ -37,9 +37,9 @@ namespace Ecstasy::Graphics
         bool shouldClose() const;
 
         // Framebuffer linkage (for resizing)
-        void linkFramebuffer(FrameBuffer* fbo);
-        void unlinkFramebuffer(FrameBuffer* fbo);
-        bool isFramebufferLinked(FrameBuffer* fbo) const;
+        void linkFramebuffer(OpenGL::FrameBuffer* fbo);
+        void unlinkFramebuffer(OpenGL::FrameBuffer* fbo);
+        bool isFramebufferLinked(OpenGL::FrameBuffer* fbo) const;
 
         // Input manager linkage
         void linkInputManager(Input::InputManager* im);

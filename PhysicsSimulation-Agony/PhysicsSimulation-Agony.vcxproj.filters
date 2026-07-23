@@ -42,7 +42,7 @@
     <ClCompile Include="Ecstasy\Core\Time\FixedStepTimer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OpenGLWrappers\DrawCommands.cpp">
+    <ClCompile Include="Ecstasy\OpenGL\DrawCommands.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Ecstasy\Graphics\TextRenderer.cpp">
@@ -54,19 +54,19 @@
     <ClCompile Include="Ecstasy\Graphics\Input\InputManager.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OpenGLWrappers\FrameBuffer.cpp">
+    <ClCompile Include="Ecstasy\OpenGL\FrameBuffer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OpenGLWrappers\ImmutableBuffer.cpp">
+    <ClCompile Include="Ecstasy\OpenGL\ImmutableBuffer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OpenGLWrappers\Shader.cpp">
+    <ClCompile Include="Ecstasy\OpenGL\Shader.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OpenGLWrappers\Texture.cpp">
+    <ClCompile Include="Ecstasy\OpenGL\Texture.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OpenGLWrappers\VertexArray.cpp">
+    <ClCompile Include="Ecstasy\OpenGL\VertexArray.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="main.cpp">
@@ -164,7 +164,7 @@
     <ClInclude Include="Ecstasy\Core\Time\FixedStepTimer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="OpenGLWrappers\DrawCommands.h">
+    <ClInclude Include="Ecstasy\OpenGL\DrawCommands.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Ecstasy\Graphics\TextRenderer.h">
@@ -176,19 +176,19 @@
     <ClInclude Include="Ecstasy\Graphics\Input\InputManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="OpenGLWrappers\FrameBuffer.h">
+    <ClInclude Include="Ecstasy\OpenGL\FrameBuffer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="OpenGLWrappers\ImmutableBuffer.h">
+    <ClInclude Include="Ecstasy\OpenGL\ImmutableBuffer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="OpenGLWrappers\Shader.h">
+    <ClInclude Include="Ecstasy\OpenGL\Shader.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="OpenGLWrappers\Texture.h">
+    <ClInclude Include="Ecstasy\OpenGL\Texture.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="OpenGLWrappers\VertexArray.h">
+    <ClInclude Include="Ecstasy\OpenGL\VertexArray.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Simulation.h">

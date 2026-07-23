@@ -37,14 +37,14 @@ namespace Ecstasy::Graphics::TextureLoader
         }
 
         // Converts an integer channel count to the TextureCompression::Channels enum.
-        TextureCompression::Channels toCompressionChannels(int channels)
+        OpenGL::TextureCompression::Channels toCompressionChannels(int channels)
         {
             switch (channels)
             {
-            case 1:  return TextureCompression::Channels::R;
-            case 2:  return TextureCompression::Channels::RG;
-            case 3:  return TextureCompression::Channels::RGB;
-            default: return TextureCompression::Channels::RGBA;
+            case 1:  return OpenGL::TextureCompression::Channels::R;
+            case 2:  return OpenGL::TextureCompression::Channels::RG;
+            case 3:  return OpenGL::TextureCompression::Channels::RGB;
+            default: return OpenGL::TextureCompression::Channels::RGBA;
             }
         }
 
@@ -108,7 +108,7 @@ namespace Ecstasy::Graphics::TextureLoader
     // -----------------------------------------------------------------------
 
     void createTexture2DFromImage(
-        Texture& texture,
+        OpenGL::Texture& texture,
         const fs::path& texturePath,
         const TextureLoadParams& params)
     {
@@ -119,7 +119,7 @@ namespace Ecstasy::Graphics::TextureLoader
         const bool loaded = loadAndProcessImage(
             texturePath, params.desiredChannels, imageData, width, height);
 
-        const GLenum fmt = TextureCompression::resolveInternalFormat(
+        const GLenum fmt = OpenGL::TextureCompression::resolveInternalFormat(
             params.compression,
             toCompressionChannels(params.desiredChannels),
             params.isHDR);
@@ -149,7 +149,7 @@ namespace Ecstasy::Graphics::TextureLoader
     }
 
     void createTextureArrayFromImages(
-        Texture& texture,
+        OpenGL::Texture& texture,
         const fs::path& texturesFolderPath,
         const std::vector<std::string>& textureNames,
         const TextureLoadParams& params)
@@ -181,7 +181,7 @@ namespace Ecstasy::Graphics::TextureLoader
         if (sharedWidth == 0 || sharedHeight == 0)
             sharedWidth = sharedHeight = 16;
 
-        const GLenum fmt = TextureCompression::resolveInternalFormat(
+        const GLenum fmt = OpenGL::TextureCompression::resolveInternalFormat(
             params.compression,
             toCompressionChannels(params.desiredChannels),
             params.isHDR);
@@ -228,7 +228,7 @@ namespace Ecstasy::Graphics::TextureLoader
     }
 
     void createTexture3DFromFloatData(
-        Texture& texture,
+        OpenGL::Texture& texture,
         const std::vector<float>& data,
         int width, int height, int depth,
         const TextureLoadParams& params)
@@ -245,7 +245,7 @@ namespace Ecstasy::Graphics::TextureLoader
         }
 
         // Block-compressed formats are not valid for GL_TEXTURE_3D in OpenGL.
-        if (params.compression != TextureCompression::Format::NONE)
+        if (params.compression != OpenGL::TextureCompression::Format::NONE)
         {
             std::cerr << "[TextureLoader][createTexture3DFromFloatData]: "
                 "Block-compressed formats are not supported for 3D textures. "

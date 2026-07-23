@@ -499,23 +499,23 @@ static int gameFunc()
     ImGui_ImplOpenGL3_Init("#version 460");
 
     // Textures.
-    Texture::initGlobalData();
+    Ecstasy::OpenGL::Texture::initGlobalData();
 
     // Create framebuffer.
-    FrameBuffer framebuffer;
+    Ecstasy::OpenGL::FrameBuffer framebuffer;
     {
         TRACY_SCOPE_N("Create framebuffer");
 
         framebuffer.create(wnd.getWidth(), wnd.getHeight());
 
-        const Texture::Parameters params
+        const  Ecstasy::OpenGL::Texture::Parameters params
         {
             .minFilter = GL_NEAREST,
             .magFilter = GL_NEAREST,
             .wrapS = GL_CLAMP_TO_EDGE,
             .wrapT = GL_CLAMP_TO_EDGE
         };
-        const bool bindless = Texture::getExtensions().bindless;
+        const bool bindless = Ecstasy::OpenGL::Texture::getExtensions().bindless;
 
         framebuffer.createColorAttachment("color", GL_RGBA8, params, bindless);
 

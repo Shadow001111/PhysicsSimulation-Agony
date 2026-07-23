@@ -145,7 +145,7 @@ namespace Ecstasy::Graphics
         return glfwWindowShouldClose(window);
     }
 
-    void WindowManager::linkFramebuffer(FrameBuffer* fbo)
+    void WindowManager::linkFramebuffer(OpenGL::FrameBuffer* fbo)
     {
         if (fbo == nullptr)
         {
@@ -157,12 +157,12 @@ namespace Ecstasy::Graphics
         fbo->resize(width, height);
     }
 
-    void WindowManager::unlinkFramebuffer(FrameBuffer* fbo)
+    void WindowManager::unlinkFramebuffer(OpenGL::FrameBuffer* fbo)
     {
         linkedFramebuffers.erase(fbo);
     }
 
-    bool WindowManager::isFramebufferLinked(FrameBuffer* fbo) const
+    bool WindowManager::isFramebufferLinked(OpenGL::FrameBuffer* fbo) const
     {
         return linkedFramebuffers.contains(fbo);
     }
