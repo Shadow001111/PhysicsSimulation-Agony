@@ -5,5 +5,5 @@
 
 namespace PS_AGONY
 {
-	using Camera2D = Ecstasy::Graphics::Camera2D<Ecstasy::Graphics::FloatingPointSystem<Real>>;
+	using Camera2D = Ecstasy::Graphics::Camera2D<Ecstasy::Core::FloatingPointSystem<Real>>;
 }

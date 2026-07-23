@@ -285,7 +285,7 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
-    <ClInclude Include="Ecstasy\Graphics\FloatingPoint.h" />
+    <ClInclude Include="Ecstasy\Core\FloatingPoint.h" />
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="Physics\GraphUtilities.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />

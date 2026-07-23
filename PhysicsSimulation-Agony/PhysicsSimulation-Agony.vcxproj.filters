@@ -338,7 +338,7 @@
     <ClInclude Include="Physics\GraphUtilities.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Ecstasy\Graphics\FloatingPoint.h">
+    <ClInclude Include="Ecstasy\Core\FloatingPoint.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Camera2D.h">
