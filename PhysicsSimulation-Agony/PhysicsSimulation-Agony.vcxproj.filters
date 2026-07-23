@@ -344,6 +344,12 @@
     <ClInclude Include="Physics\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedAllocator.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedStorage.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />

@@ -286,6 +286,8 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
     <ClInclude Include="Ecstasy\Core\FloatingPoint.h" />
+    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedAllocator.h" />
+    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedStorage.h" />
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="Physics\GraphUtilities.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />

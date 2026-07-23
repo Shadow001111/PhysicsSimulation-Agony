@@ -1,6 +1,5 @@
 #include "Scenes.h"
 
-#include "Core/FileLogger.h"
 #include "Ecstasy/Core/TracyProfiler.h"
 
 #include "Physics/Simulation.h"
@@ -16,6 +15,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <thread>
 
 
 static std::string formatSize(size_t value)
@@ -731,20 +731,6 @@ int main()
     int result = 0;
 
     result = gameFunc();
-
-    /*try
-    {
-        result = gameFunc();
-    }
-    catch (const std::exception& e)
-    {
-        FileLogger logger("log/crash.txt");
-
-        std::string message = "EXCEPTION: " + std::string(e.what());
-
-        logger.add(message);
-        result = -1;
-    }*/
 
     return result;
 }

@@ -1,6 +1,5 @@
 #pragma once
-#include "Core/MemoryAllocation/AlignedAllocator.h"
-
+#include "Ecstasy/Core/MemoryAllocation/AlignedAllocator.h"
 #include "Ecstasy/Core/Simd.h"
 
 #include "Types.h"
@@ -9,6 +8,8 @@
 
 namespace PS_AGONY
 {
+	using namespace Ecstasy::Core::MemoryAllocation;
+
 	template<typename T, size_t aligment>
 	using AlignedVector = std::vector<T, AlignedAllocator<T, aligment>>;
 
