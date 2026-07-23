@@ -3,10 +3,10 @@
 #include <memory>
 #include <functional>
 
-#include "OpenGLWrappers/Shader.h"
-#include "OpenGLWrappers/ImmutableBuffer.h"
-#include "OpenGLWrappers/VertexArray.h"
-#include "OpenGLWrappers/Texture.h"
+#include "Ecstasy/OpenGL/Shader.h"
+#include "Ecstasy/OpenGL/ImmutableBuffer.h"
+#include "Ecstasy/OpenGL/VertexArray.h"
+#include "Ecstasy/OpenGL/Texture.h"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -33,7 +33,7 @@ namespace Ecstasy::Graphics
         float fontSize = 0.0f;
         uint32_t glyphTextureCount = 0;
 
-        Texture textureArray;
+        OpenGL::Texture textureArray;
 
         Font() = default;
         ~Font() = default;
@@ -90,11 +90,11 @@ namespace Ecstasy::Graphics
         robin_hood::unordered_flat_map<std::string, Font> fonts;
         Font* currentFont = nullptr;
 
-        VertexArray textVAO;
-        ImmutableBuffer textVBO;
-        ImmutableBuffer textInstanceVBO;
+        OpenGL::VertexArray textVAO;
+        OpenGL::ImmutableBuffer textVBO;
+        OpenGL::ImmutableBuffer textInstanceVBO;
 
-        Shader textShader;
+        OpenGL::Shader textShader;
         glm::mat4 projectionMatrix;
 
         size_t glyphInstanceBatchSize = 0;

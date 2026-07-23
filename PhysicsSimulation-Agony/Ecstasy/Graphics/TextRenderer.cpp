@@ -135,7 +135,7 @@ namespace Ecstasy::Graphics
         projectionMatrix(glm::identity<glm::mat4>())
     {
         // Shaders
-        std::vector<Shader::ShaderSource> textShaderSources =
+        std::vector<OpenGL::Shader::ShaderSource> textShaderSources =
         {
             {GL_VERTEX_SHADER, "res/Shaders/text.vert"},
             {GL_FRAGMENT_SHADER, "res/Shaders/text.frag"}
@@ -241,8 +241,8 @@ namespace Ecstasy::Graphics
 
             font.textureArray.create2DArrayCompressed(
                 width, height, font.glyphTextureCount,
-                TextureCompression::Channels::R,
-                TextureCompression::Format::AUTO
+                OpenGL::TextureCompression::Channels::R,
+                OpenGL::TextureCompression::Format::AUTO
             );
         }
 
@@ -405,8 +405,8 @@ namespace Ecstasy::Graphics
 
         font.textureArray.create2DArrayCompressed(
             header.textureArrayDims.x, header.textureArrayDims.y, header.glyphTextureCount,
-            TextureCompression::Channels::R,
-            TextureCompression::Format::AUTO
+            OpenGL::TextureCompression::Channels::R,
+            OpenGL::TextureCompression::Format::AUTO
         );
 
         // Upload data to texture array
@@ -422,7 +422,7 @@ namespace Ecstasy::Graphics
 
     void TextRenderer::finalizeFontTexture(Font& font)
     {
-        const Texture::Parameters defaultParams{
+        const OpenGL::Texture::Parameters defaultParams{
             .minFilter = GL_NEAREST,
             .magFilter = GL_NEAREST,
             .wrapS = GL_CLAMP_TO_EDGE,
@@ -430,7 +430,7 @@ namespace Ecstasy::Graphics
         };
         font.textureArray.setParameters(defaultParams);
 
-        if (Texture::getExtensions().bindless)
+        if (OpenGL::Texture::getExtensions().bindless)
         {
             font.textureArray.initHandle();
             font.textureArray.makeResident();
@@ -734,13 +734,13 @@ namespace Ecstasy::Graphics
 
 
         // Pass texture handle to shader
-        if (Texture::getExtensions().bindless)
+        if (OpenGL::Texture::getExtensions().bindless)
         {
             inst.textShader.setHandleui64ARB("glyphTextureArray", inst.currentFont->textureArray.getHandle());
         }
 
         // Make previous font texture non-resident if needed
-        if (previousFont && previousFont != inst.currentFont && Texture::getExtensions().bindless)
+        if (previousFont && previousFont != inst.currentFont && OpenGL::Texture::getExtensions().bindless)
         {
             previousFont->textureArray.makeNonResident();
         }
@@ -764,7 +764,7 @@ namespace Ecstasy::Graphics
         glDepthMask(GL_FALSE);
 
         inst.textVAO.bind();
-        if (!Texture::getExtensions().bindless)
+        if (!OpenGL::Texture::getExtensions().bindless)
         {
             font->textureArray.bindUnit(0);
         }
