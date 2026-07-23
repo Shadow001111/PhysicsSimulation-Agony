@@ -1,11 +1,11 @@
 #pragma once
-#include "FloatingPoint.h"
+#include "Ecstasy/Core/FloatingPoint.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace Ecstasy::Graphics
 {
-	template<IsFloatingPointSystem FPSystem = FloatingPointSystem<float>>
+	template<Core::IsFloatingPointSystem FPSystem = Core::FloatingPointSystem<float>>
 	class Camera2D
 	{
 		using Real = typename FPSystem::Real;

@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-namespace Ecstasy::Graphics
+namespace Ecstasy::Core
 {
 	template<std::floating_point TReal>
 	struct FloatingPointSystem
