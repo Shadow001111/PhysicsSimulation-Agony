@@ -208,7 +208,12 @@ namespace PS_AGONY
 
 	size_t BodyCollisionSolver::planWorkerCount(size_t collisionCount) const
 	{
-		return 0; // Disabled multi-threading.
+		// Disabled multi-threading.Because having two additional threads drops execution time to 83% only.
+		// I think cache-sharing is happening between threads.
+		// I have SolvingPlanner function to arrange them by cache lines, but it's heavily reliant on body indices ordering.
+		// It struggles much if collision graph is dense and random. It also makes wave count explode.
+		// Efficiency metric matters (I guess), but wave count matters more (I guess).
+		return 0;
 
 		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830 * 4;
 		static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 2;
