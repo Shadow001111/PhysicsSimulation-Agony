@@ -74,14 +74,20 @@ namespace PS_AGONY
         return false;
     };
 
-    static void projectVerticesOnAxis(const std::vector<Vec2>& vertices, const Vec2 axis, Real& minOut, Real& maxOut)
+    static void projectVerticesOnAxis(
+        const Vec2* ECSTASY_RESTRICT verticesPtr,
+        size_t vertexCount,
+        const Vec2& axis,
+        Real& ECSTASY_RESTRICT minOut,
+        Real& ECSTASY_RESTRICT maxOut
+    )
     {
         minOut =  std::numeric_limits<Real>::max();
         maxOut = -std::numeric_limits<Real>::max();
 
-        for (const Vec2& v : vertices)
+        for (size_t i = 0; i < vertexCount; i++)
         {
-            const Real proj = glm::dot(v, axis);
+            const Real proj = glm::dot(verticesPtr[i], axis);
             minOut = std::fmin(minOut, proj);
             maxOut = std::fmax(maxOut, proj);
         }
@@ -1197,7 +1203,7 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        static thread_local std::vector<Vec2> polyWorldVerts;
+        static thread_local std::vector<Vec2> polyVertsB_inA;
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1216,222 +1222,261 @@ namespace PS_AGONY
             const Real halfHeightA = halfHeightPtr[shapeA];
 
             const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
-            const Vec2* localVerts = localPolygonVertices.data();
+            const Vec2* localVertsB = localPolygonVertices.data();
             const size_t vertexCount = localPolygonVertices.size();
             if (vertexCount < 3) [[unlikely]] continue;
 
             const Vec2 rightA = {  cosA, sinA };
             const Vec2 upA    = { -sinA, cosA };
-            const Vec2 rightB = {  cosB, sinB };
-            const Vec2 upB    = { -sinB, cosB };
 
-            polyWorldVerts.resize(vertexCount);
+            // Transform Body B into Body A's local space.
+            const Vec2 centerDelta = positionB - positionA;
+            const Vec2 centerDeltaLocal = {
+                glm::dot(centerDelta, rightA),
+                glm::dot(centerDelta, upA)
+            };
 
+            const Real relCos = cosA * cosB + sinA * sinB;
+            const Real relSin = cosA * sinB - sinA * cosB;
+
+            polyVertsB_inA.resize(vertexCount);
             for (size_t i = 0; i < vertexCount; i++)
             {
-                const Vec2 v = localVerts[i];
-                polyWorldVerts[i] = positionB + rightB * v.x + upB * v.y;
+                const Vec2& v = localVertsB[i];
+                polyVertsB_inA[i] = {
+                    centerDeltaLocal.x + relCos * v.x - relSin * v.y,
+                    centerDeltaLocal.y + relSin * v.x + relCos * v.y
+                };
             }
 
-            const Vec2 centerDelta = positionB - positionA;
-
-            Vec2 normal;
+            Vec2 normalLocal;
             Real depth = std::numeric_limits<Real>::max();
             SATAxis bestAxisType = SATAxis::BOX_RIGHT;
             uint32_t bestAxisIndex = 0;
             Real bestAxisFacing = std::numeric_limits<Real>::max();
 
-            auto testAxis = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
+            // Test Box X axis in local space.
+            {
+                Real polyMinX = polyVertsB_inA[0].x;
+                Real polyMaxX = polyMinX;
+                for (size_t i = 1; i < vertexCount; i++)
                 {
-                    const Real axisLenSquared = glm::dot(axis, axis);
-                    if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]] return true;
+                    polyMinX = std::fmin(polyMinX, polyVertsB_inA[i].x);
+                    polyMaxX = std::fmax(polyMaxX, polyVertsB_inA[i].x);
+                }
+                const Real overlap = std::fmin(halfWidthA, polyMaxX) - std::fmax(-halfWidthA, polyMinX);
+                if (overlap < Real(0)) continue;
 
-                    axis *= Real(1) / std::sqrt(axisLenSquared);
+                const Real axisFacing = centerDeltaLocal.x;
+                depth = overlap;
+                normalLocal = Vec2(1, 0);
+                flipSignIfNegative(normalLocal, centerDeltaLocal.x);
+                bestAxisType = SATAxis::BOX_RIGHT;
+                bestAxisFacing = axisFacing;
+            }
 
-                    const Real boxRadius =
-                        halfWidthA * std::fabs(glm::dot(axis, rightA)) +
-                        halfHeightA * std::fabs(glm::dot(axis, upA));
+            // Test Box Y axis in local space.
+            {
+                Real polyMinY = polyVertsB_inA[0].y;
+                Real polyMaxY = polyMinY;
+                for (size_t i = 1; i < vertexCount; i++)
+                {
+                    polyMinY = std::fmin(polyMinY, polyVertsB_inA[i].y);
+                    polyMaxY = std::fmax(polyMaxY, polyVertsB_inA[i].y);
+                }
+                const Real overlap = std::fmin(halfHeightA, polyMaxY) - std::fmax(-halfHeightA, polyMinY);
+                if (overlap < Real(0)) continue;
 
-                    Real polyMin, polyMax;
-                    projectVerticesOnAxis(polyWorldVerts, axis, polyMin, polyMax);
+                const Real axisFacing = centerDeltaLocal.y;
+                const bool strictlyBetter = overlap < depth;
+                const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
+                if (strictlyBetter || tiedButBetterFacing)
+                {
+                    depth = overlap;
+                    normalLocal = Vec2(0, 1);
+                    flipSignIfNegative(normalLocal, centerDeltaLocal.y);
+                    bestAxisType = SATAxis::BOX_UP;
+                    bestAxisFacing = axisFacing;
+                }
+            }
 
-                    const Real boxCenterProj = glm::dot(positionA, axis);
-                    const Real boxMin = boxCenterProj - boxRadius;
-                    const Real boxMax = boxCenterProj + boxRadius;
-
-                    const Real overlap = std::fmin(boxMax, polyMax) - std::fmax(boxMin, polyMin);
-                    if (overlap < Real(0)) return false;
-
-                    const Real axisFacing = glm::dot(axis, centerDelta);
-
-                    const bool strictlyBetter = overlap < depth;
-                    const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
-
-                    if (strictlyBetter || tiedButBetterFacing)
-                    {
-                        depth = overlap;
-                        normal = axis;
-                        flipSignIfNegative(normal, glm::dot(centerDelta, normal));
-
-                        bestAxisType = axisType;
-                        bestAxisIndex = axisIndex;
-                        bestAxisFacing = axisFacing;
-                    }
-
-                    return true;
-                };
-
-            if (!testAxis(rightA, SATAxis::BOX_RIGHT, 0)) continue;
-            if (!testAxis(upA, SATAxis::BOX_UP, 0)) continue;
-
+            // Test Polygon edge outward normals in Box local space.
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
-                Vec2 axis = edgeOutwardNormal(polyWorldVerts.data(), vertexCount, i);
-                if (!testAxis(axis, SATAxis::POLY_EDGE, i)) goto nextPair;
+                const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
+                Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
+                if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]] continue;
+
+                axisLocal *= Real(1) / std::sqrt(axisLenSquared);
+
+                const Real boxRadius = halfWidthA * std::fabs(axisLocal.x) + halfHeightA * std::fabs(axisLocal.y);
+
+                Real polyMin, polyMax;
+                projectVerticesOnAxis(polyVertsB_inA.data(), polyVertsB_inA.size(), axisLocal, polyMin, polyMax);
+
+                const Real overlap = std::fmin(boxRadius, polyMax) - std::fmax(-boxRadius, polyMin);
+                if (overlap < Real(0)) goto nextPair;
+
+                const Real axisFacing = glm::dot(axisLocal, centerDeltaLocal);
+                const bool strictlyBetter = overlap < depth;
+                const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
+
+                if (strictlyBetter || tiedButBetterFacing)
+                {
+                    depth = overlap;
+                    normalLocal = axisLocal;
+                    flipSignIfNegative(normalLocal, glm::dot(centerDeltaLocal, normalLocal));
+                    bestAxisType = SATAxis::POLY_EDGE;
+                    bestAxisIndex = i;
+                    bestAxisFacing = axisFacing;
+                }
             }
 
-            const bool refIsBox = bestAxisType != SATAxis::POLY_EDGE;
-
-            Vec2 refNormal;
-            Vec2 refFaceCenter;
-            Vec2 sideDir;
-            Vec2 refEdgeStart;
-            Vec2 refEdgeEnd;
-
-            if (refIsBox)
             {
-                refNormal = normal;
+                const bool refIsBox = bestAxisType != SATAxis::POLY_EDGE;
 
-                const Real dotX = glm::dot(refNormal, rightA);
-                const Real dotY = glm::dot(refNormal, upA);
-                const bool useX = std::fabs(dotX) > std::fabs(dotY);
-                const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
+                Vec2 refNormalLocal;
+                Vec2 refFaceCenterLocal;
+                Vec2 sideDirLocal;
+                Vec2 refEdgeStartLocal;
+                Vec2 refEdgeEndLocal;
 
-                if (useX)
+                if (refIsBox)
                 {
-                    refFaceCenter = positionA + rightA * (sign * halfWidthA);
-                    sideDir = upA;
+                    refNormalLocal = normalLocal;
+
+                    const Real dotX = refNormalLocal.x;
+                    const Real dotY = refNormalLocal.y;
+                    const bool useX = std::fabs(dotX) > std::fabs(dotY);
+                    const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
+
+                    if (useX)
+                    {
+                        refFaceCenterLocal = Vec2(sign * halfWidthA, 0);
+                        sideDirLocal = Vec2(0, 1);
+                    }
+                    else
+                    {
+                        refFaceCenterLocal = Vec2(0, sign * halfHeightA);
+                        sideDirLocal = Vec2(1, 0);
+                    }
+
+                    const Vec2 edgeOffset = sideDirLocal * (useX ? halfHeightA : halfWidthA);
+                    refEdgeStartLocal = refFaceCenterLocal + edgeOffset;
+                    refEdgeEndLocal = refFaceCenterLocal - edgeOffset;
                 }
                 else
                 {
-                    refFaceCenter = positionA + upA * (sign * halfHeightA);
-                    sideDir = rightA;
+                    refNormalLocal = -normalLocal;
+
+                    const uint32_t i0 = bestAxisIndex;
+                    const uint32_t i1 = (i0 + 1) % uint32_t(vertexCount);
+
+                    refEdgeStartLocal = polyVertsB_inA[i0];
+                    refEdgeEndLocal = polyVertsB_inA[i1];
+                    refFaceCenterLocal = (refEdgeStartLocal + refEdgeEndLocal) * Real(0.5);
+
+                    const Vec2 edge = refEdgeEndLocal - refEdgeStartLocal;
+                    const Real edgeLen = std::sqrt(glm::dot(edge, edge));
+                    if (edgeLen < ZERO_DIVISION_BOUNDARY) continue;
+
+                    sideDirLocal = edge / -edgeLen;
                 }
 
-                const Vec2 edgeOffset = sideDir * (useX ? halfHeightA : halfWidthA);
-                refEdgeStart = refFaceCenter + edgeOffset;
-                refEdgeEnd = refFaceCenter - edgeOffset;
-            }
-            else
-            {
-                refNormal = -normal;
+                Vec2 incEdgeStartLocal, incEdgeEndLocal;
+                uint32_t incidentEdge, incidentEdge2;
 
-                const uint32_t i0 = bestAxisIndex;
-                const uint32_t i1 = (i0 + 1) % uint32_t(vertexCount);
-
-                refEdgeStart = polyWorldVerts[i0];
-                refEdgeEnd = polyWorldVerts[i1];
-                refFaceCenter = (refEdgeStart + refEdgeEnd) * Real(0.5);
-
-                const Vec2 edge = refEdgeEnd - refEdgeStart;
-                const Real edgeLen = std::sqrt(glm::dot(edge, edge));
-                if (edgeLen < ZERO_DIVISION_BOUNDARY) continue;
-
-                sideDir = edge / -edgeLen;
-            }
-
-            Vec2 incEdgeStart, incEdgeEnd;
-
-            uint32_t incidentEdge;
-            uint32_t incidentEdge2;
-            if (refIsBox)
-            {
-                // Incident edge is the polygon edge whose normal is most opposite the reference normal.
-                incidentEdge = 0;
-                Real minDot = std::numeric_limits<Real>::max();
-
-                for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
+                if (refIsBox)
                 {
-                    const Vec2 n = edgeOutwardNormal(polyWorldVerts.data(), vertexCount, i);
-                    const Real d = glm::dot(refNormal, n);
-                    if (d < minDot)
+                    incidentEdge = 0;
+                    Real minDot = std::numeric_limits<Real>::max();
+
+                    for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
                     {
-                        minDot = d;
-                        incidentEdge = i;
+                        const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
+                        const Vec2 nA = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                        const Real d = glm::dot(refNormalLocal, nA);
+                        if (d < minDot)
+                        {
+                            minDot = d;
+                            incidentEdge = i;
+                        }
+                    }
+
+                    incidentEdge2 = (incidentEdge + 1) % uint32_t(vertexCount);
+                    incEdgeStartLocal = polyVertsB_inA[incidentEdge];
+                    incEdgeEndLocal = polyVertsB_inA[incidentEdge2];
+                }
+                else
+                {
+                    const Real dotX = refNormalLocal.x;
+                    const Real dotY = refNormalLocal.y;
+                    const bool useX = std::fabs(dotX) > std::fabs(dotY);
+                    const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
+
+                    const int signBool = sign > 0;
+
+                    Vec2 faceCenter, edgeOffset;
+                    if (useX)
+                    {
+                        faceCenter = Vec2(sign * halfWidthA, 0);
+                        edgeOffset = Vec2(0, halfHeightA);
+
+                        incidentEdge = (1 - signBool) * 3;
+                        incidentEdge2 = 2 - signBool;
+                    }
+                    else
+                    {
+                        faceCenter = Vec2(0, sign * halfHeightA);
+                        edgeOffset = Vec2(halfWidthA, 0);
+
+                        incidentEdge = 1 - signBool;
+                        incidentEdge2 = 2 + signBool;
+                    }
+
+                    incEdgeStartLocal = faceCenter + edgeOffset;
+                    incEdgeEndLocal = faceCenter - edgeOffset;
+                }
+
+                Vec2 clipped[2] = { incEdgeStartLocal, incEdgeEndLocal };
+                if (clipSegment(clipped[0], clipped[1], refEdgeStartLocal, -sideDirLocal)) continue;
+                if (clipSegment(clipped[0], clipped[1], refEdgeEndLocal, sideDirLocal)) continue;
+
+                const uint32_t bodyTag = refIsBox ? 0x80000000u : 0u;
+                uint32_t id1 = bodyTag | incidentEdge;
+                uint32_t id2 = bodyTag | incidentEdge2;
+
+                Vec2 contactPoints[2];
+                uint32_t contactIds[2];
+                uint32_t contactCount = 0;
+                const Real refPlaneDist = glm::dot(refFaceCenterLocal, refNormalLocal);
+
+                const Vec2 normalWorld = rightA * normalLocal.x + upA * normalLocal.y;
+
+                for (uint32_t i = 0; i < 2; i++)
+                {
+                    if (glm::dot(clipped[i], refNormalLocal) <= refPlaneDist + SAT_EPSILON)
+                    {
+                        contactPoints[contactCount] = positionA + rightA * clipped[i].x + upA * clipped[i].y;
+                        contactIds[contactCount] = (i == 0) ? id1 : id2;
+                        contactCount++;
                     }
                 }
 
-                incidentEdge2 = (incidentEdge + 1) % uint32_t(vertexCount);
+                if (contactCount == 0) continue;
 
-                incEdgeStart = polyWorldVerts[incidentEdge];
-                incEdgeEnd = polyWorldVerts[incidentEdge2];
+                outCollisionData.emplace_back(
+                    indexA, indexB,
+                    normalWorld,
+                    depth,
+                    contactCount,
+                    contactPoints[0],
+                    contactPoints[1],
+                    contactIds[0],
+                    contactIds[1]
+                );
             }
-            else
-            {
-                // Incident edge is the box face opposite the reference normal.
-                const Real dotX = glm::dot(refNormal, rightA);
-                const Real dotY = glm::dot(refNormal, upA);
-                const bool useX = std::fabs(dotX) > std::fabs(dotY);
-                const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
-
-                const int signBool = sign > 0;
-
-                Vec2 faceCenter, edgeOffset;
-                if (useX)
-                {
-                    faceCenter = positionA + rightA * (sign * halfWidthA);
-                    edgeOffset = upA * halfHeightA;
-
-                    incidentEdge  = (1 - signBool) * 3;
-                    incidentEdge2 = 2 - signBool;
-                }
-                else
-                {
-                    faceCenter = positionA + upA * (sign * halfHeightA);
-                    edgeOffset = rightA * halfWidthA;
-
-                    incidentEdge  = 1 - signBool;
-                    incidentEdge2 = 2 + signBool;
-                }
-
-                incEdgeStart = faceCenter + edgeOffset;
-                incEdgeEnd = faceCenter - edgeOffset;
-            }
-
-            Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
-            if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
-            if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
-
-            const uint32_t bodyTag = refIsBox ? 0x80000000u : 0u;
-            uint32_t id1 = bodyTag | incidentEdge;
-            uint32_t id2 = bodyTag | incidentEdge2;
-
-            Vec2 contactPoints[2];
-            uint32_t contactIds[2];
-            uint32_t contactCount = 0;
-            const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
-            for (uint32_t i = 0; i < 2; i++)
-            {
-                if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
-                {
-                    contactPoints[contactCount] = clipped[i];
-                    contactIds[contactCount] = (i == 0) ? id1 : id2;
-                    contactCount++;
-                }
-            }
-
-            if (contactCount == 0) continue;
-
-            outCollisionData.emplace_back(
-                indexA, indexB,
-                normal,
-                depth,
-                contactCount,
-                contactPoints[0],
-                contactPoints[1],
-                contactIds[0],
-                contactIds[1]
-            );
 
         nextPair:
             continue;
@@ -1458,8 +1503,7 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        static thread_local std::vector<Vec2> worldVertsA;
-        static thread_local std::vector<Vec2> worldVertsB;
+        static thread_local std::vector<Vec2> vertsB_inA;
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1482,102 +1526,105 @@ namespace PS_AGONY
             if (countA < 3 || countB < 3) [[unlikely]] continue;
 
             const Vec2 rightA = {  cosA, sinA };
-            const Vec2 upA =    { -sinA, cosA };
-            const Vec2 rightB = {  cosB, sinB };
-            const Vec2 upB =    { -sinB, cosB };
-
-            {
-                const Vec2* localVertsA = localVertsAContainer.data();
-                const Vec2* localVertsB = localVertsBContainer.data();
-
-                worldVertsA.resize(countA);
-                worldVertsB.resize(countB);
-
-                for (size_t i = 0; i < countA; i++)
-                {
-                    const Vec2 v = localVertsA[i];
-                    worldVertsA[i] = positionA + rightA * v.x + upA * v.y;
-                }
-
-                for (size_t i = 0; i < countB; i++)
-                {
-                    const Vec2 v = localVertsB[i];
-                    worldVertsB[i] = positionB + rightB * v.x + upB * v.y;
-                }
-            }
+            const Vec2 upA    = { -sinA, cosA };
 
             const Vec2 centerDelta = positionB - positionA;
+            const Vec2 centerDeltaLocal = {
+                glm::dot(centerDelta, rightA),
+                glm::dot(centerDelta, upA)
+            };
 
-            Vec2 normal;
+            const Real relCos = cosA * cosB + sinA * sinB;
+            const Real relSin = cosA * sinB - sinA * cosB;
+
+            const Vec2* localVertsA = localVertsAContainer.data();
+            const Vec2* localVertsB = localVertsBContainer.data();
+
+            vertsB_inA.resize(countB);
+            for (size_t i = 0; i < countB; i++)
+            {
+                const Vec2 v = localVertsB[i];
+                vertsB_inA[i] = {
+                    centerDeltaLocal.x + relCos * v.x - relSin * v.y,
+                    centerDeltaLocal.y + relSin * v.x + relCos * v.y
+                };
+            }
+
+            Vec2 normalLocal;
             Real depth = std::numeric_limits<Real>::max();
             SATAxis bestAxisType = SATAxis::A_EDGE;
             uint32_t bestAxisIndex = 0;
             Real bestAxisFacing = std::numeric_limits<Real>::max();
 
-            auto sat = [&](Vec2 axis, SATAxis axisType, uint32_t axisIndex) -> bool
-            {
-                const Real axisLenSquared = glm::dot(axis, axis);
-                if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
-
-                axis *= Real(1) / std::sqrt(axisLenSquared);
-
-                Real minA, maxA;
-                Real minB, maxB;
-                projectVerticesOnAxis(worldVertsA, axis, minA, maxA);
-                projectVerticesOnAxis(worldVertsB, axis, minB, maxB);
-
-                const Real overlap = std::fmin(maxA, maxB) - std::fmax(minA, minB);
-                if (overlap < Real(0)) return false;
-
-                const Real facingSign = Real(axisType == SATAxis::B_EDGE) * Real(2) - Real(1); // A = -1, B = 1.
-                const Real axisFacing = facingSign * glm::dot(axis, centerDelta);
-
-                const bool strictlyBetter = overlap < depth;
-                const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
-
-                if (strictlyBetter || tiedButBetterFacing)
+            auto sat = [&](Vec2 axisLocal, SATAxis axisType, uint32_t axisIndex) -> bool
                 {
-                    depth = overlap;
-                    normal = axis;
-                    flipSignIfNegative(normal, glm::dot(centerDelta, normal));
+                    const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
+                    if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
 
-                    bestAxisType = axisType;
-                    bestAxisIndex = axisIndex;
-                    bestAxisFacing = axisFacing;
-                }
+                    axisLocal *= Real(1) / std::sqrt(axisLenSquared);
 
-                return true;
-            };
+                    Real minA, maxA;
+                    projectVerticesOnAxis(localVertsAContainer.data(), localVertsAContainer.size(), axisLocal, minA, maxA);
+
+                    Real minB, maxB;
+                    projectVerticesOnAxis(vertsB_inA.data(), vertsB_inA.size(), axisLocal, minB, maxB);
+
+                    const Real overlap = std::fmin(maxA, maxB) - std::fmax(minA, minB);
+                    if (overlap < Real(0)) return false;
+
+                    const Real facingSign = Real(axisType == SATAxis::B_EDGE) * Real(2) - Real(1);
+                    const Real axisFacing = facingSign * glm::dot(axisLocal, centerDeltaLocal);
+
+                    const bool strictlyBetter = overlap < depth;
+                    const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
+
+                    if (strictlyBetter || tiedButBetterFacing)
+                    {
+                        depth = overlap;
+                        normalLocal = axisLocal;
+                        flipSignIfNegative(normalLocal, glm::dot(centerDeltaLocal, normalLocal));
+
+                        bestAxisType = axisType;
+                        bestAxisIndex = axisIndex;
+                        bestAxisFacing = axisFacing;
+                    }
+
+                    return true;
+                };
 
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
-                Vec2 axis = edgeOutwardNormal(worldVertsA.data(), countA, i);
-                if (!sat(axis, SATAxis::A_EDGE, i))
+                Vec2 axisLocal = edgeOutwardNormal(localVertsA, countA, i);
+                if (!sat(axisLocal, SATAxis::A_EDGE, i))
                     goto nextPair;
             }
 
             for (uint32_t i = 0; i < uint32_t(countB); i++)
             {
-                Vec2 axis = edgeOutwardNormal(worldVertsB.data(), countB, i);
-                if (!sat(axis, SATAxis::B_EDGE, i))
+                Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
+                Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                if (!sat(axisLocal, SATAxis::B_EDGE, i))
                     goto nextPair;
             }
 
             {
                 const bool refIsA = bestAxisType == SATAxis::A_EDGE;
 
-                const std::vector<Vec2>& refVerts = refIsA ? worldVertsA : worldVertsB;
-                const std::vector<Vec2>& incVerts = refIsA ? worldVertsB : worldVertsA;
+                const Vec2* refVertsPtr = refIsA ? localVertsA : vertsB_inA.data();
+                const size_t refCount = refIsA ? countA : countB;
 
-                Vec2 refNormal = refIsA ? normal : -normal;
+                const Vec2* incVertsPtr = refIsA ? vertsB_inA.data() : localVertsA;
+                const size_t incCount = refIsA ? countB : countA;
+
+                Vec2 refNormalLocal = refIsA ? normalLocal : -normalLocal;
                 Vec2 refEdgeStart, refEdgeEnd, refFaceCenter, sideDir;
 
                 {
                     const uint32_t i0 = bestAxisIndex;
-                    const uint32_t i1 = (i0 + 1) % uint32_t(refVerts.size());
+                    const uint32_t i1 = (i0 + 1) % uint32_t(refCount);
 
-                    refEdgeStart = refVerts[i0];
-                    refEdgeEnd = refVerts[i1];
+                    refEdgeStart = refVertsPtr[i0];
+                    refEdgeEnd = refVertsPtr[i1];
                     refFaceCenter = (refEdgeStart + refEdgeEnd) * Real(0.5);
 
                     const Vec2 edge = refEdgeEnd - refEdgeStart;
@@ -1587,28 +1634,30 @@ namespace PS_AGONY
                     sideDir = edge / edgeLen;
 
                     const Vec2 expectedOutward = Vec2{ edge.y, -edge.x };
-                    if (glm::dot(expectedOutward, refNormal) < Real(0))
+                    if (glm::dot(expectedOutward, refNormalLocal) < Real(0))
                     {
                         std::swap(refEdgeStart, refEdgeEnd);
                         sideDir = -sideDir;
                     }
                 }
 
-                // Incident edge: pick the edge whose outward normal is most anti-parallel to the reference normal.
                 uint32_t incidentEdgeIndex = 0;
                 Real minDot = std::numeric_limits<Real>::max();
 
-                for (uint32_t i = 0; i < uint32_t(incVerts.size()); i++)
+                for (uint32_t i = 0; i < uint32_t(incCount); i++)
                 {
-                    const Vec2 p0 = incVerts[i];
-                    const Vec2 p1 = incVerts[(i + 1) % uint32_t(incVerts.size())];
-                    const Vec2 edge = p1 - p0;
-                    Vec2 n = Vec2{ edge.y, -edge.x };
-                    const Real len2 = glm::dot(n, n);
-                    if (len2 < ZERO_DIVISION_BOUNDARY_SQUARED) continue;
-                    n *= Real(1) / std::sqrt(len2);
+                    Vec2 nLocal;
+                    if (refIsA)
+                    {
+                        Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
+                        nLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                    }
+                    else
+                    {
+                        nLocal = edgeOutwardNormal(localVertsA, countA, i);
+                    }
 
-                    const Real d = glm::dot(refNormal, n);
+                    const Real d = glm::dot(refNormalLocal, nLocal);
                     if (d < minDot)
                     {
                         minDot = d;
@@ -1616,27 +1665,30 @@ namespace PS_AGONY
                     }
                 }
 
-                Vec2 incEdgeStart = incVerts[incidentEdgeIndex];
-                Vec2 incEdgeEnd = incVerts[(incidentEdgeIndex + 1) % uint32_t(incVerts.size())];
+                Vec2 incEdgeStart = incVertsPtr[incidentEdgeIndex];
+                Vec2 incEdgeEnd = incVertsPtr[(incidentEdgeIndex + 1) % uint32_t(incCount)];
 
                 Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
                 if (clipSegment(clipped[0], clipped[1], refEdgeStart, sideDir)) goto nextPair;
                 if (clipSegment(clipped[0], clipped[1], refEdgeEnd,  -sideDir)) goto nextPair;
 
-                const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
+                const Real refPlaneDist = glm::dot(refFaceCenter, refNormalLocal);
 
                 const uint32_t bodyTag = refIsA ? 0x80000000u : 0u;
                 const uint32_t id1 = bodyTag | incidentEdgeIndex;
-                const uint32_t id2 = bodyTag | ((incidentEdgeIndex + 1) % uint32_t(incVerts.size()));
+                const uint32_t id2 = bodyTag | ((incidentEdgeIndex + 1) % uint32_t(incCount));
 
                 Vec2 contactPoints[2];
                 uint32_t contactIds[2];
                 uint32_t contactCount = 0;
+
+                const Vec2 normalWorld = rightA * normalLocal.x + upA * normalLocal.y;
+
                 for (uint32_t i = 0; i < 2; i++)
                 {
-                    if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
+                    if (glm::dot(clipped[i], refNormalLocal) <= refPlaneDist + SAT_EPSILON)
                     {
-                        contactPoints[contactCount] = clipped[i];
+                        contactPoints[contactCount] = positionA + rightA * clipped[i].x + upA * clipped[i].y;
                         contactIds[contactCount] = (i == 0) ? id1 : id2;
                         contactCount++;
                     }
@@ -1646,7 +1698,7 @@ namespace PS_AGONY
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
-                    normal,
+                    normalWorld,
                     depth,
                     contactCount,
                     contactPoints[0],
