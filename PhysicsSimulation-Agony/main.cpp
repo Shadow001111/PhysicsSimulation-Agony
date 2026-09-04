@@ -544,7 +544,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 5);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
@@ -675,7 +675,7 @@ static int gameFunc()
             framebuffer.clearDrawBuffer("color", bgColor);
 
             // Render simulation.
-            simulationRenderer.renderSimulation(simulation, (float)simulation.getInterpolationFractionForRendering());
+            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha());
 
             // Render debug data.
             renderGUI(simulation, debugData, pauseSimulation);

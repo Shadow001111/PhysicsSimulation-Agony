@@ -5,10 +5,6 @@
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-#include "Ecstasy/Graphics/TextureLoader.h"
-
-#include <iostream>
-
 namespace PS_AGONY
 {
     [[nodiscard]] static uint32_t idToHexColor(uint32_t x) noexcept
@@ -30,7 +26,7 @@ namespace PS_AGONY
         initBuffers();
     }
 
-    void SimulationRenderer::renderSimulation(const Simulation& simulation, float interpolationFraction)
+    void SimulationRenderer::renderSimulation(const Simulation& simulation, Real simRenderAlpha)
     {
         TRACY_SCOPE_N("SimulationRenderer render");
 
@@ -46,10 +42,10 @@ namespace PS_AGONY
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
         // Render.
-        renderBodies(viewProjectionMatrix, interpolationFraction);
+        renderBodies(viewProjectionMatrix, simRenderAlpha);
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         //renderContactPoints(simulation, viewProjectionMatrix);
-        renderSprings(simulation, viewProjectionMatrix);
+        renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
     }
 
     void SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
@@ -268,11 +264,11 @@ namespace PS_AGONY
         }
     }
 
-    void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
+    void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
-        renderCircleBodies(viewProjectionMatrix, interpolationFraction);
-        renderBoxBodies(viewProjectionMatrix, interpolationFraction);
-        renderPolygonBodies(viewProjectionMatrix, interpolationFraction);
+        renderCircleBodies(viewProjectionMatrix, simRenderAlpha);
+        renderBoxBodies(viewProjectionMatrix, simRenderAlpha);
+        renderPolygonBodies(viewProjectionMatrix, simRenderAlpha);
 
 		//renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
@@ -376,7 +372,7 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
+    void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
         const size_t count = circles.getCount();
         if (count == 0) return;
@@ -401,8 +397,6 @@ namespace PS_AGONY
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
-        const Real interpolationFractionReal = (Real)interpolationFraction;
-
         for (size_t i = 0; i < count; i++)
         {
             const ObjectIndex bodyIndex = bodyIndexPtr[i];
@@ -412,12 +406,12 @@ namespace PS_AGONY
             const Real oldPosX = oldPositionXPtr[bodyIndex];
             const Real oldPosY = oldPositionYPtr[bodyIndex];
 
-            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * interpolationFractionReal;
-            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * interpolationFractionReal;
+            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
+            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
             const Real fullOldRotation = oldRotationPtr[bodyIndex];
             const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * interpolationFractionReal;
+            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
 
             renderDataPtr[i].positionX = interpolatedPosX;
             renderDataPtr[i].positionY = interpolatedPosY;
@@ -432,7 +426,7 @@ namespace PS_AGONY
 		renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
+    void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
         const size_t count = boxes.getCount();
         if (count == 0) return;
@@ -458,8 +452,6 @@ namespace PS_AGONY
 
         BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
 
-        const Real interpolationFractionReal = (Real)interpolationFraction;
-
         for (size_t i = 0; i < count; i++)
         {
             const ObjectIndex bodyIndex = bodyIndexPtr[i];
@@ -469,12 +461,12 @@ namespace PS_AGONY
             const Real oldPosX = oldPositionXPtr[bodyIndex];
             const Real oldPosY = oldPositionYPtr[bodyIndex];
 
-            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * interpolationFractionReal;
-            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * interpolationFractionReal;
+            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
+            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
             const Real fullOldRotation = oldRotationPtr[bodyIndex];
             const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * interpolationFractionReal;
+            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
 
             renderDataPtr[i].positionX = interpolatedPosX;
             renderDataPtr[i].positionY = interpolatedPosY;
@@ -490,7 +482,7 @@ namespace PS_AGONY
         renderBoxShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
+    void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
         const size_t count = polygons.getCount();
         if (count == 0) return;
@@ -529,8 +521,6 @@ namespace PS_AGONY
 
         uint32_t vertexOffset = 0;
 
-        const Real interpolationFractionReal = (Real)interpolationFraction;
-
         for (size_t i = 0; i < count; i++)
         {
             const ObjectIndex         bodyIndex = bodyIndexPtr[i];
@@ -549,12 +539,12 @@ namespace PS_AGONY
             const Real oldPosX = oldPositionXPtr[bodyIndex];
             const Real oldPosY = oldPositionYPtr[bodyIndex];
 
-            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * interpolationFractionReal;
-            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * interpolationFractionReal;
+            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
+            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
             const Real fullOldRotation = oldRotationPtr[bodyIndex];
             const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * interpolationFractionReal;
+            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
 
             instData[i].positionX = interpolatedPosX;
             instData[i].positionY = interpolatedPosY;
@@ -662,7 +652,7 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
         const auto& springs = simulation.getSprings();
         const size_t springCount = springs.getCount();
@@ -674,65 +664,95 @@ namespace PS_AGONY
         springResources.vertexData.resize(vertexCount);
         LineVertex* ECSTASY_RESTRICT verts = springResources.vertexData.data();
 
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
-        for (size_t i = 0; i < springCount; ++i)
+        for (size_t i = 0; i < springCount; i++)
         {
-            const ObjectIndex idxA = springs.bodyIndexA[i];
-            const ObjectIndex idxB = springs.bodyIndexB[i];
+            const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
+            const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
 
-            const float rA = static_cast<float>(rotationPtr[idxA]);
-            const float cA = std::cos(rA);
-            const float sA = std::sin(rA);
+            // Interpolate body A transform.
+            const Real posAx = positionXPtr[bodyIndexA];
+            const Real posAy = positionYPtr[bodyIndexA];
+            const Real oldPosAx = oldPositionXPtr[bodyIndexA];
+            const Real oldPosAy = oldPositionYPtr[bodyIndexA];
 
-            const float rB = static_cast<float>(rotationPtr[idxB]);
-            const float cB = std::cos(rB);
-            const float sB = std::sin(rB);
+            const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
+            const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
 
-            // 1. Transform local coordinates into world space positions
-            const float wAx = static_cast<float>(positionXPtr[idxA]) + (springs.localAnchorA[i].x * cA - springs.localAnchorA[i].y * sA);
-            const float wAy = static_cast<float>(positionYPtr[idxA]) + (springs.localAnchorA[i].x * sA + springs.localAnchorA[i].y * cA);
+            const Real fullOldRotationA = oldRotationPtr[bodyIndexA];
+            const Real fullNewRotationA = rotationPtr[bodyIndexA] + (rotationWrapCountPtr[bodyIndexA] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotationA = fullOldRotationA + (fullNewRotationA - fullOldRotationA) * simRenderAlpha;
 
-            const float wBx = static_cast<float>(positionXPtr[idxB]) + (springs.localAnchorB[i].x * cB - springs.localAnchorB[i].y * sB);
-            const float wBy = static_cast<float>(positionYPtr[idxB]) + (springs.localAnchorB[i].x * sB + springs.localAnchorB[i].y * cB);
+            const Real cosA = std::cos(interpolatedRotationA);
+            const Real sinA = std::sin(interpolatedRotationA);
 
-            // 2. Dynamic Strain Color-Coding Calculation
-            const float dx = wBx - wAx;
-            const float dy = wBy - wAy;
+            // Interpolate body B transform.
+            const Real posBx = positionXPtr[bodyIndexB];
+            const Real posBy = positionYPtr[bodyIndexB];
+            const Real oldPosBx = oldPositionXPtr[bodyIndexB];
+            const Real oldPosBy = oldPositionYPtr[bodyIndexB];
+
+            const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
+            const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
+
+            const Real fullOldRotationB = oldRotationPtr[bodyIndexB];
+            const Real fullNewRotationB = rotationPtr[bodyIndexB] + (rotationWrapCountPtr[bodyIndexB] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotationB = fullOldRotationB + (fullNewRotationB - fullOldRotationB) * simRenderAlpha;
+
+            const Real cosB = std::cos(interpolatedRotationB);
+            const Real sinB = std::sin(interpolatedRotationB);
+
+            // Compute world positions of spring endpoints.
+            const float worldAx = interpolatedPosAx + (springs.localAnchorA[i].x * cosA - springs.localAnchorA[i].y * sinA);
+            const float worldAy = interpolatedPosAy + (springs.localAnchorA[i].x * sinA + springs.localAnchorA[i].y * cosA);
+
+            const float worldBx = interpolatedPosBx + (springs.localAnchorB[i].x * cosB - springs.localAnchorB[i].y * sinB);
+            const float worldBy = interpolatedPosBy + (springs.localAnchorB[i].x * sinB + springs.localAnchorB[i].y * cosB);
+            
+            // Compute displacement.
+            const float dx = worldBx - worldAx;
+            const float dy = worldBy - worldAy;
             const float currentLength = std::sqrt(dx * dx + dy * dy);
             const float restLength = static_cast<float>(springs.restLength[i]);
             const float displacement = currentLength - restLength;
 
-            uint32_t color = 0xBBBBBB; // Default neutral state gray
-            if (displacement > 0.02f)
+            // Compute color.
+            uint32_t color;
             {
-                // Tension (Stretched) -> Interpolate to Red
-                float factor = std::min(displacement / (restLength + 0.001f), 1.0f);
-                uint32_t greenBlue = static_cast<uint32_t>(187.0f * (1.0f - factor));
-                color = (0xFF << 16) | (greenBlue << 8) | greenBlue;
-            }
-            else if (displacement < -0.02f)
-            {
-                // Compression (Squeezed) -> Interpolate to Blue
-                float factor = std::min(std::abs(displacement) / (restLength + 0.001f), 1.0f);
-                uint32_t redGreen = static_cast<uint32_t>(187.0f * (1.0f - factor));
-                color = (redGreen << 16) | (redGreen << 8) | 0xFF;
+                // Normalize strain into [-1.0, 1.0],
+                float t = std::clamp(displacement / restLength, -1.0f, 1.0f);
+
+                // Calculate weights for each endpoint color,
+                float wBlue = std::fmax(0.0f, -t);    // Active (< 0).
+                float wRed  = std::fmax(0.0f, t);     // Active (> 0).
+                float wGrey = 1.0f - std::fabs(t);    // Active (= 0).
+
+                // Blend RGB channels.
+                uint32_t r = uint32_t(255.0f * wRed + 187.0f * wGrey);
+                uint32_t g = uint32_t(187.0f * wGrey);
+                uint32_t b = uint32_t(255.0f * wBlue + 187.0f * wGrey);
+
+                color = (r << 16) | (g << 8) | b;
             }
 
-            // 3. Stage Structural Vertex Data Pairs
             size_t vIdx = i * 2;
-            verts[vIdx].x = wAx;
-            verts[vIdx].y = wAy;
+            verts[vIdx].x = worldAx;
+            verts[vIdx].y = worldAy;
             verts[vIdx].color = color;
 
-            verts[vIdx + 1].x = wBx;
-            verts[vIdx + 1].y = wBy;
+            verts[vIdx + 1].x = worldBx;
+            verts[vIdx + 1].y = worldBy;
             verts[vIdx + 1].color = color;
         }
 
-        // 4. Stream and Bind to GPU Pipeline
         springResources.vbo.write(springResources.vertexData.data(), vertexCount * sizeof(LineVertex));
 
         springResources.shader.use();
