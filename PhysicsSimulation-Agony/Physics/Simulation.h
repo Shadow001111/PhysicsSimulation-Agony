@@ -3,7 +3,6 @@
 #include "ObjectSoA.h"
 #include "ConstraintSystem.h"
 #include "Material.h"
-#include "Constants.h"
 
 #include "BroadPhaseCollisionDetector.h"
 #include "NarrowPhaseCollisionDetector.h"
@@ -196,8 +195,12 @@ namespace PS_AGONY
 		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
+
+		Real getInterpolationFractionForRendering() const noexcept { return updateTimeAccumulator / simulationSettings.updateInterval; }
 	private:
 		void physicsStep(Real deltaTime);
+
+		void preUpdate();
 
 		void postUpdate();
 

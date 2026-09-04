@@ -17,6 +17,11 @@ namespace PS_AGONY
 		ObjectIndex shapeIndex
 	)
 	{
+		this->renderOldOffsetX.push_back(pos.x);
+		this->renderOldOffsetY.push_back(pos.y);
+		this->renderOldRotation.push_back(rot);
+		this->renderRotationWrapCount.push_back(0);
+
 		this->offsetX.push_back(pos.x);
 		this->offsetY.push_back(pos.y);
 		this->localCenterOfMassX.push_back(localCenterOfMass.x);
@@ -44,6 +49,8 @@ namespace PS_AGONY
 		this->attachments.emplace_back();
 	}
 
+	#define PS_AGONY_SWAP_WITH_BACK(vector, index) std::swap((vector)[(index)], (vector).back())
+
 	void BodySoA::swapWithBack(size_t index)
 	{
 		if (index >= offsetX.size()) [[unlikely]]
@@ -51,31 +58,36 @@ namespace PS_AGONY
 			return;
 		}
 
-		std::swap(offsetX[index], offsetX.back());
-		std::swap(offsetY[index], offsetY.back());
-		std::swap(localCenterOfMassX[index], localCenterOfMassX.back());
-		std::swap(localCenterOfMassY[index], localCenterOfMassY.back());
-		std::swap(worldCenterX[index], worldCenterX.back());
-		std::swap(worldCenterY[index], worldCenterY.back());
-		std::swap(velocityX[index], velocityX.back());
-		std::swap(velocityY[index], velocityY.back());
-		std::swap(rotation[index], rotation.back());
-		std::swap(angularVelocity[index], angularVelocity.back());
-		std::swap(mass[index], mass.back());
-		std::swap(invMass[index], invMass.back());
-		std::swap(inertia[index], inertia.back());
-		std::swap(invInertia[index], invInertia.back());
-		std::swap(rotationCos[index], rotationCos.back());
-		std::swap(rotationSin[index], rotationSin.back());
-		std::swap(isStatic[index], isStatic.back());
-		std::swap(materialIndex[index], materialIndex.back());
-		std::swap(aabb.minX[index], aabb.minX.back());
-		std::swap(aabb.minY[index], aabb.minY.back());
-		std::swap(aabb.maxX[index], aabb.maxX.back());
-		std::swap(aabb.maxY[index], aabb.maxY.back());
-		std::swap(bodyType[index], bodyType.back());
-		std::swap(shapeIndex[index], shapeIndex.back());
-		std::swap(attachments[index], attachments.back());
+		PS_AGONY_SWAP_WITH_BACK(renderOldOffsetX, index);
+		PS_AGONY_SWAP_WITH_BACK(renderOldOffsetY, index);
+		PS_AGONY_SWAP_WITH_BACK(renderOldRotation, index);
+		PS_AGONY_SWAP_WITH_BACK(renderRotationWrapCount, index);
+
+		PS_AGONY_SWAP_WITH_BACK(offsetX, index);
+		PS_AGONY_SWAP_WITH_BACK(offsetY, index);
+		PS_AGONY_SWAP_WITH_BACK(localCenterOfMassX, index);
+		PS_AGONY_SWAP_WITH_BACK(localCenterOfMassY, index);
+		PS_AGONY_SWAP_WITH_BACK(worldCenterX, index);
+		PS_AGONY_SWAP_WITH_BACK(worldCenterY, index);
+		PS_AGONY_SWAP_WITH_BACK(velocityX, index);
+		PS_AGONY_SWAP_WITH_BACK(velocityY, index);
+		PS_AGONY_SWAP_WITH_BACK(rotation, index);
+		PS_AGONY_SWAP_WITH_BACK(angularVelocity, index);
+		PS_AGONY_SWAP_WITH_BACK(mass, index);
+		PS_AGONY_SWAP_WITH_BACK(invMass, index);
+		PS_AGONY_SWAP_WITH_BACK(inertia, index);
+		PS_AGONY_SWAP_WITH_BACK(invInertia, index);
+		PS_AGONY_SWAP_WITH_BACK(rotationCos, index);
+		PS_AGONY_SWAP_WITH_BACK(rotationSin, index);
+		PS_AGONY_SWAP_WITH_BACK(isStatic, index);
+		PS_AGONY_SWAP_WITH_BACK(materialIndex, index);
+		PS_AGONY_SWAP_WITH_BACK(aabb.minX, index);
+		PS_AGONY_SWAP_WITH_BACK(aabb.minY, index);
+		PS_AGONY_SWAP_WITH_BACK(aabb.maxX, index);
+		PS_AGONY_SWAP_WITH_BACK(aabb.maxY, index);
+		PS_AGONY_SWAP_WITH_BACK(bodyType, index);
+		PS_AGONY_SWAP_WITH_BACK(shapeIndex, index);
+		PS_AGONY_SWAP_WITH_BACK(attachments, index);
 	}
 
 	void BodySoA::popBack()
@@ -84,6 +96,11 @@ namespace PS_AGONY
 		{
 			return;
 		}
+
+		renderOldOffsetX.pop_back();
+		renderOldOffsetY.pop_back();
+		renderOldRotation.pop_back();
+		renderRotationWrapCount.pop_back();
 
 		offsetX.pop_back();
 		offsetY.pop_back();
@@ -141,7 +158,13 @@ namespace PS_AGONY
 
 	size_t BodySoA::getMemoryUsage() const noexcept
 	{
-		size_t total = getVectorMemoryUsage(offsetX) +
+		size_t total =
+			getVectorMemoryUsage(renderOldOffsetX) +
+			getVectorMemoryUsage(renderOldOffsetY) +
+			getVectorMemoryUsage(renderOldRotation) +
+			getVectorMemoryUsage(renderRotationWrapCount) +
+
+			getVectorMemoryUsage(offsetX) +
 			getVectorMemoryUsage(offsetY) +
 			getVectorMemoryUsage(localCenterOfMassX) +
 			getVectorMemoryUsage(localCenterOfMassY) +

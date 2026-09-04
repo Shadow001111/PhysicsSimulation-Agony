@@ -1,5 +1,6 @@
 #include "SimulationRenderer.h"
 #include "Simulation.h"
+#include "Constants.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
@@ -29,7 +30,7 @@ namespace PS_AGONY
         initBuffers();
     }
 
-    void SimulationRenderer::renderSimulation(const Simulation& simulation)
+    void SimulationRenderer::renderSimulation(const Simulation& simulation, float interpolationFraction)
     {
         TRACY_SCOPE_N("SimulationRenderer render");
 
@@ -45,7 +46,7 @@ namespace PS_AGONY
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
         // Render.
-        renderBodies(viewProjectionMatrix);
+        renderBodies(viewProjectionMatrix, interpolationFraction);
 		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         //renderContactPoints(simulation, viewProjectionMatrix);
         renderSprings(simulation, viewProjectionMatrix);
@@ -267,11 +268,11 @@ namespace PS_AGONY
         }
     }
 
-    void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
     {
-        renderCircleBodies(viewProjectionMatrix);
-        renderBoxBodies(viewProjectionMatrix);
-        renderPolygonBodies(viewProjectionMatrix);
+        renderCircleBodies(viewProjectionMatrix, interpolationFraction);
+        renderBoxBodies(viewProjectionMatrix, interpolationFraction);
+        renderPolygonBodies(viewProjectionMatrix, interpolationFraction);
 
 		//renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
@@ -375,7 +376,7 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
     {
         const size_t count = circles.getCount();
         if (count == 0) return;
@@ -384,6 +385,11 @@ namespace PS_AGONY
 		circleResources.instanceData.resize(count);
 
         // Prepare instance data.
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
@@ -395,15 +401,29 @@ namespace PS_AGONY
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
+        const Real interpolationFractionReal = (Real)interpolationFraction;
+
         for (size_t i = 0; i < count; i++)
         {
             const ObjectIndex bodyIndex = bodyIndexPtr[i];
 
-            renderDataPtr[i].positionX = positionXPtr[bodyIndex];
-            renderDataPtr[i].positionY = positionYPtr[bodyIndex];
+            const Real posX = positionXPtr[bodyIndex];
+            const Real posY = positionYPtr[bodyIndex];
+            const Real oldPosX = oldPositionXPtr[bodyIndex];
+            const Real oldPosY = oldPositionYPtr[bodyIndex];
+
+            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * interpolationFractionReal;
+            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * interpolationFractionReal;
+
+            const Real fullOldRotation = oldRotationPtr[bodyIndex];
+            const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * interpolationFractionReal;
+
+            renderDataPtr[i].positionX = interpolatedPosX;
+            renderDataPtr[i].positionY = interpolatedPosY;
             renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
             renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = rotationPtr[bodyIndex];
+            renderDataPtr[i].rotation = interpolatedRotation;
             renderDataPtr[i].radius = radiusPtr[i];
 			renderDataPtr[i].color = 0xFFFFFF;
         }
@@ -412,7 +432,7 @@ namespace PS_AGONY
 		renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
     {
         const size_t count = boxes.getCount();
         if (count == 0) return;
@@ -421,6 +441,11 @@ namespace PS_AGONY
         boxResources.instanceData.resize(count);
 
         // Prepare instance data.
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
@@ -433,15 +458,29 @@ namespace PS_AGONY
 
         BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
 
+        const Real interpolationFractionReal = (Real)interpolationFraction;
+
         for (size_t i = 0; i < count; i++)
         {
             const ObjectIndex bodyIndex = bodyIndexPtr[i];
 
-            renderDataPtr[i].positionX = positionXPtr[bodyIndex];
-            renderDataPtr[i].positionY = positionYPtr[bodyIndex];
+            const Real posX = positionXPtr[bodyIndex];
+            const Real posY = positionYPtr[bodyIndex];
+            const Real oldPosX = oldPositionXPtr[bodyIndex];
+            const Real oldPosY = oldPositionYPtr[bodyIndex];
+
+            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * interpolationFractionReal;
+            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * interpolationFractionReal;
+
+            const Real fullOldRotation = oldRotationPtr[bodyIndex];
+            const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * interpolationFractionReal;
+
+            renderDataPtr[i].positionX = interpolatedPosX;
+            renderDataPtr[i].positionY = interpolatedPosY;
             renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
             renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = rotationPtr[bodyIndex];
+            renderDataPtr[i].rotation = interpolatedRotation;
             renderDataPtr[i].halfWidth = halfWidthPtr[i];
             renderDataPtr[i].halfHeight = halfHeightPtr[i];
             renderDataPtr[i].color = 0xFFFFFF;
@@ -451,12 +490,17 @@ namespace PS_AGONY
         renderBoxShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix, float interpolationFraction)
     {
         const size_t count = polygons.getCount();
         if (count == 0) return;
 
         // Body SoA pointers.
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
@@ -485,6 +529,8 @@ namespace PS_AGONY
 
         uint32_t vertexOffset = 0;
 
+        const Real interpolationFractionReal = (Real)interpolationFraction;
+
         for (size_t i = 0; i < count; i++)
         {
             const ObjectIndex         bodyIndex = bodyIndexPtr[i];
@@ -498,11 +544,23 @@ namespace PS_AGONY
                 verts[vertexOffset + v].y = src[v].y;
             }
 
-            instData[i].positionX = positionXPtr[bodyIndex];
-            instData[i].positionY = positionYPtr[bodyIndex];
+            const Real posX = positionXPtr[bodyIndex];
+            const Real posY = positionYPtr[bodyIndex];
+            const Real oldPosX = oldPositionXPtr[bodyIndex];
+            const Real oldPosY = oldPositionYPtr[bodyIndex];
+
+            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * interpolationFractionReal;
+            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * interpolationFractionReal;
+
+            const Real fullOldRotation = oldRotationPtr[bodyIndex];
+            const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * interpolationFractionReal;
+
+            instData[i].positionX = interpolatedPosX;
+            instData[i].positionY = interpolatedPosY;
             instData[i].localCOMX = localCOMXPtr[bodyIndex];
             instData[i].localCOMY = localCOMYPtr[bodyIndex];
-            instData[i].rotation = rotationPtr[bodyIndex];
+            instData[i].rotation = interpolatedRotation;
             instData[i].color = 0xFFFFFF;
 
             cmds[i].count = vertCount;

@@ -1,14 +1,12 @@
 #include "Simulation.h"
 #include "Threading.h"
 #include "FastCosSin.h"
+#include "Constants.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <iostream>
-#include <chrono>
-#include <filesystem>
-#include <fstream>
 #include <numeric>
 #include <cmath>
 
@@ -124,64 +122,6 @@ namespace PS_AGONY
         return { inertia, finalCOM };
     }
 
-
-    static double percentileFromSorted(const std::vector<double>& sorted, double p)
-    {
-        if (sorted.empty()) return 0.0;
-
-        // Nearest-rank style percentile, clamped.
-        const double rank = p * (static_cast<double>(sorted.size()) - 1.0);
-        const size_t idx = static_cast<size_t>(std::round(rank));
-        return sorted[std::min(idx, sorted.size() - 1)];
-    }
-
-    static void computeStats(const std::vector<double>& samples,
-        double& meanOut,
-        double& medianOut,
-        double& p90Out,
-        double& p99Out,
-        double& minOut,
-        double& maxOut,
-        double& stdDevOut)
-    {
-        if (samples.empty())
-        {
-            meanOut = medianOut = p90Out = p99Out = minOut = maxOut = stdDevOut = 0.0;
-            return;
-        }
-
-        std::vector<double> sorted = samples;
-        std::sort(sorted.begin(), sorted.end());
-
-        const double sum = std::accumulate(sorted.begin(), sorted.end(), 0.0);
-        meanOut = sum / static_cast<double>(sorted.size());
-
-        if (sorted.size() % 2 == 0)
-        {
-            const size_t mid = sorted.size() / 2;
-            medianOut = (sorted[mid - 1] + sorted[mid]) * 0.5;
-        }
-        else
-        {
-            medianOut = sorted[sorted.size() / 2];
-        }
-
-        p90Out = percentileFromSorted(sorted, 0.90);
-        p99Out = percentileFromSorted(sorted, 0.99);
-        minOut = sorted.front();
-        maxOut = sorted.back();
-
-        double variance = 0.0;
-        for (double v : sorted)
-        {
-            const double d = v - meanOut;
-            variance += d * d;
-        }
-        variance /= static_cast<double>(sorted.size());
-        stdDevOut = std::sqrt(variance);
-    }
-
-
     Simulation::Simulation()
     {
         materials.reserve(16);
@@ -214,6 +154,7 @@ namespace PS_AGONY
         const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.timeScale;
         if (stepCount > 0)
         {
+            preUpdate();
             for (uint32_t i = 0; i < stepCount; i++)
             {
                 physicsStep(fixedDeltaTime);
@@ -744,7 +685,7 @@ namespace PS_AGONY
         );
         springsWereChanged = false;
 
-        if (bodyCount >= 2)
+        if (bodyCount > 1)
         {
             // Broad phase.
             // TODO: Refit instead of rebuilding each time.
@@ -768,6 +709,20 @@ namespace PS_AGONY
         else
         {
             // TODO: Call manual reset for data that can be displayed.
+        }
+    }
+
+    void Simulation::preUpdate()
+    {
+        // Set old positions.
+        {
+            TRACY_SCOPE_NC("Set old position/rotation/wrap-count", Ecstasy::Core::Color::Black);
+
+            std::copy(bodies.offsetX.begin(), bodies.offsetX.end(), bodies.renderOldOffsetX.begin());
+            std::copy(bodies.offsetY.begin(), bodies.offsetY.end(), bodies.renderOldOffsetY.begin());
+            std::copy(bodies.rotation.begin(), bodies.rotation.end(), bodies.renderOldRotation.begin());
+
+            std::fill(bodies.renderRotationWrapCount.begin(), bodies.renderRotationWrapCount.end(), Real(0));
         }
     }
 
@@ -1182,9 +1137,11 @@ namespace PS_AGONY
         TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Core::Color::Cyan);
 
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
+        Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount.data();
 
         const size_t bodyCount = bodies.getCount();
 
+        const RealSimd oneV(1);
         const RealSimd twoPIV(Constants::TWO_PI);
         const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
 
@@ -1192,21 +1149,32 @@ namespace PS_AGONY
         for (; i + LANES <= bodyCount; i += LANES)
         {
             RealSimd rot = RealSimd::load(rotationPtr + i);
+            RealSimd oldWrapCount = RealSimd::load(rotationWrapCountPtr + i);
 
-            RealSimd q = RealSimd::roundTowardsZero(rot * invTwoPIV);
-            rot = rot - q * twoPIV;
+            RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
+            rot = rot - wrapCount * twoPIV;
 
             RealSimd isRotNegativeMask = rot < RealSimd(0);
+
             rot += isRotNegativeMask & twoPIV;
+            wrapCount -= isRotNegativeMask & oneV;
 
             rot.store(rotationPtr + i);
+            (oldWrapCount + wrapCount).store(rotationWrapCountPtr + i);
         }
         for (; i < bodyCount; i++)
         {
-            float rot = rotationPtr[i];
-            rot = std::fmod(rot, Constants::TWO_PI);
-            rot += (rot < 0) * Constants::TWO_PI;
+            Real rot = rotationPtr[i];
+            Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
+            rot -= wrapCount * Constants::TWO_PI;
+
+            Real isRotNegativeMask = rot < 0;
+
+            rot += isRotNegativeMask * Constants::TWO_PI;
+            wrapCount -= isRotNegativeMask; // * Real(1);
+
             rotationPtr[i] = rot;
+            rotationWrapCountPtr[i] += wrapCount;
         }
     }
 
