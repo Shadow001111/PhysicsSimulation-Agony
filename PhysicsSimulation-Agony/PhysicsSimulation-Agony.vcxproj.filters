@@ -30,9 +30,6 @@
     <ClCompile Include="Ecstasy\Graphics\WindowManager.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="glad.c">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Ecstasy\Core\Decoding\UTFDecoder.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
