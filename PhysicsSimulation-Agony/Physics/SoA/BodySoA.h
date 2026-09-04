@@ -5,6 +5,11 @@ namespace PS_AGONY
 {
 	struct BodySoA
 	{
+        CacheLineAlignedVector<Real> renderOldOffsetX;
+        CacheLineAlignedVector<Real> renderOldOffsetY;
+        CacheLineAlignedVector<Real> renderOldRotation;
+        CacheLineAlignedVector<Real> renderRotationWrapCount;
+
 		CacheLineAlignedVector<Real> offsetX;
 		CacheLineAlignedVector<Real> offsetY;
 		CacheLineAlignedVector<Real> localCenterOfMassX;
@@ -77,6 +82,11 @@ namespace PS_AGONY
 
         size_t count = 0;
     public:
+        const Real* renderOldOffsetX = nullptr;
+        const Real* renderOldOffsetY = nullptr;
+        const Real* renderOldRotation = nullptr;
+        const Real* renderRotationWrapCount = nullptr;
+
         const Real* offsetX = nullptr;
         const Real* offsetY = nullptr;
         const Real* localCenterOfMassX = nullptr;
@@ -106,6 +116,11 @@ namespace PS_AGONY
 
         explicit BodySoAViewer(const BodySoA& data) noexcept :
             count(data.getCount()),
+            renderOldOffsetX(data.renderOldOffsetX.data()),
+            renderOldOffsetY(data.renderOldOffsetY.data()),
+            renderOldRotation(data.renderOldRotation.data()),
+            renderRotationWrapCount(data.renderRotationWrapCount.data()),
+
             offsetX(data.offsetX.data()),
             offsetY(data.offsetY.data()),
             localCenterOfMassX(data.localCenterOfMassX.data()),

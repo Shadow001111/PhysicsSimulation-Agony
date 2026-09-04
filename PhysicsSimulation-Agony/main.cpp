@@ -655,7 +655,7 @@ static int gameFunc()
         {
             constexpr float targetAlpha = 0.8f;
 
-            float oneMinusAlpha = pow(1.0 - targetAlpha, deltaTime * 60.0);
+            float oneMinusAlpha = std::pow<double>(1.0 - targetAlpha, deltaTime * 60.0);
             float alpha = 1.0 - oneMinusAlpha;
             debugData.smoothedDelta = alpha * debugData.deltaTime + oneMinusAlpha * debugData.smoothedDelta;
         }
@@ -675,7 +675,7 @@ static int gameFunc()
             framebuffer.clearDrawBuffer("color", bgColor);
 
             // Render simulation.
-            simulationRenderer.renderSimulation(simulation);
+            simulationRenderer.renderSimulation(simulation, (float)simulation.getInterpolationFractionForRendering());
 
             // Render debug data.
             renderGUI(simulation, debugData, pauseSimulation);
