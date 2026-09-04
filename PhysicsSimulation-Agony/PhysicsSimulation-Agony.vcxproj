@@ -159,7 +159,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)Libraries\lib;</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;EcstasyLib.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
@@ -192,7 +192,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)Libraries\lib;</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>MSVCRTD;LIBCMT;</IgnoreSpecificDefaultLibraries>
-      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;EcstasyLib.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
@@ -225,7 +225,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)Libraries\lib;</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>MSVCRTD;LIBCMT;</IgnoreSpecificDefaultLibraries>
-      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;EcstasyLib.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
@@ -246,34 +246,17 @@
     <ClCompile Include="Physics\GraphUtilities.cpp" />
     <ClCompile Include="Physics\SoA\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
-    <ClCompile Include="Ecstasy\Core\FileStream.cpp" />
-    <ClCompile Include="Ecstasy\Core\Threading\ThreadPool.cpp" />
-    <ClCompile Include="Ecstasy\Core\Threading\ThreadUtils.cpp" />
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp" />
     <ClCompile Include="Physics\FastCosSin.cpp" />
     <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
-    <ClCompile Include="Ecstasy\Core\Decoding\UTFDecoder.cpp" />
-    <ClCompile Include="Ecstasy\Core\TracyPtofiler.cpp" />
-    <ClCompile Include="Ecstasy\Core\Time\FixedStepTimer.cpp" />
-    <ClCompile Include="glad.c" />
-    <ClCompile Include="Ecstasy\OpenGL\DrawCommands.cpp" />
-    <ClCompile Include="Ecstasy\Graphics\TextRenderer.cpp" />
-    <ClCompile Include="Ecstasy\Graphics\TextureLoader.cpp" />
-    <ClCompile Include="Ecstasy\Graphics\Input\InputManager.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Ecstasy\OpenGL\FrameBuffer.cpp" />
-    <ClCompile Include="Ecstasy\OpenGL\ImmutableBuffer.cpp" />
-    <ClCompile Include="Ecstasy\OpenGL\Shader.cpp" />
-    <ClCompile Include="Ecstasy\OpenGL\Texture.cpp" />
-    <ClCompile Include="Ecstasy\OpenGL\VertexArray.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\SimulationRenderer.cpp" />
     <ClCompile Include="Physics\Threading.cpp" />
     <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="Physics\Solving\SolverBase.cpp" />
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
-    <ClCompile Include="Ecstasy\Graphics\WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_glfw.h" />
@@ -285,9 +268,6 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
-    <ClInclude Include="Ecstasy\Core\FloatingPoint.h" />
-    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedAllocator.h" />
-    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedStorage.h" />
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="Physics\GraphUtilities.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />
@@ -298,14 +278,6 @@
     <ClInclude Include="Physics\SoA\Shapes\CircleSoA.h" />
     <ClInclude Include="Physics\SoA\Shapes\PolygonSoA.h" />
     <ClInclude Include="Physics\Solving\BodyCollisionSolver.h" />
-    <ClInclude Include="Ecstasy\Core\FileStream.h" />
-    <ClInclude Include="Ecstasy\Core\Assert.h" />
-    <ClInclude Include="Ecstasy\Core\Random.h" />
-    <ClInclude Include="Ecstasy\Core\Threading\ChaseLevQueue.h" />
-    <ClInclude Include="Ecstasy\Core\Threading\move_only_function.h" />
-    <ClInclude Include="Ecstasy\Core\Threading\Task.h" />
-    <ClInclude Include="Ecstasy\Core\Threading\ThreadPool.h" />
-    <ClInclude Include="Ecstasy\Core\Threading\ThreadUtils.h" />
     <ClInclude Include="Physics\ContainerUtilities.h" />
     <ClInclude Include="Physics\Solving\SolvingPlanner.h" />
     <ClInclude Include="Physics\Constants.h" />
@@ -314,25 +286,8 @@
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\ObjectSoA.h" />
-    <ClInclude Include="Ecstasy\Graphics\Camera2D.h" />
-    <ClInclude Include="Ecstasy\Core\ResourceManagment\BlockAllocator.h" />
-    <ClInclude Include="Ecstasy\Core\Decoding\UTFDecoder.h" />
-    <ClInclude Include="Ecstasy\Core\ResourceManagment\IdPool.h" />
-    <ClInclude Include="Ecstasy\Core\Simd.h" />
-    <ClInclude Include="Ecstasy\Core\TracyProfiler.h" />
-    <ClInclude Include="Ecstasy\Core\Time\FixedStepTimer.h" />
-    <ClInclude Include="Ecstasy\OpenGL\DrawCommands.h" />
-    <ClInclude Include="Ecstasy\Graphics\TextRenderer.h" />
-    <ClInclude Include="Ecstasy\Graphics\TextureLoader.h" />
-    <ClInclude Include="Ecstasy\Graphics\Input\InputManager.h" />
-    <ClInclude Include="Ecstasy\OpenGL\FrameBuffer.h" />
-    <ClInclude Include="Ecstasy\OpenGL\ImmutableBuffer.h" />
-    <ClInclude Include="Ecstasy\OpenGL\Shader.h" />
-    <ClInclude Include="Ecstasy\OpenGL\Texture.h" />
-    <ClInclude Include="Ecstasy\OpenGL\VertexArray.h" />
     <ClInclude Include="Physics\GlmTypes.h" />
     <ClInclude Include="Physics\Material.h" />
-    <ClInclude Include="Ecstasy\Core\Portablity.h" />
     <ClInclude Include="Physics\PrintUtilities.h" />
     <ClInclude Include="Physics\Simulation.h" />
     <ClInclude Include="Physics\SharedScratchBuffers.h" />
@@ -344,7 +299,6 @@
     <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />
     <ClInclude Include="Physics\Solving\SpringSolver.h" />
-    <ClInclude Include="Ecstasy\Graphics\WindowManager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="BenchmarkViewer.py" />
