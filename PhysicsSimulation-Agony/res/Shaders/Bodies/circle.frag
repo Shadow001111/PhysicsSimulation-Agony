@@ -20,9 +20,7 @@ void main()
     int checker = int(mod(float(sum), 2.0));
     const float checkerboardShading = (0.8 + 0.2 * float(checker));
 
-    const float outlineShading = mix(1.0, 0.5, float(dist > 1 - 0.1 / radius));
-
-    vec3 finalColor = color * (checkerboardShading * outlineShading);
+    vec3 finalColor = color * checkerboardShading;
 
     fragColor = vec4(finalColor, 1.0);
 }
