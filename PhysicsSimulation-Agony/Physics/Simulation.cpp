@@ -153,6 +153,8 @@ namespace PS_AGONY
         const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.timeScale;
         if (stepCount > 0)
         {
+            lastStepCount = stepCount;
+
             preUpdate();
             for (uint32_t i = 0; i < stepCount; i++)
             {
@@ -160,6 +162,10 @@ namespace PS_AGONY
             }
             postUpdate();
         }
+
+        // Render alpha.
+        const Real rawAlpha = updateTimeAccumulator / simulationSettings.updateInterval;
+        renderAlpha = (static_cast<Real>(lastStepCount - 1) + rawAlpha) / static_cast<Real>(lastStepCount);
 
         // Debug data.
         {

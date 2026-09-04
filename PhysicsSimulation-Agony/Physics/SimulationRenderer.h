@@ -137,7 +137,7 @@ namespace PS_AGONY
 		SimulationRenderer& operator=(SimulationRenderer&&) = delete;
 
 		void init();
-		void renderSimulation(const Simulation& simulation, float interpolationFraction);
+		void renderSimulation(const Simulation& simulation, Real simRenderAlpha);
 
 		void renderObjectPreview(const void* params, BodyType type);
 
@@ -148,20 +148,20 @@ namespace PS_AGONY
 
 		// Collect data and render.
 
-		void renderBodies(const Mat4& viewProjectionMatrix, float interpolationFraction);
+		void renderBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix);
 		void renderBodyPositions(const Mat4& viewProjectionMatrix);
 		void renderBodyTruePositions(const Mat4& viewProjectionMatrix);
 		
-		void renderCircleBodies(const Mat4& viewProjectionMatrix, float interpolationFraction);
-		void renderBoxBodies(const Mat4& viewProjectionMatrix, float interpolationFraction);
-		void renderPolygonBodies(const Mat4& viewProjectionMatrix, float interpolationFraction);
+		void renderCircleBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderBoxBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderPolygonBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 
 		void renderBodyAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 
-		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 
 		// Render shapes.
 

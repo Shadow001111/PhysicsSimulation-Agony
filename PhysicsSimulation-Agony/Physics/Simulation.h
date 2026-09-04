@@ -138,6 +138,10 @@ namespace PS_AGONY
 
 		// Booleans.
 		bool springsWereChanged = false;
+
+		// Render.
+		Real renderAlpha = 0;
+		uint32_t lastStepCount = 1;
 	public:
 		struct CircleCreateParams
 		{
@@ -196,7 +200,7 @@ namespace PS_AGONY
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 
-		Real getInterpolationFractionForRendering() const noexcept { return updateTimeAccumulator / simulationSettings.updateInterval; }
+		Real getRenderAlpha() const noexcept { return renderAlpha; }
 	private:
 		void physicsStep(Real deltaTime);
 
