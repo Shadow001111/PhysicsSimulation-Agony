@@ -7,7 +7,6 @@
 #include "Ecstasy/Core/Portablity.h"
 
 #include <iostream>
-#include <numeric>
 #include <cmath>
 
 namespace PS_AGONY
@@ -1287,9 +1286,13 @@ namespace PS_AGONY
         );
 
         // PD Controller for target acceleration at the grab point.
-        constexpr Real frequency = 30.0;
-        constexpr Real stiffness = frequency * frequency;
-        constexpr Real damping = 2.0 * frequency;
+        // Scale frequency down dynamically to maintain explicit Euler stability (freq < 0.5 / deltaTime).
+        constexpr Real baseFrequency = 30.0;
+        const Real maxStableFrequency = Real(0.5) / deltaTime;
+        const Real frequency = std::fmin(baseFrequency, maxStableFrequency);
+
+        const Real stiffness = frequency * frequency;
+        const Real damping = Real(2.0) * frequency;
 
         const Vec2 positionError = targetPosition - worldGrabPoint;
         const Vec2 velocityError = targetVelocity - grabPointVelocity;
