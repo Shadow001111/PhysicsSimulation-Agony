@@ -699,6 +699,9 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Physics step", Ecstasy::Core::Color::Orange);
 
+        // Clear data. Unnecessary, but usually it won't get cleared if narrow phase cd will get get reached.
+        narrowPhaseCollisionDetector.clearData();
+
         // Update timer.
         simulationRunTimer += deltaTime;
 
@@ -781,11 +784,19 @@ namespace PS_AGONY
         {
             // Broad phase.
             const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
-            if (broadCollisionData.empty()) return;
+            if (broadCollisionData.empty())
+            {
+                // TODO: Call manual reset for data that can be displayed.
+                return;
+            }
 
             // Narrow phase.
             const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
-            if (narrowCollisionData.empty()) return;
+            if (narrowCollisionData.empty())
+            {
+                // TODO: Call manual reset for data that can be displayed.
+                return;
+            }
 
             // Collision resolution.
             bodyCollisionSolver.solveCollisions(
