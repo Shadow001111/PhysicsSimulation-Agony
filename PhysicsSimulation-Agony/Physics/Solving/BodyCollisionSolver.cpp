@@ -11,11 +11,13 @@ namespace PS_AGONY
 {
 	void BodyCollisionSolver::setDataViewers(
 		BodySoA& bodiesIn,
+		const ColliderSoAViewer& collidersIn,
 		const std::vector<Material>& materialsIn,
 		SolvingPlanner& solvingPlannerIn
 	)
 	{
 		SolverBase::setResources(bodiesIn, solvingPlannerIn);
+		colliders = collidersIn;
 		materials = &materialsIn;
 	}
 
@@ -235,14 +237,6 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer)
 	{
-		{
-			const size_t collisionCount = collisionDataContainer.size();
-			positionConstraintContainer.resize(collisionCount);
-			velocityConstraintContainer.resize(collisionCount);
-			frictionDataContainer.resize(collisionCount);
-
-		}
-		return;
 		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
@@ -256,7 +250,7 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = nullptr;// bodies->materialIndex.data();
+		const MaterialIndex* ECSTASY_RESTRICT colliderMaterialIndexPtr = colliders.materialIndex;
 		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
 
 		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
@@ -296,8 +290,8 @@ namespace PS_AGONY
 				auto& velocityConstraint = velocityConstraintContainer[c];
 				auto& frictionData = frictionDataContainer[c];
 
-				const MaterialIndex materialIndexA = materialIndexPtr[data.bodyA];
-				const MaterialIndex materialIndexB = materialIndexPtr[data.bodyB];
+				const MaterialIndex materialIndexA = colliderMaterialIndexPtr[data.colliderA];
+				const MaterialIndex materialIndexB = colliderMaterialIndexPtr[data.colliderB];
 				const Material* materialA = materialPtr + materialIndexA;
 				const Material* materialB = materialPtr + materialIndexB;
 
@@ -701,7 +695,7 @@ namespace PS_AGONY
 					if (bPrime0 <= Real(0) && bPrime1 <= Real(0)) goto solved;
 				}
 
-				solved:
+			solved:
 
 				const Real deltaJn0 = x0 - a0;
 				const Real deltaJn1 = x1 - a1;
