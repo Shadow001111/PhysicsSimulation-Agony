@@ -183,7 +183,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void BroadPhaseCollisionDetector::fetchBodiesInCircle(Vec2 pos, Real radius, std::vector<ObjectIndex>& outColliders) const
+	void BroadPhaseCollisionDetector::fetchCollidersInCircle(Vec2 pos, Real radius, std::vector<ColliderIndex>& outColliders) const
 	{
 		TRACY_SCOPE_N("Fetch colliders in circle");
 
@@ -285,6 +285,10 @@ namespace PS_AGONY
 				}
 			}
 		}
+	}
+
+	void BroadPhaseCollisionDetector::fetchCollidersInAABB(const AABB& aabb, std::vector<ColliderIndex>& outColliders) const
+	{
 	}
 
 	size_t BroadPhaseCollisionDetector::getMemoryUsage() const
