@@ -1,6 +1,7 @@
 #pragma once
 #include "SolverBase.h"
 #include "../NarrowPhaseCollisionDetector.h"
+#include "../SoA/ColliderSoA.h"
 #include "../Material.h"
 
 #include <array>
@@ -61,6 +62,7 @@ namespace PS_AGONY
 		// Memeber fields.
 
 		const std::vector<Material>* materials = nullptr;
+		ColliderSoAViewer colliders;
 
 		std::vector<ObjectPair> collidingBodyPairs;
 		std::vector<BodyCollisionData> orderedCollisionData;
@@ -82,6 +84,7 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			BodySoA& bodies,
+			const ColliderSoAViewer& colliders,
 			const std::vector<Material>& materials,
 			SolvingPlanner& solvingPlanner
 		);

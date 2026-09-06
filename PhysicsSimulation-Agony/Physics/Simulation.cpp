@@ -633,7 +633,7 @@ namespace PS_AGONY
 
         bodyCollisionSolver.setDataViewers(
             bodies,
-            //ColliderSoAViewer(colliders),
+            ColliderSoAViewer(colliders),
             materials,
             bodyCollisionPlanner
         );
