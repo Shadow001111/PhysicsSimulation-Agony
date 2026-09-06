@@ -13,6 +13,8 @@
 
 #include "Interactivity/BodyHolder.h"
 
+#include "SimulationImpl/Integrator.h"
+
 #include <vector>
 #include <optional>
 #include <array>
@@ -107,16 +109,17 @@ namespace PS_AGONY
 
 		struct SimulationSettings
 		{
+			// Orchestration.
 			Real updateInterval = 1.0 / 300.0;
+			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
+
+			// Solving.
 			uint32_t collisionVelocitySolvingIterations = 6;
 			uint32_t collisionPositionSolvingIterations = 3;
 			uint32_t springSolvingIterations = 6;
-			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
 
-			// Environment.
-			Real timeScale = 1.0;
-			Vec2 gravity{ 0.0, -9.81 };
-			Real angularVelocityDamping = 1.0; // Per second.
+			// Integration.
+			Integrator::IntegrationSettings integration;
 
 			// Debug.
 			bool trackBodyCollisionSolverConstraintErrors = false;
@@ -262,18 +265,10 @@ namespace PS_AGONY
 
 		void postUpdate();
 
-		void integrateVelocities(size_t bodyCount, Real deltaTime);
-
-		void integratePositions(size_t bodyCount, Real deltaTime);
-
 		void buildColliderAABBs();
 		void buildCircleAABBs();
 		void buildBoxAABBs();
 		void buildPolygonAABBs();
-
-		void wrapRotation();
-
-		void computeRotationCosSin();
 
 		void computeBodyWorldCenters();
 

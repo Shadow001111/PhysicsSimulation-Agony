@@ -45,7 +45,7 @@ namespace PS_AGONY
         uint32_t stepCount = std::floor(updateTimeAccumulator / simulationSettings.updateInterval);
         updateTimeAccumulator -= stepCount * simulationSettings.updateInterval;
 
-        const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.timeScale;
+        const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.integration.timeScale;
         if (stepCount > 0)
         {
             lastStepCount = stepCount;
@@ -624,11 +624,10 @@ namespace PS_AGONY
         deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
         // Main stuff.
-        integrateVelocities(bodyCount, deltaTime);
+        Integrator::integrateVelocities(bodies, deltaTime, simulationSettings.integration);
         applyBodyHolderConstraint(deltaTime);
-        integratePositions(bodyCount, deltaTime);
-        wrapRotation();
-        computeRotationCosSin();
+        Integrator::integrateKinematics(bodies, deltaTime, simulationSettings.integration);
+        Integrator::computeRotationCosSin(bodies);
 
         // Compute true position for all bodies.
         computeBodyWorldCenters();
@@ -701,206 +700,6 @@ namespace PS_AGONY
         computeBodyWorldCenters();
         computeColliderWorldTransforms();
         buildColliderAABBs();
-    }
-
-    void Simulation::integrateVelocities(size_t bodyCount, Real deltaTime)
-    {
-        TRACY_SCOPE_NC("Integrate velocities", Ecstasy::Core::Color::Red);
-
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
-        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
-        const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
-
-        const Vec2 gravityDelta = simulationSettings.gravity * deltaTime;
-        const RealSimd gravityDeltaXV{ gravityDelta.x };
-        const RealSimd gravityDeltaYV{ gravityDelta.y };
-
-        const RealSimd zeros = RealSimd(Real(0));
-
-        size_t i = 0;
-        if constexpr (true)
-        {
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            {
-                RealSimd velX = RealSimd::load(velocityXPtr + i);
-                RealSimd velY = RealSimd::load(velocityYPtr + i);
-
-                const RealSimd invMassV = RealSimd::load(invMassPtr + i);
-                const auto movableMask = invMassV != zeros;
-
-                RealSimd newVelX = velX + gravityDeltaXV;
-                RealSimd newVelY = velY + gravityDeltaYV;
-
-                velX = RealSimd::blendv(velX, newVelX, movableMask);
-                velY = RealSimd::blendv(velY, newVelY, movableMask);
-
-                velX.store(velocityXPtr + i);
-                velY.store(velocityYPtr + i);
-            }
-            for (; i < bodyCount; i++)
-            {
-                const Real invMass = invMassPtr[i];
-                const Real movableMask = invMass != Real(0.0);
-
-                velocityXPtr[i] += gravityDelta.x * movableMask;
-                velocityYPtr[i] += gravityDelta.y * movableMask;
-            }
-        }
-        else
-        {
-            constexpr Real PLANET_RADIUS = 10;
-            constexpr Real PLANET_RADIUS_SQUARED = PLANET_RADIUS * PLANET_RADIUS;
-            const Real G = 1000;
-
-            const RealSimd gV(G);
-            const RealSimd planetRadiusV(PLANET_RADIUS);
-            const RealSimd planetRadiusSquaredV(PLANET_RADIUS_SQUARED);
-
-            size_t i = 0;
-            //for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            //{
-            //    RealSimd velX = RealSimd::load(velocityXPtr + i);
-            //    RealSimd velY = RealSimd::load(velocityYPtr + i);
-            //    const RealSimd invMassV = RealSimd::load(invMassPtr + i);
-            //    const auto movableMask = invMassV != zeros;
-            //
-            //    RealSimd posX = RealSimd::load(positionXPtr + i);
-            //    RealSimd posY = RealSimd::load(positionYPtr + i);
-            //
-            //    RealSimd r2 = posX * posX + posY * posY + softSqV;
-            //
-            //    RealSimd accX = -Gv * posX / r2;
-            //    RealSimd accY = -Gv * posY / r2;
-            //
-            //    RealSimd deltaVX = accX * RealSimd(deltaTime);
-            //    RealSimd deltaVY = accY * RealSimd(deltaTime);
-            //
-            //    RealSimd newVelX = velX + deltaVX;
-            //    RealSimd newVelY = velY + deltaVY;
-            //    velX = RealSimd::blendv(velX, newVelX, movableMask);
-            //    velY = RealSimd::blendv(velY, newVelY, movableMask);
-            //
-            //    velX.store(velocityXPtr + i);
-            //    velY.store(velocityYPtr + i);
-            //}
-            for (; i < bodyCount; i++)
-            {
-                const Real invMass = invMassPtr[i];
-                if (invMass == Real(0.0)) continue;
-
-                const Real posX = positionXPtr[i];
-                const Real posY = positionYPtr[i];
-                const Real distanceSquared = posX * posX + posY * posY;
-
-                Real accX, accY;
-                if (distanceSquared < PLANET_RADIUS_SQUARED)
-                {
-                    accX = posX / PLANET_RADIUS;
-                    accY = posY / PLANET_RADIUS;
-                }
-                else
-                {
-                    const Real distance = std::sqrt(distanceSquared);
-
-                    const Real normalX = posX / distance;
-                    const Real normalY = posY / distance;
-
-                    const Real radiusRatioSquared = PLANET_RADIUS_SQUARED / distanceSquared;
-
-                    accX = normalX * radiusRatioSquared;
-                    accY = normalY * radiusRatioSquared;
-                }
-                accX *= -G;
-                accY *= -G;
-
-                velocityXPtr[i] += accX * deltaTime;
-                velocityYPtr[i] += accY * deltaTime;
-            }
-        }
-
-        // Damp angular velocity.
-        if (simulationSettings.angularVelocityDamping >= 0 && simulationSettings.angularVelocityDamping < 1)
-        {
-            Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
-            Real* ECSTASY_RESTRICT invInertiaPtr = bodies.invInertia.data();
-
-            const Real damping = std::pow(simulationSettings.angularVelocityDamping, deltaTime);
-            const RealSimd dampingV(damping);
-
-            size_t i = 0;
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            {
-                RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
-
-                const RealSimd invInertiaV = RealSimd::load(invInertiaPtr + i);
-                const auto movableMask = invInertiaV != zeros;
-
-                RealSimd newAngVel = angVel * dampingV;
-
-                newAngVel = RealSimd::blendv(angVel, newAngVel, movableMask);
-
-                newAngVel.store(angularVelocityPtr + i);
-            }
-            for (; i < bodyCount; i++)
-            {
-                const Real invInertia = invInertiaPtr[i];
-                const Real movableMask = invInertia != Real(0.0);
-
-                const Real angVel = angularVelocityPtr[i];
-
-                Real newAngVel = angVel * damping;
-
-                newAngVel = movableMask * newAngVel + (Real(1) - movableMask) * angVel;
-
-                angularVelocityPtr[i] = newAngVel;
-            }
-        }
-    }
-
-    void Simulation::integratePositions(size_t bodyCount, Real deltaTime)
-    {
-        TRACY_SCOPE_NC("Intergrate positions", Ecstasy::Core::Color::Blue);
-
-        const RealSimd deltaTimeV{ deltaTime };
-
-        // Position and rotatiob.
-        {
-            Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
-            Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
-            Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
-
-            const Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
-            const Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
-            const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
-
-            size_t i = 0;
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            {
-                const RealSimd velX = RealSimd::load(velocityXPtr + i);
-                const RealSimd velY = RealSimd::load(velocityYPtr + i);
-                const RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
-
-                RealSimd posX = RealSimd::load(positionXPtr + i);
-                RealSimd posY = RealSimd::load(positionYPtr + i);
-                RealSimd rot = RealSimd::load(rotationPtr + i);
-
-                posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
-                posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
-                rot = RealSimd::mulAdd(angVel, deltaTimeV, rot);
-
-                posX.store(positionXPtr + i);
-                posY.store(positionYPtr + i);
-                rot.store(rotationPtr + i);
-            }
-            for (; i < bodyCount; i++)
-            {
-                positionXPtr[i] += velocityXPtr[i] * deltaTime;
-                positionYPtr[i] += velocityYPtr[i] * deltaTime;
-                rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
-            }
-        }
     }
 
     void Simulation::buildColliderAABBs()
@@ -1042,66 +841,6 @@ namespace PS_AGONY
             aabbMaxXPtr[colliderIndex] = x + maxX;
             aabbMaxYPtr[colliderIndex] = y + maxY;
         }
-    }
-
-    void Simulation::wrapRotation()
-    {
-        constexpr size_t LANES = RealSimd::lanes;
-
-        TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Core::Color::Cyan);
-
-        Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
-        Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount.data();
-
-        const size_t bodyCount = bodies.getCount();
-
-        const RealSimd oneV(1);
-        const RealSimd twoPIV(Constants::TWO_PI);
-        const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
-
-        size_t i = 0;
-        for (; i + LANES <= bodyCount; i += LANES)
-        {
-            RealSimd rot = RealSimd::load(rotationPtr + i);
-            RealSimd oldWrapCount = RealSimd::load(rotationWrapCountPtr + i);
-
-            RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
-            rot = rot - wrapCount * twoPIV;
-
-            RealSimd isRotNegativeMask = rot < RealSimd(0);
-
-            rot += isRotNegativeMask & twoPIV;
-            wrapCount -= isRotNegativeMask & oneV;
-
-            rot.store(rotationPtr + i);
-            (oldWrapCount + wrapCount).store(rotationWrapCountPtr + i);
-        }
-        for (; i < bodyCount; i++)
-        {
-            Real rot = rotationPtr[i];
-            Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
-            rot -= wrapCount * Constants::TWO_PI;
-
-            Real isRotNegativeMask = rot < 0;
-
-            rot += isRotNegativeMask * Constants::TWO_PI;
-            wrapCount -= isRotNegativeMask; // * Real(1);
-
-            rotationPtr[i] = rot;
-            rotationWrapCountPtr[i] += wrapCount;
-        }
-    }
-
-    void Simulation::computeRotationCosSin()
-    {
-        TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Core::Color::Teal);
-
-        FastCosSin::order4Array(
-            bodies.rotation.data(),
-            bodies.rotationCos.data(),
-            bodies.rotationSin.data(),
-            bodies.getCount()
-        );
     }
 
     void Simulation::computeBodyWorldCenters()
