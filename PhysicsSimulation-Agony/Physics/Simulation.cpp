@@ -592,11 +592,6 @@ namespace PS_AGONY
         bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
     }
 
-    void Simulation::getBroadPhaseAABBs(std::vector<AABB>& outAABBs) const
-    {
-        broadPhaseCollisionDetector.fetchAABBs(outAABBs);
-    }
-
     void Simulation::physicsStep(Real deltaTime)
     {
         TRACY_SCOPE_NC("Physics step", Ecstasy::Core::Color::Orange);
