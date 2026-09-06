@@ -1026,6 +1026,80 @@ void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generato
         });
 }
 
+void load_ColliderTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+{
+    // === MATERIALS ===
+    PS_AGONY::Material floorMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 0.5f,
+        .dynamicFriction = 0.4f
+    };
+    PS_AGONY::MaterialIndex floorMatIdx = simulation.createMaterial(floorMaterial);
+
+    PS_AGONY::Material grippyMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 5.0f,
+        .dynamicFriction = 4.0f
+    };
+    PS_AGONY::MaterialIndex grippyMatIdx = simulation.createMaterial(grippyMaterial);
+
+    PS_AGONY::Material slickMaterial = {
+        .elasticity = 0.1f,
+        .staticFriction = 0.02f,
+        .dynamicFriction = 0.01f
+    };
+    PS_AGONY::MaterialIndex slickMatIdx = simulation.createMaterial(slickMaterial);
+
+    // === STATIC FLOOR ===
+    constexpr float floorWidth = 30.0f;
+    constexpr float floorHeight = 2.0f;
+    simulation.createBox({
+        .base.position = { 0.0f, -floorHeight * 0.5f },
+        .base.mass = 0, // Static.
+        .base.materialIndex = floorMatIdx,
+        .size = { floorWidth, floorHeight }
+        });
+
+    // === SPECIAL OBJECT: two-collider compound body ===
+    // Two circles rigidly attached to one body, spaced so the gap between
+    // their surfaces is a bit larger than zero (center distance > radius sum),
+    // so they never touch each other. Different materials per collider to
+    // verify per-collider material lookup (huge friction vs. near-zero friction)
+    // lands correctly through the new collider system.
+    constexpr float radiusA = 0.8f;   // Big, grippy circle.
+    constexpr float radiusB = 0.4f;   // Small, slick circle.
+    constexpr float gap = 0.3f;       // Extra space beyond just touching.
+    const float centerDistance = radiusA + radiusB + gap;
+
+    auto bodyOpt = simulation.createBody({
+        .position = { 0.0f, 6.0f },
+        .velocity = { 0.0f, 0.0f },
+        .rotation = 0.0f,
+        .angularVelocity = 0.0f,
+        .mass = 4.0f
+        // Note: createBody() doesn't derive inertia from attached shapes, so
+        // invInertia stays 0 here - this compound body will translate but not
+        // rotate. Fine for exercising the collider system in isolation.
+        });
+
+    if (!bodyOpt) return;
+    const PS_AGONY::ObjectIndex body = *bodyOpt;
+
+    simulation.createCircleCollider({
+        .bodyIndex = body,
+        .localOffset = { -centerDistance * 0.5f, 0.0f },
+        .materialIndex = grippyMatIdx,
+        .radius = radiusA
+        });
+
+    simulation.createCircleCollider({
+        .bodyIndex = body,
+        .localOffset = { centerDistance * 0.5f, 0.0f },
+        .materialIndex = slickMatIdx,
+        .radius = radiusB
+        });
+}
+
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
@@ -1068,5 +1142,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 7)
     {
         load_Test(simulation, rvg);
+    }
+    else if (scene == 8)
+    {
+        load_ColliderTest(simulation, rvg);
     }
 }

@@ -190,6 +190,8 @@ namespace PS_AGONY
 		// but every index in it is a collider index, not a body index).
 		void remapPersistentContactData(const std::vector<ObjectDeletion>& deletedColliders);
 
+		void clearData();
+
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 
 		size_t getMemoryUsage() const;

@@ -374,6 +374,11 @@ namespace PS_AGONY
         previousContactDataContainer = std::move(newContainer);
     }
 
+    void NarrowPhaseCollisionDetector::clearData()
+    {
+        allCollisionData.clear();
+    }
+
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
         size_t total = sizeof(NarrowPhaseCollisionDetector);
