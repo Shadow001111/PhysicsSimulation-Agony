@@ -168,7 +168,10 @@ namespace PS_AGONY
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
 		// Returns COLLIDER indices whose AABB overlaps the query circle.
-		void fetchBodiesInCircle(Vec2 pos, Real radius, std::vector<ObjectIndex>& outColliders) const;
+		void fetchCollidersInCircle(Vec2 pos, Real radius, std::vector<ColliderIndex>& outColliders) const;
+
+		// Returns COLLIDER indices whose AABB overlaps the query AABB.
+		void fetchCollidersInAABB(const AABB& aabb, std::vector<ColliderIndex>& outColliders) const;
 
 		size_t getMemoryUsage() const;
 	private:

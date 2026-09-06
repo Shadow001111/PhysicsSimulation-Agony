@@ -519,21 +519,21 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT massPtr = bodies.mass.data();
 
         // Broad-phase.
-        std::vector<ObjectIndex> broadPhaseBodies; // TODO: Get rid of allocation.
-        broadPhaseBodies.reserve(128);
-        broadPhaseCollisionDetector.fetchBodiesInCircle(grabPosition, MAX_GRAB_DISTANCE, broadPhaseBodies);
-        if (broadPhaseBodies.empty()) return;
+        std::vector<ColliderIndex> broadPhaseColliders; // TODO: Get rid of allocation.
+        broadPhaseColliders.reserve(128);
+        broadPhaseCollisionDetector.fetchCollidersInCircle(grabPosition, MAX_GRAB_DISTANCE, broadPhaseColliders);
+        if (broadPhaseColliders.empty()) return;
 
         // Narrow phase.
-        std::vector<std::pair<ObjectIndex, Real>> narrowPhaseBodies; // TODO: Get rid of allocation.
-        narrowPhaseBodies.reserve(broadPhaseBodies.size());
-        narrowPhaseCollisionDetector.findCollisionsInCircle(broadPhaseBodies, grabPosition, MAX_GRAB_DISTANCE, narrowPhaseBodies);
-        if (narrowPhaseBodies.empty()) return;
+        std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders; // TODO: Get rid of allocation.
+        narrowPhaseColliders.reserve(broadPhaseColliders.size());
+        narrowPhaseCollisionDetector.findCollisionsInCircle(broadPhaseColliders, grabPosition, MAX_GRAB_DISTANCE, narrowPhaseColliders);
+        if (narrowPhaseColliders.empty()) return;
 
         // Sort bodies by distance to the surface.
         std::sort(
-            narrowPhaseBodies.begin(),
-            narrowPhaseBodies.end(),
+            narrowPhaseColliders.begin(),
+            narrowPhaseColliders.end(),
             [](const auto& a, const auto& b) -> bool
             {
                 return a.second < b.second;
@@ -543,9 +543,10 @@ namespace PS_AGONY
         // Get closest body.
         ObjectIndex closestBody;
         bool foundAnyBody = false;
-        for (const auto [bodyIndex, distance] : narrowPhaseBodies)
+        for (const auto [colliderIndex, distance] : narrowPhaseColliders)
         {
-            if (massPtr[bodyIndex] > 0)
+            ObjectIndex bodyIndex = colliders.bodyIndex[colliderIndex];
+            if (massPtr[bodyIndex] > 0) // Fix for body!
             {
                 closestBody = bodyIndex;
                 foundAnyBody = true;
