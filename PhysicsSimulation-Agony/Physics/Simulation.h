@@ -30,6 +30,7 @@ namespace PS_AGONY
 
 			// Memory.
 			size_t bodyDataMemoryUsage = 0;
+			size_t colliderDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
 			size_t boxDataMemoryUsage = 0;
 			size_t polygonDataMemoryUsage = 0;
@@ -62,6 +63,35 @@ namespace PS_AGONY
 			Real mass{ 0 };
 			std::optional<Vec2> centerOfMass = std::nullopt;
 			MaterialIndex materialIndex{ 0 };
+		};
+
+		// Params for attaching a new collider to an EXISTING body immediately (no standalone colliders).
+		struct CircleColliderCreateParams
+		{
+			ObjectIndex bodyIndex;
+			Vec2 localOffset{ 0 };
+			Real localRotation{ 0 };
+			MaterialIndex materialIndex{ 0 };
+			Real radius{ 0 };
+		};
+
+		struct BoxColliderCreateParams
+		{
+			ObjectIndex bodyIndex;
+			Vec2 localOffset{ 0 };
+			Real localRotation{ 0 };
+			MaterialIndex materialIndex{ 0 };
+			Vec2 size{ 0 };
+		};
+
+		struct PolygonColliderCreateParams
+		{
+			ObjectIndex bodyIndex;
+			Vec2 localOffset{ 0 };
+			Real localRotation{ 0 };
+			MaterialIndex materialIndex{ 0 };
+			Vec2* localVertices = nullptr;
+			size_t verticesCount = 0;
 		};
 
 		struct SpringCreateParams
@@ -173,13 +203,32 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
+		// Creates a body with NO colliders attached. Mass/inertia are taken directly
+		// from params; since there's no shape yet, inertia is not auto-derived and
+		// attaching colliders afterward does not recompute mass/inertia/COM for you.
+		std::optional<ObjectIndex> createBody(const BodyCreateParams& params);
+
+		// Attaches a new collider of the given shape to an EXISTING body immediately.
+		// Returns std::nullopt if bodyIndex is invalid. Colliders are never standalone.
+		std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params);
+		std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params);
+		std::optional<ColliderIndex> createPolygonCollider(const PolygonColliderCreateParams& params);
+
+		// Convenience: creates a body plus a single matching collider in one call.
 		std::optional<ObjectIndex> createCircle(const CircleCreateParams& params);
 		std::optional<ObjectIndex> createBox(const BoxCreateParams& params);
 		std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params);
 
+		// Destroys a body and cascade-deletes every collider/spring attached to it.
 		void destroyBody(ObjectIndex bodyIndex);
 
+		// Destroys a single collider without touching its owning body.
+		void destroyCollider(ColliderIndex colliderIndex);
+
 		void createSpring(const SpringCreateParams& params);
+
+		// Destroys a single spring by its index in the spring constraint system.
+		void destroySpring(uint32_t springIndex);
 
 		MaterialIndex createMaterial(const Material& material);
 
@@ -191,7 +240,7 @@ namespace PS_AGONY
 		const NarrowPhaseCollisionDetector& getNarrowPhaseCollisionDetector() const noexcept { return narrowPhaseCollisionDetector; };
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }
-		
+
 		SimulationSettings& getSimulationSettings() noexcept { return simulationSettings; }
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 
@@ -243,5 +292,9 @@ namespace PS_AGONY
 			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
 			MaterialIndex materialIndex, BodyType shapeType, ObjectIndex shapeIndex
 		);
+
+		// Removes a single collider (and its underlying shape-SoA entry) from bodyIndex's
+		// owned list. Shared by destroyCollider() and destroyBody()'s cascade loop.
+		void destroyColliderInternal(ObjectIndex bodyIndex, ColliderIndex colliderIndex);
 	};
 }

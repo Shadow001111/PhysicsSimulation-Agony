@@ -170,8 +170,9 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
             simulationData.boxDataMemoryUsage +
             simulationData.polygonDataMemoryUsage;
 
-        const size_t constraintTotal =
-            simulationData.springDataMemoryUsage;
+        const size_t colliderTotal = simulationData.colliderDataMemoryUsage;
+
+        const size_t constraintTotal = simulationData.springDataMemoryUsage;
 
         const size_t solvingTotal =
             simulationData.bodyCollisionSolverMemoryUsage +
@@ -181,6 +182,7 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
 
         const size_t totalMemory =
             simulationData.bodyDataMemoryUsage +
+            colliderTotal +
             shapeTotal +
             constraintTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
@@ -221,6 +223,7 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
                 };
 
             addMemoryRow("Bodies (Base Data)", simulationData.bodyDataMemoryUsage);
+            addMemoryRow("Colliders (Base Data)", simulationData.colliderDataMemoryUsage);
 
             addMemoryRow("Shapes (Total Group)", shapeTotal);
             addMemoryRow("Circles", simulationData.circleDataMemoryUsage, true);
