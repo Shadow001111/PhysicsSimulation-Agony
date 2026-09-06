@@ -608,7 +608,11 @@ namespace PS_AGONY
 
         // Check if any body exist.
         const size_t bodyCount = bodies.getCount();
-        if (bodyCount == 0) return;
+        if (bodyCount == 0)
+        {
+            // TODO: Call manual reset for data that can be displayed.
+            return;
+        }
 
         // Check if any material exist.
         if (materials.empty()) [[unlikely]]
