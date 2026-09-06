@@ -3,6 +3,8 @@
 #include "FastCosSin.h"
 #include "Constants.h"
 
+#include "SimulationImpl/PhysicsGeometry.h"
+
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
@@ -13,141 +15,6 @@ namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 
-
-    static Real calculateCircleInertia(Real mass, Real radius, Vec2 centerOfMass)
-    {
-        const Real radiusSquared = radius * radius;
-        const Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
-        return (Real(0.5) * radiusSquared + deltaSquared) * mass;
-    }
-
-    static Real calculateBoxInertia(Real mass, Real width, Real height, Vec2 centerOfMass)
-    {
-        constexpr Real div = 1.0 / 12.0;
-        const Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
-        return mass * (div * (width * width + height * height) + deltaSquared);
-    }
-
-    static std::pair<Real, Vec2> calculatePolygonInertia(
-        Real mass,
-        VerticesContainer& verticesContainer,
-        std::optional<Vec2> centerOfMass = std::nullopt
-    )
-    {
-        const size_t verticesCount = verticesContainer.size();
-        if (verticesCount < 3)
-        {
-            return { Real(0), centerOfMass.value_or(Vec2(Real(0))) };
-        }
-
-        Real signedArea = Real(0);
-        Real cx = Real(0);
-        Real cy = Real(0);
-        Real xx = Real(0);
-        Real yy = Real(0);
-
-        const bool computeCOM = !centerOfMass.has_value();
-        const Vec2* verticesPtr = verticesContainer.data();
-
-        for (size_t i = 0; i < verticesCount; i++)
-        {
-            const Vec2& p0 = verticesPtr[i];
-            const Vec2& p1 = verticesPtr[(i + 1) % verticesCount];
-
-            Real cross = p0.x * p1.y - p1.x * p0.y;
-            signedArea += cross;
-
-            if (computeCOM)
-            {
-                cx += (p0.x + p1.x) * cross;
-                cy += (p0.y + p1.y) * cross;
-            }
-
-            // Area moments about origin.
-            xx += (p0.y * p0.y + p0.y * p1.y + p1.y * p1.y) * cross;
-            yy += (p0.x * p0.x + p0.x * p1.x + p1.x * p1.x) * cross;
-        }
-
-        // If winding order is clockwise, reverse the container to make it counter-clockwise.
-        // Since all accumulated values are linear with respect to 'cross', we can just negate them.
-        if (signedArea < Real(0))
-        {
-            std::reverse(verticesContainer.begin(), verticesContainer.end());
-            signedArea = -signedArea;
-            xx = -xx;
-            yy = -yy;
-            if (computeCOM)
-            {
-                cx = -cx;
-                cy = -cy;
-            }
-        }
-
-        signedArea *= Real(0.5);
-        const Real absoluteArea = signedArea;
-        if (absoluteArea < std::numeric_limits<Real>::epsilon())
-        {
-            return { Real(0), centerOfMass.value_or(Vec2(Real(0))) };
-        }
-
-        // Determine final Center of Mass.
-        Vec2 finalCOM;
-        if (computeCOM)
-        {
-            finalCOM = Vec2(
-                cx / (Real(6) * signedArea),
-                cy / (Real(6) * signedArea)
-            );
-        }
-        else
-        {
-            finalCOM = centerOfMass.value();
-        }
-
-        xx /= Real(12);
-        yy /= Real(12);
-
-        // Local/World polar moment of area scaled to mass moment
-        Real inertia = (mass / absoluteArea) * (xx + yy);
-
-        // If COM was explicitly provided, treat vertices as local space 
-        // and shift to world origin via the parallel axis theorem.
-        if (!computeCOM)
-        {
-            Real deltaSquared = glm::dot(finalCOM, finalCOM);
-            inertia += mass * deltaSquared;
-        }
-
-        return { inertia, finalCOM };
-    }
-
-    // Filters out consecutive/any duplicate vertices from a raw vertex buffer.
-    // Shared by createPolygon() and createPolygonCollider().
-    static std::vector<Vec2> filterDuplicateVertices(const Vec2* localVertices, size_t verticesCount)
-    {
-        std::vector<Vec2> uniqueVertices;
-        uniqueVertices.reserve(verticesCount);
-        for (size_t i = 0; i < verticesCount; ++i)
-        {
-            const Vec2& current = localVertices[i];
-
-            bool isDuplicate = false;
-            for (const Vec2& existing : uniqueVertices)
-            {
-                if (existing.x == current.x && existing.y == current.y)
-                {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-
-            if (!isDuplicate)
-            {
-                uniqueVertices.push_back(current);
-            }
-        }
-        return uniqueVertices;
-    }
 
     Simulation::Simulation()
     {
@@ -315,7 +182,7 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        std::vector<Vec2> uniqueVertices = filterDuplicateVertices(params.localVertices, params.verticesCount);
+        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices(params.localVertices, params.verticesCount);
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: unique vertices count is less than three.\n";
@@ -341,7 +208,7 @@ namespace PS_AGONY
         const Real radius = std::fmax(Real(0), params.radius);
         const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
 
-        const Real inertia = calculateCircleInertia(mass, radius, centerOfMass);
+        const Real inertia = PhysicsGeometry::calculateCircleInertia(mass, radius, centerOfMass);
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
@@ -369,7 +236,7 @@ namespace PS_AGONY
         const Real height = std::fmax(Real(0), params.size.y);
         const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
 
-        const Real inertia = calculateBoxInertia(mass, width, height, centerOfMass);
+        const Real inertia = PhysicsGeometry::calculateBoxInertia(mass, width, height, centerOfMass);
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
@@ -403,7 +270,7 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        std::vector<Vec2> uniqueVertices = filterDuplicateVertices(params.localVertices, params.verticesCount);
+        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices(params.localVertices, params.verticesCount);
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
@@ -414,7 +281,7 @@ namespace PS_AGONY
 
         VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
 
-        auto iCOM = calculatePolygonInertia(mass, vertices, std::nullopt);
+        auto iCOM = PhysicsGeometry::calculatePolygonInertia(mass, vertices, std::nullopt);
         const Real inertia = iCOM.first;
         Vec2 trueCenterOfMass = iCOM.second;
         Vec2 neededCenterOfMass = params.base.centerOfMass.value_or(trueCenterOfMass);
