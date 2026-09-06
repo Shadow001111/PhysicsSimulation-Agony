@@ -4,7 +4,6 @@
 #include "Ecstasy/OpenGL/Shader.h"
 #include "Ecstasy/OpenGL/ImmutableBuffer.h"
 #include "Ecstasy/OpenGL/VertexArray.h"
-#include "Ecstasy/OpenGL/Texture.h"
 
 #include "ObjectSoA.h"
 
@@ -84,10 +83,10 @@ namespace PS_AGONY
 
 		struct DrawArraysIndirectCommand
 		{
-			uint32_t count;        
+			uint32_t count;
 			uint32_t instanceCount;
-			uint32_t first;        
-			uint32_t baseInstance; 
+			uint32_t first;
+			uint32_t baseInstance;
 		};
 
 		struct PolygonInstanceData
@@ -112,6 +111,9 @@ namespace PS_AGONY
 		};
 
 		// Resources.
+		std::vector<ColliderIndex> foundColliders;
+		std::vector<ColliderIndex> foundColliderShapes[(size_t)BodyType::COUNT];
+
 		CircleRenderResources circleResources;
 		BoxRenderResources boxResources;
 		PolygonRenderResources polygonResources;
@@ -138,7 +140,7 @@ namespace PS_AGONY
 		SimulationRenderer& operator=(SimulationRenderer&&) = delete;
 
 		void init();
-		void renderSimulation(const Simulation& simulation, Real simRenderAlpha);
+		void renderSimulation(const Simulation& simulation, Real simRenderAlpha, const AABB& cameraAABB);
 
 		void renderObjectPreview(const void* params, BodyType type);
 
@@ -147,16 +149,18 @@ namespace PS_AGONY
 		void initShaders();
 		void initBuffers();
 
+		void fetchCollidersForRender(const Simulation& simulation, const AABB& cameraAABB);
+
 		// Collect data and render.
 
-		void renderBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderColliders(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix);
 		void renderBodyPositions(const Mat4& viewProjectionMatrix);
 		void renderBodyTruePositions(const Mat4& viewProjectionMatrix);
-		
-		void renderCircleBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderBoxBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderPolygonBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+
+		void renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 
 		void renderColliderAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
@@ -169,7 +173,7 @@ namespace PS_AGONY
 		void renderCircleShapes(const Mat4& viewProjectionMatrix);
 		void renderBoxShapes(const Mat4& viewProjectionMatrix);
 		void renderPolygonShapes(const Mat4& viewProjectionMatrix);
-		
+
 		void renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix);
 
 		// Buffer helpers.
@@ -183,4 +187,3 @@ namespace PS_AGONY
 		void ensureSpringBufferCapacity(size_t vertexCount);
 	};
 }
-

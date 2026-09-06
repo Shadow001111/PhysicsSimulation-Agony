@@ -674,8 +674,22 @@ static int gameFunc()
             const float bgColor[4] = { 0.0f, 0.0f, 0.1f, 0.0f };
             framebuffer.clearDrawBuffer("color", bgColor);
 
+            // Get camera AABB.
+            PS_AGONY::AABB cameraAABB;
+            {
+                const PS_AGONY::Vec2 minCorner = camera.screenToWorldSpace({ -1.0, -1.0 });
+                const PS_AGONY::Vec2 maxCorner = camera.screenToWorldSpace({ 1.0,  1.0 });
+
+                cameraAABB = {
+                    .minX = std::fmin(minCorner.x, maxCorner.x),
+                    .minY = std::fmin(minCorner.y, maxCorner.y),
+                    .maxX = std::fmax(minCorner.x, maxCorner.x),
+                    .maxY = std::fmax(minCorner.y, maxCorner.y)
+                };
+            }
+
             // Render simulation.
-            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha());
+            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB);
 
             // Render debug data.
             renderGUI(simulation, debugData, pauseSimulation);

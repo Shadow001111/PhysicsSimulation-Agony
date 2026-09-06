@@ -289,6 +289,98 @@ namespace PS_AGONY
 
 	void BroadPhaseCollisionDetector::fetchCollidersInAABB(const AABB& aabb, std::vector<ColliderIndex>& outColliders) const
 	{
+		TRACY_SCOPE_N("Fetch colliders in AABB");
+
+		if (bvhFunctionResources.nodes.empty()) return;
+
+		// Lambda to check overlap between a BVH node's AABB and the query AABB.
+		auto overlapsAABB = [&](const BvhNode& node) noexcept -> bool
+			{
+				return node.minX < aabb.maxX && node.maxX > aabb.minX &&
+					node.minY < aabb.maxY && node.maxY > aabb.minY;
+			};
+
+		// Quick escape if root doesn't even overlap.
+		if (!overlapsAABB(bvhFunctionResources.nodes[0])) return;
+
+		// Simd constants.
+		const RealSimd aabbMinXV(aabb.minX);
+		const RealSimd aabbMaxXV(aabb.maxX);
+		const RealSimd aabbMinYV(aabb.minY);
+		const RealSimd aabbMaxYV(aabb.maxY);
+
+		// Get pointers.
+		const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<const Real*>(leafBodyAABBs.minX.data());
+		const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<const Real*>(leafBodyAABBs.maxX.data());
+		const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<const Real*>(leafBodyAABBs.minY.data());
+		const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<const Real*>(leafBodyAABBs.maxY.data());
+		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
+
+		// Local traversal stack.
+		constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+
+		uint32_t stack[MAX_STACK_CAPACITY];
+		uint32_t stackSize = 0;
+
+		stack[stackSize++] = 0;
+
+		while (stackSize > 0)
+		{
+			const uint32_t nodeIdx = stack[--stackSize];
+
+			const BvhNode& node = nodePtr[nodeIdx];
+
+			if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf node.
+			{
+				const uint32_t count = node.end - node.start;
+
+				const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
+				const Real* leafMinX = leafMinXPtr + srcIndex;
+				const Real* leafMaxX = leafMaxXPtr + srcIndex;
+				const Real* leafMinY = leafMinYPtr + srcIndex;
+				const Real* leafMaxY = leafMaxYPtr + srcIndex;
+
+				uint32_t mask = 0;
+				for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+				{
+					const RealSimd minXV = RealSimd::load(leafMinX + j);
+					const RealSimd maxXV = RealSimd::load(leafMaxX + j);
+					const RealSimd minYV = RealSimd::load(leafMinY + j);
+					const RealSimd maxYV = RealSimd::load(leafMaxY + j);
+
+					const auto overlap =
+						(minXV < aabbMaxXV) & (maxXV > aabbMinXV) &
+						(minYV < aabbMaxYV) & (maxYV > aabbMinYV);
+
+					mask |= overlap.movemask() << j;
+				}
+
+				// Apply the count boundary to mask out invalid padded elements in the leaf node.
+				mask &= static_cast<uint32_t>((1ULL << count) - 1ULL);
+
+				while (mask)
+				{
+					const uint32_t lane = std::countr_zero(mask);
+					mask &= mask - 1;
+					outColliders.push_back(bvhFunctionResources.mainColliderIndices[node.start + lane]);
+				}
+			}
+			else // Internal node.
+			{
+				const BvhNode& left = nodePtr[node.leftChildIndex];
+				const BvhNode& right = nodePtr[node.leftChildIndex + 1];
+
+				// Check overlap with children before pushing to the stack.
+				if (overlapsAABB(right))
+				{
+					stack[stackSize++] = node.leftChildIndex + 1;
+				}
+				if (overlapsAABB(left))
+				{
+					stack[stackSize++] = node.leftChildIndex;
+				}
+			}
+		}
 	}
 
 	size_t BroadPhaseCollisionDetector::getMemoryUsage() const

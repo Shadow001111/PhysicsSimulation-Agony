@@ -5,6 +5,8 @@
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
+#include <cmath>
+
 namespace PS_AGONY
 {
     [[nodiscard]] static uint32_t idToHexColor(uint32_t x) noexcept
@@ -17,7 +19,6 @@ namespace PS_AGONY
         return x & 0xFFFFFF;
     }
 
-
     void SimulationRenderer::init()
     {
         TRACY_SCOPE_N("SimulationRenderer init");
@@ -26,7 +27,7 @@ namespace PS_AGONY
         initBuffers();
     }
 
-    void SimulationRenderer::renderSimulation(const Simulation& simulation, Real simRenderAlpha)
+    void SimulationRenderer::renderSimulation(const Simulation& simulation, Real simRenderAlpha, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render simulation");
 
@@ -42,9 +43,12 @@ namespace PS_AGONY
         const Mat4 projectionMatrix = camera.getProjectionMatrix();
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
+        // Fetch for render.
+        fetchCollidersForRender(simulation, cameraAABB);
+
         // Render.
-        renderBodies(viewProjectionMatrix, simRenderAlpha);
-		renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+        renderColliders(viewProjectionMatrix, simRenderAlpha);
+        renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
         renderContactPoints(simulation, viewProjectionMatrix);
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
     }
@@ -142,7 +146,7 @@ namespace PS_AGONY
                 { GL_VERTEX_SHADER, "res/Shaders/Bodies/circle.vert" },
                 { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/circle.frag" }
             };
-            
+
             circleResources.shader.create(sources);
         }
 
@@ -207,7 +211,7 @@ namespace PS_AGONY
             ensureCircleInstanceVboCapacity(64);
         }
 
-        // Circle.
+        // Box.
         {
             const float vertices[] =
             {
@@ -241,9 +245,9 @@ namespace PS_AGONY
             const float vertices[] =
             {
                 0.0f, 0.0f,
-				1.0f, 0.0f,
-				1.0f, 1.0f,
-				0.0f, 1.0f
+                1.0f, 0.0f,
+                1.0f, 1.0f,
+                0.0f, 1.0f
             };
 
             aabbResources.vbo.create();
@@ -265,18 +269,44 @@ namespace PS_AGONY
         }
     }
 
-    void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    void SimulationRenderer::fetchCollidersForRender(const Simulation& simulation, const AABB& cameraAABB)
     {
-        TRACY_SCOPE_N("Render bodies");
+        {
+            TRACY_SCOPE_N("Find colliders for render");
 
-        renderCircleBodies(viewProjectionMatrix, simRenderAlpha);
-        renderBoxBodies(viewProjectionMatrix, simRenderAlpha);
-        renderPolygonBodies(viewProjectionMatrix, simRenderAlpha);
+            const auto& collisionDetector = simulation.getBroadPhaseCollisionDetector();
 
-		//renderBodyCentersOfMass(viewProjectionMatrix); // Red.
+            foundColliders.clear();
+            collisionDetector.fetchCollidersInAABB(cameraAABB, foundColliders);
+        }
+        {
+            TRACY_SCOPE_N("Partition found colliders");
+
+            for (auto& vec : foundColliderShapes)
+            {
+                vec.clear();
+            }
+
+            for (ColliderIndex collider : foundColliders)
+            {
+                BodyType shape = colliders.shapeType[collider];
+                foundColliderShapes[(size_t)shape].push_back(collider);
+            }
+        }
+    }
+
+    void SimulationRenderer::renderColliders(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    {
+        TRACY_SCOPE_N("Render colliders");
+
+        renderCircleColliders(foundColliderShapes[(size_t)BodyType::Circle], viewProjectionMatrix, simRenderAlpha);
+        renderBoxColliders(foundColliderShapes[(size_t)BodyType::Box], viewProjectionMatrix, simRenderAlpha);
+        renderPolygonColliders(foundColliderShapes[(size_t)BodyType::Polygon], viewProjectionMatrix, simRenderAlpha);
+
+        //renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
         //renderBodyPositions(viewProjectionMatrix); // Blue.
-		renderColliderAABBs(viewProjectionMatrix);
+        renderColliderAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -288,8 +318,8 @@ namespace PS_AGONY
         circleResources.instanceData.resize(count);
 
         // Prepare instance data.
-		const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
-		const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT centerYPtr = bodies.localCenterOfMassY;
 
@@ -297,12 +327,12 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-			const glm::vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
+            const glm::vec2 localCenterOfMass = { centerXPtr[i], centerYPtr[i] };
 
             const glm::vec2 worldCenterOfMass = {
                 positionXPtr[i] + localCenterOfMass.x,
                 positionYPtr[i] + localCenterOfMass.y
-			};
+            };
 
             renderDataPtr[i].positionX = worldCenterOfMass.x;
             renderDataPtr[i].positionY = worldCenterOfMass.y;
@@ -310,7 +340,7 @@ namespace PS_AGONY
             renderDataPtr[i].localCOMY = 0.0f;
             renderDataPtr[i].rotation = 0.785f;
             renderDataPtr[i].radius = 0.03f;
-			renderDataPtr[i].color = 0xFF0000;
+            renderDataPtr[i].color = 0xFF0000;
         }
 
         // Render.
@@ -375,15 +405,15 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    void SimulationRenderer::renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
-        TRACY_SCOPE_N("Render circle bodies");
-
-        const size_t count = circles.getCount();
+        const size_t count = givenColliders.size();
         if (count == 0) return;
 
-		// Reserve space.
-		circleResources.instanceData.resize(count);
+        TRACY_SCOPE_N("Render circle colliders");
+
+        // Reserve space.
+        circleResources.instanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
@@ -397,46 +427,64 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
+        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
+        const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
+
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.colliderIndices;
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
-            const ObjectIndex bodyIndex = bodyIndexPtr[i];
+            const ColliderIndex colliderIndex = givenColliders[i];
+
+            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
             const Real posX = positionXPtr[bodyIndex];
             const Real posY = positionYPtr[bodyIndex];
             const Real oldPosX = oldPositionXPtr[bodyIndex];
             const Real oldPosY = oldPositionYPtr[bodyIndex];
 
-            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
-            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
+            const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
+            const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
             const Real fullOldRotation = oldRotationPtr[bodyIndex];
             const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
+            const Real interpolatedBodyRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
 
-            renderDataPtr[i].positionX = interpolatedPosX;
-            renderDataPtr[i].positionY = interpolatedPosY;
+            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+
+            const Real bodyCos = std::cos(interpolatedBodyRotation);
+            const Real bodySin = std::sin(interpolatedBodyRotation);
+
+            const Real worldOffX = localOffX * bodyCos - localOffY * bodySin;
+            const Real worldOffY = localOffX * bodySin + localOffY * bodyCos;
+
+            renderDataPtr[i].positionX = interpolatedBodyPosX + worldOffX;
+            renderDataPtr[i].positionY = interpolatedBodyPosY + worldOffY;
             renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
             renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = interpolatedRotation;
-            renderDataPtr[i].radius = radiusPtr[i];
-			renderDataPtr[i].color = 0xFFFFFF;
+            renderDataPtr[i].rotation = interpolatedBodyRotation + localRot;
+            renderDataPtr[i].radius = radiusPtr[shapeIndex];
+            renderDataPtr[i].color = 0xFFFFFF;
         }
 
         // Render.
-		renderCircleShapes(viewProjectionMatrix);
+        renderCircleShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    void SimulationRenderer::renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
-        TRACY_SCOPE_N("Render box bodies");
-
-        const size_t count = boxes.getCount();
+        const size_t count = givenColliders.size();
         if (count == 0) return;
+
+        TRACY_SCOPE_N("Render box colliders");
 
         // Reserve space.
         boxResources.instanceData.resize(count);
@@ -453,35 +501,53 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
+        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
+        const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
+
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.colliderIndices;
 
         BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
-            const ObjectIndex bodyIndex = bodyIndexPtr[i];
+            const ColliderIndex colliderIndex = givenColliders[i];
+
+            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
             const Real posX = positionXPtr[bodyIndex];
             const Real posY = positionYPtr[bodyIndex];
             const Real oldPosX = oldPositionXPtr[bodyIndex];
             const Real oldPosY = oldPositionYPtr[bodyIndex];
 
-            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
-            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
+            const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
+            const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
             const Real fullOldRotation = oldRotationPtr[bodyIndex];
             const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
+            const Real interpolatedBodyRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
 
-            renderDataPtr[i].positionX = interpolatedPosX;
-            renderDataPtr[i].positionY = interpolatedPosY;
+            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+
+            const Real bodyCos = std::cos(interpolatedBodyRotation);
+            const Real bodySin = std::sin(interpolatedBodyRotation);
+
+            const Real worldOffX = localOffX * bodyCos - localOffY * bodySin;
+            const Real worldOffY = localOffX * bodySin + localOffY * bodyCos;
+
+            renderDataPtr[i].positionX = interpolatedBodyPosX + worldOffX;
+            renderDataPtr[i].positionY = interpolatedBodyPosY + worldOffY;
             renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
             renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = interpolatedRotation;
-            renderDataPtr[i].halfWidth = halfWidthPtr[i];
-            renderDataPtr[i].halfHeight = halfHeightPtr[i];
+            renderDataPtr[i].rotation = interpolatedBodyRotation + localRot;
+            renderDataPtr[i].halfWidth = halfWidthPtr[shapeIndex];
+            renderDataPtr[i].halfHeight = halfHeightPtr[shapeIndex];
             renderDataPtr[i].color = 0xFFFFFF;
         }
 
@@ -489,12 +555,12 @@ namespace PS_AGONY
         renderBoxShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    void SimulationRenderer::renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
-        TRACY_SCOPE_N("Render polygon bodies");
-
-        const size_t count = polygons.getCount();
+        const size_t count = givenColliders.size();
         if (count == 0) return;
+
+        TRACY_SCOPE_N("Render polygon colliders");
 
         // Body SoA pointers.
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
@@ -508,14 +574,24 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
+        // Collider SoA pointers.
+        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
+        const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
+
         // Polygon SoA pointers.
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.colliderIndices;
         const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices;
 
         // Count total vertices needed this frame.
         size_t totalVertices = 0;
         for (size_t i = 0; i < count; i++)
-            totalVertices += localVertsPtr[i].size();
+        {
+            const ColliderIndex colliderIndex = givenColliders[i];
+            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+            totalVertices += localVertsPtr[shapeIndex].size();
+        }
 
         ensurePolygonBufferCapacity(totalVertices, count);
 
@@ -532,9 +608,13 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < count; i++)
         {
-            const ObjectIndex         bodyIndex = bodyIndexPtr[i];
-            const VerticesContainer& vc = localVertsPtr[i];
-            const uint32_t           vertCount = static_cast<uint32_t>(vc.size());
+            const ColliderIndex colliderIndex = givenColliders[i];
+
+            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+
+            const VerticesContainer& vc = localVertsPtr[shapeIndex];
+            const uint32_t vertCount = static_cast<uint32_t>(vc.size());
             const Vec2* src = vc.data();
 
             for (uint32_t v = 0; v < vertCount; v++)
@@ -548,18 +628,28 @@ namespace PS_AGONY
             const Real oldPosX = oldPositionXPtr[bodyIndex];
             const Real oldPosY = oldPositionYPtr[bodyIndex];
 
-            const Real interpolatedPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
-            const Real interpolatedPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
+            const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
+            const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
             const Real fullOldRotation = oldRotationPtr[bodyIndex];
             const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
+            const Real interpolatedBodyRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
 
-            instData[i].positionX = interpolatedPosX;
-            instData[i].positionY = interpolatedPosY;
+            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+
+            const Real bodyCos = std::cos(interpolatedBodyRotation);
+            const Real bodySin = std::sin(interpolatedBodyRotation);
+
+            const Real worldOffX = localOffX * bodyCos - localOffY * bodySin;
+            const Real worldOffY = localOffX * bodySin + localOffY * bodyCos;
+
+            instData[i].positionX = interpolatedBodyPosX + worldOffX;
+            instData[i].positionY = interpolatedBodyPosY + worldOffY;
             instData[i].localCOMX = localCOMXPtr[bodyIndex];
             instData[i].localCOMY = localCOMYPtr[bodyIndex];
-            instData[i].rotation = interpolatedRotation;
+            instData[i].rotation = interpolatedBodyRotation + localRot;
             instData[i].color = 0xFFFFFF;
 
             cmds[i].count = vertCount;
@@ -577,11 +667,11 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Render collider AABBs");
 
-        const size_t bodyCount = bodies.getCount();
-        if (bodyCount == 0) return;
-        
+        const size_t colliderCount = colliders.getCount();
+        if (colliderCount == 0) return;
+
         // Reserve space.
-        aabbResources.instanceData.resize(bodyCount);
+        aabbResources.instanceData.resize(colliderCount);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT minXPtr = colliders.aabbMinX;
@@ -591,15 +681,15 @@ namespace PS_AGONY
 
         FloatAABB* ECSTASY_RESTRICT renderDataPtr = aabbResources.instanceData.data();
 
-        for (size_t i = 0; i < bodyCount; i++)
+        for (size_t i = 0; i < colliderCount; i++)
         {
-			renderDataPtr[i].minX = minXPtr[i];
-			renderDataPtr[i].minY = minYPtr[i];
-			renderDataPtr[i].maxX = maxXPtr[i];
-			renderDataPtr[i].maxY = maxYPtr[i];
+            renderDataPtr[i].minX = minXPtr[i];
+            renderDataPtr[i].minY = minYPtr[i];
+            renderDataPtr[i].maxX = maxXPtr[i];
+            renderDataPtr[i].maxY = maxYPtr[i];
         }
 
-		renderAABBs({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
+        renderAABBs({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix)
@@ -610,7 +700,8 @@ namespace PS_AGONY
         aabbResources.aabbs.clear();
         aabbResources.instanceData.clear();
 
-        simulation.getBroadPhaseAABBs(aabbResources.aabbs);
+        const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
+        bfcd.fetchAABBs(aabbResources.aabbs);
 
         if (aabbResources.aabbs.empty()) return;
 
@@ -733,7 +824,7 @@ namespace PS_AGONY
 
             const float worldBx = interpolatedPosBx + (springs.localAnchorB[i].x * cosB - springs.localAnchorB[i].y * sinB);
             const float worldBy = interpolatedPosBy + (springs.localAnchorB[i].x * sinB + springs.localAnchorB[i].y * cosB);
-            
+
             // Compute displacement.
             const float dx = worldBx - worldAx;
             const float dy = worldBy - worldAy;
@@ -744,12 +835,12 @@ namespace PS_AGONY
             // Compute color.
             uint32_t color;
             {
-                // Normalize strain into [-1.0, 1.0],
+                // Normalize strain into [-1.0, 1.0].
                 float t = std::clamp(displacement / restLength, -1.0f, 1.0f);
 
-                // Calculate weights for each endpoint color,
+                // Calculate weights for each endpoint color.
                 float wBlue = std::fmax(0.0f, -t);    // Active (< 0).
-                float wRed  = std::fmax(0.0f, t);     // Active (> 0).
+                float wRed = std::fmax(0.0f, t);     // Active (> 0).
                 float wGrey = 1.0f - std::fabs(t);    // Active (= 0).
 
                 // Blend RGB channels.
@@ -860,10 +951,10 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Render AABBs");
 
         const size_t count = aabbResources.instanceData.size();
-		if (count == 0) return;
+        if (count == 0) return;
 
-		// Reserve space.
-		ensureAABBInstanceVboCapacity(count);
+        // Reserve space.
+        ensureAABBInstanceVboCapacity(count);
 
         // Move data to gpu.
         aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(FloatAABB));
@@ -914,9 +1005,9 @@ namespace PS_AGONY
         vao.setFloatAttribute(4, 1, sizeof(float) * 5, 1);
         vao.setAttributeDivisor(4, 1);
 
-		vao.enableAttribute(5);
+        vao.enableAttribute(5);
         vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
-		vao.setAttributeDivisor(5, 1);
+        vao.setAttributeDivisor(5, 1);
     }
 
     void SimulationRenderer::ensureBoxInstanceVboCapacity(size_t count)
@@ -1027,7 +1118,7 @@ namespace PS_AGONY
         vao.setFloatAttribute(1, 4, 0, 1);
         vao.setAttributeDivisor(1, 1);
     }
-    
+
     void SimulationRenderer::ensureSpringBufferCapacity(size_t vertexCount)
     {
         constexpr size_t SIZEOF_VERTEX = sizeof(LineVertex);
