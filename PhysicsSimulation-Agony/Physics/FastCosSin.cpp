@@ -12,7 +12,7 @@ namespace PS_AGONY::FastCosSin
 		Ecstasy::Core::Simd<int64_t>,
 		Ecstasy::Core::Simd<int32_t>>;
 
-	void order4CosSin(
+	void order4Array(
 		const Real* ECSTASY_RESTRICT inAngleArray,
 		Real* ECSTASY_RESTRICT outCosArray,
 		Real* ECSTASY_RESTRICT outSinArray,
@@ -98,6 +98,41 @@ namespace PS_AGONY::FastCosSin
 
 			outSinArray[i] = sin;
 			outCosArray[i] = cos;
+		}
+	}
+
+	std::pair<Real, Real> order4Scalar(const Real x)
+	{
+		// Constants.
+		constexpr Real coeff2 = 0.012238f;
+		constexpr Real coeff3 = -0.199387f;
+		constexpr Real coeff4 = 0.0282173f;
+
+		constexpr int signMaskShift = sizeof(Real) * 8 - 2;
+
+		{
+			int quadrantIndex = (int)(x * Real(Constants::INV_HALF_PI));
+			Real u = x - quadrantIndex * Real(Constants::HALF_PI);
+
+			Real mirror = Real(quadrantIndex & 1);
+			Real a = u + mirror * (Real(Constants::HALF_PI) - Real(2) * u);
+
+			Real sinSign = Real(1) - Real(2) * Real(quadrantIndex >> 1);
+			Real cosSign = Real(1) - Real(2) * Real(((quadrantIndex + 1) >> 1) & 1);
+
+			Real sinMag = coeff4;
+			sinMag = sinMag * a + coeff3;
+			sinMag = sinMag * a + coeff2;
+			sinMag = sinMag * a + Real(1);
+			sinMag = a * sinMag;
+			sinMag = std::fmin(sinMag, Real(1));
+
+			Real cosMag = std::sqrt(Real(1) - sinMag * sinMag);
+
+			Real sin = sinSign * sinMag;
+			Real cos = cosSign * cosMag;
+
+			return { cos, sin };
 		}
 	}
 }

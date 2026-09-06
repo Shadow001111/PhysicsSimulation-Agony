@@ -1229,7 +1229,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Core::Color::Teal);
 
-        FastCosSin::order4CosSin(
+        FastCosSin::order4Array(
             bodies.rotation.data(),
             bodies.rotationCos.data(),
             bodies.rotationSin.data(),
@@ -1353,7 +1353,7 @@ namespace PS_AGONY
         wrapColliderRotations();
 
         // 3) Batch cos/sin, same approximation/approach bodies use.
-        FastCosSin::order4CosSin(
+        FastCosSin::order4Array(
             colliders.worldRotation.data(),
             colliders.worldRotationCos.data(),
             colliders.worldRotationSin.data(),
