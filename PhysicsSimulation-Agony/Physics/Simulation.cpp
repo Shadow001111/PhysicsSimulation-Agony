@@ -121,6 +121,34 @@ namespace PS_AGONY
         return { inertia, finalCOM };
     }
 
+    // Filters out consecutive/any duplicate vertices from a raw vertex buffer.
+    // Shared by createPolygon() and createPolygonCollider().
+    static std::vector<Vec2> filterDuplicateVertices(const Vec2* localVertices, size_t verticesCount)
+    {
+        std::vector<Vec2> uniqueVertices;
+        uniqueVertices.reserve(verticesCount);
+        for (size_t i = 0; i < verticesCount; ++i)
+        {
+            const Vec2& current = localVertices[i];
+
+            bool isDuplicate = false;
+            for (const Vec2& existing : uniqueVertices)
+            {
+                if (existing.x == current.x && existing.y == current.y)
+                {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+
+            if (!isDuplicate)
+            {
+                uniqueVertices.push_back(current);
+            }
+        }
+        return uniqueVertices;
+    }
+
     Simulation::Simulation()
     {
         materials.reserve(16);
@@ -209,69 +237,155 @@ namespace PS_AGONY
         }
     }
 
+    std::optional<ObjectIndex> Simulation::createBody(const BodyCreateParams& params)
+    {
+        const ObjectIndex newBodyIndex = static_cast<ObjectIndex>(bodies.getCount());
+
+        const Real mass = std::fmax(Real(0), params.mass);
+        const Vec2 centerOfMass = params.centerOfMass.value_or(Vec2(0));
+        const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
+
+        // No shape attached yet, so there's nothing to derive inertia from: it starts
+        // at zero (infinite resistance to rotation change is NOT implied - it just
+        // means no angular response until a collider/inertia is set some other way).
+        bodies.append(
+            params.position, params.velocity, params.rotation, params.angularVelocity,
+            mass, invMass, Real(0), Real(0), centerOfMass
+        );
+
+        return newBodyIndex;
+    }
+
+    std::optional<ColliderIndex> Simulation::createCircleCollider(const CircleColliderCreateParams& params)
+    {
+        if (params.bodyIndex >= bodies.getCount())
+        {
+            std::cerr << "[AGONY][Simulation::createCircleCollider]: Failed: bodyIndex is invalid.\n";
+            return std::nullopt;
+        }
+
+        const Real radius = std::fmax(Real(0), params.radius);
+        const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
+        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(circles.getCount());
+
+        const ColliderIndex newCollider = createColliderInternal(
+            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Circle, newShapeIndex
+        );
+        circles.append(newCollider, radius);
+
+        return newCollider;
+    }
+
+    std::optional<ColliderIndex> Simulation::createBoxCollider(const BoxColliderCreateParams& params)
+    {
+        if (params.bodyIndex >= bodies.getCount())
+        {
+            std::cerr << "[AGONY][Simulation::createBoxCollider]: Failed: bodyIndex is invalid.\n";
+            return std::nullopt;
+        }
+
+        const Real width = std::fmax(Real(0), params.size.x);
+        const Real height = std::fmax(Real(0), params.size.y);
+        const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
+        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(boxes.getCount());
+
+        const ColliderIndex newCollider = createColliderInternal(
+            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Box, newShapeIndex
+        );
+        boxes.append(newCollider, width * Real(0.5), height * Real(0.5));
+
+        return newCollider;
+    }
+
+    std::optional<ColliderIndex> Simulation::createPolygonCollider(const PolygonColliderCreateParams& params)
+    {
+        if (params.localVertices == nullptr)
+        {
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: vertices pointer is nullptr.\n";
+            return std::nullopt;
+        }
+        if (params.verticesCount < 3)
+        {
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: vertices count is less than three.\n";
+            return std::nullopt;
+        }
+        if (params.bodyIndex >= bodies.getCount())
+        {
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: bodyIndex is invalid.\n";
+            return std::nullopt;
+        }
+
+        std::vector<Vec2> uniqueVertices = filterDuplicateVertices(params.localVertices, params.verticesCount);
+        if (uniqueVertices.size() < 3)
+        {
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: unique vertices count is less than three.\n";
+            return std::nullopt;
+        }
+
+        const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
+        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(polygons.getCount());
+
+        VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
+
+        const ColliderIndex newCollider = createColliderInternal(
+            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Polygon, newShapeIndex
+        );
+        polygons.append(newCollider, std::move(vertices));
+
+        return newCollider;
+    }
+
     std::optional<ObjectIndex> Simulation::createCircle(const CircleCreateParams& params)
     {
-        const ObjectIndex newBodyIndex = bodies.getCount();
-        const ObjectIndex newShapeIndex = circles.getCount();
-
         const Real mass = std::fmax(Real(0), params.base.mass);
         const Real radius = std::fmax(Real(0), params.radius);
         const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
-        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
         const Real inertia = calculateCircleInertia(mass, radius, centerOfMass);
+        const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
+        const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
-        const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
-
+        const ObjectIndex newBodyIndex = static_cast<ObjectIndex>(bodies.getCount());
         bodies.append(
             params.base.position, params.base.velocity, params.base.rotation, params.base.angularVelocity,
             mass, invMass, inertia, invInertia, centerOfMass
         );
 
-        const ColliderIndex newCollider = createColliderInternal(
-            newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Circle, newShapeIndex
-        );
-        circles.append(newCollider, radius);
+        createCircleCollider({
+            .bodyIndex = newBodyIndex,
+            .localOffset = Vec2(0),
+            .localRotation = Real(0),
+            .materialIndex = params.base.materialIndex,
+            .radius = radius
+            });
 
         return newBodyIndex;
     }
 
     std::optional<ObjectIndex> Simulation::createBox(const BoxCreateParams& params)
     {
-        const ObjectIndex newBodyIndex = bodies.getCount();
-        const ObjectIndex newShapeIndex = boxes.getCount();
-
         const Real mass = std::fmax(Real(0), params.base.mass);
         const Real width = std::fmax(Real(0), params.size.x);
         const Real height = std::fmax(Real(0), params.size.y);
         const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
-        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
         const Real inertia = calculateBoxInertia(mass, width, height, centerOfMass);
+        const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
+        const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
-        const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
-
+        const ObjectIndex newBodyIndex = static_cast<ObjectIndex>(bodies.getCount());
         bodies.append(
-            params.base.position,
-            params.base.velocity,
-            params.base.rotation,
-            params.base.angularVelocity,
-            mass, invMass,
-            inertia, invInertia,
-            centerOfMass
+            params.base.position, params.base.velocity, params.base.rotation, params.base.angularVelocity,
+            mass, invMass, inertia, invInertia, centerOfMass
         );
 
-        const ColliderIndex newCollider = createColliderInternal(
-            newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Box, newShapeIndex
-        );
-
-        boxes.append(
-            newCollider,
-            width * Real(0.5),
-            height * Real(0.5)
-        );
+        createBoxCollider({
+            .bodyIndex = newBodyIndex,
+            .localOffset = Vec2(0),
+            .localRotation = Real(0),
+            .materialIndex = params.base.materialIndex,
+            .size = Vec2(width, height)
+            });
 
         return newBodyIndex;
     }
@@ -288,49 +402,15 @@ namespace PS_AGONY
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices count is less than three.\n";
             return std::nullopt;
         }
-        //if (params.base.centerOfMass.has_value())
-        //{
-        //    // I just don't know how to make it work with my 'true positions' and other stuff.
-        //    std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Custom center of mass is not supported.\n";
-        //    return;
-        //}
 
-        // Filter out consecutive duplicate vertices.
-        std::vector<Vec2> uniqueVertices;
-        uniqueVertices.reserve(params.verticesCount);
-        for (size_t i = 0; i < params.verticesCount; ++i)
-        {
-            const Vec2& current = params.localVertices[i];
-
-            // Check the current vertex against all vertices we've already accepted.
-            bool isDuplicate = false;
-            for (const Vec2& existing : uniqueVertices)
-            {
-                if (existing.x == current.x && existing.y == current.y)
-                {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-
-            // Only add it if it hasn't been seen anywhere else yet.
-            if (!isDuplicate)
-            {
-                uniqueVertices.push_back(current);
-            }
-        }
-
+        std::vector<Vec2> uniqueVertices = filterDuplicateVertices(params.localVertices, params.verticesCount);
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
             return std::nullopt;
         }
 
-        const ObjectIndex newBodyIndex = bodies.getCount();
-        const ObjectIndex newShapeIndex = polygons.getCount();
-
         const Real mass = std::fmax(Real(0), params.base.mass);
-        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
         VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
 
@@ -347,9 +427,10 @@ namespace PS_AGONY
         }
         neededCenterOfMass -= trueCenterOfMass;
 
-        const Real invMass = mass == 0.0 ? 0.0 : 1.0 / mass;
-        const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
+        const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
+        const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
+        const ObjectIndex newBodyIndex = static_cast<ObjectIndex>(bodies.getCount());
         bodies.append(
             params.base.position + trueCenterOfMass,
             params.base.velocity,
@@ -360,14 +441,17 @@ namespace PS_AGONY
             neededCenterOfMass
         );
 
+        // Vertices were already de-duplicated/re-centered above, so route the already-
+        // constructed VerticesContainer straight to the shape SoA below instead of
+        // going through createPolygonCollider() (which would redo dedup on raw pointers
+        // and know nothing about the COM shift already baked into these vertices).
+        const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
+        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(polygons.getCount());
+
         const ColliderIndex newCollider = createColliderInternal(
             newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Polygon, newShapeIndex
         );
-
-        polygons.append(
-            newCollider,
-            std::move(vertices)
-        );
+        polygons.append(newCollider, std::move(vertices));
 
         return newBodyIndex;
     }
@@ -391,69 +475,7 @@ namespace PS_AGONY
         while (!bodies.colliderIndices[bodyIndex].empty())
         {
             const ColliderIndex colliderIdx = bodies.colliderIndices[bodyIndex].back();
-            const BodyType shapeType = colliders.shapeType[colliderIdx];
-            const ObjectIndex shapeIdx = colliders.shapeIndex[colliderIdx];
-
-            // Remove from the underlying shape SoA (swap-remove), fixing up the collider
-            // that now occupies shapeIdx (if any) to point at its new slot.
-            if (shapeType == BodyType::Circle)
-            {
-                const size_t last = circles.getCount() - 1;
-                if (shapeIdx != last)
-                {
-                    std::swap(circles.colliderIndices[shapeIdx], circles.colliderIndices[last]);
-                    std::swap(circles.radius[shapeIdx], circles.radius[last]);
-                    colliders.shapeIndex[circles.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
-                }
-                circles.colliderIndices.pop_back();
-                circles.radius.pop_back();
-            }
-            else if (shapeType == BodyType::Box)
-            {
-                const size_t last = boxes.getCount() - 1;
-                if (shapeIdx != last)
-                {
-                    std::swap(boxes.colliderIndices[shapeIdx], boxes.colliderIndices[last]);
-                    std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth[last]);
-                    std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight[last]);
-                    colliders.shapeIndex[boxes.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
-                }
-                boxes.colliderIndices.pop_back();
-                boxes.halfWidth.pop_back();
-                boxes.halfHeight.pop_back();
-            }
-            else if (shapeType == BodyType::Polygon)
-            {
-                const size_t last = polygons.getCount() - 1;
-                if (shapeIdx != last)
-                {
-                    std::swap(polygons.colliderIndices[shapeIdx], polygons.colliderIndices[last]);
-                    std::swap(polygons.localVertices[shapeIdx], polygons.localVertices[last]);
-                    colliders.shapeIndex[polygons.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
-                }
-                polygons.colliderIndices.pop_back();
-                polygons.localVertices.pop_back();
-            }
-
-            // Remove from ColliderSoA itself.
-            bodies.removeCollider(bodyIndex, colliderIdx);
-            const size_t oldBackCollider = colliders.swapRemove(colliderIdx);
-            if (oldBackCollider != colliderIdx)
-            {
-                // The collider that was swapped into colliderIdx needs its owning body's
-                // back-reference (and, if that's the same body, our own worklist) updated.
-                const ObjectIndex swappedOwner = colliders.bodyIndex[colliderIdx];
-                bodies.removeCollider(swappedOwner, static_cast<ColliderIndex>(oldBackCollider));
-                bodies.addCollider(swappedOwner, colliderIdx);
-
-                deletedColliders.emplace_back(
-                    static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(oldBackCollider)
-                );
-            }
-            else
-            {
-                deletedColliders.emplace_back(static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(colliderIdx));
-            }
+            destroyColliderInternal(bodyIndex, colliderIdx);
         }
 
         // --- Body removal (unchanged below this point, minus bodyType/shapeIndex shape-swap block) ---
@@ -483,6 +505,81 @@ namespace PS_AGONY
         bodies.popBack();
     }
 
+    void Simulation::destroyCollider(ColliderIndex colliderIndex)
+    {
+        if (colliderIndex >= colliders.getCount()) return;
+
+        const ObjectIndex bodyIndex = colliders.bodyIndex[colliderIndex];
+        destroyColliderInternal(bodyIndex, colliderIndex);
+    }
+
+    void Simulation::destroyColliderInternal(ObjectIndex bodyIndex, ColliderIndex colliderIdx)
+    {
+        const BodyType shapeType = colliders.shapeType[colliderIdx];
+        const ObjectIndex shapeIdx = colliders.shapeIndex[colliderIdx];
+
+        // Remove from the underlying shape SoA (swap-remove), fixing up the collider
+        // that now occupies shapeIdx (if any) to point at its new slot.
+        if (shapeType == BodyType::Circle)
+        {
+            const size_t last = circles.getCount() - 1;
+            if (shapeIdx != last)
+            {
+                std::swap(circles.colliderIndices[shapeIdx], circles.colliderIndices[last]);
+                std::swap(circles.radius[shapeIdx], circles.radius[last]);
+                colliders.shapeIndex[circles.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
+            }
+            circles.colliderIndices.pop_back();
+            circles.radius.pop_back();
+        }
+        else if (shapeType == BodyType::Box)
+        {
+            const size_t last = boxes.getCount() - 1;
+            if (shapeIdx != last)
+            {
+                std::swap(boxes.colliderIndices[shapeIdx], boxes.colliderIndices[last]);
+                std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth[last]);
+                std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight[last]);
+                colliders.shapeIndex[boxes.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
+            }
+            boxes.colliderIndices.pop_back();
+            boxes.halfWidth.pop_back();
+            boxes.halfHeight.pop_back();
+        }
+        else if (shapeType == BodyType::Polygon)
+        {
+            const size_t last = polygons.getCount() - 1;
+            if (shapeIdx != last)
+            {
+                std::swap(polygons.colliderIndices[shapeIdx], polygons.colliderIndices[last]);
+                std::swap(polygons.localVertices[shapeIdx], polygons.localVertices[last]);
+                colliders.shapeIndex[polygons.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
+            }
+            polygons.colliderIndices.pop_back();
+            polygons.localVertices.pop_back();
+        }
+
+        // Remove from ColliderSoA itself.
+        bodies.removeCollider(bodyIndex, colliderIdx);
+        const size_t oldBackCollider = colliders.swapRemove(colliderIdx);
+        if (oldBackCollider != colliderIdx)
+        {
+            // The collider that was swapped into colliderIdx needs its owning body's
+            // back-reference (and, if that's the same body, our own worklist) updated.
+            const ObjectIndex swappedOwner = colliders.bodyIndex[colliderIdx];
+            bodies.removeCollider(swappedOwner, static_cast<ColliderIndex>(oldBackCollider));
+            bodies.addCollider(swappedOwner, colliderIdx);
+
+            deletedColliders.emplace_back(
+                static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(oldBackCollider)
+            );
+        }
+        else
+        {
+            deletedColliders.emplace_back(static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(colliderIdx));
+        }
+    }
+
     void Simulation::createSpring(const SpringCreateParams& params)
     {
         springConstraintSystem.createSpring(
@@ -496,6 +593,12 @@ namespace PS_AGONY
             bodies
         );
 
+        springsWereChanged = true;
+    }
+
+    void Simulation::destroySpring(uint32_t springIndex)
+    {
+        springConstraintSystem.removeConstraint(springIndex, bodies);
         springsWereChanged = true;
     }
 
@@ -644,9 +747,11 @@ namespace PS_AGONY
             springPlanner
         );
 
-        // Remap data if body was deleted.
-        narrowPhaseCollisionDetector.remapPersistentContactData(deletedBodies);
-        deletedBodies.clear();
+        // Remap warm-starting data if a collider was deleted. Persistent contact data is
+        // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
+        narrowPhaseCollisionDetector.remapPersistentContactData(deletedColliders);
+        deletedColliders.clear();
+        deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
         // Main stuff.
         integrateVelocities(bodyCount, deltaTime);
@@ -672,7 +777,7 @@ namespace PS_AGONY
         );
         springsWereChanged = false;
 
-        if (bodyCount > 1)
+        if (colliders.getCount() > 1)
         {
             // Broad phase.
             const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
@@ -1346,7 +1451,7 @@ namespace PS_AGONY
         const Vec2 positionError = targetPosition - worldGrabPoint;
         const Vec2 velocityError = targetVelocity - grabPointVelocity;
         const Vec2 desiredAccel = (stiffness * positionError) + (damping * velocityError);
-        
+
         // Compute K matrix.
         const Real k00 = invMass + (worldR.y * worldR.y) * invInertia;
         const Real k11 = invMass + (worldR.x * worldR.x) * invInertia;
@@ -1405,13 +1510,13 @@ namespace PS_AGONY
                 const RealSimd velocityX = RealSimd::load(velocityXPtr + i);
                 const RealSimd velocityY = RealSimd::load(velocityYPtr + i);
                 const RealSimd angularVelocity = RealSimd::load(angularVelocityPtr + i);
-            
+
                 const RealSimd mass = RealSimd::load(massPtr + i);
                 const RealSimd inertia = RealSimd::load(inertiaPtr + i);
-            
+
                 const RealSimd linearVelocitySquared = RealSimd::mulAdd(velocityX, velocityX, velocityY * velocityY);
                 const RealSimd angularVelocitySquared = angularVelocity * angularVelocity;
-            
+
                 const RealSimd kineticEnergy = RealSimd::mulAdd(linearVelocitySquared, mass, angularVelocitySquared * inertia) * half;
                 totalKineticEnergyV += kineticEnergy;
             }
@@ -1439,6 +1544,7 @@ namespace PS_AGONY
     {
         // Memory
         data.bodyDataMemoryUsage = sizeof(BodySoA) + bodies.getMemoryUsage();
+        data.colliderDataMemoryUsage = sizeof(ColliderSoA) + colliders.getMemoryUsage();
         data.circleDataMemoryUsage = sizeof(CircleSoA) + circles.getMemoryUsage();
         data.boxDataMemoryUsage = sizeof(BoxSoA) + boxes.getMemoryUsage();
         data.polygonDataMemoryUsage = sizeof(PolygonSoA) + polygons.getMemoryUsage();
