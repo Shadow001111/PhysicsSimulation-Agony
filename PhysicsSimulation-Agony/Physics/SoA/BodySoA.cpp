@@ -3,18 +3,9 @@
 namespace PS_AGONY
 {
 	void BodySoA::append(
-		Vec2 pos,
-		Vec2 vel,
-		Real rot,
-		Real anglVel,
-		Real mass,
-		Real invMass,
-		Real inertia,
-		Real invInertia,
-		Vec2 localCenterOfMass,
-		MaterialIndex materialIndex,
-		BodyType bodyType,
-		ObjectIndex shapeIndex
+		Vec2 pos, Vec2 vel, Real rot, Real anglVel,
+		Real mass, Real invMass, Real inertia, Real invInertia,
+		Vec2 localCenterOfMass
 	)
 	{
 		this->renderOldOffsetX.push_back(pos.x);
@@ -39,14 +30,8 @@ namespace PS_AGONY
 		this->rotationCos.push_back(std::cos(rot));
 		this->rotationSin.push_back(std::sin(rot));
 		this->isStatic.push_back(invMass == 0);
-		this->materialIndex.push_back(materialIndex);
-		this->aabb.minX.push_back(0);
-		this->aabb.minY.push_back(0);
-		this->aabb.maxX.push_back(0);
-		this->aabb.maxY.push_back(0);
-		this->bodyType.push_back(bodyType);
-		this->shapeIndex.push_back(shapeIndex);
 		this->attachments.emplace_back();
+		this->colliderIndices.emplace_back();
 	}
 
 	#define PS_AGONY_SWAP_WITH_BACK(vector, index) std::swap((vector)[(index)], (vector).back())
@@ -80,13 +65,6 @@ namespace PS_AGONY
 		PS_AGONY_SWAP_WITH_BACK(rotationCos, index);
 		PS_AGONY_SWAP_WITH_BACK(rotationSin, index);
 		PS_AGONY_SWAP_WITH_BACK(isStatic, index);
-		PS_AGONY_SWAP_WITH_BACK(materialIndex, index);
-		PS_AGONY_SWAP_WITH_BACK(aabb.minX, index);
-		PS_AGONY_SWAP_WITH_BACK(aabb.minY, index);
-		PS_AGONY_SWAP_WITH_BACK(aabb.maxX, index);
-		PS_AGONY_SWAP_WITH_BACK(aabb.maxY, index);
-		PS_AGONY_SWAP_WITH_BACK(bodyType, index);
-		PS_AGONY_SWAP_WITH_BACK(shapeIndex, index);
 		PS_AGONY_SWAP_WITH_BACK(attachments, index);
 	}
 
@@ -119,13 +97,6 @@ namespace PS_AGONY
 		rotationCos.pop_back();
 		rotationSin.pop_back();
 		isStatic.pop_back();
-		materialIndex.pop_back();
-		aabb.minX.pop_back();
-		aabb.minY.pop_back();
-		aabb.maxX.pop_back();
-		aabb.maxY.pop_back();
-		bodyType.pop_back();
-		shapeIndex.pop_back();
 		attachments.pop_back();
 	}
 
@@ -148,6 +119,27 @@ namespace PS_AGONY
 		for (size_t i = 0; i < list.size(); i++)
 		{
 			if (list[i].type == type && list[i].objectIndex == objectIndex)
+			{
+				list[i] = list.back();
+				list.pop_back();
+				return;
+			}
+		}
+	}
+
+	void BodySoA::addCollider(size_t bodyIndex, ColliderIndex colliderIndex)
+	{
+		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
+		colliderIndices[bodyIndex].push_back(colliderIndex);
+	}
+
+	void BodySoA::removeCollider(size_t bodyIndex, ColliderIndex colliderIndex)
+	{
+		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
+		auto& list = colliderIndices[bodyIndex];
+		for (size_t i = 0; i < list.size(); i++)
+		{
+			if (list[i] == colliderIndex)
 			{
 				list[i] = list.back();
 				list.pop_back();
@@ -180,11 +172,7 @@ namespace PS_AGONY
 			getVectorMemoryUsage(invInertia) +
 			getVectorMemoryUsage(rotationCos) +
 			getVectorMemoryUsage(rotationSin) +
-			getVectorMemoryUsage(isStatic) +
-			getVectorMemoryUsage(materialIndex) +
-			aabb.getMemoryUsage() +
-			getVectorMemoryUsage(bodyType) +
-			getVectorMemoryUsage(shapeIndex);
+			getVectorMemoryUsage(isStatic);
 
 		total += getVectorMemoryUsage(attachments);
 		for (const auto& bodyAttachments : attachments)

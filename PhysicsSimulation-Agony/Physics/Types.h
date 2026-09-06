@@ -10,6 +10,7 @@ namespace PS_AGONY
 	// Can't be changed.
 
 	using ObjectIndex = uint32_t;
+	using ColliderIndex = ObjectIndex;
 	using MaterialIndex = uint32_t;
 	using BodyTextureId = uint32_t;
 

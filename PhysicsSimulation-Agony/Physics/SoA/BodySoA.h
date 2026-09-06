@@ -3,83 +3,57 @@
 
 namespace PS_AGONY
 {
-	struct BodySoA
-	{
+    struct BodySoA
+    {
         CacheLineAlignedVector<Real> renderOldOffsetX;
         CacheLineAlignedVector<Real> renderOldOffsetY;
         CacheLineAlignedVector<Real> renderOldRotation;
         CacheLineAlignedVector<Real> renderRotationWrapCount;
 
-		CacheLineAlignedVector<Real> offsetX;
-		CacheLineAlignedVector<Real> offsetY;
-		CacheLineAlignedVector<Real> localCenterOfMassX;
-		CacheLineAlignedVector<Real> localCenterOfMassY;
-		CacheLineAlignedVector<Real> worldCenterX;
-		CacheLineAlignedVector<Real> worldCenterY;
+        CacheLineAlignedVector<Real> offsetX;
+        CacheLineAlignedVector<Real> offsetY;
+        CacheLineAlignedVector<Real> localCenterOfMassX;
+        CacheLineAlignedVector<Real> localCenterOfMassY;
+        CacheLineAlignedVector<Real> worldCenterX;
+        CacheLineAlignedVector<Real> worldCenterY;
 
-		CacheLineAlignedVector<Real> velocityX;
-		CacheLineAlignedVector<Real> velocityY;
-		CacheLineAlignedVector<Real> rotation;
-		CacheLineAlignedVector<Real> angularVelocity;
-		CacheLineAlignedVector<Real> mass;
-		CacheLineAlignedVector<Real> invMass;
-		CacheLineAlignedVector<Real> inertia;
-		CacheLineAlignedVector<Real> invInertia;
-		CacheLineAlignedVector<Real> rotationCos;
-		CacheLineAlignedVector<Real> rotationSin;
+        CacheLineAlignedVector<Real> velocityX;
+        CacheLineAlignedVector<Real> velocityY;
+        CacheLineAlignedVector<Real> rotation;
+        CacheLineAlignedVector<Real> angularVelocity;
+        CacheLineAlignedVector<Real> mass;
+        CacheLineAlignedVector<Real> invMass;
+        CacheLineAlignedVector<Real> inertia;
+        CacheLineAlignedVector<Real> invInertia;
+        CacheLineAlignedVector<Real> rotationCos;
+        CacheLineAlignedVector<Real> rotationSin;
 
-		CacheLineAlignedVector<uint8_t> isStatic; // TODO: Maybe use 1 bit?
-		CacheLineAlignedVector<MaterialIndex> materialIndex;
-		AABBSoA aabb;
-		CacheLineAlignedVector<BodyType> bodyType;
-		CacheLineAlignedVector<ObjectIndex> shapeIndex;
+        CacheLineAlignedVector<uint8_t> isStatic;
 
-        CacheLineAlignedVector<std::vector<BodyAttachment>> attachments;
+        CacheLineAlignedVector<std::vector<BodyAttachment>> attachments;      // Springs, etc.
+        CacheLineAlignedVector<std::vector<ColliderIndex>> colliderIndices;   // Owned colliders.
 
-		void append(
-			Vec2 pos,
-			Vec2 vel,
-			Real rot,
-			Real anglVel,
-			Real mass, Real invMass,
-			Real inertia, Real invInertia,
-			Vec2 localCenterOfMass,
-			MaterialIndex materialIndex,
-			BodyType bodyType,
-			ObjectIndex shapeIndex
-		);
+        void append(
+            Vec2 pos, Vec2 vel, Real rot, Real anglVel,
+            Real mass, Real invMass, Real inertia, Real invInertia,
+            Vec2 localCenterOfMass
+        );
 
-		void swapWithBack(size_t index);
-
-		void popBack();
+        void swapWithBack(size_t index);
+        void popBack();
 
         void addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex);
         void removeAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex);
 
-		size_t getCount() const noexcept { return offsetX.size(); }
-		size_t getMemoryUsage() const noexcept;
-	};
+        void addCollider(size_t bodyIndex, ColliderIndex colliderIndex);
+        void removeCollider(size_t bodyIndex, ColliderIndex colliderIndex);
+
+        size_t getCount() const noexcept { return offsetX.size(); }
+        size_t getMemoryUsage() const noexcept;
+    };
 
     class BodySoAViewer
     {
-        struct AABBSoAViewer_Internal
-        {
-            const Real* minX = nullptr;
-            const Real* minY = nullptr;
-            const Real* maxX = nullptr;
-            const Real* maxY = nullptr;
-
-            AABBSoAViewer_Internal() = default;
-
-            AABBSoAViewer_Internal(const AABBSoA& data) :
-                minX(data.minX.data()),
-                minY(data.minY.data()),
-                maxX(data.maxX.data()),
-                maxY(data.maxY.data())
-            {
-            }
-        };
-
         size_t count = 0;
     public:
         const Real* renderOldOffsetX = nullptr;
@@ -105,10 +79,6 @@ namespace PS_AGONY
         const Real* rotationSin = nullptr;
 
         const uint8_t* isStatic = nullptr;
-        const MaterialIndex* materialIndex = nullptr;
-        AABBSoAViewer_Internal aabb;
-        const BodyType* bodyType = nullptr;
-        const ObjectIndex* shapeIndex = nullptr;
 
         const std::vector<BodyAttachment>* attachments = nullptr;
     public:
@@ -138,10 +108,6 @@ namespace PS_AGONY
             rotationCos(data.rotationCos.data()),
             rotationSin(data.rotationSin.data()),
             isStatic(data.isStatic.data()),
-            materialIndex(data.materialIndex.data()),
-            aabb(data.aabb),
-            bodyType(data.bodyType.data()),
-            shapeIndex(data.shapeIndex.data()),
             attachments(data.attachments.data())
         {}
 

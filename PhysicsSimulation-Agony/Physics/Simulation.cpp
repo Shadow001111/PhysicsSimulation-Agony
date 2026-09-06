@@ -225,22 +225,14 @@ namespace PS_AGONY
         const Real invInertia = inertia == 0.0 ? 0.0 : 1.0 / inertia;
 
         bodies.append(
-            params.base.position,
-            params.base.velocity,
-            params.base.rotation,
-            params.base.angularVelocity,
-            mass, invMass,
-            inertia, invInertia,
-            centerOfMass,
-            materialIndex,
-            BodyType::Circle,
-            newShapeIndex
+            params.base.position, params.base.velocity, params.base.rotation, params.base.angularVelocity,
+            mass, invMass, inertia, invInertia, centerOfMass
         );
 
-        circles.append(
-            newBodyIndex,
-            radius
+        const ColliderIndex newCollider = createColliderInternal(
+            newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Circle, newShapeIndex
         );
+        circles.append(newCollider, radius);
 
         return newBodyIndex;
     }
@@ -268,14 +260,15 @@ namespace PS_AGONY
             params.base.angularVelocity,
             mass, invMass,
             inertia, invInertia,
-            centerOfMass,
-            materialIndex,
-            BodyType::Box,
-            newShapeIndex
+            centerOfMass
+        );
+
+        const ColliderIndex newCollider = createColliderInternal(
+            newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Box, newShapeIndex
         );
 
         boxes.append(
-            newBodyIndex,
+            newCollider,
             width * Real(0.5),
             height * Real(0.5)
         );
@@ -364,14 +357,15 @@ namespace PS_AGONY
             params.base.angularVelocity,
             mass, invMass,
             inertia, invInertia,
-            neededCenterOfMass,
-            materialIndex,
-            BodyType::Polygon,
-            newShapeIndex
+            neededCenterOfMass
+        );
+
+        const ColliderIndex newCollider = createColliderInternal(
+            newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Polygon, newShapeIndex
         );
 
         polygons.append(
-            newBodyIndex,
+            newCollider,
             std::move(vertices)
         );
 
@@ -383,119 +377,102 @@ namespace PS_AGONY
         const size_t bodyCount = bodies.getCount();
         if (bodyIndex >= bodyCount) return;
 
-        const BodyType type = bodies.bodyType[bodyIndex];
-        const ObjectIndex shapeIdx = bodies.shapeIndex[bodyIndex];
-
-        // Check main body holder constraint.
         if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == bodyIndex)
-        {
             mainBodyHolderRelease();
-        }
 
-        // Cascade-delete everything attached to this body.
+        // Cascade-delete constraints (springs, unchanged).
         while (!bodies.attachments[bodyIndex].empty())
         {
             const BodyAttachment attachment = bodies.attachments[bodyIndex].back();
             constraintSystems[static_cast<size_t>(attachment.type)]->removeConstraint(attachment.objectIndex, bodies);
         }
 
-        // Remove shape entry from the appropriate SoA.
-        if (type == BodyType::Circle)
+        // Cascade-delete every collider owned by this body.
+        while (!bodies.colliderIndices[bodyIndex].empty())
         {
-            const size_t circleCount = circles.getCount();
-            if (shapeIdx < circleCount)
-            {
-                // Swap with last element if not already last.
-                if (shapeIdx != circleCount - 1)
-                {
-                    // Swap body indices in circles.
-                    std::swap(circles.bodyIndices[shapeIdx], circles.bodyIndices.back());
-                    std::swap(circles.radius[shapeIdx], circles.radius.back());
+            const ColliderIndex colliderIdx = bodies.colliderIndices[bodyIndex].back();
+            const BodyType shapeType = colliders.shapeType[colliderIdx];
+            const ObjectIndex shapeIdx = colliders.shapeIndex[colliderIdx];
 
-                    // Update the body that now occupies shapeIdx to point to the new shape index.
-                    const ObjectIndex swappedBody = circles.bodyIndices[shapeIdx];
-                    bodies.shapeIndex[swappedBody] = shapeIdx;
+            // Remove from the underlying shape SoA (swap-remove), fixing up the collider
+            // that now occupies shapeIdx (if any) to point at its new slot.
+            if (shapeType == BodyType::Circle)
+            {
+                const size_t last = circles.getCount() - 1;
+                if (shapeIdx != last)
+                {
+                    std::swap(circles.colliderIndices[shapeIdx], circles.colliderIndices[last]);
+                    std::swap(circles.radius[shapeIdx], circles.radius[last]);
+                    colliders.shapeIndex[circles.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
                 }
-                circles.bodyIndices.pop_back();
+                circles.colliderIndices.pop_back();
                 circles.radius.pop_back();
             }
-        }
-        else if (type == BodyType::Box)
-        {
-            const size_t boxCount = boxes.getCount();
-            if (shapeIdx < boxCount)
+            else if (shapeType == BodyType::Box)
             {
-                if (shapeIdx != boxCount - 1)
+                const size_t last = boxes.getCount() - 1;
+                if (shapeIdx != last)
                 {
-                    std::swap(boxes.bodyIndices[shapeIdx], boxes.bodyIndices.back());
-                    std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth.back());
-                    std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight.back());
-
-                    const ObjectIndex swappedBody = boxes.bodyIndices[shapeIdx];
-                    bodies.shapeIndex[swappedBody] = shapeIdx;
+                    std::swap(boxes.colliderIndices[shapeIdx], boxes.colliderIndices[last]);
+                    std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth[last]);
+                    std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight[last]);
+                    colliders.shapeIndex[boxes.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
                 }
-                boxes.bodyIndices.pop_back();
+                boxes.colliderIndices.pop_back();
                 boxes.halfWidth.pop_back();
                 boxes.halfHeight.pop_back();
             }
-        }
-        else if (type == BodyType::Polygon)
-        {
-            const size_t polygonCount = polygons.getCount();
-            if (shapeIdx < polygonCount)
+            else if (shapeType == BodyType::Polygon)
             {
-                if (shapeIdx != polygonCount - 1)
+                const size_t last = polygons.getCount() - 1;
+                if (shapeIdx != last)
                 {
-                    std::swap(polygons.bodyIndices[shapeIdx], polygons.bodyIndices.back());
-                    std::swap(polygons.localVertices[shapeIdx], polygons.localVertices.back());
-
-                    const ObjectIndex swappedBody = polygons.bodyIndices[shapeIdx];
-                    bodies.shapeIndex[swappedBody] = shapeIdx;
+                    std::swap(polygons.colliderIndices[shapeIdx], polygons.colliderIndices[last]);
+                    std::swap(polygons.localVertices[shapeIdx], polygons.localVertices[last]);
+                    colliders.shapeIndex[polygons.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
                 }
-                polygons.bodyIndices.pop_back();
+                polygons.colliderIndices.pop_back();
                 polygons.localVertices.pop_back();
             }
+
+            // Remove from ColliderSoA itself.
+            bodies.removeCollider(bodyIndex, colliderIdx);
+            const size_t oldBackCollider = colliders.swapRemove(colliderIdx);
+            if (oldBackCollider != colliderIdx)
+            {
+                // The collider that was swapped into colliderIdx needs its owning body's
+                // back-reference (and, if that's the same body, our own worklist) updated.
+                const ObjectIndex swappedOwner = colliders.bodyIndex[colliderIdx];
+                bodies.removeCollider(swappedOwner, static_cast<ColliderIndex>(oldBackCollider));
+                bodies.addCollider(swappedOwner, colliderIdx);
+
+                deletedColliders.emplace_back(
+                    static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(oldBackCollider)
+                );
+            }
+            else
+            {
+                deletedColliders.emplace_back(static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(colliderIdx));
+            }
         }
 
-        // Remove body entry from BodySoA.
+        // --- Body removal (unchanged below this point, minus bodyType/shapeIndex shape-swap block) ---
         if (bodyIndex != bodyCount - 1)
         {
-            const ObjectIndex oldBackIndex = bodyCount - 1;
+            const ObjectIndex oldBackIndex = static_cast<ObjectIndex>(bodyCount - 1);
 
-            // Swap all vectors in BodySoA.
             bodies.swapWithBack(bodyIndex);
 
-            // Update the shape entry that refers to the swapped body (if any).
-            const BodyType swappedType = bodies.bodyType[bodyIndex];
-            const ObjectIndex swappedShapeIdx = bodies.shapeIndex[bodyIndex];
-            if (swappedType == BodyType::Circle)
-            {
-                if (swappedShapeIdx < circles.getCount())
-                    circles.bodyIndices[swappedShapeIdx] = bodyIndex;
-            }
-            else if (swappedType == BodyType::Box)
-            {
-                if (swappedShapeIdx < boxes.getCount())
-                    boxes.bodyIndices[swappedShapeIdx] = bodyIndex;
-            }
-            else if (swappedType == BodyType::Polygon)
-            {
-                if (swappedShapeIdx < polygons.getCount())
-                    polygons.bodyIndices[swappedShapeIdx] = bodyIndex;
-            }
+            // Fix up colliders owned by the body that got swapped into bodyIndex.
+            for (ColliderIndex ci : bodies.colliderIndices[bodyIndex])
+                colliders.bodyIndex[ci] = bodyIndex;
 
-            // Remap the held body index if the swapped back body was being held
             if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == oldBackIndex)
-            {
                 mainBodyHolder.heldBody = bodyIndex;
-            }
 
-            // The body that moved into bodyIndex may still have constraints
-            // referencing its old (back) index - point them at the new one.
             for (const BodyAttachment& attachment : bodies.attachments[bodyIndex])
                 constraintSystems[static_cast<size_t>(attachment.type)]->remapBodyIndex(attachment.objectIndex, oldBackIndex, bodyIndex);
 
-            // Record deletion.
             deletedBodies.emplace_back(bodyIndex, static_cast<ObjectIndex>(bodyCount - 1));
         }
         else
@@ -503,7 +480,6 @@ namespace PS_AGONY
             deletedBodies.emplace_back(bodyIndex, bodyIndex);
         }
 
-        // Pop back all BodySoA vectors.
         bodies.popBack();
     }
 
@@ -643,11 +619,13 @@ namespace PS_AGONY
 
         // Set data viewers.
         broadPhaseCollisionDetector.setDataViewers(
-            AABBSoAViewer(bodies.aabb)
+            AABBSoAViewer(colliders.aabb),
+            colliders.bodyIndex.data()
         );
 
         narrowPhaseCollisionDetector.setDataViewers(
             BodySoAViewer(bodies),
+            ColliderSoAViewer(colliders),
             CircleSoAViewer(circles),
             BoxSoAViewer(boxes),
             PolygonSoAViewer(polygons)
@@ -655,6 +633,7 @@ namespace PS_AGONY
 
         bodyCollisionSolver.setDataViewers(
             bodies,
+            //ColliderSoAViewer(colliders),
             materials,
             bodyCollisionPlanner
         );
@@ -677,10 +656,13 @@ namespace PS_AGONY
         computeRotationCosSin();
 
         // Compute true position for all bodies.
-        computeWorldCenters();
+        computeBodyWorldCenters();
+
+        //
+        computeColliderWorldTransforms();
 
         // Rebuild AABBs.
-        buildBodyAABBs();
+        buildColliderAABBs();
 
         // Springs.
         springSolver.solveSprings(
@@ -693,7 +675,6 @@ namespace PS_AGONY
         if (bodyCount > 1)
         {
             // Broad phase.
-            // TODO: Refit instead of rebuilding each time.
             const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
             if (broadCollisionData.empty()) return;
 
@@ -734,8 +715,9 @@ namespace PS_AGONY
     void Simulation::postUpdate()
     {
         // That's for renderer to have actual information.
-        computeWorldCenters();
-        buildBodyAABBs();
+        computeBodyWorldCenters();
+        computeColliderWorldTransforms();
+        buildColliderAABBs();
     }
 
     void Simulation::integrateVelocities(size_t bodyCount, Real deltaTime)
@@ -938,9 +920,9 @@ namespace PS_AGONY
         }
     }
 
-    void Simulation::buildBodyAABBs()
+    void Simulation::buildColliderAABBs()
     {
-        TRACY_SCOPE_NC("Build body AABBs", Ecstasy::Core::Color::Green);
+        TRACY_SCOPE_NC("Build collider AABBs", Ecstasy::Core::Color::Green);
         buildCircleAABBs();
         buildBoxAABBs();
         buildPolygonAABBs();
@@ -953,87 +935,29 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Core::Color::DarkGreen);
 
-        using IndexSimd = std::conditional_t<
-            std::is_same_v<Real, float>,
-            Ecstasy::Core::Simd<int32_t, 256>,
-            Ecstasy::Core::Simd<int32_t, 128>
-        >;
+        const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
+        const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
-
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices.data();
+        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = circles.colliderIndices.data();
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = colliders.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = colliders.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabb.maxY.data();
 
-        alignas(IndexSimd::bytes) ObjectIndex bodyIndexBatch[IndexSimd::lanes];
-        alignas(RealSimd::bytes) Real xBatch[RealSimd::lanes];
-        alignas(RealSimd::bytes) Real yBatch[RealSimd::lanes];
-
-        alignas(RealSimd::bytes) Real minXBatch[RealSimd::lanes];
-        alignas(RealSimd::bytes) Real minYBatch[RealSimd::lanes];
-        alignas(RealSimd::bytes) Real maxXBatch[RealSimd::lanes];
-        alignas(RealSimd::bytes) Real maxYBatch[RealSimd::lanes];
-
-        size_t i = 0;
-        for (; i + RealSimd::lanes <= count; i += RealSimd::lanes)
+        for (size_t i = 0; i < count; i++)
         {
-            std::memcpy(bodyIndexBatch, bodyIndexPtr + i, IndexSimd::bytes);
-
-            RealSimd x;
-            RealSimd y;
-
-            if constexpr (RealSimd::isGatherAvailable())
-            {
-                const auto indices = IndexSimd::load((const int32_t*)bodyIndexBatch);
-                x = RealSimd::gather(positionXPtr, indices);
-                y = RealSimd::gather(positionYPtr, indices);
-            }
-            else
-            {
-                for (size_t j = 0; j < RealSimd::lanes; j++)
-                {
-                    const ObjectIndex bodyIndex = bodyIndexBatch[j];
-                    xBatch[j] = positionXPtr[bodyIndex];
-                    yBatch[j] = positionYPtr[bodyIndex];
-                }
-                x = RealSimd::load(xBatch);
-                y = RealSimd::load(yBatch);
-            }
-
-            const RealSimd radius = RealSimd::load(radiusPtr + i);
-
-            (x - radius).store(minXBatch);
-            (y - radius).store(minYBatch);
-            (x + radius).store(maxXBatch);
-            (y + radius).store(maxYBatch);
-
-            for (size_t j = 0; j < RealSimd::lanes; j++)
-            {
-                const ObjectIndex bodyIndex = bodyIndexBatch[j];
-
-                aabbMinXPtr[bodyIndex] = minXBatch[j];
-                aabbMinYPtr[bodyIndex] = minYBatch[j];
-                aabbMaxXPtr[bodyIndex] = maxXBatch[j];
-                aabbMaxYPtr[bodyIndex] = maxYBatch[j];
-            }
-        }
-        for (; i < count; i++)
-        {
-            const ObjectIndex bodyIndex = bodyIndexPtr[i];
+            const ColliderIndex colliderIndex = colliderIndexPtr[i];
             const Real radius = radiusPtr[i];
 
-            const Real x = positionXPtr[bodyIndex];
-            const Real y = positionYPtr[bodyIndex];
+            const Real x = worldPosXPtr[colliderIndex];
+            const Real y = worldPosYPtr[colliderIndex];
 
-            aabbMinXPtr[bodyIndex] = x - radius;
-            aabbMinYPtr[bodyIndex] = y - radius;
-            aabbMaxXPtr[bodyIndex] = x + radius;
-            aabbMaxYPtr[bodyIndex] = y + radius;
+            aabbMinXPtr[colliderIndex] = x - radius;
+            aabbMinYPtr[colliderIndex] = y - radius;
+            aabbMaxXPtr[colliderIndex] = x + radius;
+            aabbMaxYPtr[colliderIndex] = y + radius;
         }
     }
 
@@ -1044,30 +968,30 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Core::Color::DarkGreen);
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
+        const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
+        const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
+        const Real* ECSTASY_RESTRICT worldRotationCosPtr = colliders.worldRotationCos.data();
+        const Real* ECSTASY_RESTRICT worldRotationSinPtr = colliders.worldRotationSin.data();
 
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices.data();
+        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = boxes.colliderIndices.data();
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth.data();
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = colliders.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = colliders.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabb.maxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
-            const ObjectIndex bodyIndex = bodyIndexPtr[i];
+            const ColliderIndex colliderIndex = colliderIndexPtr[i];
             const Real halfWidth = halfWidthPtr[i];
             const Real halfHeight = halfHeightPtr[i];
 
-            const Real x = positionXPtr[bodyIndex];
-            const Real y = positionYPtr[bodyIndex];
-            const Real cos = rotationCosPtr[bodyIndex];
-            const Real sin = rotationSinPtr[bodyIndex];
+            const Real x = worldPosXPtr[colliderIndex];
+            const Real y = worldPosYPtr[colliderIndex];
+            const Real cos = worldRotationCosPtr[colliderIndex];
+            const Real sin = worldRotationSinPtr[colliderIndex];
 
             const Real absCos = std::fabs(cos);
             const Real absSin = std::fabs(sin);
@@ -1075,10 +999,10 @@ namespace PS_AGONY
             const Real ex = absCos * halfWidth + absSin * halfHeight;
             const Real ey = absSin * halfWidth + absCos * halfHeight;
 
-            aabbMinXPtr[bodyIndex] = x - ex;
-            aabbMinYPtr[bodyIndex] = y - ey;
-            aabbMaxXPtr[bodyIndex] = x + ex;
-            aabbMaxYPtr[bodyIndex] = y + ey;
+            aabbMinXPtr[colliderIndex] = x - ex;
+            aabbMinYPtr[colliderIndex] = y - ey;
+            aabbMaxXPtr[colliderIndex] = x + ex;
+            aabbMaxYPtr[colliderIndex] = y + ey;
         }
     }
 
@@ -1089,25 +1013,27 @@ namespace PS_AGONY
 
         TRACY_SCOPE_NC("Build polygon AABBs", Ecstasy::Core::Color::DarkGreen);
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY.data();
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos.data();
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin.data();
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices.data();
+        const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
+        const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
+        const Real* ECSTASY_RESTRICT worldRotationCosPtr = colliders.worldRotationCos.data();
+        const Real* ECSTASY_RESTRICT worldRotationSinPtr = colliders.worldRotationSin.data();
+
+        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = polygons.colliderIndices.data();
         const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = bodies.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = bodies.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = bodies.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = bodies.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = colliders.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = colliders.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabb.maxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
-            const ObjectIndex bodyIndex = bodyIndexPtr[i];
-            const Real x = positionXPtr[bodyIndex];
-            const Real y = positionYPtr[bodyIndex];
-            const Real cos = rotationCosPtr[bodyIndex];
-            const Real sin = rotationSinPtr[bodyIndex];
+            const ColliderIndex colliderIndex = colliderIndexPtr[i];
+
+            const Real x = worldPosXPtr[colliderIndex];
+            const Real y = worldPosYPtr[colliderIndex];
+            const Real cos = worldRotationCosPtr[colliderIndex];
+            const Real sin = worldRotationSinPtr[colliderIndex];
 
             const Vec2* verticesPtr = localVertsPtr[i].data();
             const size_t vertexCount = localVertsPtr[i].size();
@@ -1128,10 +1054,10 @@ namespace PS_AGONY
                 maxY = std::fmax(maxY, wy);
             }
 
-            aabbMinXPtr[bodyIndex] = x + minX;
-            aabbMinYPtr[bodyIndex] = y + minY;
-            aabbMaxXPtr[bodyIndex] = x + maxX;
-            aabbMaxYPtr[bodyIndex] = y + maxY;
+            aabbMinXPtr[colliderIndex] = x + minX;
+            aabbMinYPtr[colliderIndex] = y + minY;
+            aabbMaxXPtr[colliderIndex] = x + maxX;
+            aabbMaxYPtr[colliderIndex] = y + maxY;
         }
     }
 
@@ -1195,10 +1121,8 @@ namespace PS_AGONY
         );
     }
 
-    void Simulation::computeWorldCenters()
+    void Simulation::computeBodyWorldCenters()
     {
-
-
         TRACY_SCOPE_NC("Compute true positions", Ecstasy::Core::Color::Magenta);
 
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
@@ -1241,6 +1165,125 @@ namespace PS_AGONY
             const Real sinRot = rotationSinPtr[i];
             worldCenterXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
             worldCenterYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
+        }
+    }
+
+    void Simulation::computeColliderWorldTransforms()
+    {
+        TRACY_SCOPE_NC("Compute collider world transforms", Ecstasy::Core::Color::Magenta);
+
+        computeColliderWorldPositions();
+        computeColliderWorldRotations();
+    }
+
+    void Simulation::computeColliderWorldPositions()
+    {
+        TRACY_SCOPE_N("Compute collider world positions");
+
+        const Real* ECSTASY_RESTRICT bodyWorldXPtr = bodies.worldCenterX.data();
+        const Real* ECSTASY_RESTRICT bodyWorldYPtr = bodies.worldCenterY.data();
+        const Real* ECSTASY_RESTRICT bodyCosPtr = bodies.rotationCos.data();
+        const Real* ECSTASY_RESTRICT bodySinPtr = bodies.rotationSin.data();
+
+        const ObjectIndex* ECSTASY_RESTRICT ownerPtr = colliders.bodyIndex.data();
+        const Real* ECSTASY_RESTRICT localOffXPtr = colliders.localOffsetX.data();
+        const Real* ECSTASY_RESTRICT localOffYPtr = colliders.localOffsetY.data();
+
+        Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
+        Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
+
+        // Position uses the BODY's rotation only (an offset defined in body-local
+        // space); the collider's own local rotation affects its orientation, not
+        // where its origin sits relative to the body.
+        const size_t colliderCount = colliders.getCount();
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            const ObjectIndex body = ownerPtr[i];
+            const Real bCos = bodyCosPtr[body];
+            const Real bSin = bodySinPtr[body];
+
+            const Real offX = localOffXPtr[i];
+            const Real offY = localOffYPtr[i];
+
+            worldPosXPtr[i] = bodyWorldXPtr[body] + (offX * bCos - offY * bSin);
+            worldPosYPtr[i] = bodyWorldYPtr[body] + (offX * bSin + offY * bCos);
+        }
+    }
+
+    void Simulation::computeColliderWorldRotations()
+    {
+        TRACY_SCOPE_N("Compute collider world rotations");
+
+        const size_t colliderCount = colliders.getCount();
+        if (colliderCount == 0) return;
+
+        // 1) worldRotation = body's rotation + collider's fixed local rotation.
+        {
+            const Real* ECSTASY_RESTRICT bodyRotationPtr = bodies.rotation.data();
+            const ObjectIndex* ECSTASY_RESTRICT ownerPtr = colliders.bodyIndex.data();
+            const Real* ECSTASY_RESTRICT localRotationPtr = colliders.localRotation.data();
+            Real* ECSTASY_RESTRICT worldRotationPtr = colliders.worldRotation.data();
+
+            for (size_t i = 0; i < colliderCount; i++)
+            {
+                const ObjectIndex body = ownerPtr[i];
+                worldRotationPtr[i] = bodyRotationPtr[body] + localRotationPtr[i];
+            }
+        }
+
+        // 2) FastCosSin::order4CosSin requires angles in [0, 2pi); body.rotation is
+        //    already wrapped, but adding localRotation can push the sum back out
+        //    of range, so wrap again before the batch trig call.
+        wrapColliderRotations();
+
+        // 3) Batch cos/sin, same approximation/approach bodies use.
+        FastCosSin::order4CosSin(
+            colliders.worldRotation.data(),
+            colliders.worldRotationCos.data(),
+            colliders.worldRotationSin.data(),
+            colliderCount
+        );
+    }
+
+    void Simulation::wrapColliderRotations()
+    {
+        TRACY_SCOPE_NC("Wrap collider rotations", Ecstasy::Core::Color::Cyan);
+
+        // Unlike bodies.wrapRotation(), no wrap-count bookkeeping is needed here:
+        // worldRotation is fully recomputed from scratch every step (body.rotation
+        // + fixed localRotation), never integrated/accumulated on its own, so
+        // there's nothing to unwrap later for render interpolation.
+
+        constexpr size_t LANES = RealSimd::lanes;
+
+        Real* ECSTASY_RESTRICT worldRotationPtr = colliders.worldRotation.data();
+        const size_t colliderCount = colliders.getCount();
+
+        const RealSimd twoPIV(Constants::TWO_PI);
+        const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
+
+        size_t i = 0;
+        for (; i + LANES <= colliderCount; i += LANES)
+        {
+            RealSimd rot = RealSimd::load(worldRotationPtr + i);
+
+            RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
+            rot = rot - wrapCount * twoPIV;
+
+            RealSimd isRotNegativeMask = rot < RealSimd(0);
+            rot += isRotNegativeMask & twoPIV;
+
+            rot.store(worldRotationPtr + i);
+        }
+        for (; i < colliderCount; i++)
+        {
+            Real rot = worldRotationPtr[i];
+            Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
+            rot -= wrapCount * Constants::TWO_PI;
+
+            if (rot < Real(0)) rot += Constants::TWO_PI;
+
+            worldRotationPtr[i] = rot;
         }
     }
 
@@ -1411,5 +1454,14 @@ namespace PS_AGONY
 
         data.springSolverMemoryUsage = springSolver.getMemoryUsage();
         data.springPlannerMemoryUsage = springPlanner.getMemoryUsage();
+    }
+
+    ColliderIndex Simulation::createColliderInternal(ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, BodyType shapeType, ObjectIndex shapeIndex)
+    {
+        const ColliderIndex newCollider = colliders.append(
+            bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
+        );
+        bodies.addCollider(bodyIndex, newCollider);
+        return newCollider;
     }
 }

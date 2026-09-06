@@ -1,6 +1,7 @@
 #pragma once
 #include "GlmTypes.h"
 #include "ObjectSoA.h"
+#include "SoA/ColliderSoA.h"
 #include "SymmetricMatrix.h"
 
 #include <atomic>
@@ -15,8 +16,11 @@ namespace PS_AGONY
 		Real tangentImpulseAccumulator = 0;
 	};
 
+	// bodyA/bodyB are the OWNING bodies of colliderA/colliderB, resolved once at generation
+	// time so downstream solvers (which only ever act on bodies) never re-resolve them.
 	struct BodyCollisionData
 	{
+		ColliderIndex colliderA, colliderB;
 		ObjectIndex bodyA, bodyB;
 		Vec2 normal;
 		Real penetration;
@@ -28,6 +32,7 @@ namespace PS_AGONY
 		BodyCollisionData() = default;
 
 		BodyCollisionData(
+			ColliderIndex colliderA, ColliderIndex colliderB,
 			ObjectIndex bodyA, ObjectIndex bodyB,
 			Vec2 normal,
 			Real depth,
@@ -35,7 +40,9 @@ namespace PS_AGONY
 			Vec2 contactPoint1, Vec2 contactPoint2,
 			uint32_t contactId1, uint32_t contactId2
 		) :
-			bodyA(bodyA), bodyB(bodyB), normal(normal), penetration(depth), contactCount(contactCount)
+			colliderA(colliderA), colliderB(colliderB),
+			bodyA(bodyA), bodyB(bodyB),
+			normal(normal), penetration(depth), contactCount(contactCount)
 		{
 			contactPoints[0] = contactPoint1;
 			contactPoints[1] = contactPoint2;
@@ -53,7 +60,7 @@ namespace PS_AGONY
 		struct alignas(64) ChunkData
 		{
 			size_t start = 0, end = 0;
-			SymmetricMatrix<std::vector<ObjectPair>, BODY_TYPE_COUNT> pairs;
+			SymmetricMatrix<std::vector<ObjectPair>, BODY_TYPE_COUNT> pairs; // Pairs of COLLIDER indices.
 			std::vector<BodyCollisionData> results;
 			alignas(64) std::atomic<bool> finished{ false };
 
@@ -96,24 +103,26 @@ namespace PS_AGONY
 			PersistentContactData contactData[2];
 		};
 
-		struct BodyPairKey
+		// Keyed by COLLIDER pair, not body pair: two bodies can now touch through more
+		// than one simultaneous collider pair, and warm-starting must not conflate them.
+		struct ColliderPairKey
 		{
-			ObjectIndex bodyA;
-			ObjectIndex bodyB;
+			ColliderIndex colliderA;
+			ColliderIndex colliderB;
 
-			bool operator==(const BodyPairKey& other) const noexcept
+			bool operator==(const ColliderPairKey& other) const noexcept
 			{
-				return bodyA == other.bodyA && bodyB == other.bodyB;
+				return colliderA == other.colliderA && colliderB == other.colliderB;
 			}
 		};
 
-		struct BodyPairKeyHasher
+		struct ColliderPairKeyHasher
 		{
-			size_t operator()(const BodyPairKey& key) const noexcept
+			size_t operator()(const ColliderPairKey& key) const noexcept
 			{
 				constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
-				uint64_t h = (uint64_t)key.bodyA + addConst;
-				h ^= (uint64_t)key.bodyB + addConst + (h << 6) + (h >> 2);
+				uint64_t h = (uint64_t)key.colliderA + addConst;
+				h ^= (uint64_t)key.colliderB + addConst + (h << 6) + (h >> 2);
 				return h;
 			}
 		};
@@ -131,10 +140,11 @@ namespace PS_AGONY
 		std::vector<BodyCollisionData> allCollisionData;
 		std::vector<ChunkData> chunks;
 
-		robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> previousContactDataContainer;
+		robin_hood::unordered_flat_map<ColliderPairKey, CachedContactPair, ColliderPairKeyHasher> previousContactDataContainer;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
+		ColliderSoAViewer colliders;
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
@@ -157,29 +167,35 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			const BodySoAViewer& bodies,
+			const ColliderSoAViewer& colliders,
 			const CircleSoAViewer& circles,
 			const BoxSoAViewer& boxes,
 			const PolygonSoAViewer& polygons
 		);
 
-		const std::vector<BodyCollisionData>& findCollisions(const std::vector<ObjectPair>& bodyPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+		// 'colliderPairs' are COLLIDER index pairs (as produced by BroadPhaseCollisionDetector).
+		const std::vector<BodyCollisionData>& findCollisions(const std::vector<ObjectPair>& colliderPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
+		// 'collidersToCheck' and the first element of each 'outColliding' pair are COLLIDER indices.
 		void findCollisionsInCircle(
-			const std::vector<ObjectIndex>& bodiesToCheck,
+			const std::vector<ObjectIndex>& collidersToCheck,
 			Vec2 pos,
 			Real radius,
 			std::vector<std::pair<ObjectIndex, Real>>& outColliding
 		) const;
 
 		void updatePersistentContactData();
-		void remapPersistentContactData(const std::vector<ObjectDeletion>& deletions);
+
+		// 'deletedColliders' is the collider swap-remove log (same shape as ObjectDeletion,
+		// but every index in it is a collider index, not a body index).
+		void remapPersistentContactData(const std::vector<ObjectDeletion>& deletedColliders);
 
 		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
 
 		size_t getMemoryUsage() const;
 	private:
-		void findCollisionsSingleThreaded(const std::vector<ObjectPair>& bodyPairs);
-		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& bodyPairs);
+		void findCollisionsSingleThreaded(const std::vector<ObjectPair>& colliderPairs);
+		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs);
 
 		void processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData);
 

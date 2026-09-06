@@ -6,28 +6,28 @@ namespace PS_AGONY
 {
 	struct BoxSoA
 	{
-		SimdAlignedVector<ObjectIndex> bodyIndices;
+		SimdAlignedVector<ColliderIndex> colliderIndices;
 
 		std::vector<Real> halfWidth;
 		std::vector<Real> halfHeight;
 
 		void append(
-			ObjectIndex bodyIndex,
+			ColliderIndex colliderIndex,
 			Real halfWidth,
 			Real halfHeight
 		)
 		{
-			this->bodyIndices.push_back(bodyIndex);
+			this->colliderIndices.push_back(colliderIndex);
 			this->halfWidth.push_back(halfWidth);
 			this->halfHeight.push_back(halfHeight);
 		}
 
-		size_t getCount() const noexcept { return bodyIndices.size(); }
+		size_t getCount() const noexcept { return colliderIndices.size(); }
 
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY::getVectorMemoryUsage(bodyIndices) +
+				PS_AGONY::getVectorMemoryUsage(colliderIndices) +
 				PS_AGONY::getVectorMemoryUsage(halfWidth) +
 				PS_AGONY::getVectorMemoryUsage(halfHeight);
 		}
@@ -37,7 +37,7 @@ namespace PS_AGONY
 	{
 		size_t count = 0;
 	public:
-		const ObjectIndex* bodyIndices = nullptr;
+		const ColliderIndex* colliderIndices = nullptr;
 		const Real* halfWidth = nullptr;
 		const Real* halfHeight = nullptr;
 
@@ -45,7 +45,7 @@ namespace PS_AGONY
 
 		explicit BoxSoAViewer(const BoxSoA& data) :
 			count(data.getCount()),
-			bodyIndices(data.bodyIndices.data()),
+			colliderIndices(data.colliderIndices.data()),
 			halfWidth(data.halfWidth.data()),
 			halfHeight(data.halfHeight.data())
 		{}

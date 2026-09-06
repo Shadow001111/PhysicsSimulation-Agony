@@ -271,7 +271,7 @@
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="Physics\GraphUtilities.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />
-    <ClInclude Include="Physics\SoA\AAAAA.h" />
+    <ClInclude Include="Physics\SoA\ColliderSoA.h" />
     <ClInclude Include="Physics\SoA\AABBSoA.h" />
     <ClInclude Include="Physics\SoA\BodySoA.h" />
     <ClInclude Include="Physics\SoA\Constraints\SpringSoA.h" />

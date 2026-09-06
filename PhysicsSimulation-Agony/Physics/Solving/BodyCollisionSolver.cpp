@@ -235,6 +235,14 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer)
 	{
+		{
+			const size_t collisionCount = collisionDataContainer.size();
+			positionConstraintContainer.resize(collisionCount);
+			velocityConstraintContainer.resize(collisionCount);
+			frictionDataContainer.resize(collisionCount);
+
+		}
+		return;
 		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
@@ -248,7 +256,7 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = bodies->materialIndex.data();
+		const MaterialIndex* ECSTASY_RESTRICT materialIndexPtr = nullptr;// bodies->materialIndex.data();
 		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
 
 		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2

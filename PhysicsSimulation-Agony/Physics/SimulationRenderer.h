@@ -124,6 +124,7 @@ namespace PS_AGONY
 
 		// Simulation references.
 		BodySoAViewer bodies;
+		ColliderSoAViewer colliders;
 
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
@@ -157,7 +158,7 @@ namespace PS_AGONY
 		void renderBoxBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderPolygonBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 
-		void renderBodyAABBs(const Mat4& viewProjectionMatrix);
+		void renderColliderAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 

@@ -6,25 +6,25 @@ namespace PS_AGONY
 {
 	struct CircleSoA
 	{
-		SimdAlignedVector<ObjectIndex> bodyIndices;
+		SimdAlignedVector<ColliderIndex> colliderIndices;
 
 		SimdAlignedVector<Real> radius;
 
 		void append(
-			ObjectIndex bodyIndex,
+			ColliderIndex colliderIndex,
 			Real radius
 		)
 		{
-			this->bodyIndices.push_back(bodyIndex);
+			this->colliderIndices.push_back(colliderIndex);
 			this->radius.push_back(radius);
 		}
 
-		size_t getCount() const noexcept { return bodyIndices.size(); }
+		size_t getCount() const noexcept { return colliderIndices.size(); }
 
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY::getVectorMemoryUsage(bodyIndices) +
+				PS_AGONY::getVectorMemoryUsage(colliderIndices) +
 				PS_AGONY::getVectorMemoryUsage(radius);
 		}
 	};
@@ -33,14 +33,14 @@ namespace PS_AGONY
 	{
 		size_t count = 0;
 	public:
-		const ObjectIndex* bodyIndices = nullptr;
+		const ColliderIndex* colliderIndices = nullptr;
 		const Real* radius = nullptr;
 
 		CircleSoAViewer() = default;
 
 		explicit CircleSoAViewer(const CircleSoA& data) :
 			count(data.getCount()),
-			bodyIndices(data.bodyIndices.data()),
+			colliderIndices(data.colliderIndices.data()),
 			radius(data.radius.data())
 		{}
 
