@@ -28,7 +28,7 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderSimulation(const Simulation& simulation, Real simRenderAlpha)
     {
-        TRACY_SCOPE_N("SimulationRenderer render");
+        TRACY_SCOPE_N("Render simulation");
 
         // Set references.
         bodies = simulation.getBodies();
@@ -267,6 +267,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
+        TRACY_SCOPE_N("Render bodies");
+
         renderCircleBodies(viewProjectionMatrix, simRenderAlpha);
         renderBoxBodies(viewProjectionMatrix, simRenderAlpha);
         renderPolygonBodies(viewProjectionMatrix, simRenderAlpha);
@@ -375,6 +377,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderCircleBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
+        TRACY_SCOPE_N("Render circle bodies");
+
         const size_t count = circles.getCount();
         if (count == 0) return;
 
@@ -429,6 +433,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderBoxBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
+        TRACY_SCOPE_N("Render box bodies");
+
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
@@ -485,6 +491,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderPolygonBodies(const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
+        TRACY_SCOPE_N("Render polygon bodies");
+
         const size_t count = polygons.getCount();
         if (count == 0) return;
 
@@ -567,6 +575,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderColliderAABBs(const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render collider AABBs");
+
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
         
@@ -594,6 +604,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render broad phase AABBs");
+
         // Fetch AABBs.
         aabbResources.aabbs.clear();
         aabbResources.instanceData.clear();
@@ -620,6 +632,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render contact points");
+
         const auto& collisionData = simulation.getBodyCollisionData();
 
         const size_t collisionCount = collisionData.size();
@@ -655,6 +669,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
+        TRACY_SCOPE_N("Render springs");
+
         const auto& springs = simulation.getSprings();
         const size_t springCount = springs.getCount();
         if (springCount == 0) return;
@@ -765,6 +781,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderCircleShapes(const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render circle shapes");
+
         const size_t count = circleResources.instanceData.size();
         if (count == 0) return;
 
@@ -786,6 +804,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderBoxShapes(const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render box shapes");
+
         const size_t count = boxResources.instanceData.size();
         if (count == 0) return;
 
@@ -807,6 +827,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderPolygonShapes(const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render polygon shapes");
+
         const size_t polygonCount = polygonResources.drawCommands.size();
         if (polygonCount == 0) return;
 
@@ -835,6 +857,8 @@ namespace PS_AGONY
 
     void SimulationRenderer::renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix)
     {
+        TRACY_SCOPE_N("Render AABBs");
+
         const size_t count = aabbResources.instanceData.size();
 		if (count == 0) return;
 
