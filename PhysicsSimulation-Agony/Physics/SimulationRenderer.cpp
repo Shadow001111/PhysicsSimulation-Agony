@@ -32,6 +32,7 @@ namespace PS_AGONY
 
         // Set references.
         bodies = simulation.getBodies();
+        colliders = simulation.getColliders();
         circles = simulation.getCircles();
         boxes = simulation.getBoxes();
         polygons = simulation.getPolygons();
@@ -43,8 +44,8 @@ namespace PS_AGONY
 
         // Render.
         renderBodies(viewProjectionMatrix, simRenderAlpha);
-		//renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
-        //renderContactPoints(simulation, viewProjectionMatrix);
+		renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+        renderContactPoints(simulation, viewProjectionMatrix);
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
     }
 
@@ -273,7 +274,7 @@ namespace PS_AGONY
 		//renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
         //renderBodyPositions(viewProjectionMatrix); // Blue.
-		//renderBodyAABBs(viewProjectionMatrix);
+		renderColliderAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -393,7 +394,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.bodyIndices;
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = circles.colliderIndices;
 
         CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
 
@@ -448,7 +449,7 @@ namespace PS_AGONY
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.bodyIndices;
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = boxes.colliderIndices;
 
         BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
 
@@ -500,7 +501,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
 
         // Polygon SoA pointers.
-        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.bodyIndices;
+        const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = polygons.colliderIndices;
         const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices;
 
         // Count total vertices needed this frame.
@@ -564,7 +565,7 @@ namespace PS_AGONY
         renderPolygonShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBodyAABBs(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderColliderAABBs(const Mat4& viewProjectionMatrix)
     {
         const size_t bodyCount = bodies.getCount();
         if (bodyCount == 0) return;
@@ -573,10 +574,10 @@ namespace PS_AGONY
         aabbResources.instanceData.resize(bodyCount);
 
         // Prepare instance data.
-        const Real* ECSTASY_RESTRICT minXPtr = bodies.aabb.minX;
-        const Real* ECSTASY_RESTRICT minYPtr = bodies.aabb.minY;
-        const Real* ECSTASY_RESTRICT maxXPtr = bodies.aabb.maxX;
-        const Real* ECSTASY_RESTRICT maxYPtr = bodies.aabb.maxY;
+        const Real* ECSTASY_RESTRICT minXPtr = colliders.aabbMinX;
+        const Real* ECSTASY_RESTRICT minYPtr = colliders.aabbMinY;
+        const Real* ECSTASY_RESTRICT maxXPtr = colliders.aabbMaxX;
+        const Real* ECSTASY_RESTRICT maxYPtr = colliders.aabbMaxY;
 
         FloatAABB* ECSTASY_RESTRICT renderDataPtr = aabbResources.instanceData.data();
 

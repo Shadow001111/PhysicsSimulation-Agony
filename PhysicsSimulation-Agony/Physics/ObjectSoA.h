@@ -1,5 +1,6 @@
 #pragma once
 #include "SoA/BodySoA.h"
+#include "SoA/ColliderSoA.h"
 
 #include "SoA/Shapes/CircleSoA.h"
 #include "SoA/Shapes/BoxSoA.h"

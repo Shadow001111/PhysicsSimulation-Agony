@@ -62,7 +62,7 @@ namespace PS_AGONY
         const Real d2 = glm::dot(p2 - planePoint, planeNormal);
 
         if (d1 >= 0 && d2 >= 0) return false; // Both inside.
-        if (d1  < 0 && d2  < 0) return true;  // Both outside.
+        if (d1 < 0 && d2 < 0) return true;  // Both outside.
 
         const Real t = d1 / (d1 - d2);
         const Vec2 dir = p2 - p1;
@@ -82,7 +82,7 @@ namespace PS_AGONY
         Real& ECSTASY_RESTRICT maxOut
     )
     {
-        minOut =  std::numeric_limits<Real>::max();
+        minOut = std::numeric_limits<Real>::max();
         maxOut = -std::numeric_limits<Real>::max();
 
         for (size_t i = 0; i < vertexCount; i++)
@@ -115,19 +115,21 @@ namespace PS_AGONY
 
     void NarrowPhaseCollisionDetector::setDataViewers(
         const BodySoAViewer& bodies,
+        const ColliderSoAViewer& colliders,
         const CircleSoAViewer& circles,
         const BoxSoAViewer& boxes,
         const PolygonSoAViewer& polygons
     )
     {
         this->bodies = bodies;
+        this->colliders = colliders;
         this->circles = circles;
         this->boxes = boxes;
         this->polygons = polygons;
     }
 
     const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(
-        const std::vector<ObjectPair>& bodyPairs,
+        const std::vector<ObjectPair>& colliderPairs,
         ExecutionPolicy executionPolicy
     )
     {
@@ -135,12 +137,12 @@ namespace PS_AGONY
 
         allCollisionData.clear();
 
-        if (bodyPairs.empty())
+        if (colliderPairs.empty())
         {
             return allCollisionData;
         }
 
-        allCollisionData.reserve(bodyPairs.size());
+        allCollisionData.reserve(colliderPairs.size());
 
         // Determine to use threading or not.
         bool useThreading = false;
@@ -154,24 +156,24 @@ namespace PS_AGONY
         }
         else
         {
-            useThreading = bodyPairs.size() > 6000;
+            useThreading = colliderPairs.size() > 6000;
         }
-        
+
         // Find collisions.
         if (useThreading)
         {
-            findCollisionsMultiThreaded(bodyPairs);
+            findCollisionsMultiThreaded(colliderPairs);
         }
         else
         {
-            findCollisionsSingleThreaded(bodyPairs);
+            findCollisionsSingleThreaded(colliderPairs);
         }
 
         return allCollisionData;
     }
 
     void NarrowPhaseCollisionDetector::findCollisionsInCircle(
-        const std::vector<ObjectIndex>& bodiesToCheck,
+        const std::vector<ObjectIndex>& collidersToCheck,
         Vec2 pos, Real radius,
         std::vector<std::pair<ObjectIndex, Real>>& outColliding
     ) const
@@ -188,32 +190,32 @@ namespace PS_AGONY
                 return a + ab * glm::clamp(t, Real(0), Real(1));
             };
 
-        for (ObjectIndex index : bodiesToCheck)
+        for (ObjectIndex colliderIndex : collidersToCheck)
         {
-            const BodyType type = bodies.bodyType[index];
-            const ObjectIndex shapeIdx = bodies.shapeIndex[index];
-            const Vec2 bodyPos = { bodies.worldCenterX[index], bodies.worldCenterY[index] };
+            const BodyType type = colliders.shapeType[colliderIndex];
+            const ObjectIndex shapeIdx = colliders.shapeIndex[colliderIndex];
+            const Vec2 colliderPos = { colliders.worldPosX[colliderIndex], colliders.worldPosY[colliderIndex] };
 
             Real sdf = std::numeric_limits<Real>::max();
 
             if (type == BodyType::Circle)
             {
                 const Real otherRadius = circles.radius[shapeIdx];
-                const Vec2 delta = bodyPos - pos;
+                const Vec2 delta = colliderPos - pos;
                 const Real dist = std::sqrt(glm::dot(delta, delta));
                 sdf = dist - otherRadius;
             }
             else if (type == BodyType::Box)
             {
-                const Real cosB = bodies.rotationCos[index];
-                const Real sinB = bodies.rotationSin[index];
+                const Real cosB = colliders.worldRotationCos[colliderIndex];
+                const Real sinB = colliders.worldRotationSin[colliderIndex];
                 const Real halfWidthB = boxes.halfWidth[shapeIdx];
                 const Real halfHeightB = boxes.halfHeight[shapeIdx];
 
                 const Vec2 right = { cosB, sinB };
                 const Vec2 up = { -sinB, cosB };
 
-                const Vec2 d = pos - bodyPos;
+                const Vec2 d = pos - colliderPos;
                 const Vec2 circleLocalPosition = {
                     glm::dot(d, right),
                     glm::dot(d, up)
@@ -232,8 +234,8 @@ namespace PS_AGONY
             }
             else if (type == BodyType::Polygon)
             {
-                const Real cosB = bodies.rotationCos[index];
-                const Real sinB = bodies.rotationSin[index];
+                const Real cosB = colliders.worldRotationCos[colliderIndex];
+                const Real sinB = colliders.worldRotationSin[colliderIndex];
                 const VerticesContainer& localPolygonVertices = polygons.localVertices[shapeIdx];
                 const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
                 const size_t vertexCount = localPolygonVertices.size();
@@ -243,8 +245,8 @@ namespace PS_AGONY
                 const Vec2 upB = { -sinB, cosB };
 
                 const Vec2 circleLocal = {
-                    glm::dot(pos - bodyPos, rightB),
-                    glm::dot(pos - bodyPos, upB)
+                    glm::dot(pos - colliderPos, rightB),
+                    glm::dot(pos - colliderPos, upB)
                 };
 
                 Real maxSeparation = -std::numeric_limits<Real>::max();
@@ -275,10 +277,10 @@ namespace PS_AGONY
                 }
             }
 
-            // Check if the body collides with the query circle
+            // Check if the collider collides with the query circle
             if (sdf < radius)
             {
-                outColliding.emplace_back( index, sdf );
+                outColliding.emplace_back(colliderIndex, sdf);
             }
         }
     }
@@ -297,9 +299,9 @@ namespace PS_AGONY
         previousContactDataContainer.reserve(allCollisionData.size());
         for (BodyCollisionData& collData : allCollisionData)
         {
-            BodyPairKey bodyPairKey{ collData.bodyA , collData.bodyB };
+            ColliderPairKey key{ collData.colliderA , collData.colliderB };
 
-            CachedContactPair& data = previousContactDataContainer.emplace(bodyPairKey, CachedContactPair{}).first->second;
+            CachedContactPair& data = previousContactDataContainer.emplace(key, CachedContactPair{}).first->second;
 
             // Reset contact ids.
             data.contactIds[0] = 0xFFFFFFFF;
@@ -314,9 +316,9 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::remapPersistentContactData(const std::vector<ObjectDeletion>& deletions)
+    void NarrowPhaseCollisionDetector::remapPersistentContactData(const std::vector<ObjectDeletion>& deletedColliders)
     {
-        if (deletions.empty() || previousContactDataContainer.empty())
+        if (deletedColliders.empty() || previousContactDataContainer.empty())
         {
             return;
         }
@@ -324,19 +326,19 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Remap persistent contact data");
 
         // Temporary container to safely transition into.
-        robin_hood::unordered_flat_map<BodyPairKey, CachedContactPair, BodyPairKeyHasher> newContainer;
+        robin_hood::unordered_flat_map<ColliderPairKey, CachedContactPair, ColliderPairKeyHasher> newContainer;
         newContainer.reserve(previousContactDataContainer.size());
 
-        constexpr ObjectIndex INVALID_INDEX = std::numeric_limits<ObjectIndex>::max();
+        constexpr ColliderIndex INVALID_INDEX = std::numeric_limits<ColliderIndex>::max();
 
         for (const auto& [key, data] : previousContactDataContainer)
         {
-            ObjectIndex a = key.bodyA;
-            ObjectIndex b = key.bodyB;
+            ColliderIndex a = key.colliderA;
+            ColliderIndex b = key.colliderB;
             bool alive = true;
 
             // Sequentially replay the deletions/swaps exactly as they occurred.
-            for (const auto& deletion : deletions)
+            for (const auto& deletion : deletedColliders)
             {
                 if (a == deletion.deletedIndex || b == deletion.deletedIndex)
                 {
@@ -353,8 +355,8 @@ namespace PS_AGONY
             if (alive)
             {
                 // Re-sort the indices to preserve narrow-phase invariants.
-                BodyType typeA = bodies.bodyType[a];
-                BodyType typeB = bodies.bodyType[b];
+                BodyType typeA = colliders.shapeType[a];
+                BodyType typeB = colliders.shapeType[b];
 
                 if (typeA > typeB)
                 {
@@ -365,7 +367,7 @@ namespace PS_AGONY
                     std::swap(a, b);
                 }
 
-                newContainer[BodyPairKey{ a, b }] = data;
+                newContainer[ColliderPairKey{ a, b }] = data;
             }
         }
 
@@ -393,20 +395,20 @@ namespace PS_AGONY
         return total;
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<ObjectPair>& bodyPairs)
+    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<ObjectPair>& colliderPairs)
     {
         TRACY_SCOPE_N("Single-threaded narrow phase");
 
         chunks.resize(1);
         ChunkData& cd = chunks[0];
         cd.start = 0;
-        cd.end = bodyPairs.size();
+        cd.end = colliderPairs.size();
         cd.clear();
-        processPairs(bodyPairs, cd);
+        processPairs(colliderPairs, cd);
         allCollisionData.swap(cd.results);
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& bodyPairs)
+    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs)
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
@@ -416,7 +418,7 @@ namespace PS_AGONY
         const size_t workerCount = threadPool.getThreadCount();
 
         auto [chunkCount, chunkSize] = Ecstasy::Core::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
-            threadPool, bodyPairs.size(), LOAD_BALANCING_FACTOR);
+            threadPool, colliderPairs.size(), LOAD_BALANCING_FACTOR);
 
         chunks.resize(chunkCount);
 
@@ -424,7 +426,7 @@ namespace PS_AGONY
         {
             ChunkData& cd = chunks[i];
             cd.start = i * chunkSize;
-            cd.end = std::min(chunks[i].start + chunkSize, bodyPairs.size());
+            cd.end = std::min(chunks[i].start + chunkSize, colliderPairs.size());
             cd.finished = false;
         }
 
@@ -443,7 +445,7 @@ namespace PS_AGONY
 
                     ChunkData& cd = chunks[chunkIndex];
                     cd.clear();
-                    processPairs(bodyPairs, cd);
+                    processPairs(colliderPairs, cd);
 
                     cd.finished.store(true, std::memory_order_release);
                     cd.finished.notify_one();
@@ -489,7 +491,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Process pair range");
 
-        const BodyType* ECSTASY_RESTRICT bodyTypePtr = bodies.bodyType;
+        const BodyType* ECSTASY_RESTRICT shapeTypePtr = colliders.shapeType;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
         const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies.isStatic;
 
         // Partition the given range into type-specific vectors.
@@ -497,26 +500,37 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Partition");
             for (size_t i = chunkData.start; i < chunkData.end; i++)
             {
-                auto [bodyIndexA, bodyIndexB] = pairs[i];
+                auto [colliderIndexA, colliderIndexB] = pairs[i];
+
+                const ObjectIndex bodyIndexA = colliderOwnerPtr[colliderIndexA];
+                const ObjectIndex bodyIndexB = colliderOwnerPtr[colliderIndexB];
+
+                if (bodyIndexA == bodyIndexB) [[unlikely]]
+                {
+                    // Colliders on the same body never collide. Broad phase already
+                    // filters this; kept here as a cheap safety net.
+                    continue;
+                }
+
                 if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
                 {
                     continue;
                 }
 
-                BodyType typeA = bodyTypePtr[bodyIndexA];
-                BodyType typeB = bodyTypePtr[bodyIndexB];
+                BodyType typeA = shapeTypePtr[colliderIndexA];
+                BodyType typeB = shapeTypePtr[colliderIndexB];
 
                 if (typeA > typeB)
                 {
-                    std::swap(bodyIndexA, bodyIndexB);
+                    std::swap(colliderIndexA, colliderIndexB);
                     std::swap(typeA, typeB);
                 }
-                else if (typeA == typeB && bodyIndexB > bodyIndexA)
+                else if (typeA == typeB && colliderIndexB > colliderIndexA)
                 {
-                    std::swap(bodyIndexA, bodyIndexB);
+                    std::swap(colliderIndexA, colliderIndexB);
                 }
 
-                chunkData.pairs((size_t)typeA, (size_t)typeB).emplace_back(bodyIndexA, bodyIndexB);
+                chunkData.pairs((size_t)typeA, (size_t)typeB).emplace_back(colliderIndexA, colliderIndexB);
             }
         }
 
@@ -541,10 +555,10 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Move previous contact data");
             for (BodyCollisionData& collData : chunkData.results)
             {
-                BodyPairKey bodyPairKey{ collData.bodyA , collData.bodyB };
+                ColliderPairKey key{ collData.colliderA , collData.colliderB };
 
                 // Check if pair existed in previous frame.
-                const auto it = previousContactDataContainer.find(bodyPairKey);
+                const auto it = previousContactDataContainer.find(key);
                 if (it == previousContactDataContainer.end()) continue;
 
                 const CachedContactPair& data = it->second;
@@ -574,9 +588,10 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-circle collision");
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
@@ -584,7 +599,7 @@ namespace PS_AGONY
         size_t i = 0;
         if constexpr (true)
         {
-            ObjectPair bodyPairsBatch[RealSimd::lanes];
+            ObjectPair colliderPairsBatch[RealSimd::lanes];
 
             alignas(RealSimd::bytes) Real positionAXBatch[RealSimd::lanes];
             alignas(RealSimd::bytes) Real positionAYBatch[RealSimd::lanes];
@@ -605,7 +620,7 @@ namespace PS_AGONY
                 for (size_t j = 0; j < RealSimd::lanes; j++)
                 {
                     const auto pair = pairs[i + j];
-                    bodyPairsBatch[j] = pair;
+                    colliderPairsBatch[j] = pair;
 
                     const ObjectIndex indexA = pair.a;
                     const ObjectIndex indexB = pair.b;
@@ -668,7 +683,7 @@ namespace PS_AGONY
                         const int lane = std::countr_zero(collisionMask);
                         collisionMask &= collisionMask - 1;
 
-                        const ObjectPair pair = bodyPairsBatch[lane];
+                        const ObjectPair pair = colliderPairsBatch[lane];
                         const Vec2 normal{ normalXBatch[lane], normalYBatch[lane] };
                         const Real depth = depthBatch[lane];
                         const Vec2 positionA{ positionAXBatch[lane], positionAYBatch[lane] };
@@ -676,6 +691,7 @@ namespace PS_AGONY
 
                         outCollisionData.emplace_back(
                             pair.a, pair.b,
+                            colliderOwnerPtr[pair.a], colliderOwnerPtr[pair.b],
                             normal,
                             depth,
                             1,
@@ -723,6 +739,7 @@ namespace PS_AGONY
 
             outCollisionData.emplace_back(
                 indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                 normal,
                 depth,
                 1,
@@ -740,11 +757,12 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-box collision");
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
@@ -798,13 +816,14 @@ namespace PS_AGONY
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
                 uint32_t contactId = 0;
-                if      (circleLocalPosition.x >  halfWidthB)  contactId |= 1;
+                if (circleLocalPosition.x > halfWidthB)  contactId |= 1;
                 else if (circleLocalPosition.x < -halfWidthB)  contactId |= 2;
-                if      (circleLocalPosition.y >  halfHeightB) contactId |= 4;
+                if (circleLocalPosition.y > halfHeightB) contactId |= 4;
                 else if (circleLocalPosition.y < -halfHeightB) contactId |= 8;
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
+                    colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                     normal,
                     depth,
                     1,
@@ -817,7 +836,7 @@ namespace PS_AGONY
             }
 
             // Circle center inside box: choose nearest face.
-            const Real dx = halfWidthB  - std::fabs(circleLocalPosition.x);
+            const Real dx = halfWidthB - std::fabs(circleLocalPosition.x);
             const Real dy = halfHeightB - std::fabs(circleLocalPosition.y);
             const bool useX = dx < dy;
             const Real minPen = useX ? dx : dy;
@@ -832,7 +851,7 @@ namespace PS_AGONY
                 normalLocal = Vec2(sx, Real(0));
                 contactId = sx > 0 ? 0 : 1;
             }
-            else      
+            else
             {
                 normalLocal = Vec2(Real(0), sy);
                 contactId = sy > 0 ? 2 : 3;
@@ -848,6 +867,7 @@ namespace PS_AGONY
 
             outCollisionData.emplace_back(
                 indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                 normal,
                 depth,
                 1,
@@ -865,11 +885,12 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Circle-polygon collision");
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
@@ -968,6 +989,7 @@ namespace PS_AGONY
 
             outCollisionData.emplace_back(
                 indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                 normal,
                 depth,
                 1,
@@ -993,11 +1015,12 @@ namespace PS_AGONY
             B_UP
         };
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
@@ -1148,7 +1171,7 @@ namespace PS_AGONY
 
             Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
             if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
-            if (clipSegment(clipped[0], clipped[1], refEdgeEnd,    sideDir)) continue;
+            if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
 
             Vec2 contactPoints[2];
             uint32_t contactIds[2];
@@ -1168,6 +1191,7 @@ namespace PS_AGONY
 
             outCollisionData.emplace_back(
                 indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                 normal,
                 depth,
                 contactCount,
@@ -1192,11 +1216,12 @@ namespace PS_AGONY
             POLY_EDGE
         };
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
@@ -1226,10 +1251,10 @@ namespace PS_AGONY
             const size_t vertexCount = localPolygonVertices.size();
             if (vertexCount < 3) [[unlikely]] continue;
 
-            const Vec2 rightA = {  cosA, sinA };
-            const Vec2 upA    = { -sinA, cosA };
+            const Vec2 rightA = { cosA, sinA };
+            const Vec2 upA = { -sinA, cosA };
 
-            // Transform Body B into Body A's local space.
+            // Transform Collider B into Collider A's local space.
             const Vec2 centerDelta = positionB - positionA;
             const Vec2 centerDeltaLocal = {
                 glm::dot(centerDelta, rightA),
@@ -1468,6 +1493,7 @@ namespace PS_AGONY
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
+                    colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                     normalWorld,
                     depth,
                     contactCount,
@@ -1495,11 +1521,12 @@ namespace PS_AGONY
             B_EDGE
         };
 
-        const Real* ECSTASY_RESTRICT positionXPtr = bodies.worldCenterX;
-        const Real* ECSTASY_RESTRICT positionYPtr = bodies.worldCenterY;
-        const Real* ECSTASY_RESTRICT rotationCosPtr = bodies.rotationCos;
-        const Real* ECSTASY_RESTRICT rotationSinPtr = bodies.rotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = bodies.shapeIndex;
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
@@ -1525,8 +1552,8 @@ namespace PS_AGONY
             const size_t countB = localVertsBContainer.size();
             if (countA < 3 || countB < 3) [[unlikely]] continue;
 
-            const Vec2 rightA = {  cosA, sinA };
-            const Vec2 upA    = { -sinA, cosA };
+            const Vec2 rightA = { cosA, sinA };
+            const Vec2 upA = { -sinA, cosA };
 
             const Vec2 centerDelta = positionB - positionA;
             const Vec2 centerDeltaLocal = {
@@ -1670,7 +1697,7 @@ namespace PS_AGONY
 
                 Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
                 if (clipSegment(clipped[0], clipped[1], refEdgeStart, sideDir)) goto nextPair;
-                if (clipSegment(clipped[0], clipped[1], refEdgeEnd,  -sideDir)) goto nextPair;
+                if (clipSegment(clipped[0], clipped[1], refEdgeEnd, -sideDir)) goto nextPair;
 
                 const Real refPlaneDist = glm::dot(refFaceCenter, refNormalLocal);
 
@@ -1698,6 +1725,7 @@ namespace PS_AGONY
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
+                    colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                     normalWorld,
                     depth,
                     contactCount,

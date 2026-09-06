@@ -95,11 +95,13 @@ namespace PS_AGONY
 	private:
 		// Bodies.
 		BodySoA bodies;
+		ColliderSoA colliders;
 		CircleSoA circles;
 		BoxSoA boxes;
 		PolygonSoA polygons;
 
 		std::vector<ObjectDeletion> deletedBodies;
+		std::vector<ObjectDeletion> deletedColliders;
 
 		// Constraints.
 		SpringSoA springs;
@@ -192,6 +194,7 @@ namespace PS_AGONY
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 
 		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
+		ColliderSoAViewer getColliders() const noexcept { return ColliderSoAViewer(colliders); }
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
 		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(boxes); }
 		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(polygons); }
@@ -212,7 +215,7 @@ namespace PS_AGONY
 
 		void integratePositions(size_t bodyCount, Real deltaTime);
 
-		void buildBodyAABBs();
+		void buildColliderAABBs();
 		void buildCircleAABBs();
 		void buildBoxAABBs();
 		void buildPolygonAABBs();
@@ -221,12 +224,22 @@ namespace PS_AGONY
 
 		void computeRotationCosSin();
 
-		void computeWorldCenters();
+		void computeBodyWorldCenters();
+
+		void computeColliderWorldTransforms();
+		void computeColliderWorldPositions();
+		void computeColliderWorldRotations();
+		void wrapColliderRotations();
 
 		void applyBodyHolderConstraint(Real deltaTime);
 
 		Real computeBodyTotalKineticEnergy();
 
 		void collectMemoryUsage(DebugData& data) const;
+
+		ColliderIndex createColliderInternal(
+			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
+			MaterialIndex materialIndex, BodyType shapeType, ObjectIndex shapeIndex
+		);
 	};
 }

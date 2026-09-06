@@ -3,36 +3,36 @@
 #include "../ContainerUtilities.h"
 #include "AABBSoA.h"
 #include "../Material.h"
+#include "../Constants.h"
+
+#include <cmath>
 
 namespace PS_AGONY
 {
-	// A Collider is a shape rigidly offset/rotated from its owning Body.
-	// Bodies hold mass/inertia/velocity; Colliders hold geometry + material
-	// and derive their world transform from the body's transform each step.
 	struct ColliderSoA
 	{
 		CacheLineAlignedVector<ObjectIndex> bodyIndex;
 
 		CacheLineAlignedVector<Real> localOffsetX;
 		CacheLineAlignedVector<Real> localOffsetY;
-		CacheLineAlignedVector<Real> localRotationCos;
-		CacheLineAlignedVector<Real> localRotationSin;
+		CacheLineAlignedVector<Real> localRotation; // Rigid local angle; wrapped to [0, 2pi) once, at creation.
 
 		CacheLineAlignedVector<Real> worldPosX;
 		CacheLineAlignedVector<Real> worldPosY;
+		CacheLineAlignedVector<Real> worldRotation;    // body.rotation + localRotation, re-wrapped every step.
 		CacheLineAlignedVector<Real> worldRotationCos;
 		CacheLineAlignedVector<Real> worldRotationSin;
 
 		CacheLineAlignedVector<MaterialIndex> materialIndex;
-		CacheLineAlignedVector<BodyType> shapeType;   // Circle/Box/Polygon.
-		CacheLineAlignedVector<ObjectIndex> shapeIndex; // Index into the shape's own SoA.
+		CacheLineAlignedVector<BodyType> shapeType;
+		CacheLineAlignedVector<ObjectIndex> shapeIndex;
 
 		AABBSoA aabb;
 
 		ColliderIndex append(
 			ObjectIndex bodyIndexIn,
 			Vec2 localOffset,
-			Real localRotation,
+			Real localRotationIn,
 			MaterialIndex materialIndexIn,
 			BodyType shapeTypeIn,
 			ObjectIndex shapeIndexIn
@@ -44,13 +44,17 @@ namespace PS_AGONY
 
 			localOffsetX.push_back(localOffset.x);
 			localOffsetY.push_back(localOffset.y);
-			localRotationCos.push_back(std::cos(localRotation));
-			localRotationSin.push_back(std::sin(localRotation));
+
+			// Wrap once here; local rotation is rigid and never changes afterward.
+			Real wrappedLocal = std::fmod(localRotationIn, Constants::TWO_PI);
+			if (wrappedLocal < Real(0)) wrappedLocal += Constants::TWO_PI;
+			localRotation.push_back(wrappedLocal);
 
 			worldPosX.push_back(0);
 			worldPosY.push_back(0);
-			worldRotationCos.push_back(1);
-			worldRotationSin.push_back(0);
+			worldRotation.push_back(wrappedLocal);
+			worldRotationCos.push_back(std::cos(wrappedLocal));
+			worldRotationSin.push_back(std::sin(wrappedLocal));
 
 			materialIndex.push_back(materialIndexIn);
 			shapeType.push_back(shapeTypeIn);
@@ -66,7 +70,6 @@ namespace PS_AGONY
 
 		size_t getCount() const noexcept { return bodyIndex.size(); }
 
-		// Swap-removes 'index'; returns the pre-removal last index (== index if none moved).
 		size_t swapRemove(size_t index)
 		{
 			const size_t lastIndex = bodyIndex.size() - 1;
@@ -76,10 +79,10 @@ namespace PS_AGONY
 				std::swap(bodyIndex[index], bodyIndex[lastIndex]);
 				std::swap(localOffsetX[index], localOffsetX[lastIndex]);
 				std::swap(localOffsetY[index], localOffsetY[lastIndex]);
-				std::swap(localRotationCos[index], localRotationCos[lastIndex]);
-				std::swap(localRotationSin[index], localRotationSin[lastIndex]);
+				std::swap(localRotation[index], localRotation[lastIndex]);
 				std::swap(worldPosX[index], worldPosX[lastIndex]);
 				std::swap(worldPosY[index], worldPosY[lastIndex]);
+				std::swap(worldRotation[index], worldRotation[lastIndex]);
 				std::swap(worldRotationCos[index], worldRotationCos[lastIndex]);
 				std::swap(worldRotationSin[index], worldRotationSin[lastIndex]);
 				std::swap(materialIndex[index], materialIndex[lastIndex]);
@@ -93,8 +96,9 @@ namespace PS_AGONY
 
 			bodyIndex.pop_back();
 			localOffsetX.pop_back(); localOffsetY.pop_back();
-			localRotationCos.pop_back(); localRotationSin.pop_back();
+			localRotation.pop_back();
 			worldPosX.pop_back(); worldPosY.pop_back();
+			worldRotation.pop_back();
 			worldRotationCos.pop_back(); worldRotationSin.pop_back();
 			materialIndex.pop_back();
 			shapeType.pop_back();
@@ -110,8 +114,9 @@ namespace PS_AGONY
 			return
 				PS_AGONY::getVectorMemoryUsage(bodyIndex) +
 				PS_AGONY::getVectorMemoryUsage(localOffsetX) + PS_AGONY::getVectorMemoryUsage(localOffsetY) +
-				PS_AGONY::getVectorMemoryUsage(localRotationCos) + PS_AGONY::getVectorMemoryUsage(localRotationSin) +
+				PS_AGONY::getVectorMemoryUsage(localRotation) +
 				PS_AGONY::getVectorMemoryUsage(worldPosX) + PS_AGONY::getVectorMemoryUsage(worldPosY) +
+				PS_AGONY::getVectorMemoryUsage(worldRotation) +
 				PS_AGONY::getVectorMemoryUsage(worldRotationCos) + PS_AGONY::getVectorMemoryUsage(worldRotationSin) +
 				PS_AGONY::getVectorMemoryUsage(materialIndex) +
 				PS_AGONY::getVectorMemoryUsage(shapeType) +
@@ -120,7 +125,6 @@ namespace PS_AGONY
 		}
 	};
 
-	// Mutable viewer: broad/narrow phase read geometry; per-step transform/AABB build writes it.
 	class ColliderSoAViewer
 	{
 		size_t count = 0;
@@ -129,34 +133,34 @@ namespace PS_AGONY
 
 		const Real* localOffsetX = nullptr;
 		const Real* localOffsetY = nullptr;
-		const Real* localRotationCos = nullptr;
-		const Real* localRotationSin = nullptr;
+		const Real* localRotation = nullptr;
 
-		Real* worldPosX = nullptr;
-		Real* worldPosY = nullptr;
-		Real* worldRotationCos = nullptr;
-		Real* worldRotationSin = nullptr;
+		const Real* worldPosX = nullptr;
+		const Real* worldPosY = nullptr;
+		const Real* worldRotation = nullptr;
+		const Real* worldRotationCos = nullptr;
+		const Real* worldRotationSin = nullptr;
 
 		const MaterialIndex* materialIndex = nullptr;
 		const BodyType* shapeType = nullptr;
 		const ObjectIndex* shapeIndex = nullptr;
 
-		Real* aabbMinX = nullptr;
-		Real* aabbMinY = nullptr;
-		Real* aabbMaxX = nullptr;
-		Real* aabbMaxY = nullptr;
+		const Real* aabbMinX = nullptr;
+		const Real* aabbMinY = nullptr;
+		const Real* aabbMaxX = nullptr;
+		const Real* aabbMaxY = nullptr;
 
 		ColliderSoAViewer() = default;
 
-		explicit ColliderSoAViewer(ColliderSoA& data) noexcept :
+		explicit ColliderSoAViewer(const ColliderSoA& data) noexcept :
 			count(data.getCount()),
 			bodyIndex(data.bodyIndex.data()),
 			localOffsetX(data.localOffsetX.data()),
 			localOffsetY(data.localOffsetY.data()),
-			localRotationCos(data.localRotationCos.data()),
-			localRotationSin(data.localRotationSin.data()),
+			localRotation(data.localRotation.data()),
 			worldPosX(data.worldPosX.data()),
 			worldPosY(data.worldPosY.data()),
+			worldRotation(data.worldRotation.data()),
 			worldRotationCos(data.worldRotationCos.data()),
 			worldRotationSin(data.worldRotationSin.data()),
 			materialIndex(data.materialIndex.data()),
