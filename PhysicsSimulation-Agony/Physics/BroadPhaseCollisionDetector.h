@@ -162,8 +162,21 @@ namespace PS_AGONY
 			const ObjectIndex* colliderBodyIndexIn
 		);
 
+		// Clears all broad-phase state (BVH tree, cached indices, pairs). Call when there are
+		// zero colliders so stale tree data isn't served to fetchAABBs/fetchCollidersInCircle/
+		// fetchCollidersInAABB.
+		void clearData();
+
+		// Builds (rebuild=true) or refits (rebuild=false) the BVH tree from the current collider
+		// AABBs. Safe to call with 0 or 1 colliders: 0 clears the tree, 1 produces a single-leaf
+		// tree. Needed so downstream queries reflect the current scene even when there are too
+		// few colliders to collide.
+		void buildTree(bool rebuild);
+
+		// Queries the already-built tree for overlapping collider pairs. Caller must ensure at
+		// least 2 colliders exist (checked defensively); returns empty otherwise.
 		// Returned pairs are COLLIDER index pairs.
-		const std::vector<ObjectPair>& findCollisions(bool rebuild, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 

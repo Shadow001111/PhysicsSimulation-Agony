@@ -237,7 +237,7 @@ namespace PS_AGONY
         const size_t bodyCount = objectManager.bodies.getCount();
         if (bodyCount == 0)
         {
-            // TODO: Call manual reset for data that can be displayed.
+            broadPhaseCollisionDetector.clearData();
             return;
         }
 
@@ -305,23 +305,19 @@ namespace PS_AGONY
         );
         springsWereChanged = false;
 
+        // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
+        // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
+        broadPhaseCollisionDetector.buildTree(true);
+
         if (objectManager.colliders.getCount() > 1)
         {
             // Broad phase.
-            const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(true);
-            if (broadCollisionData.empty())
-            {
-                // TODO: Call manual reset for data that can be displayed.
-                return;
-            }
+            const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions();
+            if (broadCollisionData.empty()) return;
 
             // Narrow phase.
             const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
-            if (narrowCollisionData.empty())
-            {
-                // TODO: Call manual reset for data that can be displayed.
-                return;
-            }
+            if (narrowCollisionData.empty()) return;
 
             // Collision resolution.
             bodyCollisionSolver.solveCollisions(
@@ -332,10 +328,6 @@ namespace PS_AGONY
 
             // Updating persistent contact data.
             narrowPhaseCollisionDetector.updatePersistentContactData();
-        }
-        else
-        {
-            // TODO: Call manual reset for data that can be displayed.
         }
     }
 
