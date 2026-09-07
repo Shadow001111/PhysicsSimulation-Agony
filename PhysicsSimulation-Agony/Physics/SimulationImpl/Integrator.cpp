@@ -7,12 +7,12 @@
 #include "Physics/Constants.h"
 #include "Physics/FastCosSin.h"
 
-namespace PS_AGONY
+namespace PS_AGONY::Integrator
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
-	void Integrator::integrateVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+	void integrateVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Integrate velocities", Ecstasy::Core::Color::Red);
 
@@ -95,7 +95,7 @@ namespace PS_AGONY
         }
     }
 
-    void Integrator::integrateKinematics(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void integrateKinematics(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Intergrate kinematics", Ecstasy::Core::Color::Blue);
 
@@ -140,7 +140,7 @@ namespace PS_AGONY
         }
     }
 
-    void Integrator::wrapRotation(BodySoA& bodies)
+    void wrapRotation(BodySoA& bodies)
     {
         TRACY_SCOPE_NC("Wrap rotation", Ecstasy::Core::Color::Cyan);
 
@@ -188,7 +188,7 @@ namespace PS_AGONY
         }
     }
 
-    void Integrator::computeRotationCosSin(BodySoA& bodies)
+    void computeRotationCosSin(BodySoA& bodies)
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Core::Color::Teal);
 
