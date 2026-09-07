@@ -69,9 +69,9 @@ struct ObjectCreatorState
 {
     bool isFocused = false;
     PS_AGONY::BodyType bodyType;
-    PS_AGONY::Simulation::CircleCreateParams circleParams;
-    PS_AGONY::Simulation::BoxCreateParams boxParams;
-    PS_AGONY::Simulation::PolygonCreateParams polygonParams;
+    PS_AGONY::CircleCreateParams circleParams;
+    PS_AGONY::BoxCreateParams boxParams;
+    PS_AGONY::PolygonCreateParams polygonParams;
 };
 
 
@@ -291,7 +291,7 @@ ObjectCreatorState renderObjectCreatorUI(
     ImGui::Separator();
 
     auto buildBaseParams = [&]() {
-        PS_AGONY::Simulation::BodyCreateParams base;
+        PS_AGONY::BodyCreateParams base;
         base.position = camera.screenToWorldSpace({ 0.0, 0.0 });
         base.velocity = { static_cast<PS_AGONY::Real>(vel[0]), static_cast<PS_AGONY::Real>(vel[1])};
         base.rotation = static_cast<PS_AGONY::Real>(rotation);
@@ -314,7 +314,7 @@ ObjectCreatorState renderObjectCreatorUI(
         ImGui::Spacing();
         if (ImGui::Button("Spawn Circle", ImVec2(-1, 30)))
         {
-            PS_AGONY::Simulation::CircleCreateParams params;
+            PS_AGONY::CircleCreateParams params;
             params.base = buildBaseParams();
             params.radius = static_cast<PS_AGONY::Real>(circleRadius);
             simulation.createCircle(params);
@@ -335,7 +335,7 @@ ObjectCreatorState renderObjectCreatorUI(
         ImGui::Spacing();
         if (ImGui::Button("Spawn Box", ImVec2(-1, 30)))
         {
-            PS_AGONY::Simulation::BoxCreateParams params;
+            PS_AGONY::BoxCreateParams params;
             params.base = buildBaseParams();
             params.size = { static_cast<PS_AGONY::Real>(boxWidth), static_cast<PS_AGONY::Real>(boxHeight) };
             simulation.createBox(params);
@@ -456,7 +456,7 @@ ObjectCreatorState renderObjectCreatorUI(
         ImGui::BeginDisabled(polyVertices.size() < 3);
         if (ImGui::Button("Spawn Polygon", ImVec2(-1, 30)))
         {
-            PS_AGONY::Simulation::PolygonCreateParams params;
+            PS_AGONY::PolygonCreateParams params;
             params.base = buildBaseParams();
             params.localVertices = polyVertices.data();
             params.verticesCount = polyVertices.size();
