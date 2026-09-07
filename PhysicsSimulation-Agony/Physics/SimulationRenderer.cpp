@@ -277,7 +277,7 @@ namespace PS_AGONY
             const auto& collisionDetector = simulation.getBroadPhaseCollisionDetector();
 
             foundColliders.clear();
-            collisionDetector.fetchCollidersInAABB(cameraAABB, foundColliders);
+            collisionDetector.queryCollidersInShape(BroadPhaseInternal::AABBQuery(cameraAABB), foundColliders);
         }
         {
             TRACY_SCOPE_N("Partition found colliders");

@@ -271,6 +271,8 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
+    <ClInclude Include="Physics\BroadPhaseInternal\BvhNode.h" />
+    <ClInclude Include="Physics\BroadPhaseInternal\QueryShapes.h" />
     <ClInclude Include="Physics\SimulationImpl\ObjectManager.h" />
     <ClInclude Include="Physics\SimulationImpl\Integrator.h" />
     <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h" />
