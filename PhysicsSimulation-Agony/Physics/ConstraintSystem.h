@@ -2,6 +2,8 @@
 #include "SoA/BodySoA.h"
 #include "SoA/Constraints/SpringSoA.h"
 
+#include <array>
+
 namespace PS_AGONY
 {
 	// One implementation per ConstraintType, letting a body cascade-delete
@@ -17,6 +19,8 @@ namespace PS_AGONY
 		virtual void removeConstraint(uint32_t index, BodySoA& bodies) = 0;
 		virtual void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) = 0;
 	};
+
+	using ConstraintSystemArray = std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)>;
 
 	class SpringConstraintSystem final : public IConstraintSystem
 	{

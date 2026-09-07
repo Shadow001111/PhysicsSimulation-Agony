@@ -93,7 +93,7 @@ namespace PS_AGONY
 		SpringSoA springs;
 		SpringConstraintSystem springConstraintSystem{ springs };
 
-		std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)> constraintSystems{};
+		ConstraintSystemArray constraintSystems{};
 
 		// Materials.
 		std::vector<Material> materials;
@@ -140,27 +140,59 @@ namespace PS_AGONY
 
 		void update(Real deltaTime);
 
-		// Creates a body with NO colliders attached. Mass/inertia are taken directly
-		// from params; since there's no shape yet, inertia is not auto-derived and
-		// attaching colliders afterward does not recompute mass/inertia/COM for you.
-		std::optional<ObjectIndex> createBody(const BodyCreateParams& params) { return objectManager.createBody(params); }
+		__forceinline std::optional<ObjectIndex> createBody(const BodyCreateParams& params)
+		{
+			return objectManager.createBody(params);
+		}
 
-		// Attaches a new collider of the given shape to an EXISTING body immediately.
-		// Returns std::nullopt if bodyIndex is invalid. Colliders are never standalone.
-		std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params);
-		std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params);
-		std::optional<ColliderIndex> createPolygonCollider(const PolygonColliderCreateParams& params);
+		__forceinline std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params)
+		{
+			return objectManager.createCircleCollider(params);
+		}
 
-		// Convenience: creates a body plus a single matching collider in one call.
-		std::optional<ObjectIndex> createCircle(const CircleCreateParams& params);
-		std::optional<ObjectIndex> createBox(const BoxCreateParams& params);
-		std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params);
+		__forceinline std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params)
+		{
+			return objectManager.createBoxCollider(params);
+		}
 
-		// Destroys a body and cascade-deletes every collider/spring attached to it.
-		void destroyBody(ObjectIndex bodyIndex);
+		__forceinline std::optional<ColliderIndex> createPolygonCollider(const PolygonColliderCreateParams& params)
+		{
+			return objectManager.createPolygonCollider(params);
+		}
 
-		// Destroys a single collider without touching its owning body.
-		void destroyCollider(ColliderIndex colliderIndex);
+		__forceinline std::optional<ObjectIndex> createCircle(const CircleCreateParams& params)
+		{
+			return objectManager.createCircle(params);
+		}
+
+		__forceinline std::optional<ObjectIndex> createBox(const BoxCreateParams& params)
+		{
+			return objectManager.createBox(params);
+		}
+
+		__forceinline std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params)
+		{
+			return objectManager.createPolygon(params);
+		}
+
+		void destroyBody(ObjectIndex bodyIndex)
+		{
+			// Hack. TODO: Integrate it into attackment system or constraint system or whatever!
+			{
+				if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == bodyIndex)
+					mainBodyHolderRelease();
+
+				const ObjectIndex oldBackIndex = static_cast<ObjectIndex>(objectManager.bodies.getCount() - 1);
+				if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == oldBackIndex)
+					mainBodyHolder.heldBody = bodyIndex;
+			}
+			objectManager.destroyBody(bodyIndex, constraintSystems);
+		}
+
+		__forceinline void destroyCollider(ColliderIndex colliderIndex)
+		{
+			return objectManager.destroyCollider(colliderIndex, constraintSystems);
+		}
 
 		void createSpring(const SpringCreateParams& params);
 
@@ -216,14 +248,5 @@ namespace PS_AGONY
 		Real computeBodyTotalKineticEnergy();
 
 		void collectMemoryUsage(DebugData& data) const;
-
-		ColliderIndex createColliderInternal(
-			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
-			MaterialIndex materialIndex, BodyType shapeType, ObjectIndex shapeIndex
-		);
-
-		// Removes a single collider (and its underlying shape-SoA entry) from bodyIndex's
-		// owned list. Shared by destroyCollider() and destroyBody()'s cascade loop.
-		void destroyColliderInternal(ObjectIndex bodyIndex, ColliderIndex colliderIndex);
 	};
 }
