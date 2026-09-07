@@ -22,13 +22,13 @@ namespace PS_AGONY
 		std::is_same_v<Real, float>,
 		Ecstasy::Core::Simd<uint32_t>,
 		Ecstasy::Core::Simd<uint32_t, 128> // Double.
-    >;
+	>;
 
 	using MortonI32Simd = std::conditional_t<
 		std::is_same_v<Real, float>,
 		Ecstasy::Core::Simd<int32_t>,
 		Ecstasy::Core::Simd<int32_t, 128> // Double.
-    >;
+	>;
 
 
 	static constexpr uint64_t integralLog2(uint64_t n)
@@ -114,16 +114,27 @@ namespace PS_AGONY
 		colliderBodyIndex = colliderBodyIndexIn;
 	}
 
-	const std::vector<ObjectPair>& BroadPhaseCollisionDetector::findCollisions(bool rebuild, ExecutionPolicy executionPolicy)
+	void BroadPhaseCollisionDetector::clearData()
 	{
-		TRACY_SCOPE_N("Broad phase");
-
 		collisionData.clear();
+		bvhFunctionResources.nodes.clear();
+		bvhFunctionResources.mainColliderIndices.clear();
+	}
+
+	void BroadPhaseCollisionDetector::buildTree(bool rebuild)
+	{
+		TRACY_SCOPE_N("Build broad-phase tree");
 
 		const size_t colliderCount = collidersAABB.getCount();
-		if (colliderCount < 2) return collisionData; // No pairs to check.
 
-		collisionData.reserve(colliderCount);
+		if (colliderCount == 0)
+		{
+			// No colliders: drop the old tree so fetchAABBs/fetchCollidersInCircle/
+			// fetchCollidersInAABB don't keep serving a stale, non-existent scene.
+			bvhFunctionResources.nodes.clear();
+			bvhFunctionResources.mainColliderIndices.clear();
+			return;
+		}
 
 		if (rebuild)
 		{
@@ -135,12 +146,24 @@ namespace PS_AGONY
 			indices.resize(colliderCount);
 			std::iota(indices.begin(), indices.end(), 0);
 
-			buildBvhTree(static_cast<uint32_t>(colliderCount));
+			buildBvhTree(static_cast<uint32_t>(colliderCount)); // Handles colliderCount == 1 (single leaf) too.
 		}
 		else
 		{
 			fitBvhNodeAABBs(false);
 		}
+	}
+
+	const std::vector<ObjectPair>& BroadPhaseCollisionDetector::findCollisions(ExecutionPolicy executionPolicy)
+	{
+		TRACY_SCOPE_N("Broad phase");
+
+		collisionData.clear();
+
+		const size_t colliderCount = collidersAABB.getCount();
+		if (colliderCount < 2) return collisionData; // No pairs to check. Caller should already guard this; kept defensively.
+
+		collisionData.reserve(colliderCount);
 
 		bool useThreading = false;
 
@@ -766,13 +789,13 @@ namespace PS_AGONY
 			std::is_same_v<Real, float>,
 			Ecstasy::Core::Simd<Real, 128>,
 			Ecstasy::Core::Simd<Real, 256>
-					> ;
+		>;
 
 		using InternalUintSimd = std::conditional_t<
 			std::is_same_v<Real, float>,
 			Ecstasy::Core::Simd<uint32_t, 128>,
 			Ecstasy::Core::Simd<uint64_t, 256>
-		> ;
+		>;
 
 		// Setting mask. 'Set' stores in reverse order.
 		const InternalRealSimd minMaxBlendMask = InternalUintSimd::set(-1, 0, -1, 0).as<InternalRealSimd>();
