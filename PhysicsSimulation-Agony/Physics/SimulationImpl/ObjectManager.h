@@ -14,6 +14,7 @@ namespace PS_AGONY
 		Real rotation{ 0 };
 		Real angularVelocity{ 0 };
 		Real mass{ 0 };
+		Real inertia{ 0 };
 		std::optional<Vec2> centerOfMass = std::nullopt;
 		MaterialIndex materialIndex{ 0 };
 	};

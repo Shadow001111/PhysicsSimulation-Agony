@@ -1076,10 +1076,8 @@ void load_ColliderTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::
         .velocity = { 0.0f, 0.0f },
         .rotation = 0.0f,
         .angularVelocity = 0.0f,
-        .mass = 4.0f
-        // Note: createBody() doesn't derive inertia from attached shapes, so
-        // invInertia stays 0 here - this compound body will translate but not
-        // rotate. Fine for exercising the collider system in isolation.
+        .mass = 4.0f,
+        .inertia = 1.0f
         });
 
     if (!bodyOpt) return;

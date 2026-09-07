@@ -2,7 +2,6 @@
 #include "Physics/Types.h"
 
 #include <cmath>
-#include <algorithm>
 #include <cstdint>
 
 namespace PS_AGONY
