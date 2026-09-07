@@ -66,6 +66,7 @@ namespace PS_AGONY
 		PS_AGONY_SWAP_WITH_BACK(rotationSin, index);
 		PS_AGONY_SWAP_WITH_BACK(isStatic, index);
 		PS_AGONY_SWAP_WITH_BACK(attachments, index);
+		PS_AGONY_SWAP_WITH_BACK(colliderIndices, index);
 	}
 
 	void BodySoA::popBack()
@@ -98,6 +99,7 @@ namespace PS_AGONY
 		rotationSin.pop_back();
 		isStatic.pop_back();
 		attachments.pop_back();
+		colliderIndices.pop_back();
 	}
 
 	void BodySoA::addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
@@ -178,6 +180,12 @@ namespace PS_AGONY
 		for (const auto& bodyAttachments : attachments)
 		{
 			total += getVectorMemoryUsage(bodyAttachments);
+		}
+
+		total += getVectorMemoryUsage(colliderIndices);
+		for (const auto& bodyColliders : colliderIndices)
+		{
+			total += getVectorMemoryUsage(bodyColliders);
 		}
 
 		return total;
