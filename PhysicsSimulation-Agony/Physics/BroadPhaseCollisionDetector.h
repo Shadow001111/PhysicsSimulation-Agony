@@ -1,12 +1,21 @@
 #pragma once
 #include "ObjectSoA.h"
 
+#include "BroadPhaseInternal/BvhNode.h"
+#include "BroadPhaseInternal/QueryShapes.h"
+
+#include "Ecstasy/Core/Portablity.h"
+#include "Ecstasy/Core/Simd.h"
+
 #include <vector>
 #include <atomic>
 #include <array>
+#include <bit>
 
 namespace PS_AGONY
 {
+	using BvhNode = BroadPhaseInternal::BvhNode;
+
 	// NOTE: This detector operates over COLLIDER AABBs, not body AABBs.
 	// Every ObjectIndex produced or consumed here (in ObjectPair results, or in
 	// fetchBodiesInCircle's output) is therefore a ColliderIndex. Callers that
@@ -14,34 +23,6 @@ namespace PS_AGONY
 	class BroadPhaseCollisionDetector
 	{
 	public:
-		// Note: Splitting on cold and hot didn't help.
-		struct BvhNode
-		{
-			// Max KD_LEAF_SIZE is 32. Larger size will fuck up bitwise mask.
-			// (We can change mask to me uint64_t to allow max KD_LEAF_SIZE to be 64, but increasing KD_LEAF_SIZE leads to perfomance decrease in narrow phase.)
-			static constexpr uint32_t KD_LEAF_SIZE = 16;
-			static_assert((KD_LEAF_SIZE% Ecstasy::Core::Simd<Real>::lanes) == 0, "KD_LEAF_SIZE must be multiple of Simd<Real>::lanes.");
-
-			static constexpr uint32_t INVALID_INDEX = -1;
-
-			// AABB data must stay first.
-			Real minX, maxX, minY, maxY; // Merged AABB of all colliders in this subtree.
-			uint32_t leftChildIndex = INVALID_INDEX; // INVALID_INDEX for leaves.
-			// rightChildIndex = leftChildIndex + 1.
-			uint32_t start, end; // Range in kdIndices: [start, end).
-			uint32_t leafIndex; // If node is a leaf, it's its index.
-
-			BvhNode() :
-				start(0), end(0)
-			{
-			}
-
-			BvhNode(uint32_t start, uint32_t end) :
-				start(start), end(end)
-			{
-			}
-		};
-
 		enum class ExecutionPolicy
 		{
 			Standard,
@@ -178,16 +159,22 @@ namespace PS_AGONY
 		// Returned pairs are COLLIDER index pairs.
 		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
+		// Returns all node aabbs.
 		void fetchAABBs(std::vector<AABB>& outAABBs) const;
 
-		// Returns COLLIDER indices whose AABB overlaps the query circle.
-		void fetchCollidersInCircle(Vec2 pos, Real radius, std::vector<ColliderIndex>& outColliders) const;
-
-		// Returns COLLIDER indices whose AABB overlaps the query AABB.
-		void fetchCollidersInAABB(const AABB& aabb, std::vector<ColliderIndex>& outColliders) const;
+		// Returns COLLIDER indices whose AABB overlaps the query shape.
+		template <typename ShapeQuery>
+		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const;
 
 		size_t getMemoryUsage() const;
 	private:
+		static constexpr uint64_t bvhDepth(uint64_t n, uint64_t leafSize)
+		{
+			uint64_t d = 0ull;
+			while (n > leafSize) { n = (n + 1ull) >> 1ull; d++; }
+			return d;
+		}
+
 		void computeCentroidsWithTransformations(uint32_t colliderCount, Vec2 globalMin, Vec2 scale, Real clampMax);
 
 		template<std::floating_point TReal>
@@ -205,4 +192,96 @@ namespace PS_AGONY
 		void traverseNodesToGetOverlappingLeafPairs();
 		void testCollisionsInLeaves();
 	};
+
+	template <typename ShapeQuery>
+	inline void BroadPhaseCollisionDetector::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const
+	{
+		using RealSimd = Ecstasy::Core::Simd<Real>;
+		constexpr uint32_t LANES = RealSimd::lanes;
+
+		if (bvhFunctionResources.nodes.empty()) return;
+
+		// Quick escape if root node does not overlap shape.
+		if (!shape.overlaps(bvhFunctionResources.nodes[0])) return;
+
+		// Fetch base pointers.
+		const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<const Real*>(leafBodyAABBs.minX.data());
+		const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<const Real*>(leafBodyAABBs.maxX.data());
+		const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<const Real*>(leafBodyAABBs.minY.data());
+		const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<const Real*>(leafBodyAABBs.maxY.data());
+		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
+
+		// Local stack traversal setup.
+		constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+
+		uint32_t stack[MAX_STACK_CAPACITY];
+		uint32_t stackSize = 0;
+
+		stack[stackSize++] = 0;
+
+		while (stackSize > 0)
+		{
+			const uint32_t nodeIdx = stack[--stackSize];
+			const BvhNode& node = nodePtr[nodeIdx];
+
+			// Fast path: fully contained node allows bulk-inserting all leaf elements.
+			if (shape.contains(node))
+			{
+				outColliders.insert(
+					outColliders.end(),
+					&bvhFunctionResources.mainColliderIndices[node.start],
+					&bvhFunctionResources.mainColliderIndices[node.end]
+				);
+				continue;
+			}
+
+			if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf Node.
+			{
+				const uint32_t count = node.end - node.start;
+
+				const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
+				const Real* leafMinX = leafMinXPtr + srcIndex;
+				const Real* leafMaxX = leafMaxXPtr + srcIndex;
+				const Real* leafMinY = leafMinYPtr + srcIndex;
+				const Real* leafMaxY = leafMaxYPtr + srcIndex;
+
+				uint32_t mask = 0;
+				for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+				{
+					const RealSimd minXV = RealSimd::load(leafMinX + j);
+					const RealSimd maxXV = RealSimd::load(leafMaxX + j);
+					const RealSimd minYV = RealSimd::load(leafMinY + j);
+					const RealSimd maxYV = RealSimd::load(leafMaxY + j);
+
+					const auto overlap = shape.simdOverlap(minXV, maxXV, minYV, maxYV);
+
+					mask |= overlap.movemask() << j;
+				}
+
+				// Mask out invalid padded elements past count boundary.
+				mask &= static_cast<uint32_t>((1ULL << count) - 1ULL);
+
+				while (mask)
+				{
+					const uint32_t lane = std::countr_zero(mask);
+					mask &= mask - 1;
+					outColliders.push_back(bvhFunctionResources.mainColliderIndices[node.start + lane]);
+				}
+			}
+			else // Internal Node.
+			{
+				const BvhNode& left = nodePtr[node.leftChildIndex];
+				const BvhNode& right = nodePtr[node.leftChildIndex + 1];
+
+				if (shape.overlaps(right))
+				{
+					stack[stackSize++] = node.leftChildIndex + 1;
+				}
+				if (shape.overlaps(left))
+				{
+					stack[stackSize++] = node.leftChildIndex;
+				}
+			}
+		}
+	}
 }

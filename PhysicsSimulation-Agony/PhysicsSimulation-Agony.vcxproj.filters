@@ -27,45 +27,6 @@
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Ecstasy\Graphics\WindowManager.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Core\Decoding\UTFDecoder.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Core\TracyPtofiler.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Core\Time\FixedStepTimer.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\OpenGL\DrawCommands.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Graphics\TextRenderer.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Graphics\TextureLoader.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Graphics\Input\InputManager.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\OpenGL\FrameBuffer.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\OpenGL\ImmutableBuffer.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\OpenGL\Shader.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\OpenGL\Texture.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\OpenGL\VertexArray.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -84,16 +45,7 @@
     <ClCompile Include="Scenes.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Ecstasy\Core\FileStream.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Core\Threading\ThreadPool.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Physics\Threading.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Ecstasy\Core\Threading\ThreadUtils.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\FastCosSin.cpp">
@@ -138,56 +90,17 @@
     <ClCompile Include="Physics\GraphUtilities.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\SimulationImpl\Integrator.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Ecstasy\Graphics\WindowManager.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Decoding\UTFDecoder.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\ResourceManagment\BlockAllocator.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\ResourceManagment\IdPool.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Simd.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\TracyProfiler.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Time\FixedStepTimer.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\OpenGL\DrawCommands.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Graphics\TextRenderer.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Graphics\TextureLoader.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Graphics\Input\InputManager.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\OpenGL\FrameBuffer.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\OpenGL\ImmutableBuffer.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\OpenGL\Shader.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\OpenGL\Texture.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\OpenGL\VertexArray.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\Simulation.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -195,9 +108,6 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationRenderer.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Graphics\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\GlmTypes.h">
@@ -210,9 +120,6 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\BroadPhaseCollisionDetector.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Portablity.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h">
@@ -233,31 +140,7 @@
     <ClInclude Include="Physics\Constants.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Assert.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Random.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\FileStream.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Threading\ChaseLevQueue.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Threading\move_only_function.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Threading\Task.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Threading\ThreadPool.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\FastCosSin.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Ecstasy\Core\Threading\ThreadUtils.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\PrintUtilities.h">
@@ -335,16 +218,25 @@
     <ClInclude Include="Physics\GraphUtilities.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Ecstasy\Core\FloatingPoint.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedAllocator.h">
+    <ClInclude Include="Physics\SimulationImpl\ObjectManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Ecstasy\Core\MemoryAllocation\AlignedStorage.h">
+    <ClInclude Include="Physics\SimulationImpl\Integrator.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\ColliderSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\BroadPhaseInternal\QueryShapes.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\BroadPhaseInternal\BvhNode.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
