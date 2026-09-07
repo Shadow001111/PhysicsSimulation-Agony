@@ -608,6 +608,7 @@ namespace PS_AGONY
         Integrator::integrateVelocities(objectManager.bodies, deltaTime, simulationSettings.integration);
         applyBodyHolderConstraint(deltaTime);
         Integrator::integrateKinematics(objectManager.bodies, deltaTime, simulationSettings.integration);
+        Integrator::wrapRotation(objectManager.bodies);
         Integrator::computeRotationCosSin(objectManager.bodies);
 
         // Compute true position for all bodies.
