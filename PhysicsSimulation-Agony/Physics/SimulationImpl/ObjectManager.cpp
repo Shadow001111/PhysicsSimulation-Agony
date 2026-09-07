@@ -339,11 +339,19 @@ namespace PS_AGONY
         const size_t oldBackCollider = colliders.swapRemove(colliderIdx);
         if (oldBackCollider != colliderIdx)
         {
-            // The collider that was swapped into colliderIdx needs its owning body's
-            // back-reference (and, if that's the same body, our own worklist) updated.
             const ObjectIndex swappedOwner = colliders.bodyIndex[colliderIdx];
             bodies.removeCollider(swappedOwner, static_cast<ColliderIndex>(oldBackCollider));
             bodies.addCollider(swappedOwner, colliderIdx);
+
+            // Fix the shape SoA's back-reference: it still points at the collider's old index.
+            const BodyType movedShapeType = colliders.shapeType[colliderIdx];
+            const ObjectIndex movedShapeIdx = colliders.shapeIndex[colliderIdx];
+            if (movedShapeType == BodyType::Circle)
+                circles.colliderIndices[movedShapeIdx] = colliderIdx;
+            else if (movedShapeType == BodyType::Box)
+                boxes.colliderIndices[movedShapeIdx] = colliderIdx;
+            else if (movedShapeType == BodyType::Polygon)
+                polygons.colliderIndices[movedShapeIdx] = colliderIdx;
 
             deletedColliders.emplace_back(
                 static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(oldBackCollider)
