@@ -6,7 +6,6 @@ namespace PS_AGONY::Integrator
 {
 	struct IntegrationSettings
 	{
-		Real timeScale = 1.0;
 		Vec2 gravity{ 0.0, -9.81 };
 		Real angularVelocityDamping = 1.0; // Per second.
 	};

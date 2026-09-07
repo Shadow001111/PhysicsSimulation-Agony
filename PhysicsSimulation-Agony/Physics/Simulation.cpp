@@ -36,32 +36,22 @@ namespace PS_AGONY
         // Delta time check.
         if (deltaTime <= 0) return;
 
-        // Cap how much real time this call is allowed to consume.
-        const Real cappedDeltaTime = std::fmin(deltaTime, simulationSettings.maxDeltaTimePerUpdateCall);
-
-        // Advance counter.
-        updateTimeAccumulator += cappedDeltaTime;
-
         // Physics steps.
-        uint32_t stepCount = std::floor(updateTimeAccumulator / simulationSettings.updateInterval);
-        updateTimeAccumulator -= stepCount * simulationSettings.updateInterval;
-
-        const Real fixedDeltaTime = simulationSettings.updateInterval * simulationSettings.integration.timeScale;
+        clock.setSettings(simulationSettings.clockSettings);
+        const uint32_t stepCount = clock.advance(deltaTime);
         if (stepCount > 0)
         {
-            lastStepCount = stepCount;
+            const Real fixedDeltaTime = clock.getFixedDeltaTime();
 
             preUpdate();
-            for (uint32_t i = 0; i < stepCount; i++)
+            for (uint32_t i = 0; i < stepCount; ++i)
             {
                 physicsStep(fixedDeltaTime);
             }
             postUpdate();
         }
 
-        // Render alpha.
-        const Real rawAlpha = updateTimeAccumulator / simulationSettings.updateInterval;
-        renderAlpha = (static_cast<Real>(lastStepCount - 1) + rawAlpha) / static_cast<Real>(lastStepCount);
+        renderAlpha = clock.getRenderAlpha();
 
         // Debug data.
         {
@@ -80,7 +70,7 @@ namespace PS_AGONY
             }
 
             runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
-            runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.updateInterval);
+            runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.clockSettings.updateInterval);
 
             // Track body penetration.
             {
@@ -282,9 +272,9 @@ namespace PS_AGONY
         objectManager.deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
         // Main stuff.
-        Integrator::integrateVelocities(objectManager.bodies, deltaTime, simulationSettings.integration);
+        Integrator::integrateVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
         applyBodyHolderConstraint(deltaTime);
-        Integrator::integrateKinematics(objectManager.bodies, deltaTime, simulationSettings.integration);
+        Integrator::integrateKinematics(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
         Integrator::wrapRotation(objectManager.bodies);
         Integrator::computeRotationCosSin(objectManager.bodies);
 

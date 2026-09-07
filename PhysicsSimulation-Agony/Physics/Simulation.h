@@ -14,6 +14,7 @@
 
 #include "SimulationImpl/Integrator.h"
 #include "SimulationImpl/ObjectManager.h"
+#include "SimulationImpl/FixedClock.h"
 
 #include <vector>
 #include <optional>
@@ -69,9 +70,8 @@ namespace PS_AGONY
 
 		struct SimulationSettings
 		{
-			// Orchestration.
-			Real updateInterval = 1.0 / 300.0;
-			Real maxDeltaTimePerUpdateCall = 1 / 20.0;
+			// Clock.
+			FixedClock::Settings clockSettings;
 
 			// Solving.
 			uint32_t collisionVelocitySolvingIterations = 6;
@@ -79,15 +79,16 @@ namespace PS_AGONY
 			uint32_t springSolvingIterations = 6;
 
 			// Integration.
-			Integrator::IntegrationSettings integration;
+			Integrator::IntegrationSettings integratorSettings;
 
 			// Debug.
 			bool trackBodyCollisionSolverConstraintErrors = false;
 			bool trackBodyKineticEnergySum = false;
 		};
 	private:
-		// Object manager.
+		// Internal helpers.
 		ObjectManager objectManager;
+		FixedClock clock;
 
 		// Constraints.
 		SpringSoA springs;
