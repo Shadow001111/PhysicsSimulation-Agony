@@ -65,7 +65,7 @@ namespace PS_AGONY
         // Draw body depending on the type.
         if (type == BodyType::Circle)
         {
-            const auto* circleParams = static_cast<const Simulation::CircleCreateParams*>(params);
+            const auto* circleParams = static_cast<const CircleCreateParams*>(params);
 
             circleResources.instanceData.resize(1);
             CircleInstanceData& data = circleResources.instanceData[0];
@@ -83,7 +83,7 @@ namespace PS_AGONY
         }
         else if (type == BodyType::Box)
         {
-            const auto* boxParams = static_cast<const Simulation::BoxCreateParams*>(params);
+            const auto* boxParams = static_cast<const BoxCreateParams*>(params);
 
             boxResources.instanceData.resize(1);
             BoxInstanceData& data = boxResources.instanceData[0];
@@ -102,7 +102,7 @@ namespace PS_AGONY
         }
         else if (type == BodyType::Polygon)
         {
-            const auto* polyParams = static_cast<const Simulation::PolygonCreateParams*>(params);
+            const auto* polyParams = static_cast<const PolygonCreateParams*>(params);
 
             const size_t vertCount = polyParams->verticesCount;
             if (vertCount < 3) return;
