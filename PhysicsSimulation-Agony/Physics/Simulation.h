@@ -1,6 +1,5 @@
 #pragma once
 #include "GlmTypes.h"
-#include "ObjectSoA.h"
 #include "ConstraintSystem.h"
 #include "Material.h"
 
@@ -14,6 +13,7 @@
 #include "Interactivity/BodyHolder.h"
 
 #include "SimulationImpl/Integrator.h"
+#include "SimulationImpl/ObjectManager.h"
 
 #include <vector>
 #include <optional>
@@ -126,15 +126,8 @@ namespace PS_AGONY
 			bool trackBodyKineticEnergySum = false;
 		};
 	private:
-		// Bodies.
-		BodySoA bodies;
-		ColliderSoA colliders;
-		CircleSoA circles;
-		BoxSoA boxes;
-		PolygonSoA polygons;
-
-		std::vector<ObjectDeletion> deletedBodies;
-		std::vector<ObjectDeletion> deletedColliders;
+		// Object manager.
+		ObjectManager objectManager;
 
 		// Constraints.
 		SpringSoA springs;
@@ -247,11 +240,11 @@ namespace PS_AGONY
 		SimulationSettings& getSimulationSettings() noexcept { return simulationSettings; }
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 
-		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(bodies); }
-		ColliderSoAViewer getColliders() const noexcept { return ColliderSoAViewer(colliders); }
-		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(circles); }
-		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(boxes); }
-		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(polygons); }
+		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(objectManager.bodies); }
+		ColliderSoAViewer getColliders() const noexcept { return ColliderSoAViewer(objectManager.colliders); }
+		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(objectManager.circles); }
+		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(objectManager.boxes); }
+		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(objectManager.polygons); }
 
 		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
 
