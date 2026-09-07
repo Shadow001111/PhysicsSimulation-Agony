@@ -106,16 +106,16 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
     auto& settings = simulation.getSimulationSettings();
     if (ImGui::CollapsingHeader("Simulation Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        float timeScale = static_cast<float>(settings.integration.timeScale);
+        float timeScale = static_cast<float>(settings.clockSettings.timeScale);
         if (ImGui::SliderFloat("Time scale", &timeScale, 0.0f, 1.0f, "%.3f"))
         {
-            settings.integration.timeScale = static_cast<PS_AGONY::Real>(timeScale);
+            settings.clockSettings.timeScale = static_cast<PS_AGONY::Real>(timeScale);
         }
 
-        float hz = static_cast<float>(1.0 / settings.updateInterval);
+        float hz = static_cast<float>(1.0 / settings.clockSettings.updateInterval);
         if (ImGui::SliderFloat("Update Rate (Hz)", &hz, 10.0f, 1000.0f, "%.0f Hz"))
         {
-            settings.updateInterval = static_cast<PS_AGONY::Real>(1.0f / hz);
+            settings.clockSettings.updateInterval = static_cast<PS_AGONY::Real>(1.0f / hz);
         }
 
         int velIter = static_cast<int>(settings.collisionVelocitySolvingIterations);
