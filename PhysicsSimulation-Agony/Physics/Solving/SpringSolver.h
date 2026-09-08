@@ -20,7 +20,7 @@ namespace PS_AGONY
 			Real bias; // beta * C.
 		};
 
-		// Memeber fields.
+		// Member fields.
 
 		SpringSoAViewer springs;
 

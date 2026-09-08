@@ -26,7 +26,7 @@ namespace PS_AGONY
 			Vec2 bias; // beta * positionError.
 		};
 
-		// Memeber fields.
+		// Member fields.
 
 		JointSoAViewer joints;
 
