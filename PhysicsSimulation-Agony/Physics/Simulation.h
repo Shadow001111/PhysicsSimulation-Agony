@@ -9,6 +9,7 @@
 #include "Solving/SolvingPlanner.h"
 #include "Solving/BodyCollisionSolver.h"
 #include "Solving/SpringSolver.h"
+#include "Solving/JointSolver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -40,6 +41,8 @@ namespace PS_AGONY
 
 			size_t springDataMemoryUsage = 0;
 
+			size_t jointDataMemoryUsage = 0;
+
 			size_t materialDataMemoryUsage = 0;
 
 			size_t broadPhaseDetectorMemoryUsage = 0;
@@ -49,6 +52,8 @@ namespace PS_AGONY
 			size_t bodyCollisionPlannerMemoryUsage = 0;
 			size_t springSolverMemoryUsage = 0;
 			size_t springPlannerMemoryUsage = 0;
+			size_t jointSolverMemoryUsage = 0;
+			size_t jointPlannerMemoryUsage = 0;
 
 			// Debug.
 			Real bodyCollisionSolverVelocityError = 0;
@@ -68,6 +73,16 @@ namespace PS_AGONY
 			Real damping;
 		};
 
+		struct JointCreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Real stiffness;
+			Real damping;
+		};
+
 		struct SimulationSettings
 		{
 			// Clock.
@@ -77,6 +92,7 @@ namespace PS_AGONY
 			uint32_t collisionVelocitySolvingIterations = 6;
 			uint32_t collisionPositionSolvingIterations = 3;
 			uint32_t springSolvingIterations = 6;
+			uint32_t jointSolvingIterations = 6;
 
 			// Integration.
 			Integrator::IntegrationSettings integratorSettings;
@@ -93,6 +109,9 @@ namespace PS_AGONY
 		// Constraints.
 		SpringSoA springs;
 		SpringConstraintSystem springConstraintSystem{ springs };
+
+		JointSoA joints;
+		JointConstraintSystem jointConstraintSystem{ joints };
 
 		ConstraintSystemArray constraintSystems{};
 
@@ -113,6 +132,9 @@ namespace PS_AGONY
 		SpringSolver springSolver;
 		SolvingPlanner springPlanner;
 
+		JointSolver jointSolver;
+		SolvingPlanner jointPlanner;
+
 		// Time.
 		Real simulationRunTimer = 0;
 		Real updateTimeAccumulator = 0;
@@ -127,6 +149,7 @@ namespace PS_AGONY
 
 		// Booleans.
 		bool springsWereChanged = false;
+		bool jointsWereChanged = false;
 
 		// Render.
 		Real renderAlpha = 0;
@@ -200,6 +223,11 @@ namespace PS_AGONY
 		// Destroys a single spring by its index in the spring constraint system.
 		void destroySpring(uint32_t springIndex);
 
+		void createJoint(const JointCreateParams& params);
+
+		// Destroys a single joint by its index in the joint constraint system.
+		void destroyJoint(uint32_t jointIndex);
+
 		MaterialIndex createMaterial(const Material& material);
 
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
@@ -221,6 +249,7 @@ namespace PS_AGONY
 		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(objectManager.polygons); }
 
 		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
+		JointSoAViewer getJoints() const noexcept { return JointSoAViewer(joints); }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 

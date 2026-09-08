@@ -23,6 +23,7 @@ namespace PS_AGONY
         materials.emplace_back(); // Default material.
 
         constraintSystems[static_cast<size_t>(ConstraintType::Spring)] = &springConstraintSystem;
+        constraintSystems[static_cast<size_t>(ConstraintType::Joint)] = &jointConstraintSystem;
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -115,6 +116,27 @@ namespace PS_AGONY
     {
         springConstraintSystem.removeConstraint(springIndex, objectManager.bodies);
         springsWereChanged = true;
+    }
+
+    void Simulation::createJoint(const JointCreateParams& params)
+    {
+        jointConstraintSystem.createJoint(
+            params.bodyIndexA,
+            params.bodyIndexB,
+            params.localAnchorA,
+            params.localAnchorB,
+            params.stiffness,
+            params.damping,
+            objectManager.bodies
+        );
+
+        jointsWereChanged = true;
+    }
+
+    void Simulation::destroyJoint(uint32_t jointIndex)
+    {
+        jointConstraintSystem.removeConstraint(jointIndex, objectManager.bodies);
+        jointsWereChanged = true;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -265,6 +287,12 @@ namespace PS_AGONY
             springPlanner
         );
 
+        jointSolver.setDataViewers(
+            objectManager.bodies,
+            JointSoAViewer(joints),
+            jointPlanner
+        );
+
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
         // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
         narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
@@ -294,6 +322,14 @@ namespace PS_AGONY
             springsWereChanged
         );
         springsWereChanged = false;
+
+        // Joints.
+        jointSolver.solveJoints(
+            deltaTime,
+            simulationSettings.jointSolvingIterations,
+            jointsWereChanged
+        );
+        jointsWereChanged = false;
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
@@ -800,7 +836,6 @@ namespace PS_AGONY
 
     void Simulation::collectMemoryUsage(DebugData& data) const
     {
-        // Memory
         data.bodyDataMemoryUsage = sizeof(BodySoA) + objectManager.bodies.getMemoryUsage();
         data.colliderDataMemoryUsage = sizeof(ColliderSoA) + objectManager.colliders.getMemoryUsage();
         data.circleDataMemoryUsage = sizeof(CircleSoA) + objectManager.circles.getMemoryUsage();
@@ -808,6 +843,7 @@ namespace PS_AGONY
         data.polygonDataMemoryUsage = sizeof(PolygonSoA) + objectManager.polygons.getMemoryUsage();
 
         data.springDataMemoryUsage = sizeof(SpringSoA) + springs.getMemoryUsage();
+        data.jointDataMemoryUsage = sizeof(JointSoA) + joints.getMemoryUsage();
 
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
@@ -818,5 +854,8 @@ namespace PS_AGONY
 
         data.springSolverMemoryUsage = springSolver.getMemoryUsage();
         data.springPlannerMemoryUsage = springPlanner.getMemoryUsage();
+
+        data.jointSolverMemoryUsage = jointSolver.getMemoryUsage();
+        data.jointPlannerMemoryUsage = jointPlanner.getMemoryUsage();
     }
 }

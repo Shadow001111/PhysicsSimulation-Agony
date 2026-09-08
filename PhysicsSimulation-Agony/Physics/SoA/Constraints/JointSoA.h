@@ -6,17 +6,19 @@
 
 namespace PS_AGONY
 {
-	struct SpringSoA
+	// Revolute joint: pins localAnchorA (on bodyA) to localAnchorB (on bodyB) together,
+	// leaving rotation free. Unlike SpringSoA there's no rest length - the anchors are
+	// meant to coincide.
+	struct JointSoA
 	{
 		std::vector<ObjectIndex> bodyIndexA;
 		std::vector<ObjectIndex> bodyIndexB;
 		std::vector<Vec2> localAnchorA;
 		std::vector<Vec2> localAnchorB;
-		std::vector<Real> restLength;
 		std::vector<Real> stiffness;
 		std::vector<Real> damping;
 
-		ObjectIndex append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real restLen, Real stifness, Real damping)
+		ObjectIndex append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping)
 		{
 			const ObjectIndex newIndex = this->bodyIndexA.size();
 
@@ -24,8 +26,7 @@ namespace PS_AGONY
 			this->bodyIndexB.push_back(indexB);
 			this->localAnchorA.push_back(anchorA);
 			this->localAnchorB.push_back(anchorB);
-			this->restLength.push_back(restLen);
-			this->stiffness.push_back(stifness);
+			this->stiffness.push_back(stiffness);
 			this->damping.push_back(damping);
 
 			return newIndex;
@@ -40,7 +41,6 @@ namespace PS_AGONY
 				PS_AGONY::getVectorMemoryUsage(bodyIndexB) +
 				PS_AGONY::getVectorMemoryUsage(localAnchorA) +
 				PS_AGONY::getVectorMemoryUsage(localAnchorB) +
-				PS_AGONY::getVectorMemoryUsage(restLength) +
 				PS_AGONY::getVectorMemoryUsage(stiffness) +
 				PS_AGONY::getVectorMemoryUsage(damping);
 		}
@@ -55,7 +55,6 @@ namespace PS_AGONY
 				std::swap(bodyIndexB[index], bodyIndexB[lastIndex]);
 				std::swap(localAnchorA[index], localAnchorA[lastIndex]);
 				std::swap(localAnchorB[index], localAnchorB[lastIndex]);
-				std::swap(restLength[index], restLength[lastIndex]);
 				std::swap(stiffness[index], stiffness[lastIndex]);
 				std::swap(damping[index], damping[lastIndex]);
 			}
@@ -64,7 +63,6 @@ namespace PS_AGONY
 			bodyIndexB.pop_back();
 			localAnchorA.pop_back();
 			localAnchorB.pop_back();
-			restLength.pop_back();
 			stiffness.pop_back();
 			damping.pop_back();
 
@@ -72,7 +70,7 @@ namespace PS_AGONY
 		}
 	};
 
-	class SpringSoAViewer
+	class JointSoAViewer
 	{
 		size_t count = 0;
 	public:
@@ -80,19 +78,17 @@ namespace PS_AGONY
 		const ObjectIndex* bodyIndexB = nullptr;
 		const Vec2* localAnchorA = nullptr;
 		const Vec2* localAnchorB = nullptr;
-		const Real* restLength = nullptr;
 		const Real* stiffness = nullptr;
 		const Real* damping = nullptr;
 
-		SpringSoAViewer() = default;
+		JointSoAViewer() = default;
 
-		explicit SpringSoAViewer(const SpringSoA& data) noexcept :
+		explicit JointSoAViewer(const JointSoA& data) noexcept :
 			count(data.getCount()),
 			bodyIndexA(data.bodyIndexA.data()),
 			bodyIndexB(data.bodyIndexB.data()),
 			localAnchorA(data.localAnchorA.data()),
 			localAnchorB(data.localAnchorB.data()),
-			restLength(data.restLength.data()),
 			stiffness(data.stiffness.data()),
 			damping(data.damping.data())
 		{

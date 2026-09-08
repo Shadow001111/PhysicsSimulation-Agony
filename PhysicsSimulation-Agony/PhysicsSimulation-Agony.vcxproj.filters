@@ -99,6 +99,12 @@
     <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\SimulationImpl\FixedClock.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\JointSolver.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Physics\Simulation.h">
@@ -237,6 +243,15 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\BroadPhaseInternal\BvhNode.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SimulationImpl\FixedClock.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Constraints\JointSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\JointSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
