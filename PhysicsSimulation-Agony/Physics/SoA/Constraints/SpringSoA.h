@@ -1,6 +1,6 @@
 #pragma once
-#include "../../GlmTypes.h"
-#include "../../ContainerUtilities.h"
+#include "Physics/GlmTypes.h"
+#include "Physics/ContainerUtilities.h"
 
 #include <algorithm>
 

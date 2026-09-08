@@ -42,6 +42,7 @@ namespace PS_AGONY
 	enum class ConstraintType : uint32_t
 	{
 		Spring,
+		Joint,
 		COUNT
 	};
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "SoA/BodySoA.h"
 #include "SoA/Constraints/SpringSoA.h"
+#include "SoA/Constraints/JointSoA.h"
 
 #include <array>
 
@@ -70,6 +71,57 @@ namespace PS_AGONY
 			}
 			if (springs.bodyIndexA[index] == oldBodyIndex) springs.bodyIndexA[index] = newBodyIndex;
 			if (springs.bodyIndexB[index] == oldBodyIndex) springs.bodyIndexB[index] = newBodyIndex;
+		}
+	};
+
+	class JointConstraintSystem final : public IConstraintSystem
+	{
+		JointSoA& joints;
+	public:
+		explicit JointConstraintSystem(JointSoA& joints) noexcept : joints(joints) {}
+
+		// Creates a revolute joint and registers it with both bodies it touches.
+		void createJoint(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping, BodySoA& bodies)
+		{
+			const uint32_t newIndex = joints.append(indexA, indexB, anchorA, anchorB, stiffness, damping);
+			bodies.addAttachment(indexA, ConstraintType::Joint, newIndex);
+			bodies.addAttachment(indexB, ConstraintType::Joint, newIndex);
+		}
+
+		void removeConstraint(uint32_t index, BodySoA& bodies) override
+		{
+			if (index >= joints.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+
+			// Unlink the joint being removed from both of its bodies.
+			bodies.removeAttachment(joints.bodyIndexA[index], ConstraintType::Joint, index);
+			bodies.removeAttachment(joints.bodyIndexB[index], ConstraintType::Joint, index);
+
+			const size_t oldBackIndex = joints.swapRemove(index);
+
+			// If a joint got swapped into 'index', relink it there.
+			if (oldBackIndex != index)
+			{
+				const uint32_t newIndex = static_cast<uint32_t>(index);
+				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
+
+				bodies.removeAttachment(joints.bodyIndexA[index], ConstraintType::Joint, oldIndex);
+				bodies.addAttachment(joints.bodyIndexA[index], ConstraintType::Joint, newIndex);
+				bodies.removeAttachment(joints.bodyIndexB[index], ConstraintType::Joint, oldIndex);
+				bodies.addAttachment(joints.bodyIndexB[index], ConstraintType::Joint, newIndex);
+			}
+		}
+
+		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
+		{
+			if (index >= joints.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+			if (joints.bodyIndexA[index] == oldBodyIndex) joints.bodyIndexA[index] = newBodyIndex;
+			if (joints.bodyIndexB[index] == oldBodyIndex) joints.bodyIndexB[index] = newBodyIndex;
 		}
 	};
 }

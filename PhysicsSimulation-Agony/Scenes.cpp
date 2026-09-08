@@ -37,7 +37,7 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& 
 
     std::sort(pts.begin(), pts.end(), [](const auto& p1, const auto& p2)
         {
-        return (p1.x < p2.x) || (p1.x == p2.x && p1.y < p2.y);
+            return (p1.x < p2.x) || (p1.x == p2.x && p1.y < p2.y);
         });
 
     std::vector<PS_AGONY::Vec2> hull;
@@ -259,7 +259,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::G
                 .base.mass = 0,
                 .base.materialIndex = material0Index,
                 .radius = pegRadius
-            });
+                });
         }
     }
 
@@ -273,21 +273,21 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::G
             .base.mass = 0,
             .base.materialIndex = material0Index,
             .size = { wallInnerBoundaryX * 2.0f, wallThickness }
-        });
+            });
 
         simulation.createBox({
             .base.position = {-(wallInnerBoundaryX + wallThickness * 0.5f), wallInnerBottomY + wallHeight * 0.5f },
             .base.mass = 0,
             .base.materialIndex = material0Index,
             .size = { wallThickness, wallHeight }
-        });
+            });
 
         simulation.createBox({
             .base.position = { (wallInnerBoundaryX + wallThickness * 0.5f), wallInnerBottomY + wallHeight * 0.5f },
             .base.mass = 0,
             .base.materialIndex = material0Index,
             .size = { wallThickness, wallHeight }
-        });
+            });
     }
 
     // Bins.
@@ -301,7 +301,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::G
                 .base.mass = 0,
                 .base.materialIndex = material0Index,
                 .size = { binWidth, binHeight }
-            });
+                });
         }
     }
 
@@ -316,7 +316,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::G
             .base.mass = 0,
             .base.materialIndex = material0Index,
             .size = { funnelWidth, funnelLength }
-        });
+            });
 
         simulation.createBox({
             .base.position = { funnelX, funnelY },
@@ -324,7 +324,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::G
             .base.mass = 0,
             .base.materialIndex = material0Index,
             .size = { funnelWidth, funnelLength }
-        });
+            });
     }
 
     // Balls.
@@ -375,34 +375,34 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
 
     for (int ix = 0; ix < rowCount; ix++)
-    for (int iy = 0; iy < columnCount; iy++)
-    {
-        const float x = ix * 2.1f;
-        const float y = iy * 2.1f;
+        for (int iy = 0; iy < columnCount; iy++)
+        {
+            const float x = ix * 2.1f;
+            const float y = iy * 2.1f;
 
-        //simulation.createCircle({
-        //    .base.position = { x, y },
-        //    .base.velocity = { 0, 0 },
-        //    .base.rotation = 0,
-        //    .base.angularVelocity = 0,
-        //    .base.mass = 1,
-        //    .base.materialIndex = material0Index,
-        //    .radius = 1
-        //});
+            //simulation.createCircle({
+            //    .base.position = { x, y },
+            //    .base.velocity = { 0, 0 },
+            //    .base.rotation = 0,
+            //    .base.angularVelocity = 0,
+            //    .base.mass = 1,
+            //    .base.materialIndex = material0Index,
+            //    .radius = 1
+            //});
 
-        constexpr size_t maxVerticesCount = 10;
-        const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
-        auto localVertices = makeConvexPolygon(rvg, verticesCount, 1);
-        simulation.createPolygon({
-            .base.position = { x, y },
-            .base.velocity = { 0, 0 },
-            .base.rotation = 0,
-            .base.mass = 1,
-            .base.materialIndex = material0Index,
-            .localVertices = localVertices.data(),
-            .verticesCount = verticesCount
-        });
-    }
+            constexpr size_t maxVerticesCount = 10;
+            const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
+            auto localVertices = makeConvexPolygon(rvg, verticesCount, 1);
+            simulation.createPolygon({
+                .base.position = { x, y },
+                .base.velocity = { 0, 0 },
+                .base.rotation = 0,
+                .base.mass = 1,
+                .base.materialIndex = material0Index,
+                .localVertices = localVertices.data(),
+                .verticesCount = verticesCount
+                });
+        }
 
     simulation.createCircle({
             .base.position = { -5, 0 },
@@ -1104,10 +1104,10 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     Ecstasy::Core::Random::Generator rvg; // Random value generator.
     rvg.setSeed(0);
 
-	if (scene == 0)
-	{
-		load_GaltonBoard(simulation, rvg);
-	}
+    if (scene == 0)
+    {
+        load_GaltonBoard(simulation, rvg);
+    }
     else if (scene == 1)
     {
         load_ALotOfNotTouching(simulation, rvg);
