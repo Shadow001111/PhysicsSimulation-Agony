@@ -167,6 +167,7 @@ namespace PS_AGONY
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix);
 
 		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 
 		// Render shapes.
 

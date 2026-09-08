@@ -640,23 +640,30 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::
 {
     // === 1. CONFIGURATION AND MATERIALS ===
     constexpr float cliffWidth = 25.0f;
-    constexpr float cliffHeight = 30.0f;
-    constexpr float cliffY = -cliffHeight * 0.5f; // Top surface will align perfectly with Y = 0.0
+    constexpr float cliffHeight = 60.0f;
+    constexpr float cliffY = 0.0f;
     constexpr float gapWidth = 150.0f;
 
     constexpr int plankCount = 100;
     constexpr float plankHeight = 0.5f;
     constexpr float plankMass = 1.5f;
 
-    // Calculate precise width per plank to span the gap with minor breathing spacing
+    constexpr float lowerBridgeY = 0.0f;
+    constexpr float upperBridgeY = 25.0f;
+
+    // Calculate width per plank with breathing spacing between planks to let joints rotate freely
     constexpr float totalSpanWidth = gapWidth;
     constexpr float plankStep = totalSpanWidth / static_cast<float>(plankCount);
-    constexpr float plankWidth = plankStep * 1.0f;
+    constexpr float plankWidth = plankStep * 0.9f;
 
-    // Spring mechanics configuration variables
+    // Spring mechanics configuration variables (Lower Bridge)
     constexpr float springK = 2200.0f;  // Structural stiffness
     constexpr float springD = 18.0f;    // Joint damping
     constexpr float verticalOffset = plankHeight * 0.35f; // Dual-anchor separation to prevent torsional flipping
+
+    // Joint mechanics configuration variables (Upper Bridge)
+    constexpr float jointK = 4000.0f;   // Joint stiffness
+    constexpr float jointD = 20.0f;     // Joint damping
 
     PS_AGONY::Material physicsMaterial = {
         .elasticity = 0.2f,
@@ -665,7 +672,7 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::
     };
     PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
 
-    // === 2. CREATE HUGE TERRAIN CLIFFS ===
+    // === 2. CREATE TERRAIN CLIFFS ===
     const float leftCliffX = -(gapWidth * 0.5f + cliffWidth * 0.5f);
     auto leftCliffOpt = simulation.createBox({
         .base.position = { leftCliffX, cliffY },
@@ -682,24 +689,23 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::
         .size = { cliffWidth, cliffHeight }
         });
 
-    // Halt if the terrain cliff allocations failed
     if (!leftCliffOpt || !rightCliffOpt) return;
 
     PS_AGONY::ObjectIndex leftCliff = *leftCliffOpt;
     PS_AGONY::ObjectIndex rightCliff = *rightCliffOpt;
 
-    // === 3. SPAN BRIDGE PLANKS & CONNECT WITH SPRINGS ===
-    std::vector<PS_AGONY::ObjectIndex> planks;
-    planks.reserve(plankCount);
-
     const float spanStartX = -gapWidth * 0.5f;
+
+    // === 3. SPAN LOWER BRIDGE PLANKS & CONNECT WITH SPRINGS ===
+    std::vector<PS_AGONY::ObjectIndex> lowerPlanks;
+    lowerPlanks.reserve(plankCount);
 
     for (int i = 0; i < plankCount; ++i)
     {
         float plankX = spanStartX + plankStep * (static_cast<float>(i) + 0.5f);
 
         auto plankOpt = simulation.createBox({
-            .base.position = { plankX, plankHeight * -0.5f },
+            .base.position = { plankX, lowerBridgeY - plankHeight * 0.5f },
             .base.velocity = { 0.0f, 0.0f },
             .base.rotation = 0.0f,
             .base.angularVelocity = 0.0f,
@@ -710,58 +716,118 @@ void load_SpringBridge(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::
 
         if (plankOpt)
         {
-            planks.push_back(*plankOpt);
+            lowerPlanks.push_back(*plankOpt);
         }
     }
 
-    // Early out if no bridge planks could be generated
-    if (planks.empty()) return;
-
-    // Helper lambda to construct dual-anchor spring pairs cleanly between structural components
-    auto attachWithDualSprings = [&](PS_AGONY::ObjectIndex bodyA, PS_AGONY::ObjectIndex bodyB,
-        PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB,
-        float restLen) {
-            // Upper Support Spring
-            simulation.createSpring({
-                .bodyIndexA = bodyA,
-                .bodyIndexB = bodyB,
-                .localAnchorA = { localA.x, localA.y + verticalOffset },
-                .localAnchorB = { localB.x, localB.y + verticalOffset },
-                .restLength = restLen,
-                .stiffness = springK,
-                .damping = springD
-                });
-            // Lower Support Spring
-            simulation.createSpring({
-                .bodyIndexA = bodyA,
-                .bodyIndexB = bodyB,
-                .localAnchorA = { localA.x, localA.y - verticalOffset },
-                .localAnchorB = { localB.x, localB.y - verticalOffset },
-                .restLength = restLen,
-                .stiffness = springK,
-                .damping = springD
-                });
-        };
-
-    // Connect Left Cliff Anchor to First Plank
-    float cliffToPlankRestLen = std::abs((spanStartX + plankStep * 0.5f - plankWidth * 0.5f) - (-gapWidth * 0.5f));
-    attachWithDualSprings(leftCliff, planks.front(), { cliffWidth * 0.5f, cliffHeight * 0.5f - plankHeight * 0.5f }, { -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
-
-    // Connect Continuous Plank Sequence Chains
-    float interPlankRestLen = plankStep - plankWidth;
-    for (size_t i = 0; i < planks.size() - 1; ++i)
+    if (!lowerPlanks.empty())
     {
-        attachWithDualSprings(planks[i], planks[i + 1], { plankWidth * 0.5f, 0.0f }, { -plankWidth * 0.5f, 0.0f }, interPlankRestLen);
+        auto attachWithDualSprings = [&](PS_AGONY::ObjectIndex bodyA, PS_AGONY::ObjectIndex bodyB,
+            PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB,
+            float restLen) {
+                // Upper Support Spring
+                simulation.createSpring({
+                    .bodyIndexA = bodyA,
+                    .bodyIndexB = bodyB,
+                    .localAnchorA = { localA.x, localA.y + verticalOffset },
+                    .localAnchorB = { localB.x, localB.y + verticalOffset },
+                    .restLength = restLen,
+                    .stiffness = springK,
+                    .damping = springD
+                    });
+                // Lower Support Spring
+                simulation.createSpring({
+                    .bodyIndexA = bodyA,
+                    .bodyIndexB = bodyB,
+                    .localAnchorA = { localA.x, localA.y - verticalOffset },
+                    .localAnchorB = { localB.x, localB.y - verticalOffset },
+                    .restLength = restLen,
+                    .stiffness = springK,
+                    .damping = springD
+                    });
+            };
+
+        float cliffToPlankRestLen = std::abs((spanStartX + plankStep * 0.5f - plankWidth * 0.5f) - (-gapWidth * 0.5f));
+        float lowerCliffLocalY = lowerBridgeY - plankHeight * 0.5f - cliffY;
+
+        attachWithDualSprings(leftCliff, lowerPlanks.front(), { cliffWidth * 0.5f, lowerCliffLocalY }, { -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
+
+        float interPlankRestLen = plankStep - plankWidth;
+        for (size_t i = 0; i < lowerPlanks.size() - 1; ++i)
+        {
+            attachWithDualSprings(lowerPlanks[i], lowerPlanks[i + 1], { plankWidth * 0.5f, 0.0f }, { -plankWidth * 0.5f, 0.0f }, interPlankRestLen);
+        }
+
+        attachWithDualSprings(lowerPlanks.back(), rightCliff, { plankWidth * 0.5f, 0.0f }, { -cliffWidth * 0.5f, lowerCliffLocalY }, cliffToPlankRestLen);
     }
 
-    // Connect Last Plank to Right Cliff Anchor
-    attachWithDualSprings(planks.back(), rightCliff, { plankWidth * 0.5f, 0.0f }, { -cliffWidth * 0.5f, cliffHeight * 0.5f - plankHeight * 0.5f }, cliffToPlankRestLen);
+    // === 4. SPAN UPPER BRIDGE PLANKS & CONNECT WITH JOINTS ===
+    std::vector<PS_AGONY::ObjectIndex> upperPlanks;
+    upperPlanks.reserve(plankCount);
 
-    // === 4. SPAWN INTERACTIONS (DECORATIVE INTERACTION BALLS) ===
+    for (int i = 0; i < plankCount; ++i)
+    {
+        float plankX = spanStartX + plankStep * (static_cast<float>(i) + 0.5f);
+
+        auto plankOpt = simulation.createBox({
+            .base.position = { plankX, upperBridgeY - plankHeight * 0.5f },
+            .base.velocity = { 0.0f, 0.0f },
+            .base.rotation = 0.0f,
+            .base.angularVelocity = 0.0f,
+            .base.mass = plankMass,
+            .base.materialIndex = materialIdx,
+            .size = { plankWidth, plankHeight }
+            });
+
+        if (plankOpt)
+        {
+            upperPlanks.push_back(*plankOpt);
+        }
+    }
+
+    if (!upperPlanks.empty())
+    {
+        float upperCliffLocalY = upperBridgeY - plankHeight * 0.5f - cliffY;
+
+        // Connect Left Cliff Anchor to First Upper Plank
+        simulation.createJoint({
+            .bodyIndexA = leftCliff,
+            .bodyIndexB = upperPlanks.front(),
+            .localAnchorA = { cliffWidth * 0.5f, upperCliffLocalY },
+            .localAnchorB = { -plankStep * 0.5f, 0.0f },
+            .stiffness = jointK,
+            .damping = jointD
+            });
+
+        // Connect Continuous Upper Plank Chain with Joints
+        for (size_t i = 0; i < upperPlanks.size() - 1; ++i)
+        {
+            simulation.createJoint({
+                .bodyIndexA = upperPlanks[i],
+                .bodyIndexB = upperPlanks[i + 1],
+                .localAnchorA = { plankStep * 0.5f, 0.0f },
+                .localAnchorB = { -plankStep * 0.5f, 0.0f },
+                .stiffness = jointK,
+                .damping = jointD
+                });
+        }
+
+        // Connect Last Upper Plank to Right Cliff Anchor
+        simulation.createJoint({
+            .bodyIndexA = upperPlanks.back(),
+            .bodyIndexB = rightCliff,
+            .localAnchorA = { plankStep * 0.5f, 0.0f },
+            .localAnchorB = { -cliffWidth * 0.5f, upperCliffLocalY },
+            .stiffness = jointK,
+            .damping = jointD
+            });
+    }
+
+    // === 5. SPAWN INTERACTIONS (DECORATIVE INTERACTION BALLS) ===
     for (int i = 0; i < 5; ++i)
     {
         float rx = rvg.real<float>(-gapWidth * 0.35f, gapWidth * 0.35f);
-        float ry = rvg.real<float>(4.0f, 12.0f);
+        float ry = rvg.real<float>(upperBridgeY + 4.0f, upperBridgeY + 12.0f);
         float radius = rvg.real<float>(0.6f, 1.2f);
         float mass = 3.14159f * radius * radius * 2.0f;
 
@@ -1026,78 +1092,56 @@ void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generato
         });
 }
 
-void load_ColliderTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+void load_JointedCircles(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
-    // === MATERIALS ===
-    PS_AGONY::Material floorMaterial = {
-        .elasticity = 0.1f,
+    // === 1. MATERIAL SETUP ===
+    PS_AGONY::Material material = {
+        .elasticity = 0.5f,
         .staticFriction = 0.5f,
-        .dynamicFriction = 0.4f
+        .dynamicFriction = 0.3f
     };
-    PS_AGONY::MaterialIndex floorMatIdx = simulation.createMaterial(floorMaterial);
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(material);
 
-    PS_AGONY::Material grippyMaterial = {
-        .elasticity = 0.1f,
-        .staticFriction = 5.0f,
-        .dynamicFriction = 4.0f
-    };
-    PS_AGONY::MaterialIndex grippyMatIdx = simulation.createMaterial(grippyMaterial);
-
-    PS_AGONY::Material slickMaterial = {
-        .elasticity = 0.1f,
-        .staticFriction = 0.02f,
-        .dynamicFriction = 0.01f
-    };
-    PS_AGONY::MaterialIndex slickMatIdx = simulation.createMaterial(slickMaterial);
-
-    // === STATIC FLOOR ===
-    constexpr float floorWidth = 30.0f;
-    constexpr float floorHeight = 2.0f;
-    simulation.createBox({
-        .base.position = { 0.0f, -floorHeight * 0.5f },
-        .base.mass = 0, // Static.
-        .base.materialIndex = floorMatIdx,
-        .size = { floorWidth, floorHeight }
+    // === 2. STATIC CIRCLE (MASS = 0) ===
+    auto staticCircleOpt = simulation.createCircle({
+        .base.position = { 0.0f, 0.0f },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = 0.0f,
+        .base.angularVelocity = 0.0f,
+        .base.mass = 0.0f,
+        .base.materialIndex = materialIdx,
+        .radius = 0.8f
         });
 
-    // === SPECIAL OBJECT: two-collider compound body ===
-    // Two circles rigidly attached to one body, spaced so the gap between
-    // their surfaces is a bit larger than zero (center distance > radius sum),
-    // so they never touch each other. Different materials per collider to
-    // verify per-collider material lookup (huge friction vs. near-zero friction)
-    // lands correctly through the new collider system.
-    constexpr float radiusA = 0.8f;   // Big, grippy circle.
-    constexpr float radiusB = 0.4f;   // Small, slick circle.
-    constexpr float gap = 0.3f;       // Extra space beyond just touching.
-    const float centerDistance = radiusA + radiusB + gap;
-
-    auto bodyOpt = simulation.createBody({
-        .position = { 0.0f, 6.0f },
-        .velocity = { 0.0f, 0.0f },
-        .rotation = 0.0f,
-        .angularVelocity = 0.0f,
-        .mass = 4.0f,
-        .inertia = 1.0f
+    // === 3. DYNAMIC CIRCLE ===
+    auto dynamicCircleOpt = simulation.createCircle({
+        .base.position = { 4.0f, 0.0f },
+        .base.velocity = { 0.0f, 0.0f },
+        .base.rotation = 0.0f,
+        .base.angularVelocity = 0.0f,
+        .base.mass = 3.0f,
+        .base.materialIndex = materialIdx,
+        .radius = 1.0f
         });
 
-    if (!bodyOpt) return;
-    const PS_AGONY::ObjectIndex body = *bodyOpt;
+    if (!staticCircleOpt || !dynamicCircleOpt) return;
 
-    simulation.createCircleCollider({
-        .bodyIndex = body,
-        .localOffset = { -centerDistance * 0.5f, 0.0f },
-        .materialIndex = grippyMatIdx,
-        .radius = radiusA
-        });
+    PS_AGONY::ObjectIndex staticCircle = *staticCircleOpt;
+    PS_AGONY::ObjectIndex dynamicCircle = *dynamicCircleOpt;
 
-    simulation.createCircleCollider({
-        .bodyIndex = body,
-        .localOffset = { centerDistance * 0.5f, 0.0f },
-        .materialIndex = slickMatIdx,
-        .radius = radiusB
+    // === 4. JOINT CONNECTION ===
+    constexpr float jointK = 5000.0f;
+    constexpr float jointD = 10.0f;
+
+    simulation.createJoint({
+        .bodyIndexA = staticCircle,
+        .bodyIndexB = dynamicCircle,
+        .localAnchorA = { 0.8f, 0.0f },
+        .localAnchorB = { -4.0f, 0.0f },
+        .stiffness = jointK,
+        .damping = jointD
         });
 }
-
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
@@ -1143,6 +1187,6 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 8)
     {
-        load_ColliderTest(simulation, rvg);
+        load_JointedCircles(simulation, rvg);
     }
 }
