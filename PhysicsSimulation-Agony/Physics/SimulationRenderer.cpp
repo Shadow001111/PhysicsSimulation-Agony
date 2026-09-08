@@ -49,8 +49,9 @@ namespace PS_AGONY
         // Render.
         renderColliders(viewProjectionMatrix, simRenderAlpha);
         //renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
-        renderContactPoints(simulation, viewProjectionMatrix);
+        //renderContactPoints(simulation, viewProjectionMatrix);
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
+        renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
     }
 
     void SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
@@ -859,6 +860,105 @@ namespace PS_AGONY
             verts[vIdx + 1].x = worldBx;
             verts[vIdx + 1].y = worldBy;
             verts[vIdx + 1].color = color;
+        }
+
+        springResources.vbo.write(springResources.vertexData.data(), vertexCount * sizeof(LineVertex));
+
+        springResources.shader.use();
+        springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        springResources.vao.bind();
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
+    }
+
+    void SimulationRenderer::renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    {
+        TRACY_SCOPE_N("Render joints");
+
+        const auto& joints = simulation.getJoints();
+        const size_t jointCount = joints.getCount();
+        if (jointCount == 0) return;
+
+        // 2 lines per joint = 4 vertices.
+        const size_t vertexCount = jointCount * 4;
+        ensureSpringBufferCapacity(vertexCount);
+
+        springResources.vertexData.resize(vertexCount);
+        LineVertex* ECSTASY_RESTRICT verts = springResources.vertexData.data();
+
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+
+        for (size_t i = 0; i < jointCount; i++)
+        {
+            const ObjectIndex bodyIndexA = joints.bodyIndexA[i];
+            const ObjectIndex bodyIndexB = joints.bodyIndexB[i];
+
+            // Interpolate body A transform.
+            const Real posAx = positionXPtr[bodyIndexA];
+            const Real posAy = positionYPtr[bodyIndexA];
+            const Real oldPosAx = oldPositionXPtr[bodyIndexA];
+            const Real oldPosAy = oldPositionYPtr[bodyIndexA];
+
+            const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
+            const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
+
+            const Real fullOldRotationA = oldRotationPtr[bodyIndexA];
+            const Real fullNewRotationA = rotationPtr[bodyIndexA] + (rotationWrapCountPtr[bodyIndexA] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotationA = fullOldRotationA + (fullNewRotationA - fullOldRotationA) * simRenderAlpha;
+
+            const Real cosA = std::cos(interpolatedRotationA);
+            const Real sinA = std::sin(interpolatedRotationA);
+
+            // Interpolate body B transform.
+            const Real posBx = positionXPtr[bodyIndexB];
+            const Real posBy = positionYPtr[bodyIndexB];
+            const Real oldPosBx = oldPositionXPtr[bodyIndexB];
+            const Real oldPosBy = oldPositionYPtr[bodyIndexB];
+
+            const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
+            const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
+
+            const Real fullOldRotationB = oldRotationPtr[bodyIndexB];
+            const Real fullNewRotationB = rotationPtr[bodyIndexB] + (rotationWrapCountPtr[bodyIndexB] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotationB = fullOldRotationB + (fullNewRotationB - fullOldRotationB) * simRenderAlpha;
+
+            const Real cosB = std::cos(interpolatedRotationB);
+            const Real sinB = std::sin(interpolatedRotationB);
+
+            // Compute world positions of joint anchors.
+            const float worldAx = interpolatedPosAx + (joints.localAnchorA[i].x * cosA - joints.localAnchorA[i].y * sinA);
+            const float worldAy = interpolatedPosAy + (joints.localAnchorA[i].x * sinA + joints.localAnchorA[i].y * cosA);
+
+            const float worldBx = interpolatedPosBx + (joints.localAnchorB[i].x * cosB - joints.localAnchorB[i].y * sinB);
+            const float worldBy = interpolatedPosBy + (joints.localAnchorB[i].x * sinB + joints.localAnchorB[i].y * cosB);
+
+            constexpr uint32_t color = 0x00FFFF;
+            const size_t vIdx = i * 4;
+
+            // Line 1: Body A position to Anchor A
+            verts[vIdx + 0].x = static_cast<float>(interpolatedPosAx);
+            verts[vIdx + 0].y = static_cast<float>(interpolatedPosAy);
+            verts[vIdx + 0].color = color;
+
+            verts[vIdx + 1].x = worldAx;
+            verts[vIdx + 1].y = worldAy;
+            verts[vIdx + 1].color = color;
+
+            // Line 2: Body B position to Anchor B
+            verts[vIdx + 2].x = static_cast<float>(interpolatedPosBx);
+            verts[vIdx + 2].y = static_cast<float>(interpolatedPosBy);
+            verts[vIdx + 2].color = color;
+
+            verts[vIdx + 3].x = worldBx;
+            verts[vIdx + 3].y = worldBy;
+            verts[vIdx + 3].color = color;
         }
 
         springResources.vbo.write(springResources.vertexData.data(), vertexCount * sizeof(LineVertex));

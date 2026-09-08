@@ -135,6 +135,12 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
         {
             settings.springSolvingIterations = static_cast<uint32_t>(springIter);
         }
+
+        int jointIter = static_cast<int>(settings.jointSolvingIterations);
+        if (ImGui::SliderInt("Joint Iterations", &jointIter, 1, 50))
+        {
+            settings.jointSolvingIterations = static_cast<uint32_t>(jointIter);
+        }
     }
 
     // Physics diagnostics.
@@ -172,13 +178,19 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
 
         const size_t colliderTotal = simulationData.colliderDataMemoryUsage;
 
-        const size_t constraintTotal = simulationData.springDataMemoryUsage;
+        const size_t constraintTotal =
+            simulationData.springDataMemoryUsage +
+            simulationData.jointDataMemoryUsage
+            ;
 
         const size_t solvingTotal =
             simulationData.bodyCollisionSolverMemoryUsage +
             simulationData.bodyCollisionPlannerMemoryUsage +
             simulationData.springSolverMemoryUsage +
-            simulationData.springPlannerMemoryUsage;
+            simulationData.springPlannerMemoryUsage +
+            simulationData.jointSolverMemoryUsage +
+            simulationData.jointPlannerMemoryUsage
+            ;
 
         const size_t totalMemory =
             simulationData.bodyDataMemoryUsage +
@@ -230,7 +242,9 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
             addMemoryRow("Boxes", simulationData.boxDataMemoryUsage, true);
             addMemoryRow("Polygons", simulationData.polygonDataMemoryUsage, true);
 
-            addMemoryRow("Constraints (Springs)", constraintTotal);
+            addMemoryRow("Constraints (Total)", constraintTotal);
+            addMemoryRow("Springs", simulationData.springDataMemoryUsage, true);
+            addMemoryRow("Joints", simulationData.jointDataMemoryUsage, true);
 
             addMemoryRow("Broad Phase Detector", simulationData.broadPhaseDetectorMemoryUsage);
             addMemoryRow("Narrow Phase Detector", simulationData.narrowPhaseDetectorMemoryUsage);
@@ -240,6 +254,8 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
             addMemoryRow("Body Collision Planner", simulationData.bodyCollisionPlannerMemoryUsage, true);
             addMemoryRow("Spring Solver", simulationData.springSolverMemoryUsage, true);
             addMemoryRow("Spring Planner", simulationData.springPlannerMemoryUsage, true);
+            addMemoryRow("Joint Solver", simulationData.jointSolverMemoryUsage, true);
+            addMemoryRow("Joint Planner", simulationData.jointPlannerMemoryUsage, true);
 
             ImGui::EndTable();
         }
