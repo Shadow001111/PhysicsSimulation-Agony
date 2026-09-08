@@ -120,7 +120,7 @@ namespace PS_AGONY
 
 	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices)
 	{
-		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute spring constraint data", Ecstasy::Core::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
