@@ -10,6 +10,7 @@
 #include "Solving/BodyCollisionSolver.h"
 #include "Solving/SpringSolver.h"
 #include "Solving/JointSolver.h"
+#include "Solving/RodSolver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -43,6 +44,8 @@ namespace PS_AGONY
 
 			size_t jointDataMemoryUsage = 0;
 
+			size_t rodDataMemoryUsage = 0;
+
 			size_t materialDataMemoryUsage = 0;
 
 			size_t broadPhaseDetectorMemoryUsage = 0;
@@ -54,6 +57,8 @@ namespace PS_AGONY
 			size_t springPlannerMemoryUsage = 0;
 			size_t jointSolverMemoryUsage = 0;
 			size_t jointPlannerMemoryUsage = 0;
+			size_t rodSolverMemoryUsage = 0;
+			size_t rodPlannerMemoryUsage = 0;
 
 			// Debug.
 			Real bodyCollisionSolverVelocityError = 0;
@@ -83,6 +88,15 @@ namespace PS_AGONY
 			Real damping;
 		};
 
+		struct RodCreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Real length;
+		};
+
 		struct SimulationSettings
 		{
 			// Clock.
@@ -93,6 +107,7 @@ namespace PS_AGONY
 			uint32_t collisionPositionSolvingIterations = 3;
 			uint32_t springSolvingIterations = 6;
 			uint32_t jointSolvingIterations = 6;
+			uint32_t rodSolvingIterations = 6; // TODO: Add automatic array per constraint type.
 
 			// Integration.
 			Integrator::IntegrationSettings integratorSettings;
@@ -112,6 +127,9 @@ namespace PS_AGONY
 
 		JointSoA joints;
 		JointConstraintSystem jointConstraintSystem{ joints };
+
+		RodSoA rods;
+		RodConstraintSystem rodConstraintSystem{ rods };
 
 		ConstraintSystemArray constraintSystems{};
 
@@ -135,6 +153,9 @@ namespace PS_AGONY
 		JointSolver jointSolver;
 		SolvingPlanner jointPlanner;
 
+		RodSolver rodSolver;
+		SolvingPlanner rodPlanner;
+
 		// Time.
 		Real simulationRunTimer = 0;
 		Real updateTimeAccumulator = 0;
@@ -150,6 +171,7 @@ namespace PS_AGONY
 		// Booleans.
 		bool springsWereChanged = false;
 		bool jointsWereChanged = false;
+		bool rodsWereChanged = false;
 
 		// Render.
 		Real renderAlpha = 0;
@@ -228,6 +250,11 @@ namespace PS_AGONY
 		// Destroys a single joint by its index in the joint constraint system.
 		void destroyJoint(uint32_t jointIndex);
 
+		void createRod(const RodCreateParams& params);
+
+		// Destroys a single rod by its index in the rod constraint system.
+		void destroyRod(uint32_t rodIndex);
+
 		MaterialIndex createMaterial(const Material& material);
 
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
@@ -250,6 +277,7 @@ namespace PS_AGONY
 
 		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
 		JointSoAViewer getJoints() const noexcept { return JointSoAViewer(joints); }
+		RodSoAViewer getRods() const noexcept { return RodSoAViewer(rods); }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 

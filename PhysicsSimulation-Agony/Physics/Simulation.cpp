@@ -24,6 +24,7 @@ namespace PS_AGONY
 
         constraintSystems[static_cast<size_t>(ConstraintType::Spring)] = &springConstraintSystem;
         constraintSystems[static_cast<size_t>(ConstraintType::Joint)] = &jointConstraintSystem;
+        constraintSystems[static_cast<size_t>(ConstraintType::Rod)] = &rodConstraintSystem;
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -137,6 +138,26 @@ namespace PS_AGONY
     {
         jointConstraintSystem.removeConstraint(jointIndex, objectManager.bodies);
         jointsWereChanged = true;
+    }
+
+    void Simulation::createRod(const RodCreateParams& params)
+    {
+        rodConstraintSystem.createRod(
+            params.bodyIndexA,
+            params.bodyIndexB,
+            params.localAnchorA,
+            params.localAnchorB,
+            params.length,
+            objectManager.bodies
+        );
+
+        rodsWereChanged = true;
+    }
+
+    void Simulation::destroyRod(uint32_t rodIndex)
+    {
+        rodConstraintSystem.removeConstraint(rodIndex, objectManager.bodies);
+        rodsWereChanged = true;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -293,6 +314,12 @@ namespace PS_AGONY
             jointPlanner
         );
 
+        rodSolver.setDataViewers(
+            objectManager.bodies,
+            RodSoAViewer(rods),
+            rodPlanner
+        );
+
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
         // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
         narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
@@ -330,6 +357,14 @@ namespace PS_AGONY
             jointsWereChanged
         );
         jointsWereChanged = false;
+
+        // Rods.
+        rodSolver.solveRods(
+            deltaTime,
+            simulationSettings.rodSolvingIterations,
+            rodsWereChanged
+        );
+        rodsWereChanged = false;
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
@@ -844,6 +879,7 @@ namespace PS_AGONY
 
         data.springDataMemoryUsage = sizeof(SpringSoA) + springs.getMemoryUsage();
         data.jointDataMemoryUsage = sizeof(JointSoA) + joints.getMemoryUsage();
+        data.rodDataMemoryUsage = sizeof(RodSoA) + rods.getMemoryUsage();
 
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
@@ -857,5 +893,8 @@ namespace PS_AGONY
 
         data.jointSolverMemoryUsage = jointSolver.getMemoryUsage();
         data.jointPlannerMemoryUsage = jointPlanner.getMemoryUsage();
+
+        data.rodSolverMemoryUsage = rodSolver.getMemoryUsage();
+        data.rodPlannerMemoryUsage = rodPlanner.getMemoryUsage();
     }
 }

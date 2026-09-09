@@ -2,6 +2,7 @@
 #include "SoA/BodySoA.h"
 #include "SoA/Constraints/SpringSoA.h"
 #include "SoA/Constraints/JointSoA.h"
+#include "SoA/Constraints/RodSoA.h"
 
 #include <array>
 
@@ -122,6 +123,57 @@ namespace PS_AGONY
 			}
 			if (joints.bodyIndexA[index] == oldBodyIndex) joints.bodyIndexA[index] = newBodyIndex;
 			if (joints.bodyIndexB[index] == oldBodyIndex) joints.bodyIndexB[index] = newBodyIndex;
+		}
+	};
+
+	class RodConstraintSystem final : public IConstraintSystem
+	{
+		RodSoA& rods;
+	public:
+		explicit RodConstraintSystem(RodSoA& rods) noexcept : rods(rods) {}
+
+		// Creates a rod and registers it with both bodies it touches.
+		void createRod(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real length, BodySoA& bodies)
+		{
+			const uint32_t newIndex = rods.append(indexA, indexB, anchorA, anchorB, length);
+			bodies.addAttachment(indexA, ConstraintType::Rod, newIndex);
+			bodies.addAttachment(indexB, ConstraintType::Rod, newIndex);
+		}
+
+		void removeConstraint(uint32_t index, BodySoA& bodies) override
+		{
+			if (index >= rods.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+
+			// Unlink the rod being removed from both of its bodies.
+			bodies.removeAttachment(rods.bodyIndexA[index], ConstraintType::Rod, index);
+			bodies.removeAttachment(rods.bodyIndexB[index], ConstraintType::Rod, index);
+
+			const size_t oldBackIndex = rods.swapRemove(index);
+
+			// If a rod got swapped into 'index', relink it there.
+			if (oldBackIndex != index)
+			{
+				const uint32_t newIndex = static_cast<uint32_t>(index);
+				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
+
+				bodies.removeAttachment(rods.bodyIndexA[index], ConstraintType::Rod, oldIndex);
+				bodies.addAttachment(rods.bodyIndexA[index], ConstraintType::Rod, newIndex);
+				bodies.removeAttachment(rods.bodyIndexB[index], ConstraintType::Rod, oldIndex);
+				bodies.addAttachment(rods.bodyIndexB[index], ConstraintType::Rod, newIndex);
+			}
+		}
+
+		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
+		{
+			if (index >= rods.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+			if (rods.bodyIndexA[index] == oldBodyIndex) rods.bodyIndexA[index] = newBodyIndex;
+			if (rods.bodyIndexB[index] == oldBodyIndex) rods.bodyIndexB[index] = newBodyIndex;
 		}
 	};
 }
