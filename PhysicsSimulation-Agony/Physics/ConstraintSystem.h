@@ -20,6 +20,8 @@ namespace PS_AGONY
 
 		virtual void removeConstraint(uint32_t index, BodySoA& bodies) = 0;
 		virtual void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) = 0;
+
+		virtual const char* getName() const noexcept = 0;
 	};
 
 	using ConstraintSystemArray = std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)>;
@@ -73,6 +75,8 @@ namespace PS_AGONY
 			if (springs.bodyIndexA[index] == oldBodyIndex) springs.bodyIndexA[index] = newBodyIndex;
 			if (springs.bodyIndexB[index] == oldBodyIndex) springs.bodyIndexB[index] = newBodyIndex;
 		}
+
+		const char* getName() const noexcept override { return "Spring"; }
 	};
 
 	class JointConstraintSystem final : public IConstraintSystem
@@ -124,6 +128,8 @@ namespace PS_AGONY
 			if (joints.bodyIndexA[index] == oldBodyIndex) joints.bodyIndexA[index] = newBodyIndex;
 			if (joints.bodyIndexB[index] == oldBodyIndex) joints.bodyIndexB[index] = newBodyIndex;
 		}
+
+		const char* getName() const noexcept override { return "Joint"; }
 	};
 
 	class RodConstraintSystem final : public IConstraintSystem
@@ -175,5 +181,7 @@ namespace PS_AGONY
 			if (rods.bodyIndexA[index] == oldBodyIndex) rods.bodyIndexA[index] = newBodyIndex;
 			if (rods.bodyIndexB[index] == oldBodyIndex) rods.bodyIndexB[index] = newBodyIndex;
 		}
+
+		const char* getName() const noexcept override { return "Rod"; }
 	};
 }

@@ -130,16 +130,19 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
             settings.collisionPositionSolvingIterations = static_cast<uint32_t>(posIter);
         }
 
-        int springIter = static_cast<int>(settings.springSolvingIterations);
-        if (ImGui::SliderInt("Spring Iterations", &springIter, 1, 50))
+        for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
         {
-            settings.springSolvingIterations = static_cast<uint32_t>(springIter);
-        }
+            auto& iterationSetting = settings.constraintIterations[i];
+            int iters = int(iterationSetting);
 
-        int jointIter = static_cast<int>(settings.jointSolvingIterations);
-        if (ImGui::SliderInt("Joint Iterations", &jointIter, 1, 50))
-        {
-            settings.jointSolvingIterations = static_cast<uint32_t>(jointIter);
+            const auto* system = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i)).first;
+            if (!system) continue;
+
+            const std::string label = std::string(system->getName()) + " Iterations";
+            if (ImGui::SliderInt(label.c_str(), &iters, 1, 50))
+            {
+                iterationSetting = iters;
+            }
         }
     }
 
@@ -178,28 +181,28 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
 
         const size_t colliderTotal = simulationData.colliderDataMemoryUsage;
 
-        const size_t constraintTotal =
-            simulationData.springDataMemoryUsage +
-            simulationData.jointDataMemoryUsage
-            ;
+        size_t constraintsTotal = 0;
+        size_t solversTotal = simulationData.bodyCollisionSolverMemoryUsage;
 
-        const size_t solvingTotal =
-            simulationData.bodyCollisionSolverMemoryUsage +
-            simulationData.bodyCollisionPlannerMemoryUsage +
-            simulationData.springSolverMemoryUsage +
-            simulationData.springPlannerMemoryUsage +
-            simulationData.jointSolverMemoryUsage +
-            simulationData.jointPlannerMemoryUsage
-            ;
+        for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+        {
+            constraintsTotal += simulationData.constraintDataMemoryUsage[i];
+
+            const auto pair = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i));
+            const auto* solver = pair.second;
+            if (!solver) continue;
+            solversTotal += solver->getMemoryUsage();
+        }
 
         const size_t totalMemory =
             simulationData.bodyDataMemoryUsage +
             colliderTotal +
             shapeTotal +
-            constraintTotal +
+            constraintsTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage +
-            solvingTotal;
+            simulationData.bodyCollisionSolverMemoryUsage +
+            simulationData.solvingPlannerMemoryUsage;
 
         ImGui::Text("Total System Footprint: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
@@ -234,28 +237,63 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
                 ImGui::Text("%.1f%%", percentage);
                 };
 
-            addMemoryRow("Bodies (Base Data)", simulationData.bodyDataMemoryUsage);
-            addMemoryRow("Colliders (Base Data)", simulationData.colliderDataMemoryUsage);
+            addMemoryRow("Bodies", simulationData.bodyDataMemoryUsage);
+            addMemoryRow("Colliders", simulationData.colliderDataMemoryUsage);
 
-            addMemoryRow("Shapes (Total Group)", shapeTotal);
+            addMemoryRow("Shapes", shapeTotal);
             addMemoryRow("Circles", simulationData.circleDataMemoryUsage, true);
             addMemoryRow("Boxes", simulationData.boxDataMemoryUsage, true);
             addMemoryRow("Polygons", simulationData.polygonDataMemoryUsage, true);
 
-            addMemoryRow("Constraints (Total)", constraintTotal);
-            addMemoryRow("Springs", simulationData.springDataMemoryUsage, true);
-            addMemoryRow("Joints", simulationData.jointDataMemoryUsage, true);
+            {
+                addMemoryRow("Constraints", constraintsTotal);
+                for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+                {
+                    const auto pair = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i));
+
+                    const auto* system = pair.first;
+                    std::string label;
+                    if (system)
+                    {
+                        label = std::string(system->getName()) + "s";
+                    }
+                    else
+                    {
+                        label = std::string("Unnamed constraint type");
+                    }
+
+                    addMemoryRow(label.c_str(), simulationData.constraintDataMemoryUsage[i], true);
+                }
+            }
 
             addMemoryRow("Broad Phase Detector", simulationData.broadPhaseDetectorMemoryUsage);
             addMemoryRow("Narrow Phase Detector", simulationData.narrowPhaseDetectorMemoryUsage);
 
-            addMemoryRow("Solver Pipelines (Total)", solvingTotal);
-            addMemoryRow("Body Collision Solver", simulationData.bodyCollisionSolverMemoryUsage, true);
-            addMemoryRow("Body Collision Planner", simulationData.bodyCollisionPlannerMemoryUsage, true);
-            addMemoryRow("Spring Solver", simulationData.springSolverMemoryUsage, true);
-            addMemoryRow("Spring Planner", simulationData.springPlannerMemoryUsage, true);
-            addMemoryRow("Joint Solver", simulationData.jointSolverMemoryUsage, true);
-            addMemoryRow("Joint Planner", simulationData.jointPlannerMemoryUsage, true);
+            addMemoryRow("Solving Planner", simulationData.solvingPlannerMemoryUsage);
+
+            {
+                addMemoryRow("Solvers", solversTotal);
+                addMemoryRow("Body Collision Solver", simulationData.bodyCollisionSolverMemoryUsage, true);
+                for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+                {
+                    const auto pair = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i));
+                    const auto* solver = pair.second;
+                    if (!solver) continue;
+
+                    const auto* system = pair.first;
+                    std::string label;
+                    if (system)
+                    {
+                        label = std::string(system->getName()) + " Solver";
+                    }
+                    else
+                    {
+                        label = std::string("Unnamed Solver");
+                    }
+
+                    addMemoryRow(label.c_str(), solver->getMemoryUsage(), true);
+                }
+            }
 
             ImGui::EndTable();
         }
@@ -563,7 +601,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 4);
+    loadScene(simulation, 5);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
