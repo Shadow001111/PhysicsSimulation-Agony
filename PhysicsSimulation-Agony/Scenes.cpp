@@ -665,8 +665,8 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     constexpr float verticalOffset = plankHeight * 0.35f; // Dual-anchor separation to prevent torsional flipping.
 
     // Joint mechanics configuration.
-    constexpr float jointK = 4000.0f;   // Joint stiffness.
-    constexpr float jointD = 20.0f;     // Joint damping.
+    constexpr float jointK = 2200.0f;   // Joint stiffness.
+    constexpr float jointD = 18.0f;     // Joint damping.
 
     PS_AGONY::Material physicsMaterial = {
         .elasticity = 0.2f,
@@ -826,18 +826,20 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     }
 }
 
-void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+void load_SoftBodyComparisonTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === 1. CONFIGURATION AND VARIABLES ===
-    constexpr int gridWidth = 90;   // Number of horizontal particles
-    constexpr int gridHeight = 90;  // Number of vertical particles
-    constexpr float spacing = 0.3f;
+    constexpr int gridWidth = 20;   // Number of horizontal particles.
+    constexpr int gridHeight = 20;  // Number of vertical particles.
+    constexpr float spacing = 0.5f;
     constexpr float radius = spacing * 0.5f * 0.5;
     constexpr float particleMass = 0.2f;
 
     // Spring constants chosen for elastic but stable structural behavior
     constexpr float springK = 4000.0f;
     constexpr float springD = 0.0f;
+
+    constexpr float cubeGap = 8.0f; // Horizontal separation between the two soft-body cubes
 
     PS_AGONY::Material physicsMaterial = {
         .elasticity = 0.1f,
@@ -851,90 +853,110 @@ void load_SoftBodyStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ra
         .base.position = { 0.0f, -8.0f },
         .base.mass = 0, // Static platform
         .base.materialIndex = materialIdx,
-        .size = { 2000.0f, 2.0f }
+        .size = { 3000.0f, 2.0f } // Longer ground
         });
 
-    // === 3. SPAWN PARTICLE GRID ===
-    // Array to store created IDs; standard flat vector mapping layout: index = y * gridWidth + x
-    std::vector<std::optional<PS_AGONY::ObjectIndex>> gridNodeMap(gridWidth * gridHeight, std::nullopt);
+    // === 3. HELPER: BUILD A SQUARE SOFT-BODY CUBE, LINKED WITH EITHER SPRINGS OR RODS ===
+    const float diagSpacing = std::sqrt(2.0f) * spacing;
+    const float cubeWidth = static_cast<float>(gridWidth - 1) * spacing;
 
-    const float startX = -static_cast<float>(gridWidth - 1) * spacing * 0.5f;
-    const float startY = 2.0f; // Elevate above the ground box
-
-    for (int y = 0; y < gridHeight; ++y)
-    {
-        for (int x = 0; x < gridWidth; ++x)
+    auto buildSoftBodyCube = [&](float centerX, bool useRods)
         {
-            float posX = startX + static_cast<float>(x) * spacing;
-            float posY = startY + static_cast<float>(y) * spacing;
+            // Array to store created IDs; standard flat vector mapping layout: index = y * gridWidth + x
+            std::vector<std::optional<PS_AGONY::ObjectIndex>> gridNodeMap(gridWidth * gridHeight, std::nullopt);
 
-            // Slight offset or initialization tilt to stimulate dynamic cloth folding deformation
-            auto ballOpt = simulation.createCircle({
-                .base.position = { posX, posY },
-                .base.velocity = { 1.5f, -3.0f }, // Initial throw velocity vector
-                .base.rotation = 0.0f,
-                .base.angularVelocity = 0.0f,
-                .base.mass = particleMass,
-                .base.materialIndex = materialIdx,
-                .radius = radius
-                });
+            const float startX = centerX - cubeWidth * 0.5f;
+            const float startY = 2.0f; // Elevate above the ground box
 
-            gridNodeMap[y * gridWidth + x] = ballOpt;
-        }
-    }
-
-    // === 4. GENERATE MESH OF SPRING CONSTRAINTS ===
-    // Lambda helper to safely tie nodes center-to-center if both allocations succeeded
-    auto tryConnectSpring = [&](int x1, int y1, int x2, int y2, float restLength)
-        {
-            auto nodeA = gridNodeMap[y1 * gridWidth + x1];
-            auto nodeB = gridNodeMap[y2 * gridWidth + x2];
-
-            if (nodeA && nodeB)
+            for (int y = 0; y < gridHeight; ++y)
             {
-                simulation.createSpring({
-                    .bodyIndexA = *nodeA,
-                    .bodyIndexB = *nodeB,
-                    .localAnchorA = { 0.0f, 0.0f }, // Center anchor
-                    .localAnchorB = { 0.0f, 0.0f }, // Center anchor
-                    .restLength = restLength,
-                    .stiffness = springK,
-                    .damping = springD
-                    });
+                for (int x = 0; x < gridWidth; ++x)
+                {
+                    float posX = startX + static_cast<float>(x) * spacing;
+                    float posY = startY + static_cast<float>(y) * spacing;
+
+                    // Slight offset or initialization tilt to stimulate dynamic cloth folding deformation
+                    auto ballOpt = simulation.createCircle({
+                        .base.position = { posX, posY },
+                        .base.velocity = { 1.5f, -3.0f }, // Initial throw velocity vector
+                        .base.rotation = 0.0f,
+                        .base.angularVelocity = 0.0f,
+                        .base.mass = particleMass,
+                        .base.materialIndex = materialIdx,
+                        .radius = radius
+                        });
+
+                    gridNodeMap[y * gridWidth + x] = ballOpt;
+                }
+            }
+
+            // Lambda helper to safely tie nodes center-to-center if both allocations succeeded
+            auto tryConnect = [&](int x1, int y1, int x2, int y2, float restLength)
+                {
+                    auto nodeA = gridNodeMap[y1 * gridWidth + x1];
+                    auto nodeB = gridNodeMap[y2 * gridWidth + x2];
+
+                    if (!nodeA || !nodeB) return;
+
+                    if (useRods)
+                    {
+                        simulation.createRod({
+                            .bodyIndexA = *nodeA,
+                            .bodyIndexB = *nodeB,
+                            .localAnchorA = { 0.0f, 0.0f }, // Center anchor
+                            .localAnchorB = { 0.0f, 0.0f }, // Center anchor
+                            .length = restLength
+                            });
+                    }
+                    else
+                    {
+                        simulation.createSpring({
+                            .bodyIndexA = *nodeA,
+                            .bodyIndexB = *nodeB,
+                            .localAnchorA = { 0.0f, 0.0f }, // Center anchor
+                            .localAnchorB = { 0.0f, 0.0f }, // Center anchor
+                            .restLength = restLength,
+                            .stiffness = springK,
+                            .damping = springD
+                            });
+                    }
+                };
+
+            for (int y = 0; y < gridHeight; ++y)
+            {
+                for (int x = 0; x < gridWidth; ++x)
+                {
+                    // Structural Horizontal Constraints (Right)
+                    if (x < gridWidth - 1)
+                    {
+                        tryConnect(x, y, x + 1, y, spacing);
+                    }
+
+                    // Structural Vertical Constraints (Down)
+                    if (y < gridHeight - 1)
+                    {
+                        tryConnect(x, y, x, y + 1, spacing);
+                    }
+
+                    // Shear Diagonal Constraints (Down-Right)
+                    if (x < gridWidth - 1 && y < gridHeight - 1)
+                    {
+                        tryConnect(x, y, x + 1, y + 1, diagSpacing);
+                    }
+
+                    // Shear Diagonal Constraints (Down-Left)
+                    if (x > 0 && y < gridHeight - 1)
+                    {
+                        tryConnect(x, y, x - 1, y + 1, diagSpacing);
+                    }
+                }
             }
         };
 
-    const float diagSpacing = std::sqrt(2.0f) * spacing;
-
-    for (int y = 0; y < gridHeight; ++y)
-    {
-        for (int x = 0; x < gridWidth; ++x)
-        {
-            // Structural Horizontal Constraints (Right)
-            if (x < gridWidth - 1)
-            {
-                tryConnectSpring(x, y, x + 1, y, spacing);
-            }
-
-            // Structural Vertical Constraints (Down)
-            if (y < gridHeight - 1)
-            {
-                tryConnectSpring(x, y, x, y + 1, spacing);
-            }
-
-            // Shear Diagonal Constraints (Down-Right)
-            if (x < gridWidth - 1 && y < gridHeight - 1)
-            {
-                tryConnectSpring(x, y, x + 1, y + 1, diagSpacing);
-            }
-
-            // Shear Diagonal Constraints (Down-Left)
-            if (x > 0 && y < gridHeight - 1)
-            {
-                tryConnectSpring(x, y, x - 1, y + 1, diagSpacing);
-            }
-        }
-    }
+    // === 4. SPAWN BOTH CUBES, SEPARATED HORIZONTALLY ===
+    const float halfOffset = cubeWidth * 0.5f + cubeGap * 0.5f;
+    buildSoftBodyCube(-halfOffset, false); // Left cube: springs (original behavior)
+    buildSoftBodyCube(halfOffset, true);   // Right cube: rods
 }
 
 void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
@@ -1158,7 +1180,7 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 5)
     {
-        load_SoftBodyStressTest(simulation, rvg);
+        load_SoftBodyComparisonTest(simulation, rvg);
     }
     else if (scene == 6)
     {

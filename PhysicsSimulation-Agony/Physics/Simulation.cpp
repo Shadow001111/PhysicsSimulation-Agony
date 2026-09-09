@@ -19,12 +19,18 @@ namespace PS_AGONY
     Simulation::Simulation() :
         objectManager(materials)
     {
+        simulationSettings.constraintIterations.fill(6);
+
         materials.reserve(16);
         materials.emplace_back(); // Default material.
 
-        constraintSystems[static_cast<size_t>(ConstraintType::Spring)] = &springConstraintSystem;
-        constraintSystems[static_cast<size_t>(ConstraintType::Joint)] = &jointConstraintSystem;
-        constraintSystems[static_cast<size_t>(ConstraintType::Rod)] = &rodConstraintSystem;
+        constraintSystems[size_t(ConstraintType::Spring)] = &springConstraintSystem;
+        constraintSystems[size_t(ConstraintType::Joint)] = &jointConstraintSystem;
+        constraintSystems[size_t(ConstraintType::Rod)] = &rodConstraintSystem;
+
+        constraintSystemSolvers[size_t(ConstraintType::Spring)] = &springSolver;
+        constraintSystemSolvers[size_t(ConstraintType::Joint)] = &jointSolver;
+        constraintSystemSolvers[size_t(ConstraintType::Rod)] = &rodSolver;
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -299,25 +305,25 @@ namespace PS_AGONY
             objectManager.bodies,
             ColliderSoAViewer(objectManager.colliders),
             materials,
-            bodyCollisionPlanner
+            solvingPlanner
         );
 
         springSolver.setDataViewers(
             objectManager.bodies,
             SpringSoAViewer(springs),
-            springPlanner
+            solvingPlanner
         );
 
         jointSolver.setDataViewers(
             objectManager.bodies,
             JointSoAViewer(joints),
-            jointPlanner
+            solvingPlanner
         );
 
         rodSolver.setDataViewers(
             objectManager.bodies,
             RodSoAViewer(rods),
-            rodPlanner
+            solvingPlanner
         );
 
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
@@ -345,7 +351,7 @@ namespace PS_AGONY
         // Springs.
         springSolver.solveSprings(
             deltaTime,
-            simulationSettings.springSolvingIterations,
+            simulationSettings.constraintIterations[size_t(ConstraintType::Spring)],
             springsWereChanged
         );
         springsWereChanged = false;
@@ -353,7 +359,7 @@ namespace PS_AGONY
         // Joints.
         jointSolver.solveJoints(
             deltaTime,
-            simulationSettings.jointSolvingIterations,
+            simulationSettings.constraintIterations[size_t(ConstraintType::Joint)],
             jointsWereChanged
         );
         jointsWereChanged = false;
@@ -361,7 +367,7 @@ namespace PS_AGONY
         // Rods.
         rodSolver.solveRods(
             deltaTime,
-            simulationSettings.rodSolvingIterations,
+            simulationSettings.constraintIterations[size_t(ConstraintType::Rod)],
             rodsWereChanged
         );
         rodsWereChanged = false;
@@ -877,24 +883,16 @@ namespace PS_AGONY
         data.boxDataMemoryUsage = sizeof(BoxSoA) + objectManager.boxes.getMemoryUsage();
         data.polygonDataMemoryUsage = sizeof(PolygonSoA) + objectManager.polygons.getMemoryUsage();
 
-        data.springDataMemoryUsage = sizeof(SpringSoA) + springs.getMemoryUsage();
-        data.jointDataMemoryUsage = sizeof(JointSoA) + joints.getMemoryUsage();
-        data.rodDataMemoryUsage = sizeof(RodSoA) + rods.getMemoryUsage();
-
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
 
         data.bodyCollisionSolverMemoryUsage = bodyCollisionSolver.getMemoryUsage();
-        data.bodyCollisionPlannerMemoryUsage = bodyCollisionPlanner.getMemoryUsage();
 
-        data.springSolverMemoryUsage = springSolver.getMemoryUsage();
-        data.springPlannerMemoryUsage = springPlanner.getMemoryUsage();
+        data.solvingPlannerMemoryUsage = solvingPlanner.getMemoryUsage();
 
-        data.jointSolverMemoryUsage = jointSolver.getMemoryUsage();
-        data.jointPlannerMemoryUsage = jointPlanner.getMemoryUsage();
-
-        data.rodSolverMemoryUsage = rodSolver.getMemoryUsage();
-        data.rodPlannerMemoryUsage = rodPlanner.getMemoryUsage();
+        data.constraintDataMemoryUsage[size_t(ConstraintType::Spring)] = springs.getMemoryUsage();
+        data.constraintDataMemoryUsage[size_t(ConstraintType::Joint)] = joints.getMemoryUsage();
+        data.constraintDataMemoryUsage[size_t(ConstraintType::Rod)] = rods.getMemoryUsage();
     }
 }

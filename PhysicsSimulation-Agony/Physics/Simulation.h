@@ -40,25 +40,16 @@ namespace PS_AGONY
 			size_t boxDataMemoryUsage = 0;
 			size_t polygonDataMemoryUsage = 0;
 
-			size_t springDataMemoryUsage = 0;
-
-			size_t jointDataMemoryUsage = 0;
-
-			size_t rodDataMemoryUsage = 0;
-
 			size_t materialDataMemoryUsage = 0;
 
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
 
 			size_t bodyCollisionSolverMemoryUsage = 0;
-			size_t bodyCollisionPlannerMemoryUsage = 0;
-			size_t springSolverMemoryUsage = 0;
-			size_t springPlannerMemoryUsage = 0;
-			size_t jointSolverMemoryUsage = 0;
-			size_t jointPlannerMemoryUsage = 0;
-			size_t rodSolverMemoryUsage = 0;
-			size_t rodPlannerMemoryUsage = 0;
+
+			size_t solvingPlannerMemoryUsage = 0;
+
+			std::array<size_t, size_t(ConstraintType::COUNT)> constraintDataMemoryUsage{};
 
 			// Debug.
 			Real bodyCollisionSolverVelocityError = 0;
@@ -105,9 +96,8 @@ namespace PS_AGONY
 			// Solving.
 			uint32_t collisionVelocitySolvingIterations = 6;
 			uint32_t collisionPositionSolvingIterations = 3;
-			uint32_t springSolvingIterations = 6;
-			uint32_t jointSolvingIterations = 6;
-			uint32_t rodSolvingIterations = 6; // TODO: Add automatic array per constraint type.
+
+			std::array<uint32_t, size_t(ConstraintType::COUNT)> constraintIterations{}; // Set to 6 on start.
 
 			// Integration.
 			Integrator::IntegrationSettings integratorSettings;
@@ -132,6 +122,7 @@ namespace PS_AGONY
 		RodConstraintSystem rodConstraintSystem{ rods };
 
 		ConstraintSystemArray constraintSystems{};
+		std::array<const SolverBase*, size_t(ConstraintType::COUNT)> constraintSystemSolvers{};
 
 		// Materials.
 		std::vector<Material> materials;
@@ -144,17 +135,12 @@ namespace PS_AGONY
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
 
 		// Solvers and planners.
+		SolvingPlanner solvingPlanner;
+
 		BodyCollisionSolver bodyCollisionSolver;
-		SolvingPlanner bodyCollisionPlanner;
-
 		SpringSolver springSolver;
-		SolvingPlanner springPlanner;
-
 		JointSolver jointSolver;
-		SolvingPlanner jointPlanner;
-
 		RodSolver rodSolver;
-		SolvingPlanner rodPlanner;
 
 		// Time.
 		Real simulationRunTimer = 0;
@@ -278,6 +264,11 @@ namespace PS_AGONY
 		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
 		JointSoAViewer getJoints() const noexcept { return JointSoAViewer(joints); }
 		RodSoAViewer getRods() const noexcept { return RodSoAViewer(rods); }
+
+		std::pair<const IConstraintSystem*, const SolverBase*> getConstraintSystemAndSolver(ConstraintType type) const noexcept
+		{
+			return { constraintSystems[size_t(type)], constraintSystemSolvers[size_t(type)]};
+		}
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 
