@@ -43,6 +43,7 @@ namespace PS_AGONY
 	{
 		Spring,
 		Joint,
+		Rod,
 		COUNT
 	};
 

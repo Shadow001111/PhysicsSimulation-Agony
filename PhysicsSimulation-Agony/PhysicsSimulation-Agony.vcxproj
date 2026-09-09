@@ -259,6 +259,7 @@
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\SimulationRenderer.cpp" />
     <ClCompile Include="Physics\Threading.cpp" />
+    <ClCompile Include="Physics\Solving\RodSolver.cpp" />
     <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="Physics\Solving\SolverBase.cpp" />
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
@@ -273,6 +274,7 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
+    <ClInclude Include="Physics\SoA\Constraints\RodSoA.h" />
     <ClInclude Include="Physics\Solving\JointSolver.h" />
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h" />
     <ClInclude Include="Physics\BroadPhaseInternal\BvhNode.h" />
@@ -309,6 +311,7 @@
     <ClInclude Include="Physics\Threading.h" />
     <ClInclude Include="Physics\Types.h" />
     <ClInclude Include="Physics\SimulationRenderer.h" />
+    <ClInclude Include="Physics\Solving\RodSolver.h" />
     <ClInclude Include="Scenes.h" />
     <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />
