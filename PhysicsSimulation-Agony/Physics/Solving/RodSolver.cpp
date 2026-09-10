@@ -128,7 +128,7 @@ namespace PS_AGONY
 		// Baumgarte stabilization factor for the rigid distance constraint.
 		// Note: placeholder value - not yet tuned/profiled for stability vs. stiffness at
 		// this engine's iteration counts and typical deltaTime.
-		static constexpr Real BAUMGARTE_FACTOR = Real(0.2);
+		static constexpr Real BAUMGARTE_FACTOR = Real(1.0);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{

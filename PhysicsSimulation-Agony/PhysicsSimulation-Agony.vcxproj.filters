@@ -87,9 +87,6 @@
     <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.cpp">
       <Filter>ImGui\Backends</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\GraphUtilities.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -224,9 +221,6 @@
     <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3_loader.h">
       <Filter>ImGui\Backends</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\GraphUtilities.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -263,9 +257,5 @@
     <ClInclude Include="Physics\Solving\RodSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="BenchmarkViewer.py" />
-    <None Include="FitContainers.py" />
   </ItemGroup>
 </Project>

@@ -4,7 +4,6 @@
 
 #include "Physics/Simulation.h"
 #include "Physics/SimulationRenderer.h"
-#include "Physics/GraphUtilities.h"
 
 #include "Ecstasy/Graphics/WindowManager.h"
 #include "Ecstasy/Graphics/TextRenderer.h"
@@ -16,6 +15,7 @@
 #include <iostream>
 #include <iomanip>
 #include <thread>
+#include <sstream>
 
 
 static std::string formatSize(size_t value)
@@ -598,7 +598,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 5);
+    loadScene(simulation, 2);
 
     PS_AGONY::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
