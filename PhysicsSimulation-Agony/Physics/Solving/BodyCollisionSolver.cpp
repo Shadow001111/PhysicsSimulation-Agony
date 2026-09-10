@@ -12,11 +12,10 @@ namespace PS_AGONY
 	void BodyCollisionSolver::setDataViewers(
 		BodySoA& bodiesIn,
 		const ColliderSoAViewer& collidersIn,
-		const std::vector<Material>& materialsIn,
-		SolvingPlanner& solvingPlannerIn
+		const std::vector<Material>& materialsIn
 	)
 	{
-		SolverBase::setResources(bodiesIn, solvingPlannerIn);
+		SolverBase::setResources(bodiesIn);
 		colliders = collidersIn;
 		materials = &materialsIn;
 	}
@@ -69,14 +68,14 @@ namespace PS_AGONY
 		}
 		{
 			TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-			solvingPlanner->setWorkerCount(workerCount);
+			solvingPlanner.setWorkerCount(workerCount);
 
-			solvingPlanner->planStandardExecution(collidingBodyPairs, bodies->getCount());
+			solvingPlanner.planStandardExecution(collidingBodyPairs, bodies->getCount());
 		}
 		{
 			TRACY_SCOPE_N("Reorder collision data");
 
-			const auto& flatIndices = solvingPlanner->getFlatIndices();
+			const auto& flatIndices = solvingPlanner.getFlatIndices();
 			const size_t mappedCount = flatIndices.size();
 			const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
 
@@ -99,7 +98,7 @@ namespace PS_AGONY
 		if (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
 		{
 			TRACY_SCOPE_N("Scatter persistent contact data back");
-			const auto& flatIndices = solvingPlanner->getFlatIndices();
+			const auto& flatIndices = solvingPlanner.getFlatIndices();
 			const size_t mappedCount = flatIndices.size();
 			for (size_t i = 0; i < mappedCount; i++)
 			{
@@ -204,6 +203,8 @@ namespace PS_AGONY
 
 		total += getVectorMemoryUsage(collidingBodyPairs);
 		total += getVectorMemoryUsage(orderedCollisionData);
+
+		total += solvingPlanner.getMemoryUsage();
 
 		return total;
 	}
@@ -847,9 +848,9 @@ namespace PS_AGONY
 		uint32_t positionIterations
 	)
 	{
-		const size_t workerCount = solvingPlanner->getWorkerCount();
+		const size_t workerCount = solvingPlanner.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner->getPassOffsets();
+		const auto& passOffsets = solvingPlanner.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

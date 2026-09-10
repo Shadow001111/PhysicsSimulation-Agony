@@ -45,8 +45,7 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			BodySoA& bodies,
-			const JointSoAViewer& joints,
-			SolvingPlanner& solvingPlanner
+			const JointSoAViewer& joints
 		);
 
 		size_t getMemoryUsage() const override;

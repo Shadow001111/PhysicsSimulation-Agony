@@ -47,8 +47,6 @@ namespace PS_AGONY
 
 			size_t bodyCollisionSolverMemoryUsage = 0;
 
-			size_t solvingPlannerMemoryUsage = 0;
-
 			std::array<size_t, size_t(ConstraintType::COUNT)> constraintDataMemoryUsage{};
 
 			// Debug.
@@ -134,9 +132,7 @@ namespace PS_AGONY
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
 
-		// Solvers and planners.
-		SolvingPlanner solvingPlanner;
-
+		// Solvers.
 		BodyCollisionSolver bodyCollisionSolver;
 		SpringSolver springSolver;
 		JointSolver jointSolver;

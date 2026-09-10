@@ -85,8 +85,7 @@ namespace PS_AGONY
 		void setDataViewers(
 			BodySoA& bodies,
 			const ColliderSoAViewer& colliders,
-			const std::vector<Material>& materials,
-			SolvingPlanner& solvingPlanner
+			const std::vector<Material>& materials
 		);
 
 		void solveCollisions(
