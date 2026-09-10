@@ -56,9 +56,7 @@ namespace PS_AGONY
 
 		void computeConstraintData(Real deltaTime, std::span<const size_t> springIndices);
 
-		void solveVelocityConstraints(
-			std::span<const SpringConstraintData> constraintDataContainer
-		);
+		void solveVelocityConstraints(SolvingPlanner::Pass pass);
 
 		void solveConstraintsThreaded(uint32_t springIterations);
 	};

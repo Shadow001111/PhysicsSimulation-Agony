@@ -57,9 +57,11 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedRodIndices);
 
+			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(rodCount) };
+
 			for (uint32_t i = 0; i < rodIterations; i++)
 			{
-				solveVelocityConstraints(rodConstraintContainer);
+				solveVelocityConstraints(fullPass);
 			}
 			return;
 		}
@@ -228,11 +230,11 @@ namespace PS_AGONY
 		}
 	}
 
-	void RodSolver::solveVelocityConstraints(
-		std::span<const RodConstraintData> constraintDataContainer
-	)
+	void RodSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve rod velocity constraints", Ecstasy::Core::Color::Violet);
+
+		std::span<const RodConstraintData> constraintDataSpan(rodConstraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -242,11 +244,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		// Main loop.
-		const size_t rodCount = constraintDataContainer.size();
+		const size_t rodCount = constraintDataSpan.size();
 
 		for (size_t c = 0; c < rodCount; c++)
 		{
-			const RodConstraintData& constraintData = constraintDataContainer[c];
+			const RodConstraintData& constraintData = constraintDataSpan[c];
 			if (constraintData.invEffectiveMass == Real(0)) continue;
 
 			// Get body indices.
@@ -334,9 +336,7 @@ namespace PS_AGONY
 				// Get work from current wave and execute it. If empty, skip.
 				if (passOffset.size == 0) return;
 
-				std::span<const RodConstraintData> constraintSlice(rodConstraintContainer.data() + passOffset.start, passOffset.size);
-
-				solveVelocityConstraints(constraintSlice);
+				solveVelocityConstraints(passOffset);
 			}
 		);
 	}

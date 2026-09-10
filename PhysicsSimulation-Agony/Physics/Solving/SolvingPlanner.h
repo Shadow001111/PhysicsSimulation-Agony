@@ -8,11 +8,13 @@ namespace PS_AGONY
 {
     class SolvingPlanner
     {
+    public:
         struct Pass
         {
             uint32_t start = 0;
             uint32_t size = 0;
         };
+    private:
 
         size_t workerCount = 0;
 
