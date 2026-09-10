@@ -248,7 +248,6 @@
     <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp" />
     <ClCompile Include="Physics\SimulationImpl\Integrator.cpp" />
     <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp" />
-    <ClCompile Include="Physics\GraphUtilities.cpp" />
     <ClCompile Include="Physics\SoA\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp" />
@@ -283,7 +282,6 @@
     <ClInclude Include="Physics\SimulationImpl\Integrator.h" />
     <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h" />
     <ClInclude Include="Physics\Camera2D.h" />
-    <ClInclude Include="Physics\GraphUtilities.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />
     <ClInclude Include="Physics\SoA\ColliderSoA.h" />
     <ClInclude Include="Physics\SoA\AABBSoA.h" />
@@ -316,10 +314,6 @@
     <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />
     <ClInclude Include="Physics\Solving\SpringSolver.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="BenchmarkViewer.py" />
-    <None Include="FitContainers.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

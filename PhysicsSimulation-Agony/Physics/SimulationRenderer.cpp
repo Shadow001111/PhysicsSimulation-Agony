@@ -19,6 +19,17 @@ namespace PS_AGONY
         return x & 0xFFFFFF;
     }
 
+    [[nodiscard]] __forceinline static Real interpolateRotation(
+        const Real& rot,
+        const Real& oldRot,
+        const Real& wrapCount,
+        const Real& alpha)
+    {
+
+    }
+
+
+
     void SimulationRenderer::init()
     {
         TRACY_SCOPE_N("SimulationRenderer init");
@@ -43,7 +54,7 @@ namespace PS_AGONY
         const Mat4 projectionMatrix = camera.getProjectionMatrix();
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
-        // Fetch for render.
+        // Fetch colliders which overlap camera AABB.
         fetchCollidersForRender(simulation, cameraAABB);
 
         // Render.
