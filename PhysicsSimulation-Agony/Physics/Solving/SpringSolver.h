@@ -39,8 +39,7 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			BodySoA& bodies,
-			const SpringSoAViewer& springs,
-			SolvingPlanner& solvingPlanner
+			const SpringSoAViewer& springs
 		);
 
 		size_t getMemoryUsage() const override;

@@ -6,10 +6,9 @@
 
 namespace PS_AGONY
 {
-	void SolverBase::setResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn)
+	void SolverBase::setResources(BodySoA& bodiesIn)
 	{
 		bodies = &bodiesIn;
-		solvingPlanner = &solvingPlannerIn;
 	}
 
 	void SolverBase::runThreadedWaves(

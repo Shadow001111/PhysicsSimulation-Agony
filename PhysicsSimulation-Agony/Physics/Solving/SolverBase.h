@@ -57,11 +57,11 @@ namespace PS_AGONY
 		using WaveTaskFunc = std::function<void(size_t waveIndex, size_t workerIndex, uint32_t passTicket)>;
 
 		BodySoA* bodies = nullptr;
-		SolvingPlanner* solvingPlanner = nullptr; // Shared with sibling solver(s); not owned by this class.
+		SolvingPlanner solvingPlanner;
 
 		WorkerResources workerResources;
 
-		void setResources(BodySoA& bodiesIn, SolvingPlanner& solvingPlannerIn);
+		void setResources(BodySoA& bodiesIn);
 
 		// Drives `workerCount` workers through `waveCount` waves, `totalTicks` times in total
 		// (wave index wraps naturally via passTicket % waveCount). Blocks until every worker

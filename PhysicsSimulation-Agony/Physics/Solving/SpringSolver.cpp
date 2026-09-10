@@ -10,21 +10,21 @@ namespace PS_AGONY
 {
 	void SpringSolver::setDataViewers(
 		BodySoA& bodiesIn,
-		const SpringSoAViewer& springsIn,
-		SolvingPlanner& solvingPlannerIn
+		const SpringSoAViewer& springsIn
 	)
 	{
-		setResources(bodiesIn, solvingPlannerIn);
+		setResources(bodiesIn);
 		springs = springsIn;
 	}
 
 	size_t SpringSolver::getMemoryUsage() const
 	{
-		size_t total = sizeof(SpringSolver);
+		size_t total = 0;
 
 		total += getVectorMemoryUsage(springBodyPairs);
 		total += getVectorMemoryUsage(orderedSpringIndices);
 		total += getVectorMemoryUsage(springConstraintContainer);
+		total += solvingPlanner.getMemoryUsage();
 
 		return total;
 	}
@@ -65,7 +65,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		TRACY_SCOPE_NC("Solve springs (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (springsWereChanged || solvingPlanner->getFlatIndices().size() != springCount)
+		if (springsWereChanged || solvingPlanner.getFlatIndices().size() != springCount)
 		{
 			{
 				TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Core::Color::Red);
@@ -77,9 +77,9 @@ namespace PS_AGONY
 			}
 			{
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-				solvingPlanner->setWorkerCount(workerCount);
+				solvingPlanner.setWorkerCount(workerCount);
 
-				solvingPlanner->planCacheLineAwareExecution(
+				solvingPlanner.planCacheLineAwareExecution(
 					springBodyPairs, bodies->getCount(),
 					sizeof(Real),
 					std::hardware_destructive_interference_size
@@ -89,7 +89,7 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_N("Reorder spring indices");
 
-			const auto& flatIndices = solvingPlanner->getFlatIndices();
+			const auto& flatIndices = solvingPlanner.getFlatIndices();
 			orderedSpringIndices.assign(flatIndices.begin(), flatIndices.end());
 		}
 		computeConstraintData(deltaTime, orderedSpringIndices);
@@ -319,9 +319,9 @@ namespace PS_AGONY
 
 	void SpringSolver::solveConstraintsThreaded(uint32_t springIterations)
 	{
-		const size_t workerCount = solvingPlanner->getWorkerCount();
+		const size_t workerCount = solvingPlanner.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner->getPassOffsets();
+		const auto& passOffsets = solvingPlanner.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

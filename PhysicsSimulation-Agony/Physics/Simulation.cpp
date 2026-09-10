@@ -304,26 +304,22 @@ namespace PS_AGONY
         bodyCollisionSolver.setDataViewers(
             objectManager.bodies,
             ColliderSoAViewer(objectManager.colliders),
-            materials,
-            solvingPlanner
+            materials
         );
 
         springSolver.setDataViewers(
             objectManager.bodies,
-            SpringSoAViewer(springs),
-            solvingPlanner
+            SpringSoAViewer(springs)
         );
 
         jointSolver.setDataViewers(
             objectManager.bodies,
-            JointSoAViewer(joints),
-            solvingPlanner
+            JointSoAViewer(joints)
         );
 
         rodSolver.setDataViewers(
             objectManager.bodies,
-            RodSoAViewer(rods),
-            solvingPlanner
+            RodSoAViewer(rods)
         );
 
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
@@ -877,19 +873,17 @@ namespace PS_AGONY
 
     void Simulation::collectMemoryUsage(DebugData& data) const
     {
-        data.bodyDataMemoryUsage = sizeof(BodySoA) + objectManager.bodies.getMemoryUsage();
-        data.colliderDataMemoryUsage = sizeof(ColliderSoA) + objectManager.colliders.getMemoryUsage();
-        data.circleDataMemoryUsage = sizeof(CircleSoA) + objectManager.circles.getMemoryUsage();
-        data.boxDataMemoryUsage = sizeof(BoxSoA) + objectManager.boxes.getMemoryUsage();
-        data.polygonDataMemoryUsage = sizeof(PolygonSoA) + objectManager.polygons.getMemoryUsage();
+        data.bodyDataMemoryUsage = objectManager.bodies.getMemoryUsage();
+        data.colliderDataMemoryUsage = objectManager.colliders.getMemoryUsage();
+        data.circleDataMemoryUsage = objectManager.circles.getMemoryUsage();
+        data.boxDataMemoryUsage = objectManager.boxes.getMemoryUsage();
+        data.polygonDataMemoryUsage = objectManager.polygons.getMemoryUsage();
 
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
 
         data.bodyCollisionSolverMemoryUsage = bodyCollisionSolver.getMemoryUsage();
-
-        data.solvingPlannerMemoryUsage = solvingPlanner.getMemoryUsage();
 
         data.constraintDataMemoryUsage[size_t(ConstraintType::Spring)] = springs.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Joint)] = joints.getMemoryUsage();

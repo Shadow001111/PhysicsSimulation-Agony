@@ -40,8 +40,7 @@ namespace PS_AGONY
 
 		void setDataViewers(
 			BodySoA& bodies,
-			const RodSoAViewer& rods,
-			SolvingPlanner& solvingPlanner
+			const RodSoAViewer& rods
 		);
 
 		size_t getMemoryUsage() const override;

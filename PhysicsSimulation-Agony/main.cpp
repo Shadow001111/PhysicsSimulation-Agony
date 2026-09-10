@@ -201,8 +201,7 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
             constraintsTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage +
-            simulationData.bodyCollisionSolverMemoryUsage +
-            simulationData.solvingPlannerMemoryUsage;
+            simulationData.bodyCollisionSolverMemoryUsage;
 
         ImGui::Text("Total System Footprint: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
@@ -268,8 +267,6 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
 
             addMemoryRow("Broad Phase Detector", simulationData.broadPhaseDetectorMemoryUsage);
             addMemoryRow("Narrow Phase Detector", simulationData.narrowPhaseDetectorMemoryUsage);
-
-            addMemoryRow("Solving Planner", simulationData.solvingPlannerMemoryUsage);
 
             {
                 addMemoryRow("Solvers", solversTotal);
