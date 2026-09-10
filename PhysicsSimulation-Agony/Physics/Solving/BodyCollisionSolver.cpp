@@ -440,139 +440,6 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Core::Color::Violet);
 
-		// Compile-time strategy dispatch
-		if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::Sequential)
-		{
-			solveVelocityConstraintsSequential(collisionDataContainer, constraintDataContainer, frictionDataContainer);
-		}
-		else if constexpr (VELOCITY_SOLVER_TYPE == VelocitySolverType::Block)
-		{
-			solveVelocityConstraintsBlock(collisionDataContainer, constraintDataContainer, frictionDataContainer);
-		}
-	}
-
-	void BodyCollisionSolver::solveVelocityConstraintsSequential(
-		std::span<const BodyCollisionData> collisionDataContainer,
-		std::span<const VelocityConstraintData> constraintDataContainer,
-		std::span<const FrictionData> frictionDataContainer
-	)
-	{
-		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
-		Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
-		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
-		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-
-		const size_t collisionCount = collisionDataContainer.size();
-		for (size_t c = 0; c < collisionCount; c++)
-		{
-			const BodyCollisionData& collisionData = collisionDataContainer[c];
-			const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
-
-			const ObjectIndex bodyIndexA = collisionData.bodyA;
-			const ObjectIndex bodyIndexB = collisionData.bodyB;
-
-			const Real invMassA = invMassPtr[bodyIndexA];
-			const Real invMassB = invMassPtr[bodyIndexB];
-			const Real invInertiaA = invInertiaPtr[bodyIndexA];
-			const Real invInertiaB = invInertiaPtr[bodyIndexB];
-
-			Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
-			Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
-			Real angularVelocityA = angularVelocityPtr[bodyIndexA];
-			Real angularVelocityB = angularVelocityPtr[bodyIndexB];
-
-			const Vec2 normal = collisionData.normal;
-			const uint32_t contactCount = collisionData.contactCount;
-			const Vec2 tangent = { -normal.y, normal.x };
-
-			std::array<Real, 2> jnArray{};
-
-			for (uint32_t i = 0; i < contactCount; i++)
-			{
-				const auto& contactData = velocityConstraintData.points[i];
-				const Vec2 rAPerp = contactData.rAPerp;
-				const Vec2 rBPerp = contactData.rBPerp;
-
-				const Vec2 relativeVelocity =
-					(linearVelocityB + rBPerp * angularVelocityB) -
-					(linearVelocityA + rAPerp * angularVelocityA);
-
-				const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
-				Real& accumulatedJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
-
-				if (velocityAlongNormal > Real(0) && accumulatedJn == Real(0)) continue;
-
-				const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
-				const Real oldJn = accumulatedJn;
-				accumulatedJn = std::fmax(Real(0), oldJn + jn);
-				const Real deltaJn = accumulatedJn - oldJn;
-
-				jnArray[i] = accumulatedJn;
-
-				const Vec2 impulse = deltaJn * normal;
-				linearVelocityA -= impulse * invMassA;
-				angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
-				linearVelocityB += impulse * invMassB;
-				angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
-			}
-
-			const FrictionData& frictionData = frictionDataContainer[c];
-			const Real staticFriction = frictionData.staticFriction;
-			const Real dynamicFriction = frictionData.dynamicFriction;
-
-			for (uint32_t i = 0; i < contactCount; i++)
-			{
-				const auto& contactData = velocityConstraintData.points[i];
-				const Vec2 rAPerp = contactData.rAPerp;
-				const Vec2 rBPerp = contactData.rBPerp;
-
-				const Vec2 relativeVelocity =
-					(linearVelocityB + rBPerp * angularVelocityB) -
-					(linearVelocityA + rAPerp * angularVelocityA);
-
-				const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
-				const Real jt = -currentSlipVel * contactData.tangentMass;
-
-				Real& accumulatedJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
-				const Real oldJt = accumulatedJt;
-				Real targetJt = oldJt + jt;
-				const Real jn = jnArray[i];
-
-				if (std::fabs(targetJt) <= jn * staticFriction)
-				{
-					accumulatedJt = targetJt;
-				}
-				else
-				{
-					const Real maxDynamic = jn * dynamicFriction;
-					accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic);
-				}
-
-				const Real deltaJt = accumulatedJt - oldJt;
-				const Vec2 impulse = deltaJt * tangent;
-
-				linearVelocityA -= impulse * invMassA;
-				angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
-				linearVelocityB += impulse * invMassB;
-				angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
-			}
-
-			velocityXPtr[bodyIndexA] = linearVelocityA.x;
-			velocityYPtr[bodyIndexA] = linearVelocityA.y;
-			velocityXPtr[bodyIndexB] = linearVelocityB.x;
-			velocityYPtr[bodyIndexB] = linearVelocityB.y;
-			angularVelocityPtr[bodyIndexA] = angularVelocityA;
-			angularVelocityPtr[bodyIndexB] = angularVelocityB;
-		}
-	}
-
-	void BodyCollisionSolver::solveVelocityConstraintsBlock(
-		std::span<const BodyCollisionData> collisionDataContainer,
-		std::span<const VelocityConstraintData> constraintDataContainer,
-		std::span<const FrictionData> frictionDataContainer
-	)
-	{
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
@@ -632,7 +499,7 @@ namespace PS_AGONY
 					angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
 				}
 			}
-			else if (contactCount == 2)
+			else
 			{
 				const auto& contactData0 = velocityConstraintData.points[0];
 				const auto& contactData1 = velocityConstraintData.points[1];
@@ -692,9 +559,7 @@ namespace PS_AGONY
 					x1 = Real(0);
 					if (bPrime0 <= Real(0) && bPrime1 <= Real(0)) goto solved;
 				}
-
 			solved:
-
 				const Real deltaJn0 = x0 - a0;
 				const Real deltaJn1 = x1 - a1;
 

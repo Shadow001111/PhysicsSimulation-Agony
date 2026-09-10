@@ -144,7 +144,7 @@ namespace PS_AGONY
 
 	const std::vector<ObjectPair>& BroadPhaseCollisionDetector::findCollisions(ExecutionPolicy executionPolicy)
 	{
-		TRACY_SCOPE_N("Broad phase");
+		TRACY_SCOPE_N("Find broad-phase collisions");
 
 		collisionData.clear();
 
