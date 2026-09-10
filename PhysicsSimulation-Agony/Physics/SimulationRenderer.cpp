@@ -1,6 +1,7 @@
 #include "SimulationRenderer.h"
 #include "Simulation.h"
 #include "Constants.h"
+#include "FastCosSin.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
@@ -25,7 +26,14 @@ namespace PS_AGONY
         const Real& wrapCount,
         const Real& alpha)
     {
+        const Real fullRotation = rot + wrapCount * PS_AGONY::Constants::TWO_PI;
 
+        Real interpolatedRotation = oldRot + (fullRotation - oldRot) * alpha;
+
+        Real isRotNegativeMask = interpolatedRotation < 0;
+        interpolatedRotation += isRotNegativeMask * Constants::TWO_PI;
+
+        return interpolatedRotation;
     }
 
 
@@ -464,16 +472,18 @@ namespace PS_AGONY
             const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
             const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
-            const Real fullOldRotation = oldRotationPtr[bodyIndex];
-            const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedBodyRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
+            const Real interpolatedBodyRotation = interpolateRotation(
+                rotationPtr[bodyIndex],
+                oldRotationPtr[bodyIndex],
+                rotationWrapCountPtr[bodyIndex],
+                simRenderAlpha
+            );
 
             const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
             const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
             const Real localRot = colliderLocalRotationPtr[colliderIndex];
 
-            const Real bodyCos = std::cos(interpolatedBodyRotation);
-            const Real bodySin = std::sin(interpolatedBodyRotation);
+            const auto [bodyCos, bodySin] = FastCosSin::order4Scalar(interpolatedBodyRotation);
 
             const Real worldOffX = localOffX * bodyCos - localOffY * bodySin;
             const Real worldOffY = localOffX * bodySin + localOffY * bodyCos;
@@ -539,16 +549,18 @@ namespace PS_AGONY
             const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
             const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
-            const Real fullOldRotation = oldRotationPtr[bodyIndex];
-            const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedBodyRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
+            const Real interpolatedBodyRotation = interpolateRotation(
+                rotationPtr[bodyIndex],
+                oldRotationPtr[bodyIndex],
+                rotationWrapCountPtr[bodyIndex],
+                simRenderAlpha
+            );
 
             const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
             const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
             const Real localRot = colliderLocalRotationPtr[colliderIndex];
 
-            const Real bodyCos = std::cos(interpolatedBodyRotation);
-            const Real bodySin = std::sin(interpolatedBodyRotation);
+            const auto [bodyCos, bodySin] = FastCosSin::order4Scalar(interpolatedBodyRotation);
 
             const Real worldOffX = localOffX * bodyCos - localOffY * bodySin;
             const Real worldOffY = localOffX * bodySin + localOffY * bodyCos;
@@ -643,16 +655,18 @@ namespace PS_AGONY
             const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
             const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
-            const Real fullOldRotation = oldRotationPtr[bodyIndex];
-            const Real fullNewRotation = rotationPtr[bodyIndex] + (rotationWrapCountPtr[bodyIndex] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedBodyRotation = fullOldRotation + (fullNewRotation - fullOldRotation) * simRenderAlpha;
+            const Real interpolatedBodyRotation = interpolateRotation(
+                rotationPtr[bodyIndex],
+                oldRotationPtr[bodyIndex],
+                rotationWrapCountPtr[bodyIndex],
+                simRenderAlpha
+            );
 
             const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
             const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
             const Real localRot = colliderLocalRotationPtr[colliderIndex];
 
-            const Real bodyCos = std::cos(interpolatedBodyRotation);
-            const Real bodySin = std::sin(interpolatedBodyRotation);
+            const auto [bodyCos, bodySin] = FastCosSin::order4Scalar(interpolatedBodyRotation);
 
             const Real worldOffX = localOffX * bodyCos - localOffY * bodySin;
             const Real worldOffY = localOffX * bodySin + localOffY * bodyCos;

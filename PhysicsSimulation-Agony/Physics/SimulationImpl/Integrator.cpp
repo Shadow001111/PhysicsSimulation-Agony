@@ -162,7 +162,11 @@ namespace PS_AGONY::Integrator
             RealSimd oldWrapCount = RealSimd::load(rotationWrapCountPtr + i);
 
             RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
-            rot = rot - wrapCount * twoPIV;
+            rot = RealSimd::negMulAdd(
+                wrapCount,
+                twoPIV,
+                rot
+            );
 
             RealSimd isRotNegativeMask = rot < RealSimd(0);
 
