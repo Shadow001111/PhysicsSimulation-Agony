@@ -48,17 +48,6 @@ namespace PS_AGONY
 			const Real positionCorrectionSlop = 0.001;
 		};
 
-		enum class VelocitySolverType
-		{
-			// Perfomance on two contact constraints:
-			Sequential, // First contact has error, second contact error is zero.
-			Block // Both contacts have no error.
-		};
-
-		// Static memeber fields.
-
-		static constexpr VelocitySolverType VELOCITY_SOLVER_TYPE = VelocitySolverType::Block;
-
 		// Memeber fields.
 
 		const std::vector<Material>* materials = nullptr;
@@ -113,18 +102,6 @@ namespace PS_AGONY
 		);
 
 		void solveVelocityConstraints(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer,
-			std::span<const FrictionData> frictionDataContainer
-		);
-
-		void solveVelocityConstraintsSequential(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer,
-			std::span<const FrictionData> frictionDataContainer
-		);
-
-		void solveVelocityConstraintsBlock(
 			std::span<const BodyCollisionData> collisionDataContainer,
 			std::span<const VelocityConstraintData> constraintDataContainer,
 			std::span<const FrictionData> frictionDataContainer
