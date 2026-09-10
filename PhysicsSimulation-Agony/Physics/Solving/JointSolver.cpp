@@ -57,9 +57,11 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedJointIndices);
 
+			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(jointConstraintContainer.size()) };
+
 			for (uint32_t i = 0; i < jointIterations; i++)
 			{
-				solveVelocityConstraints(jointConstraintContainer);
+				solveVelocityConstraints(fullPass);
 			}
 			return;
 		}
@@ -231,11 +233,11 @@ namespace PS_AGONY
 		}
 	}
 
-	void JointSolver::solveVelocityConstraints(
-		std::span<const JointConstraintData> constraintDataContainer
-	)
+	void JointSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve joint velocity constraints", Ecstasy::Core::Color::Violet);
+
+		std::span<const JointConstraintData> constraintDataSpan(jointConstraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -245,11 +247,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		// Main loop.
-		const size_t jointCount = constraintDataContainer.size();
+		const size_t jointCount = constraintDataSpan.size();
 
 		for (size_t c = 0; c < jointCount; c++)
 		{
-			const JointConstraintData& constraintData = constraintDataContainer[c];
+			const JointConstraintData& constraintData = constraintDataSpan[c];
 			if (constraintData.invK11 == Real(0) && constraintData.invK12 == Real(0) && constraintData.invK22 == Real(0)) continue;
 
 			// Get body indices.
@@ -339,9 +341,7 @@ namespace PS_AGONY
 				// Get work from current wave and execute it. If empty, skip.
 				if (passOffset.size == 0) return;
 
-				std::span<const JointConstraintData> constraintSlice(jointConstraintContainer.data() + passOffset.start, passOffset.size);
-
-				solveVelocityConstraints(constraintSlice);
+				solveVelocityConstraints(passOffset);
 			}
 		);
 	}

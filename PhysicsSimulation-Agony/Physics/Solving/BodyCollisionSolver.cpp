@@ -30,21 +30,23 @@ namespace PS_AGONY
 		// Single-threaded path.
 		if (workerCount <= 1)
 		{
-			debugCollisionDataContainer = narrowPhaseCollisions;
+			activeCollisionData = narrowPhaseCollisions;
 			computeConstraintData(narrowPhaseCollisions);
 
 			{
 				TRACY_SCOPE_N("Solve collision constraints (Single-threaded)");
 
-				applyWarmStarting(narrowPhaseCollisions, velocityConstraintContainer);
+				const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(narrowPhaseCollisions.size()) };
+
+				applyWarmStarting(fullPass);
 
 				for (uint32_t i = 0; i < velocityIterations; i++)
 				{
-					solveVelocityConstraints(narrowPhaseCollisions, velocityConstraintContainer, frictionDataContainer);
+					solveVelocityConstraints(fullPass);
 				}
 				for (uint32_t i = 0; i < positionIterations; i++)
 				{
-					solvePositionConstraints(narrowPhaseCollisions, positionConstraintContainer);
+					solvePositionConstraints(fullPass);
 				}
 			}
 			return;
@@ -83,7 +85,7 @@ namespace PS_AGONY
 				orderedCollisionData[i] = narrowPhaseCollisions[originalIndex];
 			}
 		}
-		debugCollisionDataContainer = orderedCollisionData;
+		activeCollisionData = orderedCollisionData;
 		computeConstraintData(orderedCollisionData);
 
 		{
@@ -108,14 +110,14 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::reportNoCollisions()
 	{
-		debugCollisionDataContainer = {};
+		activeCollisionData = {};
 	}
 
 	Vec2 BodyCollisionSolver::computeConstraintErrors() const
 	{
 		TRACY_SCOPE_NC("Compute (body collision) constraint errors", Ecstasy::Core::Color::Gray);
 
-		const size_t collisionCount = debugCollisionDataContainer.size();
+		const size_t collisionCount = activeCollisionData.size();
 		if (collisionCount == 0) return { Real(0), Real(0) };
 
 		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
@@ -146,7 +148,7 @@ namespace PS_AGONY
 
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const auto& data = debugCollisionDataContainer[c];
+			const auto& data = activeCollisionData[c];
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
@@ -351,12 +353,12 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::applyWarmStarting(
-		std::span<const BodyCollisionData> collisionDataContainer,
-		std::span<const VelocityConstraintData> constraintDataContainer
-	)
+	void BodyCollisionSolver::applyWarmStarting(SolvingPlanner::Pass pass)
 	{
 		TRACY_SCOPE_NC("Apply warm starting (body collisions)", Ecstasy::Core::Color::Violet);
+
+		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
+		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -366,11 +368,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		// Main loop.
-		const size_t collisionCount = collisionDataContainer.size();
+		const size_t collisionCount = collisionDataSpan.size();
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const BodyCollisionData& collisionData = collisionDataContainer[c];
-			const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
+			const BodyCollisionData& collisionData = collisionDataSpan[c];
+			const VelocityConstraintData& velocityConstraintData = constraintDataSpan[c];
 
 			// Get body indices.
 			const ObjectIndex bodyIndexA = collisionData.bodyA;
@@ -388,13 +390,11 @@ namespace PS_AGONY
 			Real angularVelocityA = angularVelocityPtr[bodyIndexA];
 			Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
-			//
 			const Vec2 normal = collisionData.normal;
 			const uint32_t contactCount = collisionData.contactCount;
 
 			const Vec2 tangent = { -normal.y, normal.x };
 
-			//
 			std::array<Vec2, 2> impulseArray{};
 			for (uint32_t i = 0; i < contactCount; i++)
 			{
@@ -432,13 +432,13 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::solveVelocityConstraints(
-		std::span<const BodyCollisionData> collisionDataContainer,
-		std::span<const VelocityConstraintData> constraintDataContainer,
-		std::span<const FrictionData> frictionDataContainer
-	)
+	void BodyCollisionSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Core::Color::Violet);
+
+		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
+		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
+		std::span<const FrictionData> frictionDataSpan(this->frictionDataContainer.data() + pass.start, pass.size);
 
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
@@ -446,11 +446,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
-		const size_t collisionCount = collisionDataContainer.size();
+		const size_t collisionCount = collisionDataSpan.size();
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const BodyCollisionData& collisionData = collisionDataContainer[c];
-			const VelocityConstraintData& velocityConstraintData = constraintDataContainer[c];
+			const BodyCollisionData& collisionData = collisionDataSpan[c];
+			const VelocityConstraintData& velocityConstraintData = constraintDataSpan[c];
 
 			const ObjectIndex bodyIndexA = collisionData.bodyA;
 			const ObjectIndex bodyIndexB = collisionData.bodyB;
@@ -580,7 +580,7 @@ namespace PS_AGONY
 				angularVelocityB += (glm::dot(contactData0.rBPerp, impulse0) + glm::dot(contactData1.rBPerp, impulse1)) * invInertiaB;
 			}
 
-			const FrictionData& frictionData = frictionDataContainer[c];
+			const FrictionData& frictionData = frictionDataSpan[c];
 			const Real staticFriction = frictionData.staticFriction;
 			const Real dynamicFriction = frictionData.dynamicFriction;
 
@@ -630,12 +630,12 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::solvePositionConstraints(
-		std::span<const BodyCollisionData> collisionDataContainer,
-		std::span<const PositionConstraintData> constraintDataContainer
-	)
+	void BodyCollisionSolver::solvePositionConstraints(SolvingPlanner::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve collision position constraints", Ecstasy::Core::Color::Indigo);
+
+		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
+		std::span<const PositionConstraintData> constraintDataSpan(positionConstraintContainer.data() + pass.start, pass.size);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -658,7 +658,7 @@ namespace PS_AGONY
 				return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
 			};
 
-		const size_t collisionCount = collisionDataContainer.size();
+		const size_t collisionCount = collisionDataSpan.size();
 
 		// Note: I tried to use Simd, it was slower, probably because of the gather-scatter, or just memory intensive.
 		//       plus it was invalid because same body index could appear multiple times in simd batch (on same worker).
@@ -666,7 +666,7 @@ namespace PS_AGONY
 
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const auto& data = collisionDataContainer[c];
+			const auto& data = collisionDataSpan[c];
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
@@ -678,7 +678,7 @@ namespace PS_AGONY
 			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
 			const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
 
-			const PositionConstraintData& positionConstraintData = constraintDataContainer[c];
+			const PositionConstraintData& positionConstraintData = constraintDataSpan[c];
 			const Vec2 worldAnchorA = centerOfMassA + rotate(positionConstraintData.localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
 			const Vec2 worldAnchorB = centerOfMassB + rotate(positionConstraintData.localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
@@ -724,8 +724,6 @@ namespace PS_AGONY
 		const uint32_t positionSolvingStartTick = static_cast<uint32_t>(waveCount) * velocityIterations;
 		const uint32_t totalTicks = positionSolvingStartTick + static_cast<uint32_t>(waveCount) * positionIterations;
 
-		const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
-
 		if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
 		{
 			runThreadedWaves(workerCount, waveCount, static_cast<uint32_t>(waveCount),
@@ -735,10 +733,7 @@ namespace PS_AGONY
 					const auto& passOffset = passOffsetsPtr[passGlobalIndex];
 					if (passOffset.size == 0) return;
 
-					std::span<const BodyCollisionData> collisionSlice(collisionDataPtr + passOffset.start, passOffset.size);
-					std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
-
-					applyWarmStarting(collisionSlice, constraintSlice);
+					applyWarmStarting(passOffset);
 				}
 			);
 		}
@@ -752,19 +747,13 @@ namespace PS_AGONY
 				// Get work from current wave and execute it. If empty, skip.
 				if (passOffset.size == 0) [[unlikely]] return;
 
-				std::span<const BodyCollisionData> collisionSlice(collisionDataPtr + passOffset.start, passOffset.size);
-
 				if (passTicket >= positionSolvingStartTick)
 				{
-					std::span<const PositionConstraintData> constraintSlice(positionConstraintContainer.data() + passOffset.start, passOffset.size);
-					solvePositionConstraints(collisionSlice, constraintSlice);
+					solvePositionConstraints(passOffset);
 				}
 				else
 				{
-					std::span<const VelocityConstraintData> constraintSlice(velocityConstraintContainer.data() + passOffset.start, passOffset.size);
-					std::span<const FrictionData> frictionDataSlice(frictionDataContainer.data() + passOffset.start, passOffset.size);
-
-					solveVelocityConstraints(collisionSlice, constraintSlice, frictionDataSlice);
+					solveVelocityConstraints(passOffset);
 				}
 			}
 		);

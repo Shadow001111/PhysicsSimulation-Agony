@@ -62,9 +62,7 @@ namespace PS_AGONY
 
 		void computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices);
 
-		void solveVelocityConstraints(
-			std::span<const JointConstraintData> constraintDataContainer
-		);
+		void solveVelocityConstraints(SolvingPlanner::Pass pass);
 
 		void solveConstraintsThreaded(uint32_t jointIterations);
 	};

@@ -48,7 +48,7 @@ namespace PS_AGONY
 			const Real positionCorrectionSlop = 0.001;
 		};
 
-		// Memeber fields.
+		// Member fields.
 
 		const std::vector<Material>* materials = nullptr;
 		ColliderSoAViewer colliders;
@@ -60,7 +60,7 @@ namespace PS_AGONY
 		std::vector<VelocityConstraintData> velocityConstraintContainer;
 		std::vector<FrictionData> frictionDataContainer;
 
-		std::span<const BodyCollisionData> debugCollisionDataContainer;
+		std::span<const BodyCollisionData> activeCollisionData;
 
 		SimulationSettings simulationSettings;
 	public:
@@ -96,21 +96,11 @@ namespace PS_AGONY
 
 		void computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
-		void applyWarmStarting(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer
-		);
+		void applyWarmStarting(SolvingPlanner::Pass pass);
 
-		void solveVelocityConstraints(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const VelocityConstraintData> constraintDataContainer,
-			std::span<const FrictionData> frictionDataContainer
-		);
+		void solveVelocityConstraints(SolvingPlanner::Pass pass);
 
-		void solvePositionConstraints(
-			std::span<const BodyCollisionData> collisionDataContainer,
-			std::span<const PositionConstraintData> constraintDataContainer
-		);
+		void solvePositionConstraints(SolvingPlanner::Pass pass);
 
 		void solveConstraintsThreaded(
 			const std::vector<BodyCollisionData>& collisionDataContainer,

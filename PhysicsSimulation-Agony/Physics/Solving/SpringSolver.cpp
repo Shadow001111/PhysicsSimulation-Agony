@@ -56,9 +56,11 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedSpringIndices);
 
+			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(springCount) };
+
 			for (uint32_t i = 0; i < springIterations; i++)
 			{
-				solveVelocityConstraints(springConstraintContainer);
+				solveVelocityConstraints(fullPass);
 			}
 			return;
 		}
@@ -235,11 +237,11 @@ namespace PS_AGONY
 		}
 	}
 
-	void SpringSolver::solveVelocityConstraints(
-		std::span<const SpringConstraintData> constraintDataContainer
-	)
+	void SpringSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve spring velocity constraints", Ecstasy::Core::Color::Violet);
+
+		std::span<const SpringConstraintData> constraintDataSpan(springConstraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -249,11 +251,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		// Main loop.
-		const size_t springCount = constraintDataContainer.size();
+		const size_t springCount = constraintDataSpan.size();
 
 		for (size_t c = 0; c < springCount; c++)
 		{
-			const SpringConstraintData& constraintData = constraintDataContainer[c];
+			const SpringConstraintData& constraintData = constraintDataSpan[c];
 			if (constraintData.invEffectiveMass == Real(0)) continue;
 
 			// Get body indices.
@@ -341,9 +343,7 @@ namespace PS_AGONY
 				// Get work from current wave and execute it. If empty, skip.
 				if (passOffset.size == 0) return;
 
-				std::span<const SpringConstraintData> constraintSlice(springConstraintContainer.data() + passOffset.start, passOffset.size);
-
-				solveVelocityConstraints(constraintSlice);
+				solveVelocityConstraints(passOffset);
 			}
 		);
 	}
