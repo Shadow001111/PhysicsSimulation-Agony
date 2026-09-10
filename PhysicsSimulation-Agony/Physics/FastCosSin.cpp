@@ -1,13 +1,10 @@
 #include "FastCosSin.h"
 #include "Constants.h"
 
-#include "Ecstasy/Core/Simd.h"
-
 #include <cmath>
 
 namespace PS_AGONY::FastCosSin
 {
-	using RealSimd = Ecstasy::Core::Simd<Real>;
 	using IntSimd = std::conditional_t<sizeof(Real) == 8,
 		Ecstasy::Core::Simd<int64_t>,
 		Ecstasy::Core::Simd<int32_t>>;
@@ -98,6 +95,54 @@ namespace PS_AGONY::FastCosSin
 
 			outSinArray[i] = sin;
 			outCosArray[i] = cos;
+		}
+	}
+
+	void order4Simd(const RealSimd& inAngle, RealSimd& outCos, RealSimd& outSin)
+	{
+		// Constants.
+		constexpr Real coeff2 = 0.012238f;
+		constexpr Real coeff3 = -0.199387f;
+		constexpr Real coeff4 = 0.0282173f;
+
+		constexpr int signMaskShift = sizeof(Real) * 8 - 2;
+
+		const RealSimd coeff2V(coeff2);
+		const RealSimd coeff3V(coeff3);
+		const RealSimd coeff4V(coeff4);
+
+		const RealSimd halfPiV(Constants::HALF_PI);
+		const RealSimd invHalfPiV(Constants::INV_HALF_PI);
+
+		{
+			const RealSimd& x = inAngle;
+
+			IntSimd quadrantIndex = (x * invHalfPiV).realToSmallNonNegativeInteger();
+
+			RealSimd u = RealSimd::negMulAdd(quadrantIndex.to<RealSimd>(), halfPiV, x);
+
+			RealSimd mirror = (quadrantIndex & IntSimd(1)).to<RealSimd>();
+
+			RealSimd a = RealSimd::mulAdd(
+				mirror,
+				RealSimd::negMulAdd(RealSimd(2), u, halfPiV),
+				u
+			);
+
+			RealSimd sinMask = ((quadrantIndex & IntSimd(2)) << signMaskShift).as<RealSimd>();
+			RealSimd cosMask = (((quadrantIndex + IntSimd(1)) & IntSimd(2)) << signMaskShift).as<RealSimd>();
+
+			RealSimd sinMag = coeff4V;
+			sinMag = RealSimd::mulAdd(sinMag, a, coeff3V);
+			sinMag = RealSimd::mulAdd(sinMag, a, coeff2V);
+			sinMag = RealSimd::mulAdd(sinMag, a, RealSimd(1));
+			sinMag = a * sinMag;
+			sinMag = RealSimd::min(sinMag, RealSimd(1));
+
+			RealSimd cosMag = RealSimd::sqrt(RealSimd::negMulAdd(sinMag, sinMag, RealSimd(1)));
+
+			outSin = sinMag ^ sinMask;
+			outCos = cosMag ^ cosMask;
 		}
 	}
 
