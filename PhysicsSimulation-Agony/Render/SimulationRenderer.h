@@ -13,6 +13,13 @@ namespace Render
 {
 	using namespace PS_AGONY;
 
+	struct RenderOptions
+	{
+		bool colliderAABBs = false;
+		bool broadPhaseAABBs = false;
+		bool contactPoints = false;
+	};
+
 	class SimulationRenderer
 	{
 		// Resources.
@@ -43,7 +50,12 @@ namespace Render
 
 		void init();
 
-		void renderSimulation(const Simulation& simulation, Real simRenderAlpha, const AABB& cameraAABB);
+		void renderSimulation(
+			const Simulation& simulation,
+			Real simRenderAlpha,
+			const AABB& cameraAABB,
+			const RenderOptions& renderOptions
+		);
 
 		void renderObjectPreview(const void* params, BodyType type);
 

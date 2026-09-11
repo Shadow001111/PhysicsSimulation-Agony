@@ -75,13 +75,19 @@ struct ObjectCreatorState
 };
 
 
-static void renderGUI(PS_AGONY::Simulation& simulation, Render::SimulationRenderer& simulationRenderer, const DebugData& debugData, bool& pauseSimulation)
+static void renderGUI(
+    PS_AGONY::Simulation& simulation,
+    Render::SimulationRenderer& simulationRenderer,
+    Render::RenderOptions& renderOptions,
+    const DebugData& debugData,
+    bool& pauseSimulation
+)
 {
     ImGui::Begin("Simulation Diagnostics");
 
     const auto& simulationData = debugData.simulationDebugData;
 
-    // App/Performance Section.
+    // App performance.
     if (ImGui::CollapsingHeader("Application Performance", ImGuiTreeNodeFlags_DefaultOpen))
     {
         const float smoothedDelta = debugData.smoothedDelta;
@@ -102,7 +108,7 @@ static void renderGUI(PS_AGONY::Simulation& simulation, Render::SimulationRender
         ImGui::Checkbox("Pause Simulation (P)", &pauseSimulation);
     }
 
-    // Interactive Simulation Settings.
+    // Simulation settings.
     auto& settings = simulation.getSimulationSettings();
     if (ImGui::CollapsingHeader("Simulation Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -144,6 +150,14 @@ static void renderGUI(PS_AGONY::Simulation& simulation, Render::SimulationRender
                 iterationSetting = iters;
             }
         }
+    }
+
+    // Render options.
+    if (ImGui::CollapsingHeader("Render Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
+        ImGui::Checkbox("Broad-Phase AABBs", &renderOptions.broadPhaseAABBs);
+        ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
     }
 
     // Physics diagnostics.
@@ -607,11 +621,14 @@ static int gameFunc()
 
     loadScene(simulation, 3);
 
+    // Simulation renderer.
     Render::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
 
     auto& camera = simulationRenderer.getCamera();
 	camera.setViewRangeH(20.0f, wnd.getAspectRatio());
+
+    Render::RenderOptions renderOptions{}; // Default.
 
     // OpenGL states.
     glDisable(GL_DEPTH_TEST);
@@ -750,10 +767,10 @@ static int gameFunc()
             }
 
             // Render simulation.
-            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB);
+            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions);
 
             // Render debug data.
-            renderGUI(simulation, simulationRenderer, debugData, pauseSimulation);
+            renderGUI(simulation, simulationRenderer, renderOptions, debugData, pauseSimulation);
 
             // Render object creator.
             ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
