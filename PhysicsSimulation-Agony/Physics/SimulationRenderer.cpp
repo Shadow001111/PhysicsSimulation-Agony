@@ -1095,6 +1095,51 @@ namespace PS_AGONY
         glDrawArraysInstanced(GL_LINE_LOOP, 0, 4, count);
     }
 
+    size_t SimulationRenderer::getMemoryUsage() const noexcept
+    {
+        size_t total = 0;
+
+        total += getVectorMemoryUsage(foundColliders);
+        for (const auto& vec : foundColliderShapes)
+            total += getVectorMemoryUsage(vec);
+
+        total += getVectorMemoryUsage(circleResources.instanceData);
+        total += getVectorMemoryUsage(boxResources.instanceData);
+
+        total += getVectorMemoryUsage(polygonResources.vertexData);
+        total += getVectorMemoryUsage(polygonResources.instanceData);
+        total += getVectorMemoryUsage(polygonResources.drawCommands);
+
+        total += getVectorMemoryUsage(springResources.vertexData);
+
+        total += getVectorMemoryUsage(aabbResources.aabbs);
+        total += getVectorMemoryUsage(aabbResources.instanceData);
+
+        return total;
+    }
+
+    size_t SimulationRenderer::getVideoMemoryUsage() const noexcept
+    {
+        size_t total = 0;
+
+        total += circleResources.vbo.getCapacity();
+        total += circleResources.instanceVbo.getCapacity();
+
+        total += boxResources.vbo.getCapacity();
+        total += boxResources.instanceVbo.getCapacity();
+
+        total += polygonResources.vertexVbo.getCapacity();
+        total += polygonResources.instanceVbo.getCapacity();
+        total += polygonResources.indirectBuf.getCapacity();
+
+        total += springResources.vbo.getCapacity();
+
+        total += aabbResources.vbo.getCapacity();
+        total += aabbResources.instanceVbo.getCapacity();
+
+        return total;
+    }
+
     void SimulationRenderer::ensureCircleInstanceVboCapacity(size_t count)
     {
         constexpr size_t SIZEOF_INSTANCE = sizeof(CircleInstanceData);

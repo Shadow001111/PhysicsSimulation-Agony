@@ -145,6 +145,9 @@ namespace PS_AGONY
 		void renderObjectPreview(const void* params, BodyType type);
 
 		Camera2D& getCamera() noexcept { return camera; }
+
+		size_t getMemoryUsage() const noexcept;
+		size_t getVideoMemoryUsage() const noexcept;
 	private:
 		void initShaders();
 		void initBuffers();

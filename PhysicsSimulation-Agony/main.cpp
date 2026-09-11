@@ -75,7 +75,7 @@ struct ObjectCreatorState
 };
 
 
-static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugData, bool& pauseSimulation)
+static void renderGUI(PS_AGONY::Simulation& simulation, PS_AGONY::SimulationRenderer& simulationRenderer, const DebugData& debugData, bool& pauseSimulation)
 {
     ImGui::Begin("Simulation Diagnostics");
 
@@ -171,8 +171,15 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
         }
     }
 
-    // Memory hierarchy.
-    if (ImGui::CollapsingHeader("Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
+    // Renderer memory hierarchy.
+    if (ImGui::CollapsingHeader("Renderer Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Text("RAM:  %s", formatSizeBinary(simulationRenderer.getMemoryUsage()).c_str());
+        ImGui::Text("VRAM: %s", formatSizeBinary(simulationRenderer.getVideoMemoryUsage()).c_str());
+    }
+
+    // Simulation memory hierarchy.
+    if (ImGui::CollapsingHeader("Simulation Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
     {
         const size_t shapeTotal =
             simulationData.circleDataMemoryUsage +
@@ -203,7 +210,7 @@ static void renderGUI(PS_AGONY::Simulation& simulation, const DebugData& debugDa
             simulationData.narrowPhaseDetectorMemoryUsage +
             simulationData.bodyCollisionSolverMemoryUsage;
 
-        ImGui::Text("Total System Footprint: %s", formatSizeBinary(totalMemory).c_str());
+        ImGui::Text("Total: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
 
         if (ImGui::BeginTable("MemoryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
@@ -746,7 +753,7 @@ static int gameFunc()
             simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB);
 
             // Render debug data.
-            renderGUI(simulation, debugData, pauseSimulation);
+            renderGUI(simulation, simulationRenderer, debugData, pauseSimulation);
 
             // Render object creator.
             ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
