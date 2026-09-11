@@ -1,17 +1,20 @@
 #pragma once
-#include "Camera2D.h"
+#include "Physics/Camera2D.h"
+#include "Physics/ObjectSoA.h"
 
 #include "Ecstasy/OpenGL/Shader.h"
 #include "Ecstasy/OpenGL/ImmutableBuffer.h"
 #include "Ecstasy/OpenGL/VertexArray.h"
 
-#include "ObjectSoA.h"
-
 namespace PS_AGONY
 {
-	using namespace Ecstasy::OpenGL;
-
 	class Simulation;
+}
+
+namespace Render
+{
+	using namespace Ecstasy::OpenGL;
+	using namespace PS_AGONY;
 
 	class SimulationRenderer
 	{

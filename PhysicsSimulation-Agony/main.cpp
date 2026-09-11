@@ -1,10 +1,10 @@
 #include "Scenes.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
-
 #include "Physics/Simulation.h"
-#include "Physics/SimulationRenderer.h"
 
+#include "Render/SimulationRenderer.h"
+
+#include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Graphics/WindowManager.h"
 #include "Ecstasy/Graphics/TextRenderer.h"
 
@@ -75,7 +75,7 @@ struct ObjectCreatorState
 };
 
 
-static void renderGUI(PS_AGONY::Simulation& simulation, PS_AGONY::SimulationRenderer& simulationRenderer, const DebugData& debugData, bool& pauseSimulation)
+static void renderGUI(PS_AGONY::Simulation& simulation, Render::SimulationRenderer& simulationRenderer, const DebugData& debugData, bool& pauseSimulation)
 {
     ImGui::Begin("Simulation Diagnostics");
 
@@ -607,7 +607,7 @@ static int gameFunc()
 
     loadScene(simulation, 3);
 
-    PS_AGONY::SimulationRenderer simulationRenderer;
+    Render::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
 
     auto& camera = simulationRenderer.getCamera();

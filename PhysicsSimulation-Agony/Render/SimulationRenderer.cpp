@@ -1,14 +1,15 @@
 #include "SimulationRenderer.h"
-#include "Simulation.h"
-#include "Constants.h"
-#include "FastCosSin.h"
+
+#include "Physics/Simulation.h"
+#include "Physics/Constants.h"
+#include "Physics/FastCosSin.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <cmath>
 
-namespace PS_AGONY
+namespace Render
 {
     [[nodiscard]] static uint32_t idToHexColor(uint32_t x) noexcept
     {
@@ -71,10 +72,11 @@ namespace PS_AGONY
         //renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
         //renderBodyPositions(viewProjectionMatrix); // Blue.
-        renderColliderAABBs(foundColliders, viewProjectionMatrix);
+        //renderColliderAABBs(foundColliders, viewProjectionMatrix);
 
-        renderBroadPhaseAABBs(simulation, viewProjectionMatrix, cameraAABB);
-        renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
+        //renderBroadPhaseAABBs(simulation, viewProjectionMatrix, cameraAABB);
+        //renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
+
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
         renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
     }
@@ -330,6 +332,7 @@ namespace PS_AGONY
         renderPolygonColliders(foundColliderShapes[(size_t)BodyType::Polygon], viewProjectionMatrix, simRenderAlpha);
     }
 
+    // TODO: Add culling.
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
     {
         const size_t count = bodies.getCount();
@@ -368,6 +371,7 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
+    // TODO: Add culling.
     void SimulationRenderer::renderBodyPositions(const Mat4& viewProjectionMatrix)
     {
         const size_t count = bodies.getCount();
@@ -397,6 +401,7 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
+    // TODO: Add culling.
     void SimulationRenderer::renderBodyTruePositions(const Mat4& viewProjectionMatrix)
     {
         const size_t count = bodies.getCount();
@@ -797,6 +802,7 @@ namespace PS_AGONY
         renderCircleShapes(viewProjectionMatrix);
     }
 
+    // TODO: Add culling.
     void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
         TRACY_SCOPE_N("Render springs");
@@ -909,6 +915,7 @@ namespace PS_AGONY
         glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
     }
 
+    // TODO: Add culling.
     void SimulationRenderer::renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
     {
         TRACY_SCOPE_N("Render joints");

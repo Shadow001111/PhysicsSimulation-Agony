@@ -33,7 +33,7 @@
     <ClCompile Include="Physics\Simulation.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationRenderer.cpp">
+    <ClCompile Include="Render\SimulationRenderer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp">
@@ -113,7 +113,7 @@
     <ClInclude Include="Physics\Types.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationRenderer.h">
+    <ClInclude Include="Render\SimulationRenderer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\GlmTypes.h">
