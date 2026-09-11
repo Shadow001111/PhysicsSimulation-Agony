@@ -63,11 +63,17 @@ namespace PS_AGONY
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
         // Fetch colliders which overlap camera AABB.
-        fetchCollidersForRender(simulation, cameraAABB);
+        queryCollidersForRender(simulation, cameraAABB);
 
         // Render.
         renderColliders(viewProjectionMatrix, simRenderAlpha);
-        renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+
+        //renderBodyCentersOfMass(viewProjectionMatrix); // Red.
+        //renderBodyTruePositions(viewProjectionMatrix); // Green.
+        //renderBodyPositions(viewProjectionMatrix); // Blue.
+        renderColliderAABBs(foundColliders, viewProjectionMatrix);
+
+        renderBroadPhaseAABBs(simulation, viewProjectionMatrix, cameraAABB);
         renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
         renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
@@ -289,7 +295,7 @@ namespace PS_AGONY
         }
     }
 
-    void SimulationRenderer::fetchCollidersForRender(const Simulation& simulation, const AABB& cameraAABB)
+    void SimulationRenderer::queryCollidersForRender(const Simulation& simulation, const AABB& cameraAABB)
     {
         {
             TRACY_SCOPE_N("Find colliders for render");
@@ -322,11 +328,6 @@ namespace PS_AGONY
         renderCircleColliders(foundColliderShapes[(size_t)BodyType::Circle], viewProjectionMatrix, simRenderAlpha);
         renderBoxColliders(foundColliderShapes[(size_t)BodyType::Box], viewProjectionMatrix, simRenderAlpha);
         renderPolygonColliders(foundColliderShapes[(size_t)BodyType::Polygon], viewProjectionMatrix, simRenderAlpha);
-
-        //renderBodyCentersOfMass(viewProjectionMatrix); // Red.
-        //renderBodyTruePositions(viewProjectionMatrix); // Green.
-        //renderBodyPositions(viewProjectionMatrix); // Blue.
-        //renderColliderAABBs(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
@@ -689,11 +690,11 @@ namespace PS_AGONY
         renderPolygonShapes(viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderColliderAABBs(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix)
     {
         TRACY_SCOPE_N("Render collider AABBs");
 
-        const size_t colliderCount = colliders.getCount();
+        const size_t colliderCount = givenColliders.size();
         if (colliderCount == 0) return;
 
         // Reserve space.
@@ -709,16 +710,17 @@ namespace PS_AGONY
 
         for (size_t i = 0; i < colliderCount; i++)
         {
-            renderDataPtr[i].minX = minXPtr[i];
-            renderDataPtr[i].minY = minYPtr[i];
-            renderDataPtr[i].maxX = maxXPtr[i];
-            renderDataPtr[i].maxY = maxYPtr[i];
+            ColliderIndex colliderIndex = givenColliders[i];
+            renderDataPtr[i].minX = minXPtr[colliderIndex];
+            renderDataPtr[i].minY = minYPtr[colliderIndex];
+            renderDataPtr[i].maxX = maxXPtr[colliderIndex];
+            renderDataPtr[i].maxY = maxYPtr[colliderIndex];
         }
 
         renderAABBs({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render broad phase AABBs");
 
@@ -727,7 +729,7 @@ namespace PS_AGONY
         aabbResources.instanceData.clear();
 
         const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
-        bfcd.fetchAABBs(aabbResources.aabbs);
+        bfcd.queryLeafNodeAABBsInShape(BroadPhaseInternal::AABBQuery(cameraAABB), aabbResources.aabbs);
 
         if (aabbResources.aabbs.empty()) return;
 

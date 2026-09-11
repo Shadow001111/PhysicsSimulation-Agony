@@ -159,12 +159,16 @@ namespace PS_AGONY
 		// Returned pairs are COLLIDER index pairs.
 		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
 
-		// Returns all node aabbs.
-		void fetchAABBs(std::vector<AABB>& outAABBs) const;
+		// Returns all leaf node aabbs.
+		void getAllLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
 
 		// Returns COLLIDER indices whose AABB overlaps the query shape.
 		template <typename ShapeQuery>
 		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const;
+
+		// Returns the AABBs of leaf nodes whose AABB overlaps the query shape.
+		template <typename ShapeQuery>
+		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const;
 
 		size_t getMemoryUsage() const;
 	private:
@@ -267,6 +271,50 @@ namespace PS_AGONY
 					mask &= mask - 1;
 					outColliders.push_back(bvhFunctionResources.mainColliderIndices[node.start + lane]);
 				}
+			}
+			else // Internal Node.
+			{
+				const BvhNode& left = nodePtr[node.leftChildIndex];
+				const BvhNode& right = nodePtr[node.leftChildIndex + 1];
+
+				if (shape.overlaps(right))
+				{
+					stack[stackSize++] = node.leftChildIndex + 1;
+				}
+				if (shape.overlaps(left))
+				{
+					stack[stackSize++] = node.leftChildIndex;
+				}
+			}
+		}
+	}
+
+	template <typename ShapeQuery>
+	inline void BroadPhaseCollisionDetector::queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const
+	{
+		if (bvhFunctionResources.nodes.empty()) return;
+
+		// Quick escape if root node does not overlap shape.
+		if (!shape.overlaps(bvhFunctionResources.nodes[0])) return;
+
+		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
+
+		// Local stack traversal setup.
+		constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+
+		uint32_t stack[MAX_STACK_CAPACITY];
+		uint32_t stackSize = 0;
+
+		stack[stackSize++] = 0;
+
+		while (stackSize > 0)
+		{
+			const uint32_t nodeIdx = stack[--stackSize];
+			const BvhNode& node = nodePtr[nodeIdx];
+
+			if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf Node.
+			{
+				outAABBs.push_back(AABB{ node.minX, node.minY, node.maxX, node.maxY });
 			}
 			else // Internal Node.
 			{
