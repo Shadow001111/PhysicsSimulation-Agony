@@ -46,7 +46,12 @@ namespace Render
         shapeRenderer.init();
     }
 
-    void SimulationRenderer::renderSimulation(const Simulation& simulation, Real simRenderAlpha, const AABB& cameraAABB)
+    void SimulationRenderer::renderSimulation(
+        const Simulation& simulation,
+        Real simRenderAlpha,
+        const AABB& cameraAABB,
+        const RenderOptions& renderOptions
+    )
     {
         TRACY_SCOPE_N("Render simulation");
 
@@ -67,17 +72,25 @@ namespace Render
 
         // Render.
         renderColliders(viewProjectionMatrix, simRenderAlpha);
+        renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
+        renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
+
+        if (renderOptions.colliderAABBs)
+        {
+            renderColliderAABBs(foundColliders, viewProjectionMatrix);
+        }
+        if (renderOptions.broadPhaseAABBs)
+        {
+            renderBroadPhaseAABBs(simulation, viewProjectionMatrix, cameraAABB);
+        }
+        if (renderOptions.contactPoints)
+        {
+            renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
+        }
 
         //renderBodyCentersOfMass(viewProjectionMatrix); // Red.
         //renderBodyTruePositions(viewProjectionMatrix); // Green.
         //renderBodyPositions(viewProjectionMatrix); // Blue.
-        //renderColliderAABBs(foundColliders, viewProjectionMatrix);
-
-        //renderBroadPhaseAABBs(simulation, viewProjectionMatrix, cameraAABB);
-        //renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
-
-        renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
-        renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
     }
 
     void SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
