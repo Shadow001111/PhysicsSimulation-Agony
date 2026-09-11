@@ -43,8 +43,7 @@ namespace Render
     {
         TRACY_SCOPE_N("SimulationRenderer init");
 
-        initShaders();
-        initBuffers();
+        shapeRenderer.init();
     }
 
     void SimulationRenderer::renderSimulation(const Simulation& simulation, Real simRenderAlpha, const AABB& cameraAABB)
@@ -95,8 +94,8 @@ namespace Render
         {
             const auto* circleParams = static_cast<const CircleCreateParams*>(params);
 
-            circleResources.instanceData.resize(1);
-            CircleInstanceData& data = circleResources.instanceData[0];
+            shapeRenderer.circleResources.instanceData.resize(1);
+            ShapeRenderer::CircleInstanceData& data = shapeRenderer.circleResources.instanceData[0];
 
             data.positionX = static_cast<float>(circleParams->base.position.x);
             data.positionY = static_cast<float>(circleParams->base.position.y);
@@ -107,14 +106,14 @@ namespace Render
 
             data.color = 0x00FF00;
 
-            renderCircleShapes(viewProjectionMatrix);
+            shapeRenderer.renderCircleShapes(viewProjectionMatrix);
         }
         else if (type == BodyType::Box)
         {
             const auto* boxParams = static_cast<const BoxCreateParams*>(params);
 
-            boxResources.instanceData.resize(1);
-            BoxInstanceData& data = boxResources.instanceData[0];
+            shapeRenderer.boxResources.instanceData.resize(1);
+            ShapeRenderer::BoxInstanceData& data = shapeRenderer.boxResources.instanceData[0];
 
             data.positionX = static_cast<float>(boxParams->base.position.x);
             data.positionY = static_cast<float>(boxParams->base.position.y);
@@ -126,7 +125,7 @@ namespace Render
 
             data.color = 0x00FF00;
 
-            renderBoxShapes(viewProjectionMatrix);
+            shapeRenderer.renderBoxShapes(viewProjectionMatrix);
         }
         else if (type == BodyType::Polygon)
         {
@@ -135,20 +134,20 @@ namespace Render
             const size_t vertCount = polyParams->verticesCount;
             if (vertCount < 3) return;
 
-            ensurePolygonBufferCapacity(vertCount, 1);
+            shapeRenderer.ensurePolygonBufferCapacity(vertCount, 1);
 
-            polygonResources.vertexData.resize(vertCount);
-            polygonResources.instanceData.resize(1);
-            polygonResources.drawCommands.resize(1);
+            shapeRenderer.polygonResources.vertexData.resize(vertCount);
+            shapeRenderer.polygonResources.instanceData.resize(1);
+            shapeRenderer.polygonResources.drawCommands.resize(1);
 
-            glm::vec2* verts = polygonResources.vertexData.data();
+            glm::vec2* verts = shapeRenderer.polygonResources.vertexData.data();
             for (size_t i = 0; i < vertCount; i++)
             {
                 verts[i].x = static_cast<float>(polyParams->localVertices[i].x);
                 verts[i].y = static_cast<float>(polyParams->localVertices[i].y);
             }
 
-            PolygonInstanceData& inst = polygonResources.instanceData[0];
+            ShapeRenderer::PolygonInstanceData& inst = shapeRenderer.polygonResources.instanceData[0];
             inst.positionX = static_cast<float>(polyParams->base.position.x);
             inst.positionY = static_cast<float>(polyParams->base.position.y);
             inst.localCOMX = 0.0f;
@@ -156,144 +155,13 @@ namespace Render
             inst.rotation = static_cast<float>(polyParams->base.rotation);
             inst.color = 0x00FF00;
 
-            DrawArraysIndirectCommand& cmd = polygonResources.drawCommands[0];
+            DrawArraysIndirectCommand& cmd = shapeRenderer.polygonResources.drawCommands[0];
             cmd.count = static_cast<uint32_t>(vertCount);
             cmd.instanceCount = 1;
             cmd.first = 0;
             cmd.baseInstance = 0;
 
-            renderPolygonShapes(viewProjectionMatrix);
-        }
-    }
-
-    void SimulationRenderer::initShaders()
-    {
-        // Circle.
-        {
-            std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/Bodies/circle.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/circle.frag" }
-            };
-
-            circleResources.shader.create(sources);
-        }
-
-        // Box.
-        {
-            std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/Bodies/box.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/box.frag" }
-            };
-
-            boxResources.shader.create(sources);
-        }
-
-        // Polygon.
-        {
-            std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER,   "res/Shaders/Bodies/polygon.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/polygon.frag" }
-            };
-            polygonResources.shader.create(sources);
-        }
-
-        // AABB.
-        {
-            std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/aabb.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/aabb.frag" }
-            };
-            aabbResources.shader.create(sources);
-        }
-
-        // Spring.
-        {
-            std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/spring.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/spring.frag" }
-            };
-            springResources.shader.create(sources);
-        }
-    }
-
-    void SimulationRenderer::initBuffers()
-    {
-        // Circle.
-        {
-            const float circleVertices[] =
-            {
-                0.0f, 2.0f,
-                1.7321f, -1.0f,
-                -1.7321f, -1.0f
-            };
-
-            circleResources.vbo.create();
-            circleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
-
-            circleResources.vao.create();
-            circleResources.vao.bindVertexBuffer(0, circleResources.vbo.getID(), 0, sizeof(float) * 2);
-
-            circleResources.vao.enableAttribute(0);
-            circleResources.vao.setFloatAttribute(0, 2, 0, 0);
-
-            ensureCircleInstanceVboCapacity(64);
-        }
-
-        // Box.
-        {
-            const float vertices[] =
-            {
-                0.0f, 0.0f,
-                1.0f, 0.0f,
-                1.0f, 1.0f,
-                0.0f, 1.0f
-            };
-
-            boxResources.vbo.create();
-            boxResources.vbo.allocateStorage(sizeof(vertices), 0, vertices);
-
-            boxResources.vao.create();
-            boxResources.vao.bindVertexBuffer(0, boxResources.vbo.getID(), 0, sizeof(float) * 2);
-
-            boxResources.vao.enableAttribute(0);
-            boxResources.vao.setFloatAttribute(0, 2, 0, 0);
-
-            // Initial instance VBO capacity
-            ensureBoxInstanceVboCapacity(64);
-        }
-
-        // Polygon - VAO only; buffers are grown on first use.
-        {
-            polygonResources.vao.create();
-            ensurePolygonBufferCapacity(256, 64);
-        }
-
-        // AABB.
-        {
-            const float vertices[] =
-            {
-                0.0f, 0.0f,
-                1.0f, 0.0f,
-                1.0f, 1.0f,
-                0.0f, 1.0f
-            };
-
-            aabbResources.vbo.create();
-            aabbResources.vbo.allocateStorage(sizeof(vertices), 0, vertices);
-
-            aabbResources.vao.create();
-            aabbResources.vao.bindVertexBuffer(0, aabbResources.vbo.getID(), 0, sizeof(float) * 2);
-
-            aabbResources.vao.enableAttribute(0);
-            aabbResources.vao.setFloatAttribute(0, 2, 0, 0);
-
-            // Initial instance VBO capacity
-            ensureAABBInstanceVboCapacity(64);
-        }
-
-        // Spring.
-        {
-            springResources.vao.create();
+            shapeRenderer.renderPolygonShapes(viewProjectionMatrix);
         }
     }
 
@@ -339,7 +207,7 @@ namespace Render
         if (count == 0) return;
 
         // Reserve space.
-        circleResources.instanceData.resize(count);
+        shapeRenderer.circleResources.instanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
@@ -347,7 +215,7 @@ namespace Render
         const Real* ECSTASY_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT centerYPtr = bodies.localCenterOfMassY;
 
-        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -368,7 +236,7 @@ namespace Render
         }
 
         // Render.
-        renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -378,13 +246,13 @@ namespace Render
         if (count == 0) return;
 
         // Reserve space.
-        circleResources.instanceData.resize(count);
+        shapeRenderer.circleResources.instanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
 
-        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -398,7 +266,7 @@ namespace Render
         }
 
         // Render.
-        renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -408,13 +276,13 @@ namespace Render
         if (count == 0) return;
 
         // Reserve space.
-        circleResources.instanceData.resize(count);
+        shapeRenderer.circleResources.instanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.worldCenterX;
         const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.worldCenterY;
 
-        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -428,7 +296,7 @@ namespace Render
         }
 
         // Render.
-        renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
@@ -439,7 +307,7 @@ namespace Render
         TRACY_SCOPE_N("Render circle colliders");
 
         // Reserve space.
-        circleResources.instanceData.resize(count);
+        shapeRenderer.circleResources.instanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
@@ -461,7 +329,7 @@ namespace Render
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
-        CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -504,7 +372,7 @@ namespace Render
         }
 
         // Render.
-        renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
@@ -515,7 +383,7 @@ namespace Render
         TRACY_SCOPE_N("Render box colliders");
 
         // Reserve space.
-        boxResources.instanceData.resize(count);
+        shapeRenderer.boxResources.instanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
@@ -538,7 +406,7 @@ namespace Render
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxResources.instanceData.data();
+        ShapeRenderer::BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.boxResources.instanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -582,7 +450,7 @@ namespace Render
         }
 
         // Render.
-        renderBoxShapes(viewProjectionMatrix);
+        shapeRenderer.renderBoxShapes(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
@@ -623,16 +491,16 @@ namespace Render
             totalVertices += localVertsPtr[shapeIndex].size();
         }
 
-        ensurePolygonBufferCapacity(totalVertices, count);
+        shapeRenderer.ensurePolygonBufferCapacity(totalVertices, count);
 
         // Build CPU-side data.
-        polygonResources.vertexData.resize(totalVertices);
-        polygonResources.instanceData.resize(count);
-        polygonResources.drawCommands.resize(count);
+        shapeRenderer.polygonResources.vertexData.resize(totalVertices);
+        shapeRenderer.polygonResources.instanceData.resize(count);
+        shapeRenderer.polygonResources.drawCommands.resize(count);
 
-        glm::vec2* ECSTASY_RESTRICT verts = polygonResources.vertexData.data();
-        PolygonInstanceData* ECSTASY_RESTRICT instData = polygonResources.instanceData.data();
-        DrawArraysIndirectCommand* ECSTASY_RESTRICT cmds = polygonResources.drawCommands.data();
+        glm::vec2* ECSTASY_RESTRICT verts = shapeRenderer.polygonResources.vertexData.data();
+        ShapeRenderer::PolygonInstanceData* ECSTASY_RESTRICT instData = shapeRenderer.polygonResources.instanceData.data();
+        DrawArraysIndirectCommand* ECSTASY_RESTRICT cmds = shapeRenderer.polygonResources.drawCommands.data();
 
         uint32_t vertexOffset = 0;
 
@@ -692,7 +560,7 @@ namespace Render
             vertexOffset += vertCount;
         }
 
-        renderPolygonShapes(viewProjectionMatrix);
+        shapeRenderer.renderPolygonShapes(viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix)
@@ -703,7 +571,7 @@ namespace Render
         if (colliderCount == 0) return;
 
         // Reserve space.
-        aabbResources.instanceData.resize(colliderCount);
+        shapeRenderer.aabbResources.instanceData.resize(colliderCount);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT minXPtr = colliders.aabbMinX;
@@ -711,7 +579,7 @@ namespace Render
         const Real* ECSTASY_RESTRICT maxXPtr = colliders.aabbMaxX;
         const Real* ECSTASY_RESTRICT maxYPtr = colliders.aabbMaxY;
 
-        FloatAABB* ECSTASY_RESTRICT renderDataPtr = aabbResources.instanceData.data();
+        ShapeRenderer::FloatAABB* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.aabbResources.instanceData.data();
 
         for (size_t i = 0; i < colliderCount; i++)
         {
@@ -722,7 +590,7 @@ namespace Render
             renderDataPtr[i].maxY = maxYPtr[colliderIndex];
         }
 
-        renderAABBs({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
+        shapeRenderer.renderAABBShapes({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -730,28 +598,28 @@ namespace Render
         TRACY_SCOPE_N("Render broad phase AABBs");
 
         // Fetch AABBs.
-        aabbResources.aabbs.clear();
-        aabbResources.instanceData.clear();
+        queriedAABBs.clear();
+        shapeRenderer.aabbResources.instanceData.clear();
 
         const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
-        bfcd.queryLeafNodeAABBsInShape(BroadPhaseInternal::AABBQuery(cameraAABB), aabbResources.aabbs);
+        bfcd.queryLeafNodeAABBsInShape(BroadPhaseInternal::AABBQuery(cameraAABB), queriedAABBs);
 
-        if (aabbResources.aabbs.empty()) return;
+        if (queriedAABBs.empty()) return;
 
         // Allocate space for instance data
-        aabbResources.instanceData.resize(aabbResources.aabbs.size());
+        shapeRenderer.aabbResources.instanceData.resize(queriedAABBs.size());
 
         // Copy and cast values. 
-        for (size_t i = 0; i < aabbResources.aabbs.size(); i++)
+        for (size_t i = 0; i < queriedAABBs.size(); i++)
         {
-            aabbResources.instanceData[i].minX = static_cast<float>(aabbResources.aabbs[i].minX);
-            aabbResources.instanceData[i].minY = static_cast<float>(aabbResources.aabbs[i].minY);
-            aabbResources.instanceData[i].maxX = static_cast<float>(aabbResources.aabbs[i].maxX);
-            aabbResources.instanceData[i].maxY = static_cast<float>(aabbResources.aabbs[i].maxY);
+            shapeRenderer.aabbResources.instanceData[i].minX = static_cast<float>(queriedAABBs[i].minX);
+            shapeRenderer.aabbResources.instanceData[i].minY = static_cast<float>(queriedAABBs[i].minY);
+            shapeRenderer.aabbResources.instanceData[i].maxX = static_cast<float>(queriedAABBs[i].maxX);
+            shapeRenderer.aabbResources.instanceData[i].maxY = static_cast<float>(queriedAABBs[i].maxY);
         }
 
         // Render.
-        renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
+        shapeRenderer.renderAABBShapes({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -769,7 +637,7 @@ namespace Render
         const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
-        circleResources.instanceData.clear();
+        shapeRenderer.circleResources.instanceData.clear();
 
         // Prepare instance data.
         for (size_t i = 0; i < collisionCount; i++)
@@ -786,7 +654,7 @@ namespace Render
                     continue;
                 }
 
-                auto& renderData = circleResources.instanceData.emplace_back();
+                auto& renderData = shapeRenderer.circleResources.instanceData.emplace_back();
 
                 renderData.positionX = contact.x;
                 renderData.positionY = contact.y;
@@ -799,7 +667,7 @@ namespace Render
         }
 
         // Render.
-        renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -812,10 +680,10 @@ namespace Render
         if (springCount == 0) return;
 
         const size_t vertexCount = springCount * 2;
-        ensureSpringBufferCapacity(vertexCount);
+        shapeRenderer.ensureSpringBufferCapacity(vertexCount);
 
-        springResources.vertexData.resize(vertexCount);
-        LineVertex* ECSTASY_RESTRICT verts = springResources.vertexData.data();
+        shapeRenderer.springResources.vertexData.resize(vertexCount);
+        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = shapeRenderer.springResources.vertexData.data();
 
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
         const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
@@ -906,12 +774,12 @@ namespace Render
             verts[vIdx + 1].color = color;
         }
 
-        springResources.vbo.write(springResources.vertexData.data(), vertexCount * sizeof(LineVertex));
+        shapeRenderer.springResources.vbo.write(shapeRenderer.springResources.vertexData.data(), vertexCount * sizeof(ShapeRenderer::LineVertex));
 
-        springResources.shader.use();
-        springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+        shapeRenderer.springResources.shader.use();
+        shapeRenderer.springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
-        springResources.vao.bind();
+        shapeRenderer.springResources.vao.bind();
         glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
     }
 
@@ -926,10 +794,10 @@ namespace Render
 
         // 2 lines per joint = 4 vertices.
         const size_t vertexCount = jointCount * 4;
-        ensureSpringBufferCapacity(vertexCount);
+        shapeRenderer.ensureSpringBufferCapacity(vertexCount);
 
-        springResources.vertexData.resize(vertexCount);
-        LineVertex* ECSTASY_RESTRICT verts = springResources.vertexData.data();
+        shapeRenderer.springResources.vertexData.resize(vertexCount);
+        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = shapeRenderer.springResources.vertexData.data();
 
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
         const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
@@ -1006,113 +874,13 @@ namespace Render
             verts[vIdx + 3].color = color;
         }
 
-        springResources.vbo.write(springResources.vertexData.data(), vertexCount * sizeof(LineVertex));
+        shapeRenderer.springResources.vbo.write(shapeRenderer.springResources.vertexData.data(), vertexCount * sizeof(ShapeRenderer::LineVertex));
 
-        springResources.shader.use();
-        springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+        shapeRenderer.springResources.shader.use();
+        shapeRenderer.springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
-        springResources.vao.bind();
+        shapeRenderer.springResources.vao.bind();
         glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
-    }
-
-    void SimulationRenderer::renderCircleShapes(const Mat4& viewProjectionMatrix)
-    {
-        TRACY_SCOPE_N("Render circle shapes");
-
-        const size_t count = circleResources.instanceData.size();
-        if (count == 0) return;
-
-        // Reserve space.
-        ensureCircleInstanceVboCapacity(count);
-
-        // Move data to gpu.
-        circleResources.instanceVbo.write(circleResources.instanceData.data(), count * sizeof(CircleInstanceData));
-
-        // Bind things, set uniforms.
-        circleResources.shader.use();
-        circleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
-
-        circleResources.vao.bind();
-
-        // Draw.
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
-    }
-
-    void SimulationRenderer::renderBoxShapes(const Mat4& viewProjectionMatrix)
-    {
-        TRACY_SCOPE_N("Render box shapes");
-
-        const size_t count = boxResources.instanceData.size();
-        if (count == 0) return;
-
-        // Reserve space.
-        ensureBoxInstanceVboCapacity(count);
-
-        // Move data to gpu.
-        boxResources.instanceVbo.write(boxResources.instanceData.data(), count * sizeof(BoxInstanceData));
-
-        // Bind things, set uniforms.
-        boxResources.shader.use();
-        boxResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
-
-        boxResources.vao.bind();
-
-        // Draw.
-        glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, count);
-    }
-
-    void SimulationRenderer::renderPolygonShapes(const Mat4& viewProjectionMatrix)
-    {
-        TRACY_SCOPE_N("Render polygon shapes");
-
-        const size_t polygonCount = polygonResources.drawCommands.size();
-        if (polygonCount == 0) return;
-
-        const size_t vertexBytes = polygonResources.vertexData.size() * sizeof(glm::vec2);
-        const size_t instanceBytes = polygonCount * sizeof(PolygonInstanceData);
-        const size_t cmdBytes = polygonCount * sizeof(DrawArraysIndirectCommand);
-
-        // Upload vertex positions.
-        polygonResources.vertexVbo.write(polygonResources.vertexData.data(), vertexBytes);
-
-        // Upload per-polygon transforms.
-        polygonResources.instanceVbo.write(polygonResources.instanceData.data(), instanceBytes);
-
-        // Upload indirect draw commands.
-        polygonResources.indirectBuf.write(polygonResources.drawCommands.data(), cmdBytes);
-
-        // Bind and draw.
-        polygonResources.shader.use();
-        polygonResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
-
-        polygonResources.vao.bind();
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, polygonResources.indirectBuf.getID());
-
-        glMultiDrawArraysIndirect(GL_TRIANGLE_FAN, nullptr, static_cast<GLsizei>(polygonCount), 0);
-    }
-
-    void SimulationRenderer::renderAABBs(const glm::vec3& color, const Mat4& viewProjectionMatrix)
-    {
-        TRACY_SCOPE_N("Render AABBs");
-
-        const size_t count = aabbResources.instanceData.size();
-        if (count == 0) return;
-
-        // Reserve space.
-        ensureAABBInstanceVboCapacity(count);
-
-        // Move data to gpu.
-        aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(FloatAABB));
-
-        // Bind things, set uniforms.
-        aabbResources.shader.use();
-        aabbResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
-        aabbResources.shader.setVec3("color", color.x, color.y, color.z);
-
-        aabbResources.vao.bind();
-
-        // Draw.
-        glDrawArraysInstanced(GL_LINE_LOOP, 0, 4, count);
     }
 
     size_t SimulationRenderer::getMemoryUsage() const noexcept
@@ -1123,17 +891,16 @@ namespace Render
         for (const auto& vec : foundColliderShapes)
             total += getVectorMemoryUsage(vec);
 
-        total += getVectorMemoryUsage(circleResources.instanceData);
-        total += getVectorMemoryUsage(boxResources.instanceData);
+        total += getVectorMemoryUsage(shapeRenderer.circleResources.instanceData);
+        total += getVectorMemoryUsage(shapeRenderer.boxResources.instanceData);
 
-        total += getVectorMemoryUsage(polygonResources.vertexData);
-        total += getVectorMemoryUsage(polygonResources.instanceData);
-        total += getVectorMemoryUsage(polygonResources.drawCommands);
+        total += getVectorMemoryUsage(shapeRenderer.polygonResources.vertexData);
+        total += getVectorMemoryUsage(shapeRenderer.polygonResources.instanceData);
+        total += getVectorMemoryUsage(shapeRenderer.polygonResources.drawCommands);
 
-        total += getVectorMemoryUsage(springResources.vertexData);
+        total += getVectorMemoryUsage(shapeRenderer.springResources.vertexData);
 
-        total += getVectorMemoryUsage(aabbResources.aabbs);
-        total += getVectorMemoryUsage(aabbResources.instanceData);
+        total += getVectorMemoryUsage(shapeRenderer.aabbResources.instanceData);
 
         return total;
     }
@@ -1142,196 +909,21 @@ namespace Render
     {
         size_t total = 0;
 
-        total += circleResources.vbo.getCapacity();
-        total += circleResources.instanceVbo.getCapacity();
+        total += shapeRenderer.circleResources.vbo.getCapacity();
+        total += shapeRenderer.circleResources.instanceVbo.getCapacity();
 
-        total += boxResources.vbo.getCapacity();
-        total += boxResources.instanceVbo.getCapacity();
+        total += shapeRenderer.boxResources.vbo.getCapacity();
+        total += shapeRenderer.boxResources.instanceVbo.getCapacity();
 
-        total += polygonResources.vertexVbo.getCapacity();
-        total += polygonResources.instanceVbo.getCapacity();
-        total += polygonResources.indirectBuf.getCapacity();
+        total += shapeRenderer.polygonResources.vertexVbo.getCapacity();
+        total += shapeRenderer.polygonResources.instanceVbo.getCapacity();
+        total += shapeRenderer.polygonResources.indirectBuf.getCapacity();
 
-        total += springResources.vbo.getCapacity();
+        total += shapeRenderer.springResources.vbo.getCapacity();
 
-        total += aabbResources.vbo.getCapacity();
-        total += aabbResources.instanceVbo.getCapacity();
+        total += shapeRenderer.aabbResources.vbo.getCapacity();
+        total += shapeRenderer.aabbResources.instanceVbo.getCapacity();
 
         return total;
-    }
-
-    void SimulationRenderer::ensureCircleInstanceVboCapacity(size_t count)
-    {
-        constexpr size_t SIZEOF_INSTANCE = sizeof(CircleInstanceData);
-
-        auto& vao = circleResources.vao;
-        auto& instanceVbo = circleResources.instanceVbo;
-
-        const size_t neededCapacity = count * SIZEOF_INSTANCE;
-        const size_t currentCapacity = instanceVbo.getCapacity();
-
-        if (neededCapacity <= currentCapacity) return;
-
-        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
-
-        instanceVbo.create();
-        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-
-        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
-
-        vao.enableAttribute(1);
-        vao.setFloatAttribute(1, 2, 0, 1);
-        vao.setAttributeDivisor(1, 1);
-
-        vao.enableAttribute(2);
-        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
-        vao.setAttributeDivisor(2, 1);
-
-        vao.enableAttribute(3);
-        vao.setFloatAttribute(3, 1, sizeof(float) * 4, 1);
-        vao.setAttributeDivisor(3, 1);
-
-        vao.enableAttribute(4);
-        vao.setFloatAttribute(4, 1, sizeof(float) * 5, 1);
-        vao.setAttributeDivisor(4, 1);
-
-        vao.enableAttribute(5);
-        vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
-        vao.setAttributeDivisor(5, 1);
-    }
-
-    void SimulationRenderer::ensureBoxInstanceVboCapacity(size_t count)
-    {
-        constexpr size_t SIZEOF_INSTANCE = sizeof(BoxInstanceData);
-
-        auto& vao = boxResources.vao;
-        auto& instanceVbo = boxResources.instanceVbo;
-
-        const size_t neededCapacity = count * SIZEOF_INSTANCE;
-        const size_t currentCapacity = instanceVbo.getCapacity();
-
-        if (neededCapacity <= currentCapacity) return;
-
-        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
-
-        instanceVbo.create();
-        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-
-        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
-
-        vao.enableAttribute(1);
-        vao.setFloatAttribute(1, 2, 0, 1);
-        vao.setAttributeDivisor(1, 1);
-
-        vao.enableAttribute(2);
-        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
-        vao.setAttributeDivisor(2, 1);
-
-        vao.enableAttribute(3);
-        vao.setFloatAttribute(3, 1, sizeof(float) * 4, 1);
-        vao.setAttributeDivisor(3, 1);
-
-        vao.enableAttribute(4);
-        vao.setFloatAttribute(4, 2, sizeof(float) * 5, 1);
-        vao.setAttributeDivisor(4, 1);
-
-        vao.enableAttribute(5);
-        vao.setIntAttribute(5, 1, sizeof(float) * 7, 1);
-        vao.setAttributeDivisor(5, 1);
-    }
-
-    void SimulationRenderer::ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount)
-    {
-        constexpr size_t SIZEOF_VERTEX = sizeof(glm::vec2);
-        constexpr size_t SIZEOF_INSTANCE = sizeof(PolygonInstanceData);
-        constexpr size_t SIZEOF_CMD = sizeof(DrawArraysIndirectCommand);
-
-        auto& vao = polygonResources.vao;
-        auto& vertexVbo = polygonResources.vertexVbo;
-        auto& instanceVbo = polygonResources.instanceVbo;
-        auto& indirectBuf = polygonResources.indirectBuf;
-
-        const size_t neededVertexBytes = vertexCount * SIZEOF_VERTEX;
-        if (neededVertexBytes > vertexVbo.getCapacity())
-        {
-            const size_t newCapacity = neededVertexBytes + (neededVertexBytes >> 1);
-
-            vertexVbo.create();
-            vertexVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-
-            vao.bindVertexBuffer(0, vertexVbo.getID(), 0, SIZEOF_VERTEX);
-            vao.enableAttribute(0);
-            vao.setFloatAttribute(0, 2, 0, 0);
-        }
-
-        const size_t neededInstanceBytes = polygonCount * SIZEOF_INSTANCE;
-        if (neededInstanceBytes > instanceVbo.getCapacity())
-        {
-            const size_t newCapacity = neededInstanceBytes + (neededInstanceBytes >> 1);
-
-            instanceVbo.create();
-            instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, instanceVbo.getID());
-        }
-
-        const size_t neededCmdBytes = polygonCount * SIZEOF_CMD;
-        if (neededCmdBytes > indirectBuf.getCapacity())
-        {
-            const size_t newCapacity = neededCmdBytes + (neededCmdBytes >> 1);
-
-            indirectBuf.create();
-            indirectBuf.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-        }
-    }
-
-    void SimulationRenderer::ensureAABBInstanceVboCapacity(size_t count)
-    {
-        constexpr size_t SIZEOF_INSTANCE = sizeof(FloatAABB);
-
-        auto& vao = aabbResources.vao;
-        auto& instanceVbo = aabbResources.instanceVbo;
-
-        const size_t neededCapacity = count * SIZEOF_INSTANCE;
-        const size_t currentCapacity = instanceVbo.getCapacity();
-
-        if (neededCapacity <= currentCapacity) return;
-
-        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
-
-        instanceVbo.create();
-        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-
-        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
-
-        vao.enableAttribute(1);
-        vao.setFloatAttribute(1, 4, 0, 1);
-        vao.setAttributeDivisor(1, 1);
-    }
-
-    void SimulationRenderer::ensureSpringBufferCapacity(size_t vertexCount)
-    {
-        constexpr size_t SIZEOF_VERTEX = sizeof(LineVertex);
-
-        auto& vao = springResources.vao;
-        auto& vbo = springResources.vbo;
-
-        const size_t neededBytes = vertexCount * SIZEOF_VERTEX;
-        if (neededBytes <= vbo.getCapacity()) return;
-
-        const size_t newCapacity = neededBytes + (neededBytes >> 1);
-
-        vbo.create();
-        vbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
-
-        vao.bindVertexBuffer(0, vbo.getID(), 0, SIZEOF_VERTEX);
-
-        // Setup positions attribute (location = 0)
-        vao.enableAttribute(0);
-        vao.setFloatAttribute(0, 2, 0, 0);
-
-        // Setup packed Hex Color attribute (location = 1)
-        vao.enableAttribute(1);
-        vao.setIntAttribute(1, 1, sizeof(float) * 2, 0);
     }
 }
