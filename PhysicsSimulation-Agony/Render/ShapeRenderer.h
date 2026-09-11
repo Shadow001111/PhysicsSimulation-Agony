@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include <vector>
+#include <span>
 #include <cstdint>
 
 namespace Render
@@ -61,7 +62,6 @@ namespace Render
 			ImmutableBuffer vbo;
 			ImmutableBuffer instanceVbo;
 			Shader shader;
-			std::vector<CircleInstanceData> instanceData;
 		};
 
 		struct BoxRenderResources
@@ -70,7 +70,6 @@ namespace Render
 			ImmutableBuffer vbo;
 			ImmutableBuffer instanceVbo;
 			Shader shader;
-			std::vector<BoxInstanceData> instanceData;
 		};
 
 		struct PolygonRenderResources
@@ -80,17 +79,14 @@ namespace Render
 			ImmutableBuffer instanceVbo;
 			ImmutableBuffer indirectBuf;
 			Shader shader;
-			std::vector<glm::vec2> vertexData;
-			std::vector<PolygonInstanceData> instanceData;
-			std::vector<DrawArraysIndirectCommand> drawCommands;
 		};
 
-		struct SpringRenderResources
+		// Shared by any 2-point-per-segment line draw: springs, joints, rods, etc.
+		struct LineRenderResources
 		{
 			VertexArray vao;
 			ImmutableBuffer vbo;
 			Shader shader;
-			std::vector<LineVertex> vertexData;
 		};
 
 		struct AABBResources
@@ -99,30 +95,34 @@ namespace Render
 			ImmutableBuffer vbo;
 			ImmutableBuffer instanceVbo;
 			Shader shader;
-			std::vector<FloatAABB> instanceData;
 		};
 	public:
-		// Render resources.
+		// Render resources (GPU-side only; CPU-side instance data is owned by the caller).
 		CircleRenderResources circleResources;
 		BoxRenderResources boxResources;
 		PolygonRenderResources polygonResources;
-		SpringRenderResources springResources;
+		LineRenderResources lineResources;
 		AABBResources aabbResources;
 	public:
 		void init();
 		void initShaders();
 		void initBuffers();
 
-		void renderCircleShapes(const glm::mat4& viewProjectionMatrix);
-		void renderBoxShapes(const glm::mat4& viewProjectionMatrix);
-		void renderPolygonShapes(const glm::mat4& viewProjectionMatrix);
-		void renderAABBShapes(const glm::vec3& color, const glm::mat4& viewProjectionMatrix);
-	
+		void renderCircleShapes(std::span<const CircleInstanceData> instances, const glm::mat4& viewProjectionMatrix);
+		void renderBoxShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix);
+		void renderPolygonShapes(
+			std::span<const glm::vec2> vertices,
+			std::span<const PolygonInstanceData> instances,
+			std::span<const DrawArraysIndirectCommand> drawCommands,
+			const glm::mat4& viewProjectionMatrix
+		);
+		void renderAABBShapes(std::span<const FloatAABB> instances, const glm::vec3& color, const glm::mat4& viewProjectionMatrix);
+		void renderLines(std::span<const LineVertex> vertices, const glm::mat4& viewProjectionMatrix);
+
 		void ensureCircleInstanceVboCapacity(size_t count);
 		void ensureBoxInstanceVboCapacity(size_t count);
 		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);
 		void ensureAABBInstanceVboCapacity(size_t count);
-		void ensureSpringBufferCapacity(size_t vertexCount);
+		void ensureLineBufferCapacity(size_t vertexCount);
 	};
 }
-

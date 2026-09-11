@@ -74,6 +74,7 @@ namespace Render
         renderColliders(viewProjectionMatrix, simRenderAlpha);
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
         renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
+        renderRods(simulation, viewProjectionMatrix, simRenderAlpha);
 
         if (renderOptions.colliderAABBs)
         {
@@ -107,8 +108,8 @@ namespace Render
         {
             const auto* circleParams = static_cast<const CircleCreateParams*>(params);
 
-            shapeRenderer.circleResources.instanceData.resize(1);
-            ShapeRenderer::CircleInstanceData& data = shapeRenderer.circleResources.instanceData[0];
+            circleInstanceData.resize(1);
+            ShapeRenderer::CircleInstanceData& data = circleInstanceData[0];
 
             data.positionX = static_cast<float>(circleParams->base.position.x);
             data.positionY = static_cast<float>(circleParams->base.position.y);
@@ -119,14 +120,14 @@ namespace Render
 
             data.color = 0x00FF00;
 
-            shapeRenderer.renderCircleShapes(viewProjectionMatrix);
+            shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
         }
         else if (type == BodyType::Box)
         {
             const auto* boxParams = static_cast<const BoxCreateParams*>(params);
 
-            shapeRenderer.boxResources.instanceData.resize(1);
-            ShapeRenderer::BoxInstanceData& data = shapeRenderer.boxResources.instanceData[0];
+            boxInstanceData.resize(1);
+            ShapeRenderer::BoxInstanceData& data = boxInstanceData[0];
 
             data.positionX = static_cast<float>(boxParams->base.position.x);
             data.positionY = static_cast<float>(boxParams->base.position.y);
@@ -138,7 +139,7 @@ namespace Render
 
             data.color = 0x00FF00;
 
-            shapeRenderer.renderBoxShapes(viewProjectionMatrix);
+            shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
         }
         else if (type == BodyType::Polygon)
         {
@@ -149,18 +150,18 @@ namespace Render
 
             shapeRenderer.ensurePolygonBufferCapacity(vertCount, 1);
 
-            shapeRenderer.polygonResources.vertexData.resize(vertCount);
-            shapeRenderer.polygonResources.instanceData.resize(1);
-            shapeRenderer.polygonResources.drawCommands.resize(1);
+            polygonVertexData.resize(vertCount);
+            polygonInstanceData.resize(1);
+            polygonDrawCommands.resize(1);
 
-            glm::vec2* verts = shapeRenderer.polygonResources.vertexData.data();
+            glm::vec2* verts = polygonVertexData.data();
             for (size_t i = 0; i < vertCount; i++)
             {
                 verts[i].x = static_cast<float>(polyParams->localVertices[i].x);
                 verts[i].y = static_cast<float>(polyParams->localVertices[i].y);
             }
 
-            ShapeRenderer::PolygonInstanceData& inst = shapeRenderer.polygonResources.instanceData[0];
+            ShapeRenderer::PolygonInstanceData& inst = polygonInstanceData[0];
             inst.positionX = static_cast<float>(polyParams->base.position.x);
             inst.positionY = static_cast<float>(polyParams->base.position.y);
             inst.localCOMX = 0.0f;
@@ -168,13 +169,13 @@ namespace Render
             inst.rotation = static_cast<float>(polyParams->base.rotation);
             inst.color = 0x00FF00;
 
-            DrawArraysIndirectCommand& cmd = shapeRenderer.polygonResources.drawCommands[0];
+            DrawArraysIndirectCommand& cmd = polygonDrawCommands[0];
             cmd.count = static_cast<uint32_t>(vertCount);
             cmd.instanceCount = 1;
             cmd.first = 0;
             cmd.baseInstance = 0;
 
-            shapeRenderer.renderPolygonShapes(viewProjectionMatrix);
+            shapeRenderer.renderPolygonShapes(polygonVertexData, polygonInstanceData, polygonDrawCommands, viewProjectionMatrix);
         }
     }
 
@@ -220,7 +221,7 @@ namespace Render
         if (count == 0) return;
 
         // Reserve space.
-        shapeRenderer.circleResources.instanceData.resize(count);
+        circleInstanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
@@ -228,7 +229,7 @@ namespace Render
         const Real* ECSTASY_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT centerYPtr = bodies.localCenterOfMassY;
 
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -249,7 +250,7 @@ namespace Render
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -259,13 +260,13 @@ namespace Render
         if (count == 0) return;
 
         // Reserve space.
-        shapeRenderer.circleResources.instanceData.resize(count);
+        circleInstanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
 
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -279,7 +280,7 @@ namespace Render
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -289,13 +290,13 @@ namespace Render
         if (count == 0) return;
 
         // Reserve space.
-        shapeRenderer.circleResources.instanceData.resize(count);
+        circleInstanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.worldCenterX;
         const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.worldCenterY;
 
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -309,7 +310,7 @@ namespace Render
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
@@ -320,7 +321,7 @@ namespace Render
         TRACY_SCOPE_N("Render circle colliders");
 
         // Reserve space.
-        shapeRenderer.circleResources.instanceData.resize(count);
+        circleInstanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
@@ -342,7 +343,7 @@ namespace Render
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.circleResources.instanceData.data();
+        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -385,7 +386,7 @@ namespace Render
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
@@ -396,7 +397,7 @@ namespace Render
         TRACY_SCOPE_N("Render box colliders");
 
         // Reserve space.
-        shapeRenderer.boxResources.instanceData.resize(count);
+        boxInstanceData.resize(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
@@ -419,7 +420,7 @@ namespace Render
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        ShapeRenderer::BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.boxResources.instanceData.data();
+        ShapeRenderer::BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxInstanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -463,7 +464,7 @@ namespace Render
         }
 
         // Render.
-        shapeRenderer.renderBoxShapes(viewProjectionMatrix);
+        shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
@@ -507,13 +508,13 @@ namespace Render
         shapeRenderer.ensurePolygonBufferCapacity(totalVertices, count);
 
         // Build CPU-side data.
-        shapeRenderer.polygonResources.vertexData.resize(totalVertices);
-        shapeRenderer.polygonResources.instanceData.resize(count);
-        shapeRenderer.polygonResources.drawCommands.resize(count);
+        polygonVertexData.resize(totalVertices);
+        polygonInstanceData.resize(count);
+        polygonDrawCommands.resize(count);
 
-        glm::vec2* ECSTASY_RESTRICT verts = shapeRenderer.polygonResources.vertexData.data();
-        ShapeRenderer::PolygonInstanceData* ECSTASY_RESTRICT instData = shapeRenderer.polygonResources.instanceData.data();
-        DrawArraysIndirectCommand* ECSTASY_RESTRICT cmds = shapeRenderer.polygonResources.drawCommands.data();
+        glm::vec2* ECSTASY_RESTRICT verts = polygonVertexData.data();
+        ShapeRenderer::PolygonInstanceData* ECSTASY_RESTRICT instData = polygonInstanceData.data();
+        DrawArraysIndirectCommand* ECSTASY_RESTRICT cmds = polygonDrawCommands.data();
 
         uint32_t vertexOffset = 0;
 
@@ -573,7 +574,7 @@ namespace Render
             vertexOffset += vertCount;
         }
 
-        shapeRenderer.renderPolygonShapes(viewProjectionMatrix);
+        shapeRenderer.renderPolygonShapes(polygonVertexData, polygonInstanceData, polygonDrawCommands, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix)
@@ -584,7 +585,7 @@ namespace Render
         if (colliderCount == 0) return;
 
         // Reserve space.
-        shapeRenderer.aabbResources.instanceData.resize(colliderCount);
+        aabbInstanceData.resize(colliderCount);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT minXPtr = colliders.aabbMinX;
@@ -592,7 +593,7 @@ namespace Render
         const Real* ECSTASY_RESTRICT maxXPtr = colliders.aabbMaxX;
         const Real* ECSTASY_RESTRICT maxYPtr = colliders.aabbMaxY;
 
-        ShapeRenderer::FloatAABB* ECSTASY_RESTRICT renderDataPtr = shapeRenderer.aabbResources.instanceData.data();
+        ShapeRenderer::FloatAABB* ECSTASY_RESTRICT renderDataPtr = aabbInstanceData.data();
 
         for (size_t i = 0; i < colliderCount; i++)
         {
@@ -603,7 +604,7 @@ namespace Render
             renderDataPtr[i].maxY = maxYPtr[colliderIndex];
         }
 
-        shapeRenderer.renderAABBShapes({ 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
+        shapeRenderer.renderAABBShapes(aabbInstanceData, { 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -612,7 +613,7 @@ namespace Render
 
         // Fetch AABBs.
         queriedAABBs.clear();
-        shapeRenderer.aabbResources.instanceData.clear();
+        aabbInstanceData.clear();
 
         const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
         bfcd.queryLeafNodeAABBsInShape(BroadPhaseInternal::AABBQuery(cameraAABB), queriedAABBs);
@@ -620,19 +621,19 @@ namespace Render
         if (queriedAABBs.empty()) return;
 
         // Allocate space for instance data
-        shapeRenderer.aabbResources.instanceData.resize(queriedAABBs.size());
+        aabbInstanceData.resize(queriedAABBs.size());
 
         // Copy and cast values. 
         for (size_t i = 0; i < queriedAABBs.size(); i++)
         {
-            shapeRenderer.aabbResources.instanceData[i].minX = static_cast<float>(queriedAABBs[i].minX);
-            shapeRenderer.aabbResources.instanceData[i].minY = static_cast<float>(queriedAABBs[i].minY);
-            shapeRenderer.aabbResources.instanceData[i].maxX = static_cast<float>(queriedAABBs[i].maxX);
-            shapeRenderer.aabbResources.instanceData[i].maxY = static_cast<float>(queriedAABBs[i].maxY);
+            aabbInstanceData[i].minX = static_cast<float>(queriedAABBs[i].minX);
+            aabbInstanceData[i].minY = static_cast<float>(queriedAABBs[i].minY);
+            aabbInstanceData[i].maxX = static_cast<float>(queriedAABBs[i].maxX);
+            aabbInstanceData[i].maxY = static_cast<float>(queriedAABBs[i].maxY);
         }
 
         // Render.
-        shapeRenderer.renderAABBShapes({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
+        shapeRenderer.renderAABBShapes(aabbInstanceData, { 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -650,7 +651,7 @@ namespace Render
         const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
-        shapeRenderer.circleResources.instanceData.clear();
+        circleInstanceData.clear();
 
         // Prepare instance data.
         for (size_t i = 0; i < collisionCount; i++)
@@ -667,7 +668,7 @@ namespace Render
                     continue;
                 }
 
-                auto& renderData = shapeRenderer.circleResources.instanceData.emplace_back();
+                auto& renderData = circleInstanceData.emplace_back();
 
                 renderData.positionX = contact.x;
                 renderData.positionY = contact.y;
@@ -680,7 +681,7 @@ namespace Render
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(viewProjectionMatrix);
+        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -693,10 +694,8 @@ namespace Render
         if (springCount == 0) return;
 
         const size_t vertexCount = springCount * 2;
-        shapeRenderer.ensureSpringBufferCapacity(vertexCount);
-
-        shapeRenderer.springResources.vertexData.resize(vertexCount);
-        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = shapeRenderer.springResources.vertexData.data();
+        lineVertexData.resize(vertexCount);
+        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
 
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
         const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
@@ -787,13 +786,7 @@ namespace Render
             verts[vIdx + 1].color = color;
         }
 
-        shapeRenderer.springResources.vbo.write(shapeRenderer.springResources.vertexData.data(), vertexCount * sizeof(ShapeRenderer::LineVertex));
-
-        shapeRenderer.springResources.shader.use();
-        shapeRenderer.springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
-
-        shapeRenderer.springResources.vao.bind();
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
+        shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
     }
 
     // TODO: Add culling.
@@ -807,10 +800,8 @@ namespace Render
 
         // 2 lines per joint = 4 vertices.
         const size_t vertexCount = jointCount * 4;
-        shapeRenderer.ensureSpringBufferCapacity(vertexCount);
-
-        shapeRenderer.springResources.vertexData.resize(vertexCount);
-        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = shapeRenderer.springResources.vertexData.data();
+        lineVertexData.resize(vertexCount);
+        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
 
         const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
         const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
@@ -887,13 +878,112 @@ namespace Render
             verts[vIdx + 3].color = color;
         }
 
-        shapeRenderer.springResources.vbo.write(shapeRenderer.springResources.vertexData.data(), vertexCount * sizeof(ShapeRenderer::LineVertex));
+        shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
+    }
 
-        shapeRenderer.springResources.shader.use();
-        shapeRenderer.springResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+    // TODO: Add culling.
+    void SimulationRenderer::renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    {
+        TRACY_SCOPE_N("Render rods");
 
-        shapeRenderer.springResources.vao.bind();
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertexCount));
+        const auto& rods = simulation.getRods();
+        const size_t rodCount = rods.getCount();
+        if (rodCount == 0) return;
+
+        const size_t vertexCount = rodCount * 2;
+        lineVertexData.resize(vertexCount);
+        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
+
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+
+        for (size_t i = 0; i < rodCount; i++)
+        {
+            const ObjectIndex bodyIndexA = rods.bodyIndexA[i];
+            const ObjectIndex bodyIndexB = rods.bodyIndexB[i];
+
+            // Interpolate body A transform.
+            const Real posAx = positionXPtr[bodyIndexA];
+            const Real posAy = positionYPtr[bodyIndexA];
+            const Real oldPosAx = oldPositionXPtr[bodyIndexA];
+            const Real oldPosAy = oldPositionYPtr[bodyIndexA];
+
+            const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
+            const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
+
+            const Real fullOldRotationA = oldRotationPtr[bodyIndexA];
+            const Real fullNewRotationA = rotationPtr[bodyIndexA] + (rotationWrapCountPtr[bodyIndexA] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotationA = fullOldRotationA + (fullNewRotationA - fullOldRotationA) * simRenderAlpha;
+
+            const Real cosA = std::cos(interpolatedRotationA);
+            const Real sinA = std::sin(interpolatedRotationA);
+
+            // Interpolate body B transform.
+            const Real posBx = positionXPtr[bodyIndexB];
+            const Real posBy = positionYPtr[bodyIndexB];
+            const Real oldPosBx = oldPositionXPtr[bodyIndexB];
+            const Real oldPosBy = oldPositionYPtr[bodyIndexB];
+
+            const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
+            const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
+
+            const Real fullOldRotationB = oldRotationPtr[bodyIndexB];
+            const Real fullNewRotationB = rotationPtr[bodyIndexB] + (rotationWrapCountPtr[bodyIndexB] * PS_AGONY::Constants::TWO_PI);
+            const Real interpolatedRotationB = fullOldRotationB + (fullNewRotationB - fullOldRotationB) * simRenderAlpha;
+
+            const Real cosB = std::cos(interpolatedRotationB);
+            const Real sinB = std::sin(interpolatedRotationB);
+
+            // Compute world positions of rod endpoints.
+            const float worldAx = interpolatedPosAx + (rods.localAnchorA[i].x * cosA - rods.localAnchorA[i].y * sinA);
+            const float worldAy = interpolatedPosAy + (rods.localAnchorA[i].x * sinA + rods.localAnchorA[i].y * cosA);
+
+            const float worldBx = interpolatedPosBx + (rods.localAnchorB[i].x * cosB - rods.localAnchorB[i].y * sinB);
+            const float worldBy = interpolatedPosBy + (rods.localAnchorB[i].x * sinB + rods.localAnchorB[i].y * cosB);
+
+            // Compute displacement.
+            const float dx = worldBx - worldAx;
+            const float dy = worldBy - worldAy;
+            const float currentLength = std::sqrt(dx * dx + dy * dy);
+            const float restLength = static_cast<float>(rods.length[i]);
+            const float displacement = currentLength - restLength;
+
+            // Compute color.
+            uint32_t color;
+            {
+                // Normalize strain into [-1.0, 1.0].
+                float t = std::clamp(displacement / restLength, -1.0f, 1.0f);
+
+                // Calculate weights for each endpoint color.
+                float wBlue = std::fmax(0.0f, -t);    // Active (< 0).
+                float wRed = std::fmax(0.0f, t);     // Active (> 0).
+                float wGrey = 1.0f - std::fabs(t);    // Active (= 0).
+
+                // Blend RGB channels.
+                uint32_t r = uint32_t(255.0f * wRed + 187.0f * wGrey);
+                uint32_t g = uint32_t(187.0f * wGrey);
+                uint32_t b = uint32_t(255.0f * wBlue + 187.0f * wGrey);
+
+                color = (r << 16) | (g << 8) | b;
+            }
+
+            size_t vIdx = i * 2;
+            verts[vIdx].x = worldAx;
+            verts[vIdx].y = worldAy;
+            verts[vIdx].color = color;
+
+            verts[vIdx + 1].x = worldBx;
+            verts[vIdx + 1].y = worldBy;
+            verts[vIdx + 1].color = color;
+        }
+
+        shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
     }
 
     size_t SimulationRenderer::getMemoryUsage() const noexcept
@@ -904,16 +994,16 @@ namespace Render
         for (const auto& vec : foundColliderShapes)
             total += getVectorMemoryUsage(vec);
 
-        total += getVectorMemoryUsage(shapeRenderer.circleResources.instanceData);
-        total += getVectorMemoryUsage(shapeRenderer.boxResources.instanceData);
+        total += getVectorMemoryUsage(circleInstanceData);
+        total += getVectorMemoryUsage(boxInstanceData);
 
-        total += getVectorMemoryUsage(shapeRenderer.polygonResources.vertexData);
-        total += getVectorMemoryUsage(shapeRenderer.polygonResources.instanceData);
-        total += getVectorMemoryUsage(shapeRenderer.polygonResources.drawCommands);
+        total += getVectorMemoryUsage(polygonVertexData);
+        total += getVectorMemoryUsage(polygonInstanceData);
+        total += getVectorMemoryUsage(polygonDrawCommands);
 
-        total += getVectorMemoryUsage(shapeRenderer.springResources.vertexData);
+        total += getVectorMemoryUsage(lineVertexData);
 
-        total += getVectorMemoryUsage(shapeRenderer.aabbResources.instanceData);
+        total += getVectorMemoryUsage(aabbInstanceData);
 
         return total;
     }
@@ -932,7 +1022,7 @@ namespace Render
         total += shapeRenderer.polygonResources.instanceVbo.getCapacity();
         total += shapeRenderer.polygonResources.indirectBuf.getCapacity();
 
-        total += shapeRenderer.springResources.vbo.getCapacity();
+        total += shapeRenderer.lineResources.vbo.getCapacity();
 
         total += shapeRenderer.aabbResources.vbo.getCapacity();
         total += shapeRenderer.aabbResources.instanceVbo.getCapacity();

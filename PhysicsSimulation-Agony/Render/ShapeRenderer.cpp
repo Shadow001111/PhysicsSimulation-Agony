@@ -53,13 +53,13 @@ namespace Render
             aabbResources.shader.create(sources);
         }
 
-        // Spring.
+        // Lines (springs, joints, rods, ...).
         {
             std::vector<Shader::ShaderSource> sources = {
                 { GL_VERTEX_SHADER, "res/Shaders/spring.vert" },
                 { GL_FRAGMENT_SHADER, "res/Shaders/spring.frag" }
             };
-            springResources.shader.create(sources);
+            lineResources.shader.create(sources);
         }
     }
 
@@ -138,24 +138,24 @@ namespace Render
             ensureAABBInstanceVboCapacity(64);
         }
 
-        // Spring.
+        // Lines (springs, joints, rods, ...).
         {
-            springResources.vao.create();
+            lineResources.vao.create();
         }
     }
 
-    void ShapeRenderer::renderCircleShapes(const glm::mat4& viewProjectionMatrix)
+    void ShapeRenderer::renderCircleShapes(std::span<const CircleInstanceData> instances, const glm::mat4& viewProjectionMatrix)
     {
         TRACY_SCOPE_N("Render circle shapes");
 
-        const size_t count = circleResources.instanceData.size();
+        const size_t count = instances.size();
         if (count == 0) return;
 
         // Reserve space.
         ensureCircleInstanceVboCapacity(count);
 
         // Move data to gpu.
-        circleResources.instanceVbo.write(circleResources.instanceData.data(), count * sizeof(CircleInstanceData));
+        circleResources.instanceVbo.write(instances.data(), count * sizeof(CircleInstanceData));
 
         // Bind things, set uniforms.
         circleResources.shader.use();
@@ -167,18 +167,18 @@ namespace Render
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
     }
 
-    void ShapeRenderer::renderBoxShapes(const glm::mat4& viewProjectionMatrix)
+    void ShapeRenderer::renderBoxShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix)
     {
         TRACY_SCOPE_N("Render box shapes");
 
-        const size_t count = boxResources.instanceData.size();
+        const size_t count = instances.size();
         if (count == 0) return;
 
         // Reserve space.
         ensureBoxInstanceVboCapacity(count);
 
         // Move data to gpu.
-        boxResources.instanceVbo.write(boxResources.instanceData.data(), count * sizeof(BoxInstanceData));
+        boxResources.instanceVbo.write(instances.data(), count * sizeof(BoxInstanceData));
 
         // Bind things, set uniforms.
         boxResources.shader.use();
@@ -190,25 +190,30 @@ namespace Render
         glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, count);
     }
 
-    void ShapeRenderer::renderPolygonShapes(const glm::mat4& viewProjectionMatrix)
+    void ShapeRenderer::renderPolygonShapes(
+        std::span<const glm::vec2> vertices,
+        std::span<const PolygonInstanceData> instances,
+        std::span<const DrawArraysIndirectCommand> drawCommands,
+        const glm::mat4& viewProjectionMatrix
+    )
     {
         TRACY_SCOPE_N("Render polygon shapes");
 
-        const size_t polygonCount = polygonResources.drawCommands.size();
+        const size_t polygonCount = drawCommands.size();
         if (polygonCount == 0) return;
 
-        const size_t vertexBytes = polygonResources.vertexData.size() * sizeof(glm::vec2);
-        const size_t instanceBytes = polygonCount * sizeof(PolygonInstanceData);
-        const size_t cmdBytes = polygonCount * sizeof(Ecstasy::OpenGL::DrawArraysIndirectCommand);
+        const size_t vertexBytes = vertices.size() * sizeof(glm::vec2);
+        const size_t instanceBytes = instances.size() * sizeof(PolygonInstanceData);
+        const size_t cmdBytes = drawCommands.size() * sizeof(Ecstasy::OpenGL::DrawArraysIndirectCommand);
 
         // Upload vertex positions.
-        polygonResources.vertexVbo.write(polygonResources.vertexData.data(), vertexBytes);
+        polygonResources.vertexVbo.write(vertices.data(), vertexBytes);
 
         // Upload per-polygon transforms.
-        polygonResources.instanceVbo.write(polygonResources.instanceData.data(), instanceBytes);
+        polygonResources.instanceVbo.write(instances.data(), instanceBytes);
 
         // Upload indirect draw commands.
-        polygonResources.indirectBuf.write(polygonResources.drawCommands.data(), cmdBytes);
+        polygonResources.indirectBuf.write(drawCommands.data(), cmdBytes);
 
         // Bind and draw.
         polygonResources.shader.use();
@@ -220,18 +225,18 @@ namespace Render
         glMultiDrawArraysIndirect(GL_TRIANGLE_FAN, nullptr, static_cast<GLsizei>(polygonCount), 0);
     }
 
-    void ShapeRenderer::renderAABBShapes(const glm::vec3& color, const glm::mat4& viewProjectionMatrix)
+    void ShapeRenderer::renderAABBShapes(std::span<const FloatAABB> instances, const glm::vec3& color, const glm::mat4& viewProjectionMatrix)
     {
         TRACY_SCOPE_N("Render AABB shapes");
 
-        const size_t count = aabbResources.instanceData.size();
+        const size_t count = instances.size();
         if (count == 0) return;
 
         // Reserve space.
         ensureAABBInstanceVboCapacity(count);
 
         // Move data to gpu.
-        aabbResources.instanceVbo.write(aabbResources.instanceData.data(), count * sizeof(FloatAABB));
+        aabbResources.instanceVbo.write(instances.data(), count * sizeof(FloatAABB));
 
         // Bind things, set uniforms.
         aabbResources.shader.use();
@@ -393,12 +398,12 @@ namespace Render
         vao.setAttributeDivisor(1, 1);
     }
 
-    void ShapeRenderer::ensureSpringBufferCapacity(size_t vertexCount)
+    void ShapeRenderer::ensureLineBufferCapacity(size_t vertexCount)
     {
         constexpr size_t SIZEOF_VERTEX = sizeof(LineVertex);
 
-        auto& vao = springResources.vao;
-        auto& vbo = springResources.vbo;
+        auto& vao = lineResources.vao;
+        auto& vbo = lineResources.vbo;
 
         const size_t neededBytes = vertexCount * SIZEOF_VERTEX;
         if (neededBytes <= vbo.getCapacity()) return;
@@ -417,5 +422,28 @@ namespace Render
         // Setup packed Hex Color attribute (location = 1)
         vao.enableAttribute(1);
         vao.setIntAttribute(1, 1, sizeof(float) * 2, 0);
+    }
+
+    void ShapeRenderer::renderLines(std::span<const LineVertex> vertices, const glm::mat4& viewProjectionMatrix)
+    {
+        TRACY_SCOPE_N("Render lines");
+
+        const size_t count = vertices.size();
+        if (count == 0) return;
+
+        // Reserve space.
+        ensureLineBufferCapacity(count);
+
+        // Move data to gpu.
+        lineResources.vbo.write(vertices.data(), count * sizeof(LineVertex));
+
+        // Bind things, set uniforms.
+        lineResources.shader.use();
+        lineResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        lineResources.vao.bind();
+
+        // Draw.
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(count));
     }
 }
