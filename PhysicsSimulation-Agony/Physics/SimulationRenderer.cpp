@@ -67,8 +67,8 @@ namespace PS_AGONY
 
         // Render.
         renderColliders(viewProjectionMatrix, simRenderAlpha);
-        //renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
-        //renderContactPoints(simulation, viewProjectionMatrix);
+        renderBroadPhaseAABBs(simulation, viewProjectionMatrix);
+        renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
         renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
     }
@@ -747,7 +747,7 @@ namespace PS_AGONY
         renderAABBs({ 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render contact points");
 
@@ -755,6 +755,11 @@ namespace PS_AGONY
 
         const size_t collisionCount = collisionData.size();
         if (collisionCount == 0) return;
+
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
         circleResources.instanceData.clear();
@@ -767,6 +772,12 @@ namespace PS_AGONY
             for (size_t j = 0; j < collData.contactCount; j++)
             {
                 const auto& contact = collData.contactPoints[j];
+
+                if (contact.x < cullMinX || contact.x > cullMaxX ||
+                    contact.y < cullMinY || contact.y > cullMaxY)
+                {
+                    continue;
+                }
 
                 auto& renderData = circleResources.instanceData.emplace_back();
 

@@ -167,7 +167,7 @@ namespace PS_AGONY
 
 		void renderColliderAABBs(const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
-		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
 		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
