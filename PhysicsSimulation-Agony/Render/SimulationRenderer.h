@@ -28,6 +28,15 @@ namespace Render
 
 		std::vector<AABB> queriedAABBs;
 
+		// CPU-side per-frame draw data, owned here; ShapeRenderer only owns GPU resources.
+		std::vector<ShapeRenderer::CircleInstanceData> circleInstanceData;
+		std::vector<ShapeRenderer::BoxInstanceData> boxInstanceData;
+		std::vector<glm::vec2> polygonVertexData;
+		std::vector<ShapeRenderer::PolygonInstanceData> polygonInstanceData;
+		std::vector<DrawArraysIndirectCommand> polygonDrawCommands;
+		std::vector<ShapeRenderer::FloatAABB> aabbInstanceData;
+		std::vector<ShapeRenderer::LineVertex> lineVertexData; // Reused scratch buffer for springs/joints/rods.
+
 		ShapeRenderer shapeRenderer;
 
 		// Camera.
@@ -83,5 +92,6 @@ namespace Render
 
 		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 	};
 }
