@@ -180,7 +180,7 @@ namespace PS_AGONY
 		return collisionData;
 	}
 
-	void BroadPhaseCollisionDetector::fetchAABBs(std::vector<AABB>& outAABBs) const
+	void BroadPhaseCollisionDetector::getAllLeafNodeAABBs(std::vector<AABB>& outAABBs) const
 	{
 		// Collect BVH nodes (leafs) AABBs from previous time.
 		const auto& nodes = bvhFunctionResources.nodes;

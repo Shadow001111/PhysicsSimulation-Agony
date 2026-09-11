@@ -152,7 +152,7 @@ namespace PS_AGONY
 		void initShaders();
 		void initBuffers();
 
-		void fetchCollidersForRender(const Simulation& simulation, const AABB& cameraAABB);
+		void queryCollidersForRender(const Simulation& simulation, const AABB& cameraAABB);
 
 		// Collect data and render.
 
@@ -165,8 +165,8 @@ namespace PS_AGONY
 		void renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 
-		void renderColliderAABBs(const Mat4& viewProjectionMatrix);
-		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix);
+		void renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix);
+		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
 		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
