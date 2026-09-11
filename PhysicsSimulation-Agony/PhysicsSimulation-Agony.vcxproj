@@ -262,6 +262,7 @@
     <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="Physics\Solving\SolverBase.cpp" />
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
+    <ClCompile Include="Render\ShapeRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_glfw.h" />
@@ -314,6 +315,7 @@
     <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />
     <ClInclude Include="Physics\Solving\SpringSolver.h" />
+    <ClInclude Include="Render\ShapeRenderer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
