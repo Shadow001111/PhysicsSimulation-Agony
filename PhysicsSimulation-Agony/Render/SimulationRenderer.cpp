@@ -21,7 +21,9 @@ namespace Render
         return x & 0xFFFFFF;
     }
 
-    [[nodiscard]] __forceinline static Real interpolateRotation(
+    // Interpolates between the old and new rotation of a body and wraps the
+    // result into [0, 2*pi) so it can be safely fed into FastCosSin.
+    [[nodiscard]] __forceinline static Real interpolateAndWrapRotation(
         const Real& rot,
         const Real& oldRot,
         const Real& wrapCount,
@@ -31,7 +33,10 @@ namespace Render
 
         Real interpolatedRotation = oldRot + (fullRotation - oldRot) * alpha;
 
-        Real isRotNegativeMask = interpolatedRotation < 0;
+        const Real wrapMultiple = std::trunc(interpolatedRotation * Constants::INV_TWO_PI);
+        interpolatedRotation -= wrapMultiple * Constants::TWO_PI;
+
+        const Real isRotNegativeMask = interpolatedRotation < 0;
         interpolatedRotation += isRotNegativeMask * Constants::TWO_PI;
 
         return interpolatedRotation;
@@ -360,7 +365,7 @@ namespace Render
             const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
             const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
-            const Real interpolatedBodyRotation = interpolateRotation(
+            const Real interpolatedBodyRotation = interpolateAndWrapRotation(
                 rotationPtr[bodyIndex],
                 oldRotationPtr[bodyIndex],
                 rotationWrapCountPtr[bodyIndex],
@@ -437,7 +442,7 @@ namespace Render
             const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
             const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
-            const Real interpolatedBodyRotation = interpolateRotation(
+            const Real interpolatedBodyRotation = interpolateAndWrapRotation(
                 rotationPtr[bodyIndex],
                 oldRotationPtr[bodyIndex],
                 rotationWrapCountPtr[bodyIndex],
@@ -543,7 +548,7 @@ namespace Render
             const Real interpolatedBodyPosX = oldPosX + (posX - oldPosX) * simRenderAlpha;
             const Real interpolatedBodyPosY = oldPosY + (posY - oldPosY) * simRenderAlpha;
 
-            const Real interpolatedBodyRotation = interpolateRotation(
+            const Real interpolatedBodyRotation = interpolateAndWrapRotation(
                 rotationPtr[bodyIndex],
                 oldRotationPtr[bodyIndex],
                 rotationWrapCountPtr[bodyIndex],
@@ -720,12 +725,14 @@ namespace Render
             const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
             const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
 
-            const Real fullOldRotationA = oldRotationPtr[bodyIndexA];
-            const Real fullNewRotationA = rotationPtr[bodyIndexA] + (rotationWrapCountPtr[bodyIndexA] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotationA = fullOldRotationA + (fullNewRotationA - fullOldRotationA) * simRenderAlpha;
+            const Real interpolatedRotationA = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexA],
+                oldRotationPtr[bodyIndexA],
+                rotationWrapCountPtr[bodyIndexA],
+                simRenderAlpha
+            );
 
-            const Real cosA = std::cos(interpolatedRotationA);
-            const Real sinA = std::sin(interpolatedRotationA);
+            const auto [cosA, sinA] = FastCosSin::order4Scalar(interpolatedRotationA);
 
             // Interpolate body B transform.
             const Real posBx = positionXPtr[bodyIndexB];
@@ -736,12 +743,14 @@ namespace Render
             const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
             const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
 
-            const Real fullOldRotationB = oldRotationPtr[bodyIndexB];
-            const Real fullNewRotationB = rotationPtr[bodyIndexB] + (rotationWrapCountPtr[bodyIndexB] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotationB = fullOldRotationB + (fullNewRotationB - fullOldRotationB) * simRenderAlpha;
+            const Real interpolatedRotationB = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexB],
+                oldRotationPtr[bodyIndexB],
+                rotationWrapCountPtr[bodyIndexB],
+                simRenderAlpha
+            );
 
-            const Real cosB = std::cos(interpolatedRotationB);
-            const Real sinB = std::sin(interpolatedRotationB);
+            const auto [cosB, sinB] = FastCosSin::order4Scalar(interpolatedRotationB);
 
             // Compute world positions of spring endpoints.
             const float worldAx = interpolatedPosAx + (springs.localAnchorA[i].x * cosA - springs.localAnchorA[i].y * sinA);
@@ -826,12 +835,14 @@ namespace Render
             const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
             const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
 
-            const Real fullOldRotationA = oldRotationPtr[bodyIndexA];
-            const Real fullNewRotationA = rotationPtr[bodyIndexA] + (rotationWrapCountPtr[bodyIndexA] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotationA = fullOldRotationA + (fullNewRotationA - fullOldRotationA) * simRenderAlpha;
+            const Real interpolatedRotationA = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexA],
+                oldRotationPtr[bodyIndexA],
+                rotationWrapCountPtr[bodyIndexA],
+                simRenderAlpha
+            );
 
-            const Real cosA = std::cos(interpolatedRotationA);
-            const Real sinA = std::sin(interpolatedRotationA);
+            const auto [cosA, sinA] = FastCosSin::order4Scalar(interpolatedRotationA);
 
             // Interpolate body B transform.
             const Real posBx = positionXPtr[bodyIndexB];
@@ -842,12 +853,14 @@ namespace Render
             const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
             const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
 
-            const Real fullOldRotationB = oldRotationPtr[bodyIndexB];
-            const Real fullNewRotationB = rotationPtr[bodyIndexB] + (rotationWrapCountPtr[bodyIndexB] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotationB = fullOldRotationB + (fullNewRotationB - fullOldRotationB) * simRenderAlpha;
+            const Real interpolatedRotationB = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexB],
+                oldRotationPtr[bodyIndexB],
+                rotationWrapCountPtr[bodyIndexB],
+                simRenderAlpha
+            );
 
-            const Real cosB = std::cos(interpolatedRotationB);
-            const Real sinB = std::sin(interpolatedRotationB);
+            const auto [cosB, sinB] = FastCosSin::order4Scalar(interpolatedRotationB);
 
             // Compute world positions of joint anchors.
             const float worldAx = interpolatedPosAx + (joints.localAnchorA[i].x * cosA - joints.localAnchorA[i].y * sinA);
@@ -917,12 +930,14 @@ namespace Render
             const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
             const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
 
-            const Real fullOldRotationA = oldRotationPtr[bodyIndexA];
-            const Real fullNewRotationA = rotationPtr[bodyIndexA] + (rotationWrapCountPtr[bodyIndexA] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotationA = fullOldRotationA + (fullNewRotationA - fullOldRotationA) * simRenderAlpha;
+            const Real interpolatedRotationA = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexA],
+                oldRotationPtr[bodyIndexA],
+                rotationWrapCountPtr[bodyIndexA],
+                simRenderAlpha
+            );
 
-            const Real cosA = std::cos(interpolatedRotationA);
-            const Real sinA = std::sin(interpolatedRotationA);
+            const auto [cosA, sinA] = FastCosSin::order4Scalar(interpolatedRotationA);
 
             // Interpolate body B transform.
             const Real posBx = positionXPtr[bodyIndexB];
@@ -933,12 +948,14 @@ namespace Render
             const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
             const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
 
-            const Real fullOldRotationB = oldRotationPtr[bodyIndexB];
-            const Real fullNewRotationB = rotationPtr[bodyIndexB] + (rotationWrapCountPtr[bodyIndexB] * PS_AGONY::Constants::TWO_PI);
-            const Real interpolatedRotationB = fullOldRotationB + (fullNewRotationB - fullOldRotationB) * simRenderAlpha;
+            const Real interpolatedRotationB = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexB],
+                oldRotationPtr[bodyIndexB],
+                rotationWrapCountPtr[bodyIndexB],
+                simRenderAlpha
+            );
 
-            const Real cosB = std::cos(interpolatedRotationB);
-            const Real sinB = std::sin(interpolatedRotationB);
+            const auto [cosB, sinB] = FastCosSin::order4Scalar(interpolatedRotationB);
 
             // Compute world positions of rod endpoints.
             const float worldAx = interpolatedPosAx + (rods.localAnchorA[i].x * cosA - rods.localAnchorA[i].y * sinA);
