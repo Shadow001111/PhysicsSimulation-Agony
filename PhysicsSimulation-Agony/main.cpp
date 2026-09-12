@@ -768,7 +768,6 @@ static int gameFunc()
             glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
             // Clean screen and other buffers.
-
             const float bgColor[4] = { 0.0f, 0.0f, 0.1f, 0.0f };
             framebuffer.clearDrawBufferFloat("color", bgColor);
 
@@ -789,7 +788,11 @@ static int gameFunc()
                 };
             }
 
-            // Render simulation.
+            // Build GUI window commands.
+            renderGUI(simulation, simulationRenderer, renderOptions, debugData, pauseSimulation);
+            ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
+
+            // Render simulation to FBO.
             simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions);
 
             framebuffer.setDrawBuffers({ "color" });
@@ -799,12 +802,6 @@ static int gameFunc()
                 GLuint idTex = framebuffer.getTexture("id").value()->getID();
                 simulationRenderer.renderOutlines(idTex, renderOptions.outlineColor);
             }
-
-            // Render debug data.
-            renderGUI(simulation, simulationRenderer, renderOptions, debugData, pauseSimulation);
-
-            // Render object creator.
-            ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
 
             if (creatorState.isFocused)
             {
@@ -825,11 +822,18 @@ static int gameFunc()
                 simulationRenderer.renderObjectPreview(previewParams, creatorState.bodyType);
             }
 
+            // Blit scene color attachment.
+            framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
+
+            // Unbind offscreen FBO containing integer attachment before rendering UI.
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            // Render ImGui draw data to default backbuffer
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-            // Blitting FBO to default FBO.
-            framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
+            // Rebind offscreen FBO for next frame initialization.
+            framebuffer.bind();
 
             // Swap buffers.
             wnd.swapBuffers();
