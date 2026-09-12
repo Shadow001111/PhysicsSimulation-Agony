@@ -2,8 +2,10 @@
 
 in vec2 uv;
 in flat vec3 vColor;
+in flat uint fragIdOut;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out uint fragId;
 
 const float TILING = 1.0;
 
@@ -20,4 +22,5 @@ void main()
     vec3 finalColor = vColor * (0.8 + 0.2 * float(checker));
 
     fragColor = vec4(finalColor, 1.0);
+    fragId = fragIdOut;
 }

@@ -85,7 +85,10 @@ namespace Ecstasy::OpenGL
         void blitToDefaultFramebuffer(int dstWidth, int dstHeight, GLbitfield mask = GL_COLOR_BUFFER_BIT, GLenum filter = GL_NEAREST) const;
 
         void clearAttachment(const std::string& name, const float* clearValue) const;
-        void clearDrawBuffer(const std::string& name, const float* clearValue) const;
+
+        void clearDrawBufferFloat(const std::string& name, const float* clearValue) const;
+        void clearDrawBufferInt(const std::string& name, const int32_t* clearValue) const;
+        void clearDrawBufferUint(const std::string& name, const uint32_t* clearValue) const;
 
         // Texture access
         [[nodiscard]] std::optional<Texture*> getTexture(const std::string& name);

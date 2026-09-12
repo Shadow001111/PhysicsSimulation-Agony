@@ -3,8 +3,10 @@
 in vec2 uv;
 in flat vec3 color;
 in flat float radius;
+in flat uint fragIdOut;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out uint fragId;
 
 const float TILING = 1.0;
 
@@ -23,4 +25,5 @@ void main()
     vec3 finalColor = color * checkerboardShading;
 
     fragColor = vec4(finalColor, 1.0);
+    fragId = fragIdOut;
 }

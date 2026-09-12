@@ -76,7 +76,10 @@ namespace Render
         queryCollidersForRender(simulation, cameraAABB);
 
         // Render.
+        glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         renderColliders(viewProjectionMatrix, simRenderAlpha);
+        glColorMaski(1, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
         renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
         renderRods(simulation, viewProjectionMatrix, simRenderAlpha);
@@ -388,6 +391,7 @@ namespace Render
             renderDataPtr[i].rotation = interpolatedBodyRotation + localRot;
             renderDataPtr[i].radius = radiusPtr[shapeIndex];
             renderDataPtr[i].color = 0xFFFFFF;
+            renderDataPtr[i].id = colliderIndex + 1;
         }
 
         // Render.
@@ -466,6 +470,7 @@ namespace Render
             renderDataPtr[i].halfWidth = halfWidthPtr[shapeIndex];
             renderDataPtr[i].halfHeight = halfHeightPtr[shapeIndex];
             renderDataPtr[i].color = 0xFFFFFF;
+            renderDataPtr[i].id = colliderIndex + 1;
         }
 
         // Render.
@@ -570,6 +575,7 @@ namespace Render
             instData[i].localCOMY = localCOMYPtr[bodyIndex];
             instData[i].rotation = interpolatedBodyRotation + localRot;
             instData[i].color = 0xFFFFFF;
+            instData[i].id = colliderIndex + 1;
 
             cmds[i].count = vertCount;
             cmds[i].instanceCount = 1;
@@ -1045,5 +1051,10 @@ namespace Render
         total += shapeRenderer.aabbResources.instanceVbo.getCapacity();
 
         return total;
+    }
+
+    void SimulationRenderer::renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor)
+    {
+        shapeRenderer.renderOutlines(idTextureID, outlineColor);
     }
 }

@@ -8,7 +8,7 @@ struct PolygonInstance
     float localCOMX, localCOMY;
     float rotation;
     uint  color;
-    uint  textureId;
+    uint  id;
 };
 
 layout(std430, binding = 0) readonly buffer InstanceBuffer
@@ -20,6 +20,7 @@ uniform mat4 viewProjectionMatrix;
 
 out vec2 uv;
 out flat vec3 vColor;
+out flat uint fragIdOut;
 
 void main()
 {
@@ -42,6 +43,7 @@ void main()
     );
 
     uv = centered;
+    fragIdOut = inst.id;
 
     gl_Position = viewProjectionMatrix * vec4(worldPos, 0.0, 1.0);
 }

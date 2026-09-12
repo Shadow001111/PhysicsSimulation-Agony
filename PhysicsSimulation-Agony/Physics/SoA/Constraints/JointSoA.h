@@ -7,8 +7,7 @@
 namespace PS_AGONY
 {
 	// Revolute joint: pins localAnchorA (on bodyA) to localAnchorB (on bodyB) together,
-	// leaving rotation free. Unlike SpringSoA there's no rest length - the anchors are
-	// meant to coincide.
+	// leaving rotation free.
 	struct JointSoA
 	{
 		std::vector<ObjectIndex> bodyIndexA;

@@ -18,6 +18,8 @@ namespace Render
 		bool colliderAABBs = false;
 		bool broadPhaseAABBs = false;
 		bool contactPoints = false;
+		bool outlineColliders = true;
+		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
 	};
 
 	class SimulationRenderer
@@ -65,6 +67,8 @@ namespace Render
 			const AABB& cameraAABB,
 			const RenderOptions& renderOptions
 		);
+
+		void renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor);
 
 		void renderObjectPreview(const void* params, BodyType type);
 

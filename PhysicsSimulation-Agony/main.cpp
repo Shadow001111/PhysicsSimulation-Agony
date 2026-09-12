@@ -158,6 +158,12 @@ static void renderGUI(
         ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
         ImGui::Checkbox("Broad-Phase AABBs", &renderOptions.broadPhaseAABBs);
         ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
+        ImGui::Checkbox("Outline Colliders", &renderOptions.outlineColliders);
+        if (renderOptions.outlineColliders)
+        {
+            ImGui::ColorPicker3("Outline Color", &renderOptions.outlineColor.x,
+                ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoSidePreview);
+        }
     }
 
     // Physics diagnostics.
@@ -583,6 +589,8 @@ static int gameFunc()
 
         framebuffer.create(wnd.getWidth(), wnd.getHeight());
 
+        const bool bindless = Ecstasy::OpenGL::Texture::getExtensions().bindless;
+
         const  Ecstasy::OpenGL::Texture::Parameters params
         {
             .minFilter = GL_NEAREST,
@@ -590,11 +598,18 @@ static int gameFunc()
             .wrapS = GL_CLAMP_TO_EDGE,
             .wrapT = GL_CLAMP_TO_EDGE
         };
-        const bool bindless = Ecstasy::OpenGL::Texture::getExtensions().bindless;
+
+        const Ecstasy::OpenGL::Texture::Parameters idParams
+        {
+            .minFilter = GL_NEAREST,
+            .magFilter = GL_NEAREST,
+            .wrapS = GL_CLAMP_TO_EDGE,
+            .wrapT = GL_CLAMP_TO_EDGE
+        };
 
         framebuffer.createColorAttachment("color", GL_RGBA8, params, bindless);
-
         framebuffer.createDepthAttachment("depth", GL_DEPTH_COMPONENT32F, params, bindless);
+        framebuffer.createColorAttachment("id", GL_R32UI, idParams, /*bindless*/ false);
 
         if (!framebuffer.isComplete())
         {
@@ -619,7 +634,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 4);
+    loadScene(simulation, 2);
 
     // Simulation renderer.
     Render::SimulationRenderer simulationRenderer;
@@ -633,6 +648,7 @@ static int gameFunc()
     // OpenGL states.
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
+    glDisable(GL_DITHER);
 
     // Debug data.
     DebugData debugData;
@@ -746,11 +762,18 @@ static int gameFunc()
         }
         else if (framebuffer.isComplete()) [[likely]]
         {
-            framebuffer.setDrawBuffers({ "color" });
+            framebuffer.setDrawBuffers({ "color", "id" });
 
-            // Clean screen.
+            glDisable(GL_BLEND);
+            glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+            // Clean screen and other buffers.
+
             const float bgColor[4] = { 0.0f, 0.0f, 0.1f, 0.0f };
-            framebuffer.clearDrawBuffer("color", bgColor);
+            framebuffer.clearDrawBufferFloat("color", bgColor);
+
+            const uint32_t idClear[4] = { 0, 0, 0, 0 };
+            framebuffer.clearDrawBufferUint("id", idClear);
 
             // Get camera AABB.
             PS_AGONY::AABB cameraAABB;
@@ -768,6 +791,14 @@ static int gameFunc()
 
             // Render simulation.
             simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions);
+
+            framebuffer.setDrawBuffers({ "color" });
+
+            if (renderOptions.outlineColliders)
+            {
+                GLuint idTex = framebuffer.getTexture("id").value()->getID();
+                simulationRenderer.renderOutlines(idTex, renderOptions.outlineColor);
+            }
 
             // Render debug data.
             renderGUI(simulation, simulationRenderer, renderOptions, debugData, pauseSimulation);
@@ -798,7 +829,6 @@ static int gameFunc()
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
             // Blitting FBO to default FBO.
-            framebuffer.setReadBuffer("color");
             framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());
 
             // Swap buffers.

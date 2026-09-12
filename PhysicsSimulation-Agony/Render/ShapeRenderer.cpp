@@ -53,13 +53,22 @@ namespace Render
             aabbResources.shader.create(sources);
         }
 
-        // Lines (springs, joints, rods, ...).
+        // Lines.
         {
             std::vector<Shader::ShaderSource> sources = {
                 { GL_VERTEX_SHADER, "res/Shaders/spring.vert" },
                 { GL_FRAGMENT_SHADER, "res/Shaders/spring.frag" }
             };
             lineResources.shader.create(sources);
+        }
+
+        // Outline post-process.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER,   "res/Shaders/outline.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/outline.frag" }
+            };
+            outlineResources.shader.create(sources);
         }
     }
 
@@ -138,9 +147,14 @@ namespace Render
             ensureAABBInstanceVboCapacity(64);
         }
 
-        // Lines (springs, joints, rods, ...).
+        // Lines.
         {
             lineResources.vao.create();
+        }
+
+        // Outline pass - no vertex data needed, full-screen triangle via gl_VertexID.
+        {
+            outlineResources.vao.create();
         }
     }
 
@@ -222,6 +236,8 @@ namespace Render
         polygonResources.vao.bind();
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, polygonResources.indirectBuf.getID());
 
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, polygonResources.instanceVbo.getID());
+
         glMultiDrawArraysIndirect(GL_TRIANGLE_FAN, nullptr, static_cast<GLsizei>(polygonCount), 0);
     }
 
@@ -287,6 +303,10 @@ namespace Render
         vao.enableAttribute(5);
         vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
         vao.setAttributeDivisor(5, 1);
+
+        vao.enableAttribute(6);
+        vao.setIntAttribute(6, 1, sizeof(float) * 7, 1);
+        vao.setAttributeDivisor(6, 1);
     }
 
     void ShapeRenderer::ensureBoxInstanceVboCapacity(size_t count)
@@ -327,6 +347,10 @@ namespace Render
         vao.enableAttribute(5);
         vao.setIntAttribute(5, 1, sizeof(float) * 7, 1);
         vao.setAttributeDivisor(5, 1);
+
+        vao.enableAttribute(6);
+        vao.setIntAttribute(6, 1, sizeof(float) * 8, 1);
+        vao.setAttributeDivisor(6, 1);
     }
 
     void ShapeRenderer::ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount)
@@ -351,6 +375,8 @@ namespace Render
             vao.bindVertexBuffer(0, vertexVbo.getID(), 0, SIZEOF_VERTEX);
             vao.enableAttribute(0);
             vao.setFloatAttribute(0, 2, 0, 0);
+
+            // TODO: Add id for polygons.
         }
 
         const size_t neededInstanceBytes = polygonCount * SIZEOF_INSTANCE;
@@ -445,5 +471,20 @@ namespace Render
 
         // Draw.
         glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(count));
+    }
+
+    void ShapeRenderer::renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor)
+    {
+        TRACY_SCOPE_N("Render outlines");
+
+        outlineResources.shader.use();
+        outlineResources.shader.setVec3("outlineColor", outlineColor.x, outlineColor.y, outlineColor.z);
+        outlineResources.shader.setInt("idTexture", 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, idTextureID);
+
+        outlineResources.vao.bind();
+        glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 }

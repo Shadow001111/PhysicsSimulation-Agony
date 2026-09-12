@@ -24,6 +24,7 @@ namespace Render
 			float rotation;
 			float radius;
 			uint32_t color;
+			uint32_t id;
 		};
 
 		struct BoxInstanceData
@@ -33,6 +34,7 @@ namespace Render
 			float rotation;
 			float halfWidth, halfHeight;
 			uint32_t color;
+			uint32_t id;
 		};
 
 		struct PolygonInstanceData
@@ -41,7 +43,7 @@ namespace Render
 			float localCOMX, localCOMY;
 			float rotation;
 			uint32_t color;
-			uint32_t textureId;
+			uint32_t id;
 		};
 
 		struct LineVertex
@@ -96,6 +98,12 @@ namespace Render
 			ImmutableBuffer instanceVbo;
 			Shader shader;
 		};
+
+		struct OutlineRenderResources
+		{
+			VertexArray vao; // Empty.
+			Shader shader;
+		};
 	public:
 		// Render resources (GPU-side only; CPU-side instance data is owned by the caller).
 		CircleRenderResources circleResources;
@@ -103,6 +111,7 @@ namespace Render
 		PolygonRenderResources polygonResources;
 		LineRenderResources lineResources;
 		AABBResources aabbResources;
+		OutlineRenderResources outlineResources;
 	public:
 		void init();
 		void initShaders();
@@ -118,6 +127,8 @@ namespace Render
 		);
 		void renderAABBShapes(std::span<const FloatAABB> instances, const glm::vec3& color, const glm::mat4& viewProjectionMatrix);
 		void renderLines(std::span<const LineVertex> vertices, const glm::mat4& viewProjectionMatrix);
+
+		void renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor);
 
 		void ensureCircleInstanceVboCapacity(size_t count);
 		void ensureBoxInstanceVboCapacity(size_t count);

@@ -5,11 +5,13 @@ layout (location = 1) in vec2 instancePosition;
 layout (location = 2) in vec2 instanceCOM;
 layout (location = 3) in float instanceRotation;
 layout (location = 4) in float instanceRadius;
-layout (location = 5) in int instanceColor; // 3 bytes used.
+layout (location = 5) in uint instanceColor;
+layout (location = 6) in uint instanceId;
 
 out vec2 uv;
 out flat vec3 color;
 out flat float radius;
+out flat uint fragIdOut;
 
 uniform mat4 viewProjectionMatrix;
 
@@ -38,4 +40,5 @@ void main()
     color = vec3(r, g, b);
 
     radius = instanceRadius;
+    fragIdOut = instanceId;
 }

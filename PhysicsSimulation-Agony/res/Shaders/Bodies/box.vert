@@ -5,12 +5,13 @@ layout (location = 1) in vec2 instancePosition;
 layout (location = 2) in vec2 instanceCOM;
 layout (location = 3) in float instanceRotation;
 layout (location = 4) in vec2 instanceHalfSize;
-layout (location = 5) in int instanceColor;
-layout (location = 6) in uint instanceTextureId;
+layout (location = 5) in uint instanceColor;
+layout (location = 6) in uint instanceId;
 
 out vec2 uv;
 out flat vec3 color;
 out flat vec2 halfSize;
+out flat uint fragIdOut;
 
 uniform mat4 viewProjectionMatrix;
 
@@ -30,11 +31,12 @@ void main()
     vec2 worldPosition = instancePosition + rotate2D(localPosition - instanceCOM, instanceRotation) + instanceCOM;
     gl_Position = viewProjectionMatrix * vec4(worldPosition, 0.0, 1.0);
 
-    uv = localPosition;
-    halfSize = instanceHalfSize;
-
     const float r = (instanceColor >> 16) / 255.0;
     const float g = ((instanceColor >> 8) & 255) / 255.0;
     const float b = (instanceColor & 255) / 255.0;
     color = vec3(r, g, b);
+
+    uv = localPosition;
+    halfSize = instanceHalfSize;
+    fragIdOut = instanceId;
 }
