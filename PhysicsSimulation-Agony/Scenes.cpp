@@ -829,8 +829,8 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
 void load_SoftBodyComparisonTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === 1. CONFIGURATION AND VARIABLES ===
-    constexpr int gridWidth = 20;   // Number of horizontal particles.
-    constexpr int gridHeight = 20;  // Number of vertical particles.
+    constexpr int gridWidth = 80;   // Number of horizontal particles.
+    constexpr int gridHeight = 80;  // Number of vertical particles.
     constexpr float spacing = 0.5f;
     constexpr float radius = spacing * 0.5f * 0.5;
     constexpr float particleMass = 0.2f;
@@ -956,7 +956,7 @@ void load_SoftBodyComparisonTest(PS_AGONY::Simulation& simulation, Ecstasy::Core
     // === 4. SPAWN BOTH CUBES, SEPARATED HORIZONTALLY ===
     const float halfOffset = cubeWidth * 0.5f + cubeGap * 0.5f;
     buildSoftBodyCube(-halfOffset, false); // Left cube: springs (original behavior)
-    buildSoftBodyCube(halfOffset, true);   // Right cube: rods
+    //buildSoftBodyCube(halfOffset, true);   // Right cube: rods
 }
 
 void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
@@ -1299,7 +1299,7 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 2)
     {
-        load_LargeWorld(simulation, rvg, {}, 2500);
+        load_LargeWorld(simulation, rvg, {}, 4000);
 
         //load_LargeWorld(simulation, rvg, { -70.0f, -50.0f }, 2500 / 4);
         //load_LargeWorld(simulation, rvg, {  70.0f, -50.0f }, 2500 / 4);

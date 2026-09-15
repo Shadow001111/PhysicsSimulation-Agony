@@ -70,6 +70,12 @@ namespace PS_AGONY
 			solvingPlanner.setWorkerCount(workerCount);
 
 			solvingPlanner.planStandardExecution(collidingBodyPairs, bodies->getCount());
+
+			//solvingPlanner.planCacheLineAwareExecution(
+			//	collidingBodyPairs, bodies->getCount(),
+			//	sizeof(Real),
+			//	std::hardware_destructive_interference_size
+			//);
 		}
 		{
 			TRACY_SCOPE_N("Reorder collision data");
@@ -215,7 +221,7 @@ namespace PS_AGONY
 		// I have SolvingPlanner function to arrange them by cache lines, but it's heavily reliant on body indices ordering.
 		// It struggles much if collision graph is dense and random. It also makes wave count explode.
 		// Efficiency metric matters (I guess), but wave count matters more (I guess).
-		return 0;
+		//return 0;
 
 		static constexpr size_t COLLISION_COUNT_PER_WORKER = 830 * 4;
 		static constexpr size_t MIN_COLLISION_COUNT_FOR_THREADING = COLLISION_COUNT_PER_WORKER * 2;

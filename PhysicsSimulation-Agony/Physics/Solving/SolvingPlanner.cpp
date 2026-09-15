@@ -7,9 +7,22 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <queue>
 
 namespace PS_AGONY
 {
+    static inline size_t hashGroupPair(size_t lo, size_t hi)
+    {
+        uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+        key = (~key) + (key << 21);
+        key = key ^ (key >> 24);
+        key = (key + (key << 3)) + (key << 8);
+        key = key ^ (key >> 14);
+        key = (key + (key << 2)) + (key << 4);
+        key = key ^ (key >> 28);
+        return static_cast<size_t>(key);
+    }
+
     void SolvingPlanner::planStandardExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount)
     {
         const size_t collisionCount = collisions.size();
@@ -514,6 +527,253 @@ namespace PS_AGONY
                     usedBodies[groupA] = static_cast<uint8_t>(chosenWorker);
                     usedBodies[groupB] = static_cast<uint8_t>(chosenWorker);
                 }
+            }
+
+            {
+                TRACY_SCOPE_NC("Append to flatIndices", Ecstasy::Core::Color::Magenta);
+                for (size_t w = 0; w < workerCount; w++)
+                {
+                    const size_t passIndex = waveStartPass + w;
+                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
+                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+
+                    flatIndices.insert(flatIndices.end(),
+                        waveAssignments[w].begin(),
+                        waveAssignments[w].end());
+                }
+            }
+
+            remainingIndices.swap(nextRemainingIndices);
+        }
+    }
+
+    void SolvingPlanner::planCacheSharingAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t bodyStrideBytes, size_t cacheLineBytes)
+    {
+        const size_t collisionCount = collisions.size();
+
+        flatIndices.clear();
+        flatIndices.reserve(collisionCount);
+        passOffsets.clear();
+
+        if (collisionCount == 0 || workerCount == 0 || bodyStrideBytes == 0 || cacheLineBytes == 0)
+            return;
+
+        const size_t bodiesPerCacheLine = std::max<size_t>(1, cacheLineBytes / bodyStrideBytes);
+        const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
+
+        // 1. Build cache-line group adjacency graph
+        std::vector<std::vector<size_t>> adjacency(groupCount);
+        for (const auto& c : collisions)
+        {
+            const size_t ga = c.a / bodiesPerCacheLine;
+            const size_t gb = c.b / bodiesPerCacheLine;
+            if (ga != gb)
+            {
+                adjacency[ga].push_back(gb);
+                adjacency[gb].push_back(ga);
+            }
+        }
+
+        // Deduplicate adjacency lists
+        for (size_t g = 0; g < groupCount; ++g)
+        {
+            std::sort(adjacency[g].begin(), adjacency[g].end());
+            adjacency[g].erase(std::unique(adjacency[g].begin(), adjacency[g].end()), adjacency[g].end());
+        }
+
+        // 2. Persistent partitioning via Multi-Source BFS
+        std::vector<uint8_t> groupOwner(groupCount, uint8_t(-1));
+        std::vector<size_t> groupSizes(workerCount, 0);
+
+        if (workerCount == 1)
+        {
+            std::fill(groupOwner.begin(), groupOwner.end(), static_cast<uint8_t>(0));
+        }
+        else if (groupCount > 0)
+        {
+            std::vector<size_t> seeds(groupCount);
+            std::iota(seeds.begin(), seeds.end(), 0);
+
+            // Deterministic LCG shuffle for seed candidates
+            uint32_t seedRng = 1234;
+            for (size_t i = seeds.size() - 1; i > 0; --i)
+            {
+                seedRng = seedRng * 1664525u + 1013904223u;
+                size_t j = seedRng % (i + 1);
+                std::swap(seeds[i], seeds[j]);
+            }
+
+            std::queue<size_t> bfsQueue;
+            const size_t targetSize = std::max<size_t>(1, static_cast<size_t>(std::round(static_cast<double>(groupCount) / workerCount * 1.15)));
+
+            for (size_t w = 0; w < workerCount && w < groupCount; ++w)
+            {
+                size_t seedGroup = seeds[w];
+                if (groupOwner[seedGroup] == uint8_t(-1))
+                {
+                    groupOwner[seedGroup] = static_cast<uint8_t>(w);
+                    groupSizes[w]++;
+                    bfsQueue.push(seedGroup);
+                }
+            }
+
+            while (!bfsQueue.empty())
+            {
+                size_t node = bfsQueue.front();
+                bfsQueue.pop();
+
+                uint8_t w = groupOwner[node];
+                if (groupSizes[w] >= targetSize)
+                    continue;
+
+                for (size_t neighbor : adjacency[node])
+                {
+                    if (groupOwner[neighbor] == uint8_t(-1))
+                    {
+                        groupOwner[neighbor] = w;
+                        groupSizes[w]++;
+                        bfsQueue.push(neighbor);
+                    }
+                }
+            }
+
+            // Assign remaining unreached groups to the worker with the smallest region
+            for (size_t g = 0; g < groupCount; ++g)
+            {
+                if (groupOwner[g] == uint8_t(-1))
+                {
+                    size_t minWorker = 0;
+                    size_t minSize = groupSizes[0];
+                    for (size_t w = 1; w < workerCount; ++w)
+                    {
+                        if (groupSizes[w] < minSize)
+                        {
+                            minSize = groupSizes[w];
+                            minWorker = w;
+                        }
+                    }
+                    groupOwner[g] = static_cast<uint8_t>(minWorker);
+                    groupSizes[minWorker]++;
+                }
+            }
+        }
+
+        // 3. Multi-wave execution planner
+        remainingIndices.resize(collisionCount);
+        std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
+
+        std::vector<uint8_t> waveOwner(groupCount, uint8_t(-1));
+        std::vector<std::vector<size_t>> waveAssignments(workerCount);
+
+        std::vector<size_t> interiorIndices;
+        std::vector<size_t> boundaryIndices;
+
+        while (!remainingIndices.empty())
+        {
+            const size_t waveStartPass = passOffsets.size();
+            passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+
+            nextRemainingIndices.clear();
+            std::fill(waveOwner.begin(), waveOwner.end(), uint8_t(-1));
+
+            for (auto& vec : waveAssignments)
+                vec.clear();
+
+            interiorIndices.clear();
+            boundaryIndices.clear();
+
+            for (size_t idx : remainingIndices)
+            {
+                const ObjectPair& c = collisions[idx];
+                const size_t ga = c.a / bodiesPerCacheLine;
+                const size_t gb = c.b / bodiesPerCacheLine;
+
+                if (groupOwner[ga] == groupOwner[gb])
+                    interiorIndices.push_back(idx);
+                else
+                    boundaryIndices.push_back(idx);
+            }
+
+            // Phase 1: Interior collisions assigned to persistent owners
+            for (size_t idx : interiorIndices)
+            {
+                const ObjectPair& c = collisions[idx];
+                const size_t ga = c.a / bodiesPerCacheLine;
+                const size_t gb = c.b / bodiesPerCacheLine;
+                const uint8_t chosen = groupOwner[ga];
+
+                waveAssignments[chosen].push_back(idx);
+                waveOwner[ga] = chosen;
+                waveOwner[gb] = chosen;
+            }
+
+            // Phase 2 (Pass A): Boundary collisions (unclaimed groups resolved deterministically)
+            delayedIndices.clear();
+            for (size_t idx : boundaryIndices)
+            {
+                const ObjectPair& c = collisions[idx];
+                const size_t ga = c.a / bodiesPerCacheLine;
+                const size_t gb = c.b / bodiesPerCacheLine;
+
+                const uint8_t ownerA = waveOwner[ga];
+                const uint8_t ownerB = waveOwner[gb];
+
+                uint8_t chosen = uint8_t(-1);
+
+                if (ownerA == ownerB && ownerA != uint8_t(-1))
+                {
+                    chosen = ownerA;
+                }
+                else if (ownerA == uint8_t(-1) && ownerB == uint8_t(-1))
+                {
+                    size_t lo = std::min(ga, gb);
+                    size_t hi = std::max(ga, gb);
+                    chosen = ((hashGroupPair(lo, hi) & 1) == 0) ? groupOwner[lo] : groupOwner[hi];
+                }
+                else
+                {
+                    delayedIndices.push_back(idx);
+                    continue;
+                }
+
+                waveAssignments[chosen].push_back(idx);
+                waveOwner[ga] = chosen;
+                waveOwner[gb] = chosen;
+            }
+
+            // Phase 2 (Pass B): Boundary collisions (partially claimed groups inherit active worker)
+            for (size_t idx : delayedIndices)
+            {
+                const ObjectPair& c = collisions[idx];
+                const size_t ga = c.a / bodiesPerCacheLine;
+                const size_t gb = c.b / bodiesPerCacheLine;
+
+                const uint8_t ownerA = waveOwner[ga];
+                const uint8_t ownerB = waveOwner[gb];
+
+                uint8_t chosen = uint8_t(-1);
+
+                if (ownerA == ownerB && ownerA != uint8_t(-1))
+                {
+                    chosen = ownerA;
+                }
+                else if (ownerA == uint8_t(-1) && ownerB != uint8_t(-1))
+                {
+                    chosen = ownerB;
+                }
+                else if (ownerB == uint8_t(-1) && ownerA != uint8_t(-1))
+                {
+                    chosen = ownerA;
+                }
+                else
+                {
+                    nextRemainingIndices.push_back(idx);
+                    continue;
+                }
+
+                waveAssignments[chosen].push_back(idx);
+                waveOwner[ga] = chosen;
+                waveOwner[gb] = chosen;
             }
 
             {

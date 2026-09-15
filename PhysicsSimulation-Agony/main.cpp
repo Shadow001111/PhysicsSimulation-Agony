@@ -634,7 +634,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 9);
+    loadScene(simulation, 2);
 
     // Simulation renderer.
     Render::SimulationRenderer simulationRenderer;

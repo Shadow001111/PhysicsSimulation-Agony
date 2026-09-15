@@ -43,6 +43,11 @@ namespace PS_AGONY
             size_t bodyCount,
             size_t bodyStrideBytes,
             size_t cacheLineBytes);
+        void planCacheSharingAwareExecution(
+            const std::vector<ObjectPair>& collisions,
+            size_t bodyCount,
+            size_t bodyStrideBytes,
+            size_t cacheLineBytes);
 
         void printExecutionPlan();
 

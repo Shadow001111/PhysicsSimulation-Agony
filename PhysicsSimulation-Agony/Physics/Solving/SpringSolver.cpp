@@ -81,7 +81,7 @@ namespace PS_AGONY
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
 				solvingPlanner.setWorkerCount(workerCount);
 
-				solvingPlanner.planCacheLineAwareExecution(
+				solvingPlanner.planCacheSharingAwareExecution(
 					springBodyPairs, bodies->getCount(),
 					sizeof(Real),
 					std::hardware_destructive_interference_size
