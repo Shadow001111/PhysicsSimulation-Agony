@@ -25,6 +25,7 @@ namespace PS_AGONY
         std::vector<size_t> delayedIndices;
         std::vector<size_t> nextRemainingIndices;
         std::vector<uint8_t> usedBodies;
+        std::vector<std::vector<size_t>> waveAssignments;
     public:
         SolvingPlanner() = default;
         ~SolvingPlanner() = default;

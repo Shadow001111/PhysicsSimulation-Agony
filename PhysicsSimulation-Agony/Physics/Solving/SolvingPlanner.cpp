@@ -42,7 +42,7 @@ namespace PS_AGONY
 
         usedBodies.assign(bodyCount, uint8_t(-1));
 
-        std::vector<std::vector<size_t>> waveAssignments(workerCount);
+        waveAssignments.resize(workerCount);
 
         std::vector<size_t> workerLoad(workerCount);
 
@@ -86,29 +86,25 @@ namespace PS_AGONY
                                     chosenWorker = i;
                                 }
                             }
+
+                            const uint8_t choosenWorkerU8 = static_cast<uint8_t>(chosenWorker);
+                            usedBodies[c.a] = choosenWorkerU8;
+                            usedBodies[c.b] = choosenWorkerU8;
                         }
                         else
                         {
                             chosenWorker = static_cast<size_t>(ownerA);
                         }
-                    }
-                    else if (ownerA == uint8_t(-1) || ownerB == uint8_t(-1))
-                    {
-                        // Delay on second pass.
-                        delayedIndices.push_back(idx);
-                        continue;
+
+                        waveAssignments[chosenWorker].push_back(idx);
+                        workerLoad[chosenWorker]++;
                     }
                     else
                     {
-                        nextRemainingIndices.push_back(idx);
-                        continue;
+                        const bool eitherIsUnassigned = ownerA == uint8_t(-1) || ownerB == uint8_t(-1);
+                        auto& vec = eitherIsUnassigned ? delayedIndices : nextRemainingIndices;
+                        vec.push_back(idx);
                     }
-
-                    waveAssignments[chosenWorker].push_back(idx);
-                    workerLoad[chosenWorker]++;
-
-                    usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
-                    usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
                 }
             }
 
@@ -123,29 +119,20 @@ namespace PS_AGONY
 
                     size_t chosenWorker;
 
-                    if (ownerA == ownerB)
-                    {
-                        chosenWorker = static_cast<size_t>(ownerA);
-                    }
-                    else if (ownerA == uint8_t(-1))
-                    {
-                        chosenWorker = static_cast<size_t>(ownerB);
-                    }
-                    else if (ownerB == uint8_t(-1))
-                    {
-                        chosenWorker = static_cast<size_t>(ownerA);
-                    }
-                    else
+                    if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
                     {
                         nextRemainingIndices.push_back(idx);
                         continue;
                     }
 
+                    const uint8_t chosenWorkerU8 = std::min(ownerA, ownerB);
+                    const size_t chosenWorker = static_cast<size_t>(chosenWorkerU8);
+
                     waveAssignments[chosenWorker].push_back(idx);
                     workerLoad[chosenWorker]++;
 
-                    usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
-                    usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                    usedBodies[c.a] = chosenWorkerU8;
+                    usedBodies[c.b] = chosenWorkerU8;
                 }
             }
 
@@ -246,17 +233,15 @@ namespace PS_AGONY
                             {
                                 chosenWorker = static_cast<size_t>(ownerA);
                             }
-                        }
-                        else if (ownerA == uint8_t(-1) || ownerB == uint8_t(-1))
-                        {
-                            // Defer partially claimed pairs to Pass 2
-                            delayedIndices.push_back(idx);
-                            continue;
+
+                            waveAssignments[chosenWorker].push_back(idx);
+                            workerLoad[chosenWorker]++;
                         }
                         else
                         {
-                            // Direct wave structural conflict (different workers)
-                            nextRemainingIndices.push_back(idx);
+                            const bool eitherIsUnassigned = ownerA == uint8_t(-1) || ownerB == uint8_t(-1);
+                            auto& vec = eitherIsUnassigned ? delayedIndices : nextRemainingIndices;
+                            vec.push_back(idx);
                             continue;
                         }
 
@@ -303,26 +288,17 @@ namespace PS_AGONY
                         const uint8_t ownerA = usedBodies[c.a];
                         const uint8_t ownerB = usedBodies[c.b];
 
-                        size_t chosenWorker = -1;
-                        if (ownerA == ownerB)
-                        {
-                            chosenWorker = static_cast<size_t>(ownerA);
-                        }
-                        else if (ownerA == uint8_t(-1))
-                        {
-                            chosenWorker = static_cast<size_t>(ownerB);
-                        }
-                        else if (ownerB == uint8_t(-1))
-                        {
-                            chosenWorker = static_cast<size_t>(ownerA);
-                        }
-                        else
+                        size_t chosenWorker;
+                        if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
                         {
                             nextRemainingIndices.push_back(idx);
                             continue;
                         }
 
-                        // Evaluate intra-chunk SIMD safety constraints
+                        const uint8_t chosenWorkerU8 = std::min(ownerA, ownerB);
+                        const size_t chosenWorker = static_cast<size_t>(chosenWorkerU8);
+
+                        // Evaluate intra-chunk SIMD safety constraints.
                         const size_t currSize = waveAssignments[chosenWorker].size();
                         const size_t chunkRem = currSize % chunkSize;
                         bool simdConflict = false;
@@ -349,8 +325,8 @@ namespace PS_AGONY
                             waveAssignments[chosenWorker].push_back(idx);
                             workerLoad[chosenWorker]++;
 
-                            usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
-                            usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
+                            usedBodies[c.a] = chosenWorkerU8;
+                            usedBodies[c.b] = chosenWorkerU8;
                             placedAny = true;
                         }
                     }
@@ -463,29 +439,25 @@ namespace PS_AGONY
                                     chosenWorker = i;
                                 }
                             }
+
+                            const uint8_t choosenWorkerU8 = static_cast<uint8_t>(chosenWorker);
+                            usedBodies[c.a] = choosenWorkerU8;
+                            usedBodies[c.b] = choosenWorkerU8;
                         }
                         else
                         {
                             chosenWorker = static_cast<size_t>(ownerA);
                         }
-                    }
-                    else if (ownerA == uint8_t(-1) || ownerB == uint8_t(-1))
-                    {
-                        // Delay on second pass.
-                        delayedIndices.push_back(idx);
-                        continue;
+
+                        waveAssignments[chosenWorker].push_back(idx);
+                        workerLoad[chosenWorker]++;
                     }
                     else
                     {
-                        nextRemainingIndices.push_back(idx);
-                        continue;
+                        const bool eitherIsUnassigned = ownerA == uint8_t(-1) || ownerB == uint8_t(-1);
+                        auto& vec = eitherIsUnassigned ? delayedIndices : nextRemainingIndices;
+                        vec.push_back(idx);
                     }
-
-                    waveAssignments[chosenWorker].push_back(idx);
-                    workerLoad[chosenWorker]++;
-
-                    usedBodies[groupA] = static_cast<uint8_t>(chosenWorker);
-                    usedBodies[groupB] = static_cast<uint8_t>(chosenWorker);
                 }
             }
 
@@ -495,37 +467,25 @@ namespace PS_AGONY
                 for (size_t idx : delayedIndices)
                 {
                     const ObjectPair& c = collisions[idx];
-                    const size_t groupA = c.a / bodiesPerCacheLine;
-                    const size_t groupB = c.b / bodiesPerCacheLine;
-
-                    const uint8_t ownerA = usedBodies[groupA];
-                    const uint8_t ownerB = usedBodies[groupB];
+                    const uint8_t ownerA = usedBodies[c.a];
+                    const uint8_t ownerB = usedBodies[c.b];
 
                     size_t chosenWorker;
 
-                    if (ownerA == ownerB)
-                    {
-                        chosenWorker = static_cast<size_t>(ownerA);
-                    }
-                    else if (ownerA == uint8_t(-1))
-                    {
-                        chosenWorker = static_cast<size_t>(ownerB);
-                    }
-                    else if (ownerB == uint8_t(-1))
-                    {
-                        chosenWorker = static_cast<size_t>(ownerA);
-                    }
-                    else
+                    if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
                     {
                         nextRemainingIndices.push_back(idx);
                         continue;
                     }
 
+                    const uint8_t chosenWorkerU8 = std::min(ownerA, ownerB);
+                    const size_t chosenWorker = static_cast<size_t>(chosenWorkerU8);
+
                     waveAssignments[chosenWorker].push_back(idx);
                     workerLoad[chosenWorker]++;
 
-                    usedBodies[groupA] = static_cast<uint8_t>(chosenWorker);
-                    usedBodies[groupB] = static_cast<uint8_t>(chosenWorker);
+                    usedBodies[c.a] = chosenWorkerU8;
+                    usedBodies[c.b] = chosenWorkerU8;
                 }
             }
 
@@ -547,7 +507,11 @@ namespace PS_AGONY
         }
     }
 
-    void SolvingPlanner::planCacheSharingAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t bodyStrideBytes, size_t cacheLineBytes)
+    void SolvingPlanner::planCacheSharingAwareExecution(
+        const std::vector<ObjectPair>& collisions,
+        size_t bodyCount,
+        size_t bodyStrideBytes,
+        size_t cacheLineBytes)
     {
         const size_t collisionCount = collisions.size();
 
@@ -561,7 +525,7 @@ namespace PS_AGONY
         const size_t bodiesPerCacheLine = std::max<size_t>(1, cacheLineBytes / bodyStrideBytes);
         const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
 
-        // 1. Build cache-line group adjacency graph
+        // Build cache-line group adjacency graph.
         std::vector<std::vector<size_t>> adjacency(groupCount);
         for (const auto& c : collisions)
         {
@@ -574,14 +538,14 @@ namespace PS_AGONY
             }
         }
 
-        // Deduplicate adjacency lists
+        // Deduplicate adjacency lists.
         for (size_t g = 0; g < groupCount; ++g)
         {
             std::sort(adjacency[g].begin(), adjacency[g].end());
             adjacency[g].erase(std::unique(adjacency[g].begin(), adjacency[g].end()), adjacency[g].end());
         }
 
-        // 2. Persistent partitioning via Multi-Source BFS
+        // Persistent partitioning via Multi-Source BFS.
         std::vector<uint8_t> groupOwner(groupCount, uint8_t(-1));
         std::vector<size_t> groupSizes(workerCount, 0);
 
@@ -594,7 +558,7 @@ namespace PS_AGONY
             std::vector<size_t> seeds(groupCount);
             std::iota(seeds.begin(), seeds.end(), 0);
 
-            // Deterministic LCG shuffle for seed candidates
+            // Deterministic LCG shuffle for seed candidates.
             uint32_t seedRng = 1234;
             for (size_t i = seeds.size() - 1; i > 0; --i)
             {
@@ -637,7 +601,7 @@ namespace PS_AGONY
                 }
             }
 
-            // Assign remaining unreached groups to the worker with the smallest region
+            // Assign remaining unreached groups to the worker with the smallest region.
             for (size_t g = 0; g < groupCount; ++g)
             {
                 if (groupOwner[g] == uint8_t(-1))
@@ -658,7 +622,7 @@ namespace PS_AGONY
             }
         }
 
-        // 3. Multi-wave execution planner
+        // Multi-wave execution planner.
         remainingIndices.resize(collisionCount);
         std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
 
@@ -688,13 +652,10 @@ namespace PS_AGONY
                 const size_t ga = c.a / bodiesPerCacheLine;
                 const size_t gb = c.b / bodiesPerCacheLine;
 
-                if (groupOwner[ga] == groupOwner[gb])
-                    interiorIndices.push_back(idx);
-                else
-                    boundaryIndices.push_back(idx);
+                auto& vec = groupOwner[ga] == groupOwner[gb] ? interiorIndices : boundaryIndices;
             }
 
-            // Phase 1: Interior collisions assigned to persistent owners
+            // Phase 1: Interior collisions assigned to persistent owners.
             for (size_t idx : interiorIndices)
             {
                 const ObjectPair& c = collisions[idx];
@@ -707,7 +668,7 @@ namespace PS_AGONY
                 waveOwner[gb] = chosen;
             }
 
-            // Phase 2 (Pass A): Boundary collisions (unclaimed groups resolved deterministically)
+            // Phase 2 (Pass A): Boundary collisions (unclaimed groups resolved deterministically).
             delayedIndices.clear();
             for (size_t idx : boundaryIndices)
             {
@@ -741,7 +702,7 @@ namespace PS_AGONY
                 waveOwner[gb] = chosen;
             }
 
-            // Phase 2 (Pass B): Boundary collisions (partially claimed groups inherit active worker)
+            // Phase 2 (Pass B): Boundary collisions (partially claimed groups inherit active worker).
             for (size_t idx : delayedIndices)
             {
                 const ObjectPair& c = collisions[idx];
@@ -751,25 +712,15 @@ namespace PS_AGONY
                 const uint8_t ownerA = waveOwner[ga];
                 const uint8_t ownerB = waveOwner[gb];
 
-                uint8_t chosen = uint8_t(-1);
-
-                if (ownerA == ownerB && ownerA != uint8_t(-1))
-                {
-                    chosen = ownerA;
-                }
-                else if (ownerA == uint8_t(-1) && ownerB != uint8_t(-1))
-                {
-                    chosen = ownerB;
-                }
-                else if (ownerB == uint8_t(-1) && ownerA != uint8_t(-1))
-                {
-                    chosen = ownerA;
-                }
-                else
+                if ((ownerA == uint8_t(-1) && ownerB == uint8_t(-1)) ||
+                    (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB))
                 {
                     nextRemainingIndices.push_back(idx);
                     continue;
                 }
+
+                // Branchless worker selection: min() picks whichever is a valid worker ID (< 255)
+                const uint8_t chosen = std::min(ownerA, ownerB);
 
                 waveAssignments[chosen].push_back(idx);
                 waveOwner[ga] = chosen;
@@ -888,6 +839,13 @@ namespace PS_AGONY
         total += getVectorMemoryUsage(delayedIndices);
         total += getVectorMemoryUsage(nextRemainingIndices);
         total += getVectorMemoryUsage(usedBodies);
+
+        total += getVectorMemoryUsage(waveAssignments);
+        for (const auto& assignment : waveAssignments)
+        {
+            total += getVectorMemoryUsage(assignment);
+        }
+
         return total;
     }
 }
