@@ -27,10 +27,12 @@ namespace PS_AGONY
         constraintSystems[size_t(ConstraintType::Spring)] = &springConstraintSystem;
         constraintSystems[size_t(ConstraintType::Joint)] = &jointConstraintSystem;
         constraintSystems[size_t(ConstraintType::Rod)] = &rodConstraintSystem;
+        constraintSystems[size_t(ConstraintType::Prismatic)] = &prismaticJointConstraintSystem;
 
         constraintSystemSolvers[size_t(ConstraintType::Spring)] = &springSolver;
         constraintSystemSolvers[size_t(ConstraintType::Joint)] = &jointSolver;
         constraintSystemSolvers[size_t(ConstraintType::Rod)] = &rodSolver;
+        constraintSystemSolvers[size_t(ConstraintType::Prismatic)] = &prismaticJointSolver;
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -164,6 +166,31 @@ namespace PS_AGONY
     {
         rodConstraintSystem.removeConstraint(rodIndex, objectManager.bodies);
         rodsWereChanged = true;
+    }
+
+    void Simulation::createPrismaticJoint(const PrismaticJointCreateParams& params)
+    {
+        prismaticJointConstraintSystem.createPrismaticJoint(
+            params.bodyIndexA,
+            params.bodyIndexB,
+            params.localAnchorA,
+            params.localAnchorB,
+            params.localAxisA,
+            params.stiffness,
+            params.damping,
+            params.lowerLimit,
+            params.upperLimit,
+            params.enableLimit,
+            objectManager.bodies
+        );
+
+        prismaticJointsWereChanged = true;
+    }
+
+    void Simulation::destroyPrismaticJoint(uint32_t prismaticJointIndex)
+    {
+        prismaticJointConstraintSystem.removeConstraint(prismaticJointIndex, objectManager.bodies);
+        prismaticJointsWereChanged = true;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -322,6 +349,11 @@ namespace PS_AGONY
             RodSoAViewer(rods)
         );
 
+        prismaticJointSolver.setDataViewers(
+            objectManager.bodies,
+            PrismaticJointSoAViewer(prismaticJoints)
+        );
+
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
         // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
         narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
@@ -367,6 +399,14 @@ namespace PS_AGONY
             rodsWereChanged
         );
         rodsWereChanged = false;
+
+        // Prismatic joints.
+        prismaticJointSolver.solvePrismaticJoints(
+            deltaTime,
+            simulationSettings.constraintIterations[size_t(ConstraintType::Prismatic)],
+            prismaticJointsWereChanged
+        );
+        prismaticJointsWereChanged = false;
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
@@ -888,5 +928,6 @@ namespace PS_AGONY
         data.constraintDataMemoryUsage[size_t(ConstraintType::Spring)] = springs.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Joint)] = joints.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Rod)] = rods.getMemoryUsage();
+        data.constraintDataMemoryUsage[size_t(ConstraintType::Prismatic)] = prismaticJoints.getMemoryUsage();
     }
 }

@@ -7,3 +7,6 @@
 #include "SoA/Shapes/PolygonSoA.h"
 
 #include "SoA/Constraints/SpringSoA.h"
+#include "SoA/Constraints/JointSoA.h"
+#include "SoA/Constraints/RodSoA.h"
+#include "SoA/Constraints/PrismaticJointSoA.h"

@@ -82,6 +82,7 @@ namespace Render
 
         renderSprings(simulation, viewProjectionMatrix, simRenderAlpha);
         renderJoints(simulation, viewProjectionMatrix, simRenderAlpha);
+        renderPrismaticJoints(simulation, viewProjectionMatrix, simRenderAlpha);
         renderRods(simulation, viewProjectionMatrix, simRenderAlpha);
 
         if (renderOptions.colliderAABBs)
@@ -895,6 +896,125 @@ namespace Render
             verts[vIdx + 3].x = worldBx;
             verts[vIdx + 3].y = worldBy;
             verts[vIdx + 3].color = color;
+        }
+
+        shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
+    }
+
+    // TODO: Add culling.
+    void SimulationRenderer::renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha)
+    {
+        TRACY_SCOPE_N("Render prismatic joints");
+
+        const auto& prismaticJoints = simulation.getPrismaticJoints();
+        const size_t prismaticJointCount = prismaticJoints.getCount();
+        if (prismaticJointCount == 0) return;
+
+        // 2 lines per joint = 4 vertices.
+        const size_t vertexCount = prismaticJointCount * 4;
+        lineVertexData.resize(vertexCount);
+        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
+
+        const Real* ECSTASY_RESTRICT oldPositionXPtr = bodies.renderOldOffsetX;
+        const Real* ECSTASY_RESTRICT oldPositionYPtr = bodies.renderOldOffsetY;
+        const Real* ECSTASY_RESTRICT oldRotationPtr = bodies.renderOldRotation;
+        const Real* ECSTASY_RESTRICT rotationWrapCountPtr = bodies.renderRotationWrapCount;
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
+        const Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation;
+
+        constexpr uint32_t actualColor = 0xFF3333; // Reddish: anchor to anchor.
+        constexpr uint32_t targetColor = 0x3399FF; // Blueish: axis-projected, clamped.
+
+        for (size_t i = 0; i < prismaticJointCount; i++)
+        {
+            const ObjectIndex bodyIndexA = prismaticJoints.bodyIndexA[i];
+            const ObjectIndex bodyIndexB = prismaticJoints.bodyIndexB[i];
+
+            // Interpolate body A transform.
+            const Real posAx = positionXPtr[bodyIndexA];
+            const Real posAy = positionYPtr[bodyIndexA];
+            const Real oldPosAx = oldPositionXPtr[bodyIndexA];
+            const Real oldPosAy = oldPositionYPtr[bodyIndexA];
+
+            const Real interpolatedPosAx = oldPosAx + (posAx - oldPosAx) * simRenderAlpha;
+            const Real interpolatedPosAy = oldPosAy + (posAy - oldPosAy) * simRenderAlpha;
+
+            const Real interpolatedRotationA = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexA],
+                oldRotationPtr[bodyIndexA],
+                rotationWrapCountPtr[bodyIndexA],
+                simRenderAlpha
+            );
+
+            const auto [cosA, sinA] = FastCosSin::order4Scalar(interpolatedRotationA);
+
+            // Interpolate body B transform.
+            const Real posBx = positionXPtr[bodyIndexB];
+            const Real posBy = positionYPtr[bodyIndexB];
+            const Real oldPosBx = oldPositionXPtr[bodyIndexB];
+            const Real oldPosBy = oldPositionYPtr[bodyIndexB];
+
+            const Real interpolatedPosBx = oldPosBx + (posBx - oldPosBx) * simRenderAlpha;
+            const Real interpolatedPosBy = oldPosBy + (posBy - oldPosBy) * simRenderAlpha;
+
+            const Real interpolatedRotationB = interpolateAndWrapRotation(
+                rotationPtr[bodyIndexB],
+                oldRotationPtr[bodyIndexB],
+                rotationWrapCountPtr[bodyIndexB],
+                simRenderAlpha
+            );
+
+            const auto [cosB, sinB] = FastCosSin::order4Scalar(interpolatedRotationB);
+
+            // Compute world positions of joint anchors.
+            const float worldAx = interpolatedPosAx + (prismaticJoints.localAnchorA[i].x * cosA - prismaticJoints.localAnchorA[i].y * sinA);
+            const float worldAy = interpolatedPosAy + (prismaticJoints.localAnchorA[i].x * sinA + prismaticJoints.localAnchorA[i].y * cosA);
+
+            const float worldBx = interpolatedPosBx + (prismaticJoints.localAnchorB[i].x * cosB - prismaticJoints.localAnchorB[i].y * sinB);
+            const float worldBy = interpolatedPosBy + (prismaticJoints.localAnchorB[i].x * sinB + prismaticJoints.localAnchorB[i].y * cosB);
+
+            // Compute world-space slider axis (attached to body A, so it rotates with A).
+            const float axisX = static_cast<float>(prismaticJoints.localAxisA[i].x * cosA - prismaticJoints.localAxisA[i].y * sinA);
+            const float axisY = static_cast<float>(prismaticJoints.localAxisA[i].x * sinA + prismaticJoints.localAxisA[i].y * cosA);
+
+            // Project anchor-to-anchor displacement onto the axis, clamp to the joint's limit.
+            const float dx = worldBx - worldAx;
+            const float dy = worldBy - worldAy;
+            float projection = dx * axisX + dy * axisY;
+
+            if (prismaticJoints.enableLimit[i])
+            {
+                projection = std::clamp(
+                    projection,
+                    static_cast<float>(prismaticJoints.lowerLimit[i]),
+                    static_cast<float>(prismaticJoints.upperLimit[i])
+                );
+            }
+
+            const float targetX = worldAx + axisX * projection;
+            const float targetY = worldAy + axisY * projection;
+
+            const size_t vIdx = i * 4;
+
+            // Line 1: Anchor A to Anchor B (actual).
+            verts[vIdx + 0].x = worldAx;
+            verts[vIdx + 0].y = worldAy;
+            verts[vIdx + 0].color = actualColor;
+
+            verts[vIdx + 1].x = worldBx;
+            verts[vIdx + 1].y = worldBy;
+            verts[vIdx + 1].color = actualColor;
+
+            // Line 2: Anchor A to axis-projected, clamped point (target).
+            verts[vIdx + 2].x = worldAx;
+            verts[vIdx + 2].y = worldAy;
+            verts[vIdx + 2].color = targetColor;
+
+            verts[vIdx + 3].x = targetX;
+            verts[vIdx + 3].y = targetY;
+            verts[vIdx + 3].color = targetColor;
         }
 
         shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);

@@ -3,8 +3,10 @@
 #include "SoA/Constraints/SpringSoA.h"
 #include "SoA/Constraints/JointSoA.h"
 #include "SoA/Constraints/RodSoA.h"
+#include "SoA/Constraints/PrismaticJointSoA.h"
 
 #include <array>
+#include <cmath>
 
 namespace PS_AGONY
 {
@@ -183,5 +185,78 @@ namespace PS_AGONY
 		}
 
 		const char* getName() const noexcept override { return "Rod"; }
+	};
+
+	class PrismaticJointConstraintSystem final : public IConstraintSystem
+	{
+		PrismaticJointSoA& prismaticJoints;
+	public:
+		explicit PrismaticJointConstraintSystem(PrismaticJointSoA& prismaticJoints) noexcept : prismaticJoints(prismaticJoints) {}
+
+		// Creates a prismatic (slider/piston) joint and registers it with both bodies it touches.
+		// axisA is given in body A's local space and need not be pre-normalized.
+		void createPrismaticJoint(
+			ObjectIndex indexA, ObjectIndex indexB,
+			Vec2 anchorA, Vec2 anchorB, Vec2 axisA,
+			Real stiffness, Real damping,
+			Real lowerLimit, Real upperLimit, bool enableLimit,
+			BodySoA& bodies)
+		{
+			// Normalize the axis defensively; a zero-length axis would make the joint singular.
+			const Real axisLenSq = glm::dot(axisA, axisA);
+			const Vec2 normalizedAxis = axisLenSq > Real(1e-12) ? axisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
+
+			// Capture the current relative angle so the joint locks rotation at its creation pose,
+			// wrapped to (-pi, pi] so it stays robust to each body's rotation wrapping independently.
+			constexpr Real PI = Real(3.14159265358979323846);
+			constexpr Real TWO_PI = Real(2) * PI;
+			Real refAngle = bodies.rotation[indexB] - bodies.rotation[indexA];
+			refAngle -= TWO_PI * std::floor((refAngle + PI) / TWO_PI);
+
+			const uint32_t newIndex = prismaticJoints.append(
+				indexA, indexB, anchorA, anchorB, normalizedAxis, refAngle,
+				stiffness, damping, lowerLimit, upperLimit, enableLimit
+			);
+			bodies.addAttachment(indexA, ConstraintType::Prismatic, newIndex);
+			bodies.addAttachment(indexB, ConstraintType::Prismatic, newIndex);
+		}
+
+		void removeConstraint(uint32_t index, BodySoA& bodies) override
+		{
+			if (index >= prismaticJoints.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+
+			// Unlink the prismatic joint being removed from both of its bodies.
+			bodies.removeAttachment(prismaticJoints.bodyIndexA[index], ConstraintType::Prismatic, index);
+			bodies.removeAttachment(prismaticJoints.bodyIndexB[index], ConstraintType::Prismatic, index);
+
+			const size_t oldBackIndex = prismaticJoints.swapRemove(index);
+
+			// If a prismatic joint got swapped into 'index', relink it there.
+			if (oldBackIndex != index)
+			{
+				const uint32_t newIndex = static_cast<uint32_t>(index);
+				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
+
+				bodies.removeAttachment(prismaticJoints.bodyIndexA[index], ConstraintType::Prismatic, oldIndex);
+				bodies.addAttachment(prismaticJoints.bodyIndexA[index], ConstraintType::Prismatic, newIndex);
+				bodies.removeAttachment(prismaticJoints.bodyIndexB[index], ConstraintType::Prismatic, oldIndex);
+				bodies.addAttachment(prismaticJoints.bodyIndexB[index], ConstraintType::Prismatic, newIndex);
+			}
+		}
+
+		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
+		{
+			if (index >= prismaticJoints.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+			if (prismaticJoints.bodyIndexA[index] == oldBodyIndex) prismaticJoints.bodyIndexA[index] = newBodyIndex;
+			if (prismaticJoints.bodyIndexB[index] == oldBodyIndex) prismaticJoints.bodyIndexB[index] = newBodyIndex;
+		}
+
+		const char* getName() const noexcept override { return "PrismaticJoint"; }
 	};
 }

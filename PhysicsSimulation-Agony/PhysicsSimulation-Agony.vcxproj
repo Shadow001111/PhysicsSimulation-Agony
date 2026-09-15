@@ -256,6 +256,7 @@
     <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
+    <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp" />
     <ClCompile Include="Render\SimulationRenderer.cpp" />
     <ClCompile Include="Physics\Threading.cpp" />
     <ClCompile Include="Physics\Solving\RodSolver.cpp" />
@@ -309,6 +310,8 @@
     <ClInclude Include="Physics\SymmetricMatrix.h" />
     <ClInclude Include="Physics\Threading.h" />
     <ClInclude Include="Physics\Types.h" />
+    <ClInclude Include="Physics\SoA\Constraints\PrismaticJointSoA.h" />
+    <ClInclude Include="Physics\Solving\PrismaticJointSolver.h" />
     <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Physics\Solving\RodSolver.h" />
     <ClInclude Include="Scenes.h" />

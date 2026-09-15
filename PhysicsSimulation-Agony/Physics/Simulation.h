@@ -11,6 +11,7 @@
 #include "Solving/SpringSolver.h"
 #include "Solving/JointSolver.h"
 #include "Solving/RodSolver.h"
+#include "Solving/PrismaticJointSolver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -86,6 +87,20 @@ namespace PS_AGONY
 			Real length;
 		};
 
+		struct PrismaticJointCreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Vec2 localAxisA;      // Axis in body A's local space that translation is locked to; need not be pre-normalized.
+			Real stiffness;
+			Real damping;
+			Real lowerLimit = 0;
+			Real upperLimit = 0;
+			bool enableLimit = false;
+		};
+
 		struct SimulationSettings
 		{
 			// Clock.
@@ -119,6 +134,9 @@ namespace PS_AGONY
 		RodSoA rods;
 		RodConstraintSystem rodConstraintSystem{ rods };
 
+		PrismaticJointSoA prismaticJoints;
+		PrismaticJointConstraintSystem prismaticJointConstraintSystem{ prismaticJoints };
+
 		ConstraintSystemArray constraintSystems{};
 		std::array<const SolverBase*, size_t(ConstraintType::COUNT)> constraintSystemSolvers{};
 
@@ -137,6 +155,7 @@ namespace PS_AGONY
 		SpringSolver springSolver;
 		JointSolver jointSolver;
 		RodSolver rodSolver;
+		PrismaticJointSolver prismaticJointSolver;
 
 		// Time.
 		Real simulationRunTimer = 0;
@@ -154,6 +173,7 @@ namespace PS_AGONY
 		bool springsWereChanged = false;
 		bool jointsWereChanged = false;
 		bool rodsWereChanged = false;
+		bool prismaticJointsWereChanged = false;
 
 		// Render.
 		Real renderAlpha = 0;
@@ -237,6 +257,11 @@ namespace PS_AGONY
 		// Destroys a single rod by its index in the rod constraint system.
 		void destroyRod(uint32_t rodIndex);
 
+		void createPrismaticJoint(const PrismaticJointCreateParams& params);
+
+		// Destroys a single prismatic joint by its index in the prismatic joint constraint system.
+		void destroyPrismaticJoint(uint32_t prismaticJointIndex);
+
 		MaterialIndex createMaterial(const Material& material);
 
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
@@ -260,10 +285,11 @@ namespace PS_AGONY
 		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
 		JointSoAViewer getJoints() const noexcept { return JointSoAViewer(joints); }
 		RodSoAViewer getRods() const noexcept { return RodSoAViewer(rods); }
+		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return PrismaticJointSoAViewer(prismaticJoints); }
 
 		std::pair<const IConstraintSystem*, const SolverBase*> getConstraintSystemAndSolver(ConstraintType type) const noexcept
 		{
-			return { constraintSystems[size_t(type)], constraintSystemSolvers[size_t(type)]};
+			return { constraintSystems[size_t(type)], constraintSystemSolvers[size_t(type)] };
 		}
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }

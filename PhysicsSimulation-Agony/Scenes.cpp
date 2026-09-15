@@ -1148,6 +1148,142 @@ void load_JointedCircles(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random
         });
 }
 
+// A row of piston rigs (static cylinder body + sliding piston body), each using a
+// prismatic joint with different stiffness/damping/limit settings, to exercise the
+// full parameter space in one visual pass.
+//
+// NOTE: assumes Simulation::createPrismaticJoint auto-captures referenceAngle from
+// the two bodies' rotations at creation time (mirroring the SoA field comment), so
+// it isn't passed here. Adjust if the actual API expects it explicitly.
+void load_PrismaticJointGallery(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+{
+    // === 1. MATERIAL SETUP ===
+    PS_AGONY::Material material = {
+        .elasticity = 0.2f,
+        .staticFriction = 0.5f,
+        .dynamicFriction = 0.4f
+    };
+    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(material);
+
+    // === 2. RIG BUILDER ===
+    // anchorPos/rotationRad define the static cylinder; axisLocal is the slide
+    // direction in the cylinder's local space (rotates with it). axisOffset/perpOffset
+    // place the piston's initial position along/off that axis, so misaligned starts
+    // (perpOffset != 0) show the joint pulling the body back onto the axis.
+    auto makePistonRig = [&](
+        PS_AGONY::Vec2 anchorPos, float rotationRad, PS_AGONY::Vec2 axisLocal,
+        float axisOffset, float perpOffset,
+        float stiffness, float damping,
+        float lowerLimit, float upperLimit, bool enableLimit,
+        float sliderMass)
+        {
+            auto anchorOpt = simulation.createBox({
+                .base.position = anchorPos,
+                .base.velocity = { 0.0f, 0.0f },
+                .base.rotation = rotationRad,
+                .base.angularVelocity = 0.0f,
+                .base.mass = 0.0f,
+                .base.materialIndex = materialIdx,
+                .size = { 1.0f, 0.5f }
+                });
+
+            if (!anchorOpt) return;
+            PS_AGONY::ObjectIndex anchor = *anchorOpt;
+
+            const float cosR = std::cos(rotationRad);
+            const float sinR = std::sin(rotationRad);
+
+            // World-space axis (rotates with the anchor, same convention as the joint).
+            const float worldAxisX = axisLocal.x * cosR - axisLocal.y * sinR;
+            const float worldAxisY = axisLocal.x * sinR + axisLocal.y * cosR;
+
+            // World-space perpendicular (90 degrees CCW from axis), used only to seed
+            // an off-axis starting position for testing the correction visually.
+            const float worldPerpX = -worldAxisY;
+            const float worldPerpY = worldAxisX;
+
+            const float sliderX = anchorPos.x + worldAxisX * axisOffset + worldPerpX * perpOffset;
+            const float sliderY = anchorPos.y + worldAxisY * axisOffset + worldPerpY * perpOffset;
+
+            auto sliderOpt = simulation.createBox({
+                .base.position = { sliderX, sliderY },
+                .base.velocity = { 0.0f, 0.0f },
+                .base.rotation = rotationRad,
+                .base.angularVelocity = 0.0f,
+                .base.mass = sliderMass,
+                .base.materialIndex = materialIdx,
+                .size = { 0.8f, 0.8f }
+                });
+
+            if (!sliderOpt) return;
+            PS_AGONY::ObjectIndex slider = *sliderOpt;
+
+            simulation.createPrismaticJoint({
+                .bodyIndexA = anchor,
+                .bodyIndexB = slider,
+                .localAnchorA = { 0.0f, 0.0f },
+                .localAnchorB = { 0.0f, 0.0f },
+                .localAxisA = axisLocal,
+                .stiffness = stiffness,
+                .damping = damping,
+                .lowerLimit = lowerLimit,
+                .upperLimit = upperLimit,
+                .enableLimit = enableLimit
+                });
+        };
+
+    // === 3. RIG LAYOUT ===
+    // Vertical piston shafts, axis pointing down so gravity drives the slider toward
+    // the limit. Spaced along X, stiffness/damping ramp up left to right.
+    constexpr float ceilingY = 6.0f;
+    constexpr PS_AGONY::Vec2 downAxis = { 0.0f, -1.0f };
+
+    // Very soft: sags loosely, oscillates a lot before settling near the limit.
+    makePistonRig({ -12.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
+        /*stiffness*/ 100.0f, /*damping*/ 10.0f,
+        /*lowerLimit*/ 0.0f, /*upperLimit*/ 4.0f, /*enableLimit*/ true,
+        /*sliderMass*/ 1.0f);
+
+    // Soft.
+    makePistonRig({ -8.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
+        2'000.0f, 150.0f,
+        0.0f, 4.0f, true,
+        1.0f);
+
+    // Medium.
+    makePistonRig({ -4.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
+        20'000.0f, 800.0f,
+        0.0f, 4.0f, true,
+        1.0f);
+
+    // Stiff.
+    makePistonRig({ 0.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
+        200'000.0f, 4'000.0f,
+        0.0f, 4.0f, true,
+        1.0f);
+
+    // Rigid: should barely deviate from the initial offset regardless of load.
+    makePistonRig({ 4.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
+        2'000'000.0f, 20'000.0f,
+        0.0f, 4.0f, true,
+        1.0f);
+
+    // No limit: same mid stiffness as the "Medium" rig, but free to fall indefinitely.
+    makePistonRig({ 8.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
+        20'000.0f, 800.0f,
+        0.0f, 0.0f, false,
+        1.0f);
+
+    // Diagonal axis, deliberately started off-axis: exercises axis rotation with body A
+    // and the axis-projection/clamp correction (visible as red-vs-blue divergence
+    // in the debug render) instead of straight vertical sag.
+    constexpr float diagonalRotation = 0.785398f; // 45 degrees.
+    makePistonRig({ 12.0f, ceilingY }, diagonalRotation, PS_AGONY::Vec2{ 1.0f, 0.0f }, 1.0f, /*perpOffset*/ 1.0f,
+        20'000.0f, 800.0f,
+        -3.0f, 3.0f, true,
+        1.0f);
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Core::Random::Generator rvg; // Random value generator.
@@ -1193,5 +1329,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 8)
     {
         load_JointedCircles(simulation, rvg);
+    }
+    else if (scene == 9)
+    {
+        load_PrismaticJointGallery(simulation, rvg);
     }
 }

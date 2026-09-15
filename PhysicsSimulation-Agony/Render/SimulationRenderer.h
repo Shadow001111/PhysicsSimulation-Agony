@@ -96,6 +96,7 @@ namespace Render
 
 		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 		void renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
 	};
 }
