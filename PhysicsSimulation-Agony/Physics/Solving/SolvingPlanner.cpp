@@ -171,7 +171,7 @@ namespace PS_AGONY
 
         usedBodies.assign(bodyCount, uint8_t(-1));
 
-        std::vector<std::vector<size_t>> waveAssignments(workerCount);
+        waveAssignments.resize(workerCount);
 
         std::vector<size_t> workerLoad(workerCount);
 
@@ -390,7 +390,8 @@ namespace PS_AGONY
         // Ownership tracked per cache-line group, not per body.
         usedBodies.assign(groupCount, uint8_t(-1));
 
-        std::vector<std::vector<size_t>> waveAssignments(workerCount);
+        waveAssignments.resize(workerCount);
+
         std::vector<size_t> workerLoad(workerCount);
 
         while (!remainingIndices.empty())
@@ -521,6 +522,7 @@ namespace PS_AGONY
         const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
 
         // Build cache-line group adjacency graph.
+        // TODO: Some bodies may be sparse in memory. Check if bodyCount matches actual all body count.
         std::vector<std::vector<size_t>> adjacency(groupCount);
         for (const auto& c : collisions)
         {
@@ -622,7 +624,7 @@ namespace PS_AGONY
         std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
 
         std::vector<uint8_t> waveOwner(groupCount, uint8_t(-1));
-        std::vector<std::vector<size_t>> waveAssignments(workerCount);
+        waveAssignments.resize(workerCount);
 
         std::vector<size_t> interiorIndices;
         std::vector<size_t> boundaryIndices;
@@ -648,6 +650,7 @@ namespace PS_AGONY
                 const size_t gb = c.b / bodiesPerCacheLine;
 
                 auto& vec = groupOwner[ga] == groupOwner[gb] ? interiorIndices : boundaryIndices;
+                vec.push_back(idx);
             }
 
             // Phase 1: Interior collisions assigned to persistent owners.
