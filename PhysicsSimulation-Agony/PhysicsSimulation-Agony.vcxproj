@@ -260,6 +260,8 @@
     <ClCompile Include="Render\SimulationRenderer.cpp" />
     <ClCompile Include="Physics\Threading.cpp" />
     <ClCompile Include="Physics\Solving\RodSolver.cpp" />
+    <ClCompile Include="Render\SimulationRenderer_Colliders.cpp" />
+    <ClCompile Include="Render\SimulationRenderer_Constraints.cpp" />
     <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="Physics\Solving\SolverBase.cpp" />
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
@@ -314,6 +316,7 @@
     <ClInclude Include="Physics\Solving\PrismaticJointSolver.h" />
     <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Physics\Solving\RodSolver.h" />
+    <ClInclude Include="Render\SimulationRenderer_Internal.h" />
     <ClInclude Include="Scenes.h" />
     <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />

@@ -13,6 +13,10 @@ namespace Render
 {
 	using namespace PS_AGONY;
 
+	// Defined in SimulationRenderer_Internal.h; only forward-declared here so
+	// the public header stays free of private implementation detail.
+	struct BodyTransformContext;
+
 	struct RenderOptions
 	{
 		bool colliderAABBs = false;
@@ -20,6 +24,13 @@ namespace Render
 		bool contactPoints = false;
 		bool outlineColliders = true;
 		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
+
+		// When false, all body transforms used for rendering this frame snap
+		// straight to the current simulation state instead of blending from
+		// the previous state via simRenderAlpha. Skips the lerp and the
+		// rotation wrap/trunc math - use when the render rate matches the
+		// sim rate and interpolation isn't needed.
+		bool interpolation = true;
 	};
 
 	class SimulationRenderer
@@ -81,22 +92,22 @@ namespace Render
 
 		// Collect data and render.
 
-		void renderColliders(const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderColliders(const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix);
 		void renderBodyPositions(const Mat4& viewProjectionMatrix);
 		void renderBodyTruePositions(const Mat4& viewProjectionMatrix);
 
-		void renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 
 		void renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix);
 		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
-		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
-		void renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, Real simRenderAlpha);
+		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 	};
 }

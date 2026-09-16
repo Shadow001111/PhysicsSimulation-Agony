@@ -117,8 +117,6 @@ namespace PS_AGONY
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
-                    size_t chosenWorker;
-
                     if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
                     {
                         nextRemainingIndices.push_back(idx);
@@ -288,7 +286,6 @@ namespace PS_AGONY
                         const uint8_t ownerA = usedBodies[c.a];
                         const uint8_t ownerB = usedBodies[c.b];
 
-                        size_t chosenWorker;
                         if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
                         {
                             nextRemainingIndices.push_back(idx);
@@ -469,8 +466,6 @@ namespace PS_AGONY
                     const ObjectPair& c = collisions[idx];
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
-
-                    size_t chosenWorker;
 
                     if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
                     {
