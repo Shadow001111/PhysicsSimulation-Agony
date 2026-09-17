@@ -11,7 +11,7 @@ namespace PS_AGONY
     public:
         struct Settings
         {
-            Real updateInterval = Real(1) / Real(300);
+            Real updateInterval = Real(1) / Real(60);
             Real maxDeltaTimePerUpdateCall = Real(1) / Real(20);
             Real timeScale = Real(1);
         };

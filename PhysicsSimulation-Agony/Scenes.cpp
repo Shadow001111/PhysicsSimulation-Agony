@@ -580,7 +580,7 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random
     // === 1. MATERIAL SETUP ===
     // High friction and lower elasticity help the pyramid remain stable upon initialization
     PS_AGONY::Material pyramidMaterial = {
-        .elasticity = 0.9f,
+        .elasticity = 0.1f,
         .staticFriction = 0.8f,
         .dynamicFriction = 0.6f
     };
