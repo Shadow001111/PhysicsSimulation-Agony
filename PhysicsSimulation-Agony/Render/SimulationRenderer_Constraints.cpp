@@ -11,8 +11,7 @@
 
 namespace Render
 {
-    // TODO: Add culling.
-    void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render springs");
 
@@ -20,9 +19,13 @@ namespace Render
         const size_t springCount = springs.getCount();
         if (springCount == 0) return;
 
-        const size_t vertexCount = springCount * 2;
-        lineVertexData.resize(vertexCount);
-        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
+        lineVertexData.clear();
+        lineVertexData.reserve(springCount * 2);
 
         for (size_t i = 0; i < springCount; i++)
         {
@@ -38,6 +41,17 @@ namespace Render
 
             const float worldBx = bodyB.x + (springs.localAnchorB[i].x * bodyB.cosR - springs.localAnchorB[i].y * bodyB.sinR);
             const float worldBy = bodyB.y + (springs.localAnchorB[i].x * bodyB.sinR + springs.localAnchorB[i].y * bodyB.cosR);
+
+            // Cull the spring if its segment bounding box misses the camera.
+            const float segMinX = std::fmin(worldAx, worldBx);
+            const float segMaxX = std::fmax(worldAx, worldBx);
+            const float segMinY = std::fmin(worldAy, worldBy);
+            const float segMaxY = std::fmax(worldAy, worldBy);
+
+            if (segMaxX < cullMinX || segMinX > cullMaxX || segMaxY < cullMinY || segMinY > cullMaxY)
+            {
+                continue;
+            }
 
             // Compute displacement.
             const float dx = worldBx - worldAx;
@@ -65,21 +79,21 @@ namespace Render
                 color = (r << 16) | (g << 8) | b;
             }
 
-            size_t vIdx = i * 2;
-            verts[vIdx].x = worldAx;
-            verts[vIdx].y = worldAy;
-            verts[vIdx].color = color;
+            ShapeRenderer::LineVertex& vA = lineVertexData.emplace_back();
+            vA.x = worldAx;
+            vA.y = worldAy;
+            vA.color = color;
 
-            verts[vIdx + 1].x = worldBx;
-            verts[vIdx + 1].y = worldBy;
-            verts[vIdx + 1].color = color;
+            ShapeRenderer::LineVertex& vB = lineVertexData.emplace_back();
+            vB.x = worldBx;
+            vB.y = worldBy;
+            vB.color = color;
         }
 
         shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
     }
 
-    // TODO: Add culling.
-    void SimulationRenderer::renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render joints");
 
@@ -87,10 +101,14 @@ namespace Render
         const size_t jointCount = joints.getCount();
         if (jointCount == 0) return;
 
-        // 2 lines per joint = 4 vertices.
-        const size_t vertexCount = jointCount * 4;
-        lineVertexData.resize(vertexCount);
-        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
+        // Up to 2 lines per joint = 4 vertices.
+        lineVertexData.clear();
+        lineVertexData.reserve(jointCount * 4);
 
         for (size_t i = 0; i < jointCount; i++)
         {
@@ -107,33 +125,51 @@ namespace Render
             const float worldBx = bodyB.x + (joints.localAnchorB[i].x * bodyB.cosR - joints.localAnchorB[i].y * bodyB.sinR);
             const float worldBy = bodyB.y + (joints.localAnchorB[i].x * bodyB.sinR + joints.localAnchorB[i].y * bodyB.cosR);
 
+            const float bodyAx = static_cast<float>(bodyA.x);
+            const float bodyAy = static_cast<float>(bodyA.y);
+            const float bodyBx = static_cast<float>(bodyB.x);
+            const float bodyBy = static_cast<float>(bodyB.y);
+
+            // Cull the whole joint (both lines) if its bounding box misses the camera.
+            const float boxMinX = std::fmin(std::fmin(bodyAx, worldAx), std::fmin(bodyBx, worldBx));
+            const float boxMaxX = std::fmax(std::fmax(bodyAx, worldAx), std::fmax(bodyBx, worldBx));
+            const float boxMinY = std::fmin(std::fmin(bodyAy, worldAy), std::fmin(bodyBy, worldBy));
+            const float boxMaxY = std::fmax(std::fmax(bodyAy, worldAy), std::fmax(bodyBy, worldBy));
+
+            if (boxMaxX < cullMinX || boxMinX > cullMaxX || boxMaxY < cullMinY || boxMinY > cullMaxY)
+            {
+                continue;
+            }
+
             constexpr uint32_t color = 0x00FFFF;
-            const size_t vIdx = i * 4;
 
             // Line 1: Body A position to Anchor A
-            verts[vIdx + 0].x = static_cast<float>(bodyA.x);
-            verts[vIdx + 0].y = static_cast<float>(bodyA.y);
-            verts[vIdx + 0].color = color;
+            ShapeRenderer::LineVertex& vA0 = lineVertexData.emplace_back();
+            vA0.x = bodyAx;
+            vA0.y = bodyAy;
+            vA0.color = color;
 
-            verts[vIdx + 1].x = worldAx;
-            verts[vIdx + 1].y = worldAy;
-            verts[vIdx + 1].color = color;
+            ShapeRenderer::LineVertex& vA1 = lineVertexData.emplace_back();
+            vA1.x = worldAx;
+            vA1.y = worldAy;
+            vA1.color = color;
 
             // Line 2: Body B position to Anchor B
-            verts[vIdx + 2].x = static_cast<float>(bodyB.x);
-            verts[vIdx + 2].y = static_cast<float>(bodyB.y);
-            verts[vIdx + 2].color = color;
+            ShapeRenderer::LineVertex& vB0 = lineVertexData.emplace_back();
+            vB0.x = bodyBx;
+            vB0.y = bodyBy;
+            vB0.color = color;
 
-            verts[vIdx + 3].x = worldBx;
-            verts[vIdx + 3].y = worldBy;
-            verts[vIdx + 3].color = color;
+            ShapeRenderer::LineVertex& vB1 = lineVertexData.emplace_back();
+            vB1.x = worldBx;
+            vB1.y = worldBy;
+            vB1.color = color;
         }
 
         shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
     }
 
-    // TODO: Add culling.
-    void SimulationRenderer::renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render prismatic joints");
 
@@ -141,10 +177,14 @@ namespace Render
         const size_t prismaticJointCount = prismaticJoints.getCount();
         if (prismaticJointCount == 0) return;
 
-        // 2 lines per joint = 4 vertices.
-        const size_t vertexCount = prismaticJointCount * 4;
-        lineVertexData.resize(vertexCount);
-        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
+        // Up to 2 lines per joint = 4 vertices.
+        lineVertexData.clear();
+        lineVertexData.reserve(prismaticJointCount * 4);
 
         constexpr uint32_t actualColor = 0xFF3333; // Reddish: anchor to anchor.
         constexpr uint32_t targetColor = 0x3399FF; // Blueish: axis-projected, clamped.
@@ -185,32 +225,44 @@ namespace Render
             const float targetX = worldAx + axisX * projection;
             const float targetY = worldAy + axisY * projection;
 
-            const size_t vIdx = i * 4;
+            // Cull the whole joint (both lines) if its bounding box misses the camera.
+            const float boxMinX = std::fmin(std::fmin(worldAx, worldBx), targetX);
+            const float boxMaxX = std::fmax(std::fmax(worldAx, worldBx), targetX);
+            const float boxMinY = std::fmin(std::fmin(worldAy, worldBy), targetY);
+            const float boxMaxY = std::fmax(std::fmax(worldAy, worldBy), targetY);
+
+            if (boxMaxX < cullMinX || boxMinX > cullMaxX || boxMaxY < cullMinY || boxMinY > cullMaxY)
+            {
+                continue;
+            }
 
             // Line 1: Anchor A to Anchor B (actual).
-            verts[vIdx + 0].x = worldAx;
-            verts[vIdx + 0].y = worldAy;
-            verts[vIdx + 0].color = actualColor;
+            ShapeRenderer::LineVertex& vA0 = lineVertexData.emplace_back();
+            vA0.x = worldAx;
+            vA0.y = worldAy;
+            vA0.color = actualColor;
 
-            verts[vIdx + 1].x = worldBx;
-            verts[vIdx + 1].y = worldBy;
-            verts[vIdx + 1].color = actualColor;
+            ShapeRenderer::LineVertex& vA1 = lineVertexData.emplace_back();
+            vA1.x = worldBx;
+            vA1.y = worldBy;
+            vA1.color = actualColor;
 
             // Line 2: Anchor A to axis-projected, clamped point (target).
-            verts[vIdx + 2].x = worldAx;
-            verts[vIdx + 2].y = worldAy;
-            verts[vIdx + 2].color = targetColor;
+            ShapeRenderer::LineVertex& vB0 = lineVertexData.emplace_back();
+            vB0.x = worldAx;
+            vB0.y = worldAy;
+            vB0.color = targetColor;
 
-            verts[vIdx + 3].x = targetX;
-            verts[vIdx + 3].y = targetY;
-            verts[vIdx + 3].color = targetColor;
+            ShapeRenderer::LineVertex& vB1 = lineVertexData.emplace_back();
+            vB1.x = targetX;
+            vB1.y = targetY;
+            vB1.color = targetColor;
         }
 
         shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
     }
 
-    // TODO: Add culling.
-    void SimulationRenderer::renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderRods(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
     {
         TRACY_SCOPE_N("Render rods");
 
@@ -218,9 +270,13 @@ namespace Render
         const size_t rodCount = rods.getCount();
         if (rodCount == 0) return;
 
-        const size_t vertexCount = rodCount * 2;
-        lineVertexData.resize(vertexCount);
-        ShapeRenderer::LineVertex* ECSTASY_RESTRICT verts = lineVertexData.data();
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
+        lineVertexData.clear();
+        lineVertexData.reserve(rodCount * 2);
 
         for (size_t i = 0; i < rodCount; i++)
         {
@@ -236,6 +292,17 @@ namespace Render
 
             const float worldBx = bodyB.x + (rods.localAnchorB[i].x * bodyB.cosR - rods.localAnchorB[i].y * bodyB.sinR);
             const float worldBy = bodyB.y + (rods.localAnchorB[i].x * bodyB.sinR + rods.localAnchorB[i].y * bodyB.cosR);
+
+            // Cull the rod if its segment bounding box misses the camera.
+            const float segMinX = std::fmin(worldAx, worldBx);
+            const float segMaxX = std::fmax(worldAx, worldBx);
+            const float segMinY = std::fmin(worldAy, worldBy);
+            const float segMaxY = std::fmax(worldAy, worldBy);
+
+            if (segMaxX < cullMinX || segMinX > cullMaxX || segMaxY < cullMinY || segMinY > cullMaxY)
+            {
+                continue;
+            }
 
             // Compute displacement.
             const float dx = worldBx - worldAx;
@@ -263,14 +330,15 @@ namespace Render
                 color = (r << 16) | (g << 8) | b;
             }
 
-            size_t vIdx = i * 2;
-            verts[vIdx].x = worldAx;
-            verts[vIdx].y = worldAy;
-            verts[vIdx].color = color;
+            ShapeRenderer::LineVertex& vA = lineVertexData.emplace_back();
+            vA.x = worldAx;
+            vA.y = worldAy;
+            vA.color = color;
 
-            verts[vIdx + 1].x = worldBx;
-            verts[vIdx + 1].y = worldBy;
-            verts[vIdx + 1].color = color;
+            ShapeRenderer::LineVertex& vB = lineVertexData.emplace_back();
+            vB.x = worldBx;
+            vB.y = worldBy;
+            vB.color = color;
         }
 
         shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);

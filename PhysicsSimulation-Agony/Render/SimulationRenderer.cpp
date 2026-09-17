@@ -54,10 +54,10 @@ namespace Render
         renderColliders(viewProjectionMatrix, transformContext);
         glColorMaski(1, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
-        renderSprings(simulation, viewProjectionMatrix, transformContext);
-        renderJoints(simulation, viewProjectionMatrix, transformContext);
-        renderPrismaticJoints(simulation, viewProjectionMatrix, transformContext);
-        renderRods(simulation, viewProjectionMatrix, transformContext);
+        renderSprings(simulation, viewProjectionMatrix, transformContext, cameraAABB);
+        renderJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);
+        renderPrismaticJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);
+        renderRods(simulation, viewProjectionMatrix, transformContext, cameraAABB);
 
         if (renderOptions.colliderAABBs)
         {
@@ -72,9 +72,9 @@ namespace Render
             renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
         }
 
-        //renderBodyCentersOfMass(viewProjectionMatrix); // Red.
-        //renderBodyTruePositions(viewProjectionMatrix); // Green.
-        //renderBodyPositions(viewProjectionMatrix); // Blue.
+        //renderBodyCentersOfMass(viewProjectionMatrix, cameraAABB); // Red.
+        //renderBodyTruePositions(viewProjectionMatrix, cameraAABB); // Green.
+        //renderBodyPositions(viewProjectionMatrix, cameraAABB); // Blue.
     }
 
     void SimulationRenderer::renderObjectPreview(const void* params, BodyType type)

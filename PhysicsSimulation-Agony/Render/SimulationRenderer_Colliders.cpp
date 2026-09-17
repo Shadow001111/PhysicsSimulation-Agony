@@ -17,22 +17,25 @@ namespace Render
         renderPolygonColliders(foundColliderShapes[(size_t)BodyType::Polygon], viewProjectionMatrix, transformContext);
     }
 
-    // TODO: Add culling.
-    void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
     {
         const size_t count = bodies.getCount();
         if (count == 0) return;
 
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
         // Reserve space.
-        circleInstanceData.resize(count);
+        circleInstanceData.clear();
+        circleInstanceData.reserve(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
         const Real* ECSTASY_RESTRICT centerXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT centerYPtr = bodies.localCenterOfMassY;
-
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -43,73 +46,107 @@ namespace Render
                 positionYPtr[i] + localCenterOfMass.y
             };
 
-            renderDataPtr[i].positionX = worldCenterOfMass.x;
-            renderDataPtr[i].positionY = worldCenterOfMass.y;
-            renderDataPtr[i].localCOMX = 0.0f;
-            renderDataPtr[i].localCOMY = 0.0f;
-            renderDataPtr[i].rotation = 0.785f;
-            renderDataPtr[i].radius = 0.03f;
-            renderDataPtr[i].color = 0xFF0000;
+            if (worldCenterOfMass.x < cullMinX || worldCenterOfMass.x > cullMaxX ||
+                worldCenterOfMass.y < cullMinY || worldCenterOfMass.y > cullMaxY)
+            {
+                continue;
+            }
+
+            auto& renderData = circleInstanceData.emplace_back();
+
+            renderData.positionX = worldCenterOfMass.x;
+            renderData.positionY = worldCenterOfMass.y;
+            renderData.localCOMX = 0.0f;
+            renderData.localCOMY = 0.0f;
+            renderData.rotation = 0.785f;
+            renderData.radius = 0.03f;
+            renderData.color = 0xFF0000;
         }
 
         // Render.
         shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
-    // TODO: Add culling.
-    void SimulationRenderer::renderBodyPositions(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBodyPositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
     {
         const size_t count = bodies.getCount();
         if (count == 0) return;
 
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
         // Reserve space.
-        circleInstanceData.resize(count);
+        circleInstanceData.clear();
+        circleInstanceData.reserve(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
         const Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY;
 
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
-
         for (size_t i = 0; i < count; i++)
         {
-            renderDataPtr[i].positionX = positionXPtr[i];
-            renderDataPtr[i].positionY = positionYPtr[i];
-            renderDataPtr[i].localCOMX = 0.0f;
-            renderDataPtr[i].localCOMY = 0.0f;
-            renderDataPtr[i].rotation = 0.0f;
-            renderDataPtr[i].radius = 0.03f;
-            renderDataPtr[i].color = 0x0000FF;
+            const float posX = static_cast<float>(positionXPtr[i]);
+            const float posY = static_cast<float>(positionYPtr[i]);
+
+            if (posX < cullMinX || posX > cullMaxX || posY < cullMinY || posY > cullMaxY)
+            {
+                continue;
+            }
+
+            auto& renderData = circleInstanceData.emplace_back();
+
+            renderData.positionX = posX;
+            renderData.positionY = posY;
+            renderData.localCOMX = 0.0f;
+            renderData.localCOMY = 0.0f;
+            renderData.rotation = 0.0f;
+            renderData.radius = 0.03f;
+            renderData.color = 0x0000FF;
         }
 
         // Render.
         shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
-    // TODO: Add culling.
-    void SimulationRenderer::renderBodyTruePositions(const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderBodyTruePositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
     {
         const size_t count = bodies.getCount();
         if (count == 0) return;
 
+        const float cullMinX = static_cast<float>(cameraAABB.minX);
+        const float cullMinY = static_cast<float>(cameraAABB.minY);
+        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
+        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+
         // Reserve space.
-        circleInstanceData.resize(count);
+        circleInstanceData.clear();
+        circleInstanceData.reserve(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.worldCenterX;
         const Real* ECSTASY_RESTRICT truePositionYPtr = bodies.worldCenterY;
 
-        ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
-
         for (size_t i = 0; i < count; i++)
         {
-            renderDataPtr[i].positionX = truePositionXPtr[i];
-            renderDataPtr[i].positionY = truePositionYPtr[i];
-            renderDataPtr[i].localCOMX = 0.0f;
-            renderDataPtr[i].localCOMY = 0.0f;
-            renderDataPtr[i].rotation = 0.0f;
-            renderDataPtr[i].radius = 0.03f;
-            renderDataPtr[i].color = 0x00FF00;
+            const float posX = static_cast<float>(truePositionXPtr[i]);
+            const float posY = static_cast<float>(truePositionYPtr[i]);
+
+            if (posX < cullMinX || posX > cullMaxX || posY < cullMinY || posY > cullMaxY)
+            {
+                continue;
+            }
+
+            auto& renderData = circleInstanceData.emplace_back();
+
+            renderData.positionX = posX;
+            renderData.positionY = posY;
+            renderData.localCOMX = 0.0f;
+            renderData.localCOMY = 0.0f;
+            renderData.rotation = 0.0f;
+            renderData.radius = 0.03f;
+            renderData.color = 0x00FF00;
         }
 
         // Render.
