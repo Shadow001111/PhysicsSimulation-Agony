@@ -793,6 +793,7 @@ static int gameFunc()
             ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
 
             // Render simulation to FBO.
+            renderOptions.interpolation = deltaTime < simulation.getSimulationSettings().clockSettings.updateInterval;
             simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions);
 
             framebuffer.setDrawBuffers({ "color" });
