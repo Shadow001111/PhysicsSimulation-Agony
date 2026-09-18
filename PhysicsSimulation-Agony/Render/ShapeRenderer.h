@@ -27,6 +27,18 @@ namespace Render
 			uint32_t id;
 		};
 
+		// Position-only circle marker: no rotation, no local COM offset.
+		// Used for debug/marker points (body positions, COM dots, contact
+		// points) where the extra 12 bytes and per-vertex rotate2D of
+		// CircleInstanceData buy nothing since the shape is a circle.
+		struct SimplePointInstanceData
+		{
+			float positionX, positionY;
+			float radius;
+			uint32_t color;
+			uint32_t id;
+		};
+
 		struct BoxInstanceData
 		{
 			float positionX, positionY;
@@ -59,6 +71,14 @@ namespace Render
 		};
 
 		struct CircleRenderResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vbo;
+			ImmutableBuffer instanceVbo;
+			Shader shader;
+		};
+
+		struct SimplePointCircleRenderResources
 		{
 			VertexArray vao;
 			ImmutableBuffer vbo;
@@ -107,6 +127,7 @@ namespace Render
 	public:
 		// Render resources (GPU-side only; CPU-side instance data is owned by the caller).
 		CircleRenderResources circleResources;
+		SimplePointCircleRenderResources simplePointCircleResources;
 		BoxRenderResources boxResources;
 		PolygonRenderResources polygonResources;
 		LineRenderResources lineResources;
@@ -118,6 +139,7 @@ namespace Render
 		void initBuffers();
 
 		void renderCircleShapes(std::span<const CircleInstanceData> instances, const glm::mat4& viewProjectionMatrix);
+		void renderSimplePointCircles(std::span<const SimplePointInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderBoxShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderPolygonShapes(
 			std::span<const glm::vec2> vertices,
@@ -131,6 +153,7 @@ namespace Render
 		void renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor);
 
 		void ensureCircleInstanceVboCapacity(size_t count);
+		void ensureSimplePointInstanceVboCapacity(size_t count);
 		void ensureBoxInstanceVboCapacity(size_t count);
 		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);
 		void ensureAABBInstanceVboCapacity(size_t count);

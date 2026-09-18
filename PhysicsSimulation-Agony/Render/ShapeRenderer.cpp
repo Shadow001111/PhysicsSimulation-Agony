@@ -25,6 +25,16 @@ namespace Render
             circleResources.shader.create(sources);
         }
 
+        // Simple point circle (position-only marker; shares circle.frag).
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/circle_simple.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/circle.frag" }
+            };
+
+            simplePointCircleResources.shader.create(sources);
+        }
+
         // Box.
         {
             std::vector<Shader::ShaderSource> sources = {
@@ -93,6 +103,27 @@ namespace Render
             circleResources.vao.setFloatAttribute(0, 2, 0, 0);
 
             ensureCircleInstanceVboCapacity(64);
+        }
+
+        // Simple point circle.
+        {
+            const float circleVertices[] =
+            {
+                0.0f, 2.0f,
+                1.7321f, -1.0f,
+                -1.7321f, -1.0f
+            };
+
+            simplePointCircleResources.vbo.create();
+            simplePointCircleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
+
+            simplePointCircleResources.vao.create();
+            simplePointCircleResources.vao.bindVertexBuffer(0, simplePointCircleResources.vbo.getID(), 0, sizeof(float) * 2);
+
+            simplePointCircleResources.vao.enableAttribute(0);
+            simplePointCircleResources.vao.setFloatAttribute(0, 2, 0, 0);
+
+            ensureSimplePointInstanceVboCapacity(64);
         }
 
         // Box.
@@ -176,6 +207,29 @@ namespace Render
         circleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
         circleResources.vao.bind();
+
+        // Draw.
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
+    }
+
+    void ShapeRenderer::renderSimplePointCircles(std::span<const SimplePointInstanceData> instances, const glm::mat4& viewProjectionMatrix)
+    {
+        TRACY_SCOPE_N("Render simple point circles");
+
+        const size_t count = instances.size();
+        if (count == 0) return;
+
+        // Reserve space.
+        ensureSimplePointInstanceVboCapacity(count);
+
+        // Move data to gpu.
+        simplePointCircleResources.instanceVbo.write(instances.data(), count * sizeof(SimplePointInstanceData));
+
+        // Bind things, set uniforms.
+        simplePointCircleResources.shader.use();
+        simplePointCircleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        simplePointCircleResources.vao.bind();
 
         // Draw.
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
@@ -307,6 +361,42 @@ namespace Render
         vao.enableAttribute(6);
         vao.setIntAttribute(6, 1, sizeof(float) * 7, 1);
         vao.setAttributeDivisor(6, 1);
+    }
+
+    void ShapeRenderer::ensureSimplePointInstanceVboCapacity(size_t count)
+    {
+        constexpr size_t SIZEOF_INSTANCE = sizeof(SimplePointInstanceData);
+
+        auto& vao = simplePointCircleResources.vao;
+        auto& instanceVbo = simplePointCircleResources.instanceVbo;
+
+        const size_t neededCapacity = count * SIZEOF_INSTANCE;
+        const size_t currentCapacity = instanceVbo.getCapacity();
+
+        if (neededCapacity <= currentCapacity) return;
+
+        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
+
+        instanceVbo.create();
+        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+
+        vao.enableAttribute(1);
+        vao.setFloatAttribute(1, 2, 0, 1);
+        vao.setAttributeDivisor(1, 1);
+
+        vao.enableAttribute(2);
+        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
+        vao.setAttributeDivisor(2, 1);
+
+        vao.enableAttribute(3);
+        vao.setIntAttribute(3, 1, sizeof(float) * 3, 1);
+        vao.setAttributeDivisor(3, 1);
+
+        vao.enableAttribute(4);
+        vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
+        vao.setAttributeDivisor(4, 1);
     }
 
     void ShapeRenderer::ensureBoxInstanceVboCapacity(size_t count)

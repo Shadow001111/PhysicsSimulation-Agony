@@ -28,8 +28,8 @@ namespace Render
         const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
-        circleInstanceData.clear();
-        circleInstanceData.reserve(count);
+        simplePointInstanceData.clear();
+        simplePointInstanceData.reserve(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
@@ -52,19 +52,17 @@ namespace Render
                 continue;
             }
 
-            auto& renderData = circleInstanceData.emplace_back();
+            auto& renderData = simplePointInstanceData.emplace_back();
 
             renderData.positionX = worldCenterOfMass.x;
             renderData.positionY = worldCenterOfMass.y;
-            renderData.localCOMX = 0.0f;
-            renderData.localCOMY = 0.0f;
-            renderData.rotation = 0.785f;
             renderData.radius = 0.03f;
             renderData.color = 0xFF0000;
+            renderData.id = 0;
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
+        shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyPositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -78,8 +76,8 @@ namespace Render
         const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
-        circleInstanceData.clear();
-        circleInstanceData.reserve(count);
+        simplePointInstanceData.clear();
+        simplePointInstanceData.reserve(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX;
@@ -95,19 +93,17 @@ namespace Render
                 continue;
             }
 
-            auto& renderData = circleInstanceData.emplace_back();
+            auto& renderData = simplePointInstanceData.emplace_back();
 
             renderData.positionX = posX;
             renderData.positionY = posY;
-            renderData.localCOMX = 0.0f;
-            renderData.localCOMY = 0.0f;
-            renderData.rotation = 0.0f;
             renderData.radius = 0.03f;
             renderData.color = 0x0000FF;
+            renderData.id = 0;
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
+        shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderBodyTruePositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -121,8 +117,8 @@ namespace Render
         const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
-        circleInstanceData.clear();
-        circleInstanceData.reserve(count);
+        simplePointInstanceData.clear();
+        simplePointInstanceData.reserve(count);
 
         // Prepare instance data.
         const Real* ECSTASY_RESTRICT truePositionXPtr = bodies.worldCenterX;
@@ -138,19 +134,17 @@ namespace Render
                 continue;
             }
 
-            auto& renderData = circleInstanceData.emplace_back();
+            auto& renderData = simplePointInstanceData.emplace_back();
 
             renderData.positionX = posX;
             renderData.positionY = posY;
-            renderData.localCOMX = 0.0f;
-            renderData.localCOMY = 0.0f;
-            renderData.rotation = 0.0f;
             renderData.radius = 0.03f;
             renderData.color = 0x00FF00;
+            renderData.id = 0;
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
+        shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
@@ -425,7 +419,7 @@ namespace Render
         const float cullMaxY = static_cast<float>(cameraAABB.maxY);
 
         // Reserve space.
-        circleInstanceData.clear();
+        simplePointInstanceData.clear();
 
         // Prepare instance data.
         for (size_t i = 0; i < collisionCount; i++)
@@ -442,19 +436,17 @@ namespace Render
                     continue;
                 }
 
-                auto& renderData = circleInstanceData.emplace_back();
+                auto& renderData = simplePointInstanceData.emplace_back();
 
                 renderData.positionX = contact.x;
                 renderData.positionY = contact.y;
-                renderData.localCOMX = 0.0f;
-                renderData.localCOMY = 0.0f;
-                renderData.rotation = 0.0f;
                 renderData.radius = 0.05f;
                 renderData.color = idToHexColor(collData.contactIds[j]);
+                renderData.id = 0;
             }
         }
 
         // Render.
-        shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
+        shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
 }

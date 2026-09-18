@@ -197,6 +197,7 @@ namespace Render
             total += getVectorMemoryUsage(vec);
 
         total += getVectorMemoryUsage(circleInstanceData);
+        total += getVectorMemoryUsage(simplePointInstanceData);
         total += getVectorMemoryUsage(boxInstanceData);
 
         total += getVectorMemoryUsage(polygonVertexData);
@@ -216,6 +217,9 @@ namespace Render
 
         total += shapeRenderer.circleResources.vbo.getCapacity();
         total += shapeRenderer.circleResources.instanceVbo.getCapacity();
+
+        total += shapeRenderer.simplePointCircleResources.vbo.getCapacity();
+        total += shapeRenderer.simplePointCircleResources.instanceVbo.getCapacity();
 
         total += shapeRenderer.boxResources.vbo.getCapacity();
         total += shapeRenderer.boxResources.instanceVbo.getCapacity();

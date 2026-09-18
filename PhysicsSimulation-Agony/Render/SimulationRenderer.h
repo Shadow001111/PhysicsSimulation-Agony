@@ -43,6 +43,7 @@ namespace Render
 
 		// CPU-side per-frame draw data, owned here; ShapeRenderer only owns GPU resources.
 		std::vector<ShapeRenderer::CircleInstanceData> circleInstanceData;
+		std::vector<ShapeRenderer::SimplePointInstanceData> simplePointInstanceData; // Position/COM/contact markers, no rotation needed.
 		std::vector<ShapeRenderer::BoxInstanceData> boxInstanceData;
 		std::vector<glm::vec2> polygonVertexData;
 		std::vector<ShapeRenderer::PolygonInstanceData> polygonInstanceData;
