@@ -153,8 +153,6 @@ namespace PS_AGONY::FastCosSin
 		constexpr Real coeff3 = -0.199387f;
 		constexpr Real coeff4 = 0.0282173f;
 
-		constexpr int signMaskShift = sizeof(Real) * 8 - 2;
-
 		{
 			int quadrantIndex = (int)(x * Real(Constants::INV_HALF_PI));
 			Real u = x - quadrantIndex * Real(Constants::HALF_PI);
