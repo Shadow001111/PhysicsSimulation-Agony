@@ -7,7 +7,8 @@ namespace PS_AGONY
 {
     ObjectManager::ObjectManager(const std::vector<Material>& materials) :
         materials(materials)
-    {}
+    {
+    }
 
     std::optional<ObjectIndex> ObjectManager::createBody(const BodyCreateParams& params)
     {
@@ -73,7 +74,7 @@ namespace PS_AGONY
         return newCollider;
     }
 
-    std::optional<ColliderIndex> ObjectManager::createPolygonCollider(const PolygonColliderCreateParams& params)
+    std::optional<PolygonColliderCreateResult> ObjectManager::createPolygonCollider(const PolygonColliderCreateParams& params)
     {
         if (params.localVertices == nullptr)
         {
@@ -99,16 +100,22 @@ namespace PS_AGONY
         }
 
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
-        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(polygons.getCount());
 
-        VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
+        // Concave outlines are split into multiple convex pieces here; an already-convex
+        // outline comes back as a single (CCW-normalized) piece at no extra cost.
+        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices);
 
-        const ColliderIndex newCollider = createColliderInternal(
-            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Polygon, newShapeIndex
+        const ColliderIndex firstCollider = createConvexPolygonColliderInternal(
+            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
         );
-        polygons.append(newCollider, std::move(vertices));
+        for (size_t i = 1; i < convexPieces.size(); ++i)
+        {
+            createConvexPolygonColliderInternal(
+                params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[i])
+            );
+        }
 
-        return newCollider;
+        return PolygonColliderCreateResult{ firstCollider, convexPieces.size() };
     }
 
     std::optional<ObjectIndex> ObjectManager::createCircle(const CircleCreateParams& params)
@@ -190,6 +197,9 @@ namespace PS_AGONY
 
         VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
 
+        // Mass/COM/inertia are computed from the full (possibly concave) outline: the
+        // shoelace-based formulas in calculatePolygonInertia are valid for any simple
+        // polygon, convex or not, so no decomposition is needed for this part.
         auto iCOM = PhysicsGeometry::calculatePolygonInertia(mass, vertices, std::nullopt);
         const Real inertia = iCOM.first;
         Vec2 trueCenterOfMass = iCOM.second;
@@ -197,6 +207,9 @@ namespace PS_AGONY
 
         // This makes: position == true position == world COM.
         // TODO: This probably invalidates inertia. Need second pass.
+        // NOTE: 'vertices' is a view over uniqueVertices, so this also reorders/shifts
+        // uniqueVertices itself (calculatePolygonInertia may have already reversed its
+        // winding to CCW in-place above) - decomposeConvex() below sees the final result.
         for (Vec2& v : vertices)
         {
             v -= trueCenterOfMass;
@@ -217,17 +230,17 @@ namespace PS_AGONY
             neededCenterOfMass
         );
 
-        // Vertices were already de-duplicated/re-centered above, so route the already-
-        // constructed VerticesContainer straight to the shape SoA below instead of
-        // going through createPolygonCollider() (which would redo dedup on raw pointers
-        // and know nothing about the COM shift already baked into these vertices).
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
-        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(polygons.getCount());
 
-        const ColliderIndex newCollider = createColliderInternal(
-            newBodyIndex, Vec2(0), Real(0), materialIndex, BodyType::Polygon, newShapeIndex
-        );
-        polygons.append(newCollider, std::move(vertices));
+        // Split the already de-duplicated/re-centered outline into convex colliders (one
+        // piece if it was already convex) via the same helper createPolygonCollider() uses.
+        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices);
+        for (std::vector<Vec2>& piece : convexPieces)
+        {
+            createConvexPolygonColliderInternal(
+                newBodyIndex, Vec2(0), Real(0), materialIndex, std::move(piece)
+            );
+        }
 
         return newBodyIndex;
     }
@@ -289,6 +302,23 @@ namespace PS_AGONY
             bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
         );
         bodies.addCollider(bodyIndex, newCollider);
+        return newCollider;
+    }
+
+    ColliderIndex ObjectManager::createConvexPolygonColliderInternal(
+        ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
+        MaterialIndex materialIndex, std::vector<Vec2> convexVertices
+    )
+    {
+        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(polygons.getCount());
+
+        VerticesContainer vertices{ convexVertices.data(), convexVertices.size() };
+
+        const ColliderIndex newCollider = createColliderInternal(
+            bodyIndex, localOffset, localRotation, materialIndex, BodyType::Polygon, newShapeIndex
+        );
+        polygons.append(newCollider, std::move(vertices));
+
         return newCollider;
     }
 

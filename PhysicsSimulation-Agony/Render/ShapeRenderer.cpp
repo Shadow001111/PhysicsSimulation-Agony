@@ -465,8 +465,6 @@ namespace Render
             vao.bindVertexBuffer(0, vertexVbo.getID(), 0, SIZEOF_VERTEX);
             vao.enableAttribute(0);
             vao.setFloatAttribute(0, 2, 0, 0);
-
-            // TODO: Add id for polygons.
         }
 
         const size_t neededInstanceBytes = polygonCount * SIZEOF_INSTANCE;

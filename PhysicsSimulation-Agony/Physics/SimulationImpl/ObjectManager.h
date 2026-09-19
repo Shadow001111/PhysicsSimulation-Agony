@@ -48,6 +48,15 @@ namespace PS_AGONY
 		size_t verticesCount = 0;
 	};
 
+	// Result of createPolygonCollider(). A concave input outline may be split into several
+	// convex colliders on the same body; they are appended back-to-back in colliders/polygons
+	// SoA storage during that single call, so every valid collider index is contiguous:
+	// [firstColliderIndex, firstColliderIndex + colliderCount).
+	struct PolygonColliderCreateResult
+	{
+		ColliderIndex firstColliderIndex{ 0 };
+		size_t colliderCount{ 0 };
+	};
 
 	struct CircleCreateParams
 	{
@@ -66,6 +75,7 @@ namespace PS_AGONY
 		BodyCreateParams base;
 		Vec2* localVertices = nullptr;
 		size_t verticesCount = 0;
+		// TODO: Make it use std::span.
 	};
 
 	class ObjectManager
@@ -93,7 +103,10 @@ namespace PS_AGONY
 		// Returns std::nullopt if bodyIndex is invalid. Colliders are never standalone.
 		std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params);
 		std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params);
-		std::optional<ColliderIndex> createPolygonCollider(const PolygonColliderCreateParams& params);
+
+		// If localVertices describe a concave outline, it is split into multiple convex
+		// colliders attached to the same body (see PolygonColliderCreateResult).
+		std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params);
 
 		std::optional<ObjectIndex> createCircle(const CircleCreateParams& params);
 		std::optional<ObjectIndex> createBox(const BoxCreateParams& params);
@@ -111,9 +124,16 @@ namespace PS_AGONY
 			MaterialIndex materialIndex, BodyType shapeType, ObjectIndex shapeIndex
 		);
 
+		// Appends a single convex-polygon collider (assumed already convex, CCW, >=3 vertices -
+		// no validation is performed here) to bodyIndex. Shared by createPolygon() and
+		// createPolygonCollider() so the collider/shape-SoA wiring is written once.
+		ColliderIndex createConvexPolygonColliderInternal(
+			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
+			MaterialIndex materialIndex, std::vector<Vec2> convexVertices
+		);
+
 		// Removes a single collider (and its underlying shape-SoA entry) from bodyIndex's
 		// owned list. Shared by destroyCollider() and destroyBody()'s cascade loop.
 		void destroyColliderInternal(ObjectIndex bodyIndex, ColliderIndex colliderIndex);
 	};
 }
-

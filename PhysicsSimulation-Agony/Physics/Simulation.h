@@ -203,7 +203,7 @@ namespace PS_AGONY
 			return objectManager.createBoxCollider(params);
 		}
 
-		__forceinline std::optional<ColliderIndex> createPolygonCollider(const PolygonColliderCreateParams& params)
+		__forceinline std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params)
 		{
 			return objectManager.createPolygonCollider(params);
 		}
