@@ -12,9 +12,6 @@ namespace PS_AGONY
 {
 	using RealSimd = Ecstasy::Core::Simd<Real>;
 
-	// TODO: Fix that.
-	static_assert(Ecstasy::Core::Simd<uint32_t>::lanes == 8, "Double works with morton codes only when AVX enabled");
-
 	using MortonU32Simd = std::conditional_t<
 		std::is_same_v<Real, float>,
 		Ecstasy::Core::Simd<uint32_t>,
@@ -312,19 +309,9 @@ namespace PS_AGONY
 		TRACY_SCOPE_N("Compute morton codes");
 
 		size_t i = 0;
-		if constexpr (std::is_same_v<Real, float>)
-		{
-			for (; i + RealSimd::lanes <= colliderCount; i += TRealSimd::lanes)
-			{
-				const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).template to<MortonU32Simd>();
-				const MortonU32Simd qy = TRealSimd::load(centroidYPtr + i).template to<MortonU32Simd>();
 
-				const MortonU32Simd code = morton2DSimd(qx, qy);
-
-				code.store(mortonCodePtr + i);
-			}
-		}
-		else
+		// SIMD loop. Runs only when lane counts match.
+		if constexpr (MortonU32Simd::lanes == RealSimd::lanes)
 		{
 			for (; i + RealSimd::lanes <= colliderCount; i += TRealSimd::lanes)
 			{
@@ -337,6 +324,8 @@ namespace PS_AGONY
 				code.store(mortonCodePtr + i);
 			}
 		}
+
+		// Scalar loop. Handles remaining elements.
 		for (; i < colliderCount; i++)
 		{
 			const uint32_t qx = static_cast<uint32_t>(centroidXPtr[i]);
