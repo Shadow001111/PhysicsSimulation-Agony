@@ -1,5 +1,6 @@
 #pragma once
-#include "ObjectSoA.h"
+#include "Physics/ObjectSoA.h"
+#include "Physics/ExecutionPolicy.h"
 
 #include "BroadPhaseInternal/BvhNode.h"
 #include "BroadPhaseInternal/QueryShapes.h"
@@ -22,14 +23,6 @@ namespace PS_AGONY
 	// need the owning body must resolve it via ColliderSoAViewer::bodyIndex.
 	class BroadPhaseCollisionDetector
 	{
-	public:
-		enum class ExecutionPolicy
-		{
-			Standard,
-			ForceSingleThreaded,
-			ForceMultiThreaded
-		};
-	private:
 		struct BvhNodePair
 		{
 			uint32_t a, b;
@@ -157,7 +150,7 @@ namespace PS_AGONY
 		// Queries the already-built tree for overlapping collider pairs. Caller must ensure at
 		// least 2 colliders exist (checked defensively); returns empty otherwise.
 		// Returned pairs are COLLIDER index pairs.
-		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Auto);
 
 		// Returns all leaf node aabbs.
 		void getAllLeafNodeAABBs(std::vector<AABB>& outAABBs) const;

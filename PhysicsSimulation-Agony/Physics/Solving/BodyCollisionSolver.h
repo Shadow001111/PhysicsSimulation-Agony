@@ -1,8 +1,9 @@
 #pragma once
 #include "SolverBase.h"
-#include "../NarrowPhaseCollisionDetector.h"
-#include "../SoA/ColliderSoA.h"
-#include "../Material.h"
+
+#include "Physics/SoA/ColliderSoA.h"
+#include "Physics/Material.h"
+#include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
 
 #include <array>
 #include <span>

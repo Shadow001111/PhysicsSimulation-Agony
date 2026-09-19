@@ -3,8 +3,8 @@
 #include "ConstraintSystem.h"
 #include "Material.h"
 
-#include "BroadPhaseCollisionDetector.h"
-#include "NarrowPhaseCollisionDetector.h"
+#include "Physics/CollisionDetection/BroadPhaseCollisionDetector.h"
+#include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
 
 #include "Solving/SolvingPlanner.h"
 #include "Solving/BodyCollisionSolver.h"

@@ -252,8 +252,8 @@
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp" />
     <ClCompile Include="Physics\FastCosSin.cpp" />
-    <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp" />
-    <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp" />
@@ -277,11 +277,12 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
+    <ClInclude Include="Physics\ExecutionPolicy.h" />
     <ClInclude Include="Physics\SoA\Constraints\RodSoA.h" />
     <ClInclude Include="Physics\Solving\JointSolver.h" />
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h" />
-    <ClInclude Include="Physics\BroadPhaseInternal\BvhNode.h" />
-    <ClInclude Include="Physics\BroadPhaseInternal\QueryShapes.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNode.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\QueryShapes.h" />
     <ClInclude Include="Physics\SimulationImpl\ObjectManager.h" />
     <ClInclude Include="Physics\SimulationImpl\Integrator.h" />
     <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h" />
@@ -301,8 +302,8 @@
     <ClInclude Include="Physics\Constants.h" />
     <ClInclude Include="Physics\FastCosSin.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
-    <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h" />
-    <ClInclude Include="Physics\BroadPhaseCollisionDetector.h" />
+    <ClInclude Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\ObjectSoA.h" />
     <ClInclude Include="Physics\GlmTypes.h" />
     <ClInclude Include="Physics\Material.h" />

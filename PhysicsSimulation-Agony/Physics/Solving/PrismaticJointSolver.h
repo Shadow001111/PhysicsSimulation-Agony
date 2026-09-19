@@ -1,8 +1,8 @@
 #pragma once
 #include "SolverBase.h"
 
-#include "Physics/SoA/Constraints/PrismaticJointSoA.h"
 #include "Physics/SoA/BodySoA.h"
+#include "Physics/SoA/Constraints/PrismaticJointSoA.h"
 
 #include <span>
 #include <vector>

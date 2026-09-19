@@ -36,10 +36,10 @@
     <ClCompile Include="Render\SimulationRenderer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\BroadPhaseCollisionDetector.cpp">
+    <ClCompile Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\NarrowPhaseCollisionDetector.cpp">
+    <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Scenes.cpp">
@@ -137,10 +137,10 @@
     <ClInclude Include="Physics\Material.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\BroadPhaseCollisionDetector.h">
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\NarrowPhaseCollisionDetector.h">
+    <ClInclude Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Threading.h">
@@ -248,10 +248,10 @@
     <ClInclude Include="Physics\SoA\ColliderSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\BroadPhaseInternal\QueryShapes.h">
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\QueryShapes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\BroadPhaseInternal\BvhNode.h">
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNode.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h">
@@ -279,6 +279,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Render\SimulationRenderer_Internal.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\ExecutionPolicy.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

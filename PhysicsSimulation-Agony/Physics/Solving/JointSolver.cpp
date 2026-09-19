@@ -1,10 +1,9 @@
 #include "JointSolver.h"
-#include "../Threading.h"
+
+#include "Physics/Threading.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
-
-#include <iostream>
 
 namespace PS_AGONY
 {

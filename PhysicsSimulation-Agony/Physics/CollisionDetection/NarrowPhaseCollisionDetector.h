@@ -1,8 +1,9 @@
 #pragma once
-#include "GlmTypes.h"
-#include "ObjectSoA.h"
-#include "SoA/ColliderSoA.h"
-#include "SymmetricMatrix.h"
+#include "Physics/GlmTypes.h"
+#include "Physics/ObjectSoA.h"
+#include "Physics/SoA/ColliderSoA.h"
+#include "Physics/SymmetricMatrix.h"
+#include "Physics/ExecutionPolicy.h"
 
 #include <atomic>
 #include <robin_hood.h>
@@ -151,13 +152,6 @@ namespace PS_AGONY
 	public:
 		static constexpr bool ENABLE_WARM_STARTING = true;
 
-		enum class ExecutionPolicy
-		{
-			Standard,
-			ForceSingleThreaded,
-			ForceMultiThreaded
-		};
-
 		NarrowPhaseCollisionDetector();
 		~NarrowPhaseCollisionDetector() = default;
 		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = delete;
@@ -174,7 +168,10 @@ namespace PS_AGONY
 		);
 
 		// 'colliderPairs' are COLLIDER index pairs (as produced by BroadPhaseCollisionDetector).
-		const std::vector<BodyCollisionData>& findCollisions(const std::vector<ObjectPair>& colliderPairs, ExecutionPolicy executionPolicy = ExecutionPolicy::Standard);
+		const std::vector<BodyCollisionData>& findCollisions(
+			const std::vector<ObjectPair>& colliderPairs,
+			ExecutionPolicy executionPolicy = ExecutionPolicy::Auto
+		);
 
 		// 'collidersToCheck' and the first element of each 'outColliding' pair are COLLIDER indices.
 		void findCollisionsInCircle(

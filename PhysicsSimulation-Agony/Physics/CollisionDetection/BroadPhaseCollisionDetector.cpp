@@ -1,5 +1,6 @@
 ﻿#include "BroadPhaseCollisionDetector.h"
-#include "Threading.h"
+
+#include "Physics/Threading.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 
@@ -11,6 +12,7 @@ namespace PS_AGONY
 {
 	using RealSimd = Ecstasy::Core::Simd<Real>;
 
+	// TODO: Fix that.
 	static_assert(Ecstasy::Core::Simd<uint32_t>::lanes == 8, "Double works with morton codes only when AVX enabled");
 
 	using MortonU32Simd = std::conditional_t<

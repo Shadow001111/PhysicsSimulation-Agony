@@ -1,7 +1,8 @@
 #pragma once
 #include "SolverBase.h"
-#include "../NarrowPhaseCollisionDetector.h"
-#include "../SoA/Constraints/JointSoA.h"
+
+#include "Physics/SoA/BodySoA.h"
+#include "Physics/SoA/Constraints/JointSoA.h"
 
 #include <span>
 #include <vector>

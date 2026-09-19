@@ -1,11 +1,10 @@
 ﻿#include "NarrowPhaseCollisionDetector.h"
-#include "Threading.h"
-#include "PrintUtilities.h"
+
+#include "Physics/Threading.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-#include <iostream>
 #include <bit>
 
 namespace PS_AGONY
