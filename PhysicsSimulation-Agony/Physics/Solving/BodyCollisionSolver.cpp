@@ -217,7 +217,7 @@ namespace PS_AGONY
 
 	size_t BodyCollisionSolver::planWorkerCount(size_t collisionCount) const
 	{
-		// Disabled multi-threading.Because having two additional threads drops execution time to 83% only.
+		// Having two additional threads drops execution time to 83% only.
 		// I think cache-sharing is happening between threads.
 		// I have SolvingPlanner function to arrange them by cache lines, but it's heavily reliant on body indices ordering.
 		// It struggles much if collision graph is dense and random. It also makes wave count explode.
@@ -429,13 +429,18 @@ namespace PS_AGONY
 			}
 
 			// Store velocities.
-			velocityXPtr[bodyIndexA] = linearVelocityA.x;
-			velocityYPtr[bodyIndexA] = linearVelocityA.y;
-			velocityXPtr[bodyIndexB] = linearVelocityB.x;
-			velocityYPtr[bodyIndexB] = linearVelocityB.y;
-
-			angularVelocityPtr[bodyIndexA] = angularVelocityA;
-			angularVelocityPtr[bodyIndexB] = angularVelocityB;
+			if (invMassA > Real(0)) [[likely]]
+			{
+				velocityXPtr[bodyIndexA] = linearVelocityA.x;
+				velocityYPtr[bodyIndexA] = linearVelocityA.y;
+				angularVelocityPtr[bodyIndexA] = angularVelocityA;
+			}
+			if (invMassB > Real(0)) [[likely]]
+			{
+				velocityXPtr[bodyIndexB] = linearVelocityB.x;
+				velocityYPtr[bodyIndexB] = linearVelocityB.y;
+				angularVelocityPtr[bodyIndexB] = angularVelocityB;
+			}
 		}
 	}
 
@@ -628,12 +633,18 @@ namespace PS_AGONY
 				angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
 			}
 
-			velocityXPtr[bodyIndexA] = linearVelocityA.x;
-			velocityYPtr[bodyIndexA] = linearVelocityA.y;
-			velocityXPtr[bodyIndexB] = linearVelocityB.x;
-			velocityYPtr[bodyIndexB] = linearVelocityB.y;
-			angularVelocityPtr[bodyIndexA] = angularVelocityA;
-			angularVelocityPtr[bodyIndexB] = angularVelocityB;
+			if (invMassA > Real(0)) [[likely]]
+			{
+				velocityXPtr[bodyIndexA] = linearVelocityA.x;
+				velocityYPtr[bodyIndexA] = linearVelocityA.y;
+				angularVelocityPtr[bodyIndexA] = angularVelocityA;
+			}
+			if (invMassB > Real(0)) [[likely]]
+			{
+				velocityXPtr[bodyIndexB] = linearVelocityB.x;
+				velocityYPtr[bodyIndexB] = linearVelocityB.y;
+				angularVelocityPtr[bodyIndexB] = angularVelocityB;
+			}
 		}
 	}
 

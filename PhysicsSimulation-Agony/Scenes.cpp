@@ -1299,7 +1299,7 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 2)
     {
-        load_LargeWorld(simulation, rvg, {}, 2000);
+        load_LargeWorld(simulation, rvg, {}, 4000);
 
         //load_LargeWorld(simulation, rvg, { -70.0f, -50.0f }, 2500 / 4);
         //load_LargeWorld(simulation, rvg, {  70.0f, -50.0f }, 2500 / 4);
