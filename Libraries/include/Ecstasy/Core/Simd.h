@@ -5,23 +5,47 @@
 
 namespace Ecstasy::Core
 {
-    // Compile-time register width
+    // Register width.
     #if defined(__AVX2__)
-    inline constexpr size_t kSimdBits = 256;
-    #define SIMD_AVX2
-    #else // SSE by default
-    inline constexpr size_t kSimdBits = 128;
-    #define SIMD_SSE
+        inline constexpr size_t kSimdBits = 256;
+        #define ECSTASY_SIMD_AVX2
+    #elif defined(__AVX__)
+        inline constexpr size_t kSimdBits = 256;
+        #define ECSTASY_SIMD_AVX1
+    #else
+        #if (defined(__clang__) || defined(__GNUC__)) && !defined(__SSE4_1__)
+            #error "Ecstasy SIMD requires at least SSE4.1. Bare SSE2 is not supported."
+        #endif
+            inline constexpr size_t kSimdBits = 128;
+        #define ECSTASY_SIMD_SSE
     #endif
 
     inline constexpr size_t kSimdBytes = kSimdBits / 8;
 
+    // Features.
+    #if defined(__FMA__) || (defined(_MSC_VER) && defined(__AVX2__))
+        #define ECSTASY_HAS_FMA 1
+    #else
+        #define ECSTASY_HAS_FMA 0
+    #endif
+
     // Allowed element types.
     template<typename T>
     concept SimdElement =
-        std::is_same_v<T, int32_t>  || std::is_same_v<T, int64_t>  ||
+        std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t> ||
         std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
-        std::is_same_v<T, float>    || std::is_same_v<T, double>;
+        std::is_same_v<T, float> || std::is_same_v<T, double>;
+
+    // Default register width per element type.
+    // AVX1 only provides 256-bit float/double ops; 256-bit integer ops require AVX2.
+    // So under AVX1-without-AVX2, integer types must default to 128 bits.
+    template<typename T>
+    inline constexpr size_t kSimdBitsFor =
+        #if defined(ECSTASY_SIMD_AVX1)
+        std::is_integral_v<T> ? 128 : kSimdBits;
+    #else
+        kSimdBits;
+    #endif
 
     // Register type trait.
     template<typename T, size_t Bits> struct SimdReg;
@@ -43,13 +67,17 @@ namespace Ecstasy::Core
     template<> struct SimdReg<double, 128> { using type = __m128d; };
     template<> struct SimdReg<double, 256> { using type = __m256d; };
 
-    // Simd class
-    template<SimdElement T, size_t Bits = kSimdBits>
+    // Simd class.
+    template<SimdElement T, size_t Bits = kSimdBitsFor<T>>
     struct Simd
     {
         static_assert(Bits == 128 || Bits == 256, "Invalid bit count");
-        #if !defined(SIMD_AVX2)
+        #if defined(ECSTASY_SIMD_SSE)
         static_assert(Bits < 256, "256-bit SIMD requires AVX2");
+        #endif
+        #if defined(ECSTASY_SIMD_AVX1)
+        static_assert(!(Bits == 256 && std::is_integral_v<T>),
+            "256-bit integer SIMD requires AVX2 (AVX1 only supports 256-bit float/double)");
         #endif
 
         using ValueType = T;
@@ -314,7 +342,7 @@ namespace Ecstasy::Core
         }
 
         void storeLowerInt64(T* ptr) const noexcept
-            requires (IS_INT32 && Bits == 128)
+            requires (IS_INT32&& Bits == 128)
         {
             _mm_storel_epi64(reinterpret_cast<__m128i*>(ptr), reg);
         }
@@ -323,7 +351,7 @@ namespace Ecstasy::Core
 
         [[nodiscard]] static constexpr bool isGatherAvailable() noexcept
         {
-            #ifdef SIMD_AVX2
+            #ifdef ECSTASY_SIMD_AVX2
             return true;
             #else
             return false;
@@ -354,7 +382,7 @@ namespace Ecstasy::Core
                         else
                             return indices.reg; // __m128i
                     }
-                }();
+                    }();
 
                 Simd s;
                 if constexpr (IS_FLOAT)
@@ -701,6 +729,7 @@ namespace Ecstasy::Core
         [[nodiscard]] static Simd mulAdd(const Simd& a, const Simd& b, const Simd& c) noexcept
             requires IS_REAL
         {
+            #if ECSTASY_HAS_FMA
             Simd s;
             if constexpr (IS_FLOAT)
             {
@@ -713,12 +742,16 @@ namespace Ecstasy::Core
                 else                       s.reg = _mm_fmadd_pd(a.reg, b.reg, c.reg);
             }
             return s;
+            #else
+            return a * b + c;
+            #endif
         }
 
         // a * b - c
         [[nodiscard]] static Simd mulSub(const Simd& a, const Simd& b, const Simd& c) noexcept
             requires IS_REAL
         {
+            #if ECSTASY_HAS_FMA
             Simd s;
             if constexpr (IS_FLOAT)
             {
@@ -731,12 +764,17 @@ namespace Ecstasy::Core
                 else                       s.reg = _mm_fmsub_pd(a.reg, b.reg, c.reg);
             }
             return s;
+            #else
+            return a * b - c;
+            #endif
         }
 
         // -(a * b) + c
+        // c - a * b
         [[nodiscard]] static Simd negMulAdd(const Simd& a, const Simd& b, const Simd& c) noexcept
             requires IS_REAL
         {
+            #if ECSTASY_HAS_FMA
             Simd s;
             if constexpr (IS_FLOAT)
             {
@@ -749,12 +787,17 @@ namespace Ecstasy::Core
                 else                       s.reg = _mm_fnmadd_pd(a.reg, b.reg, c.reg);
             }
             return s;
+            #else
+            return c - a * b;
+            #endif
         }
 
         // -(a * b) - c
+        // -c - a * b
         [[nodiscard]] static Simd negMulSub(const Simd& a, const Simd& b, const Simd& c) noexcept
             requires IS_REAL
         {
+            #if ECSTASY_HAS_FMA
             Simd s;
             if constexpr (IS_FLOAT)
             {
@@ -767,6 +810,9 @@ namespace Ecstasy::Core
                 else                       s.reg = _mm_fnmsub_pd(a.reg, b.reg, c.reg);
             }
             return s;
+            #else
+            return -c - a * b;
+            #endif
         }
 
         [[nodiscard]] static Simd negate(const Simd& a) noexcept
@@ -1252,7 +1298,7 @@ namespace Ecstasy::Core
         // Narrow-saturate (int32_t, 128-bit only).
 
         [[nodiscard]] static Simd<T, 128> narrowSaturate16To8(const Simd& low, const Simd& high) noexcept
-            requires (IS_INT32 && Bits == 128)
+            requires (IS_INT32&& Bits == 128)
         {
             Simd<T, 128> s;
             s.reg = _mm_packs_epi16(low.reg, high.reg);
@@ -1260,7 +1306,7 @@ namespace Ecstasy::Core
         }
 
         [[nodiscard]] static Simd<T, 128> narrowSaturate32To16(const Simd& low, const Simd& high) noexcept
-            requires (IS_INT32 && Bits == 128)
+            requires (IS_INT32&& Bits == 128)
         {
             Simd<T, 128> s;
             s.reg = _mm_packs_epi32(low.reg, high.reg);
@@ -1327,7 +1373,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<int32_t, Bits>> && IS_FLOAT
+            requires std::is_same_v<Target, Simd<int32_t, Bits>>&& IS_FLOAT
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvttps_epi32(reg);
@@ -1337,7 +1383,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires (std::is_same_v<Target, Simd<int32_t, 128>> && IS_DOUBLE && Bits == 256)
+            requires (std::is_same_v<Target, Simd<int32_t, 128>>&& IS_DOUBLE&& Bits == 256)
         {
             Target s;
             s.reg = _mm256_cvttpd_epi32(reg);
@@ -1348,7 +1394,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<uint32_t, Bits>> && IS_FLOAT
+            requires std::is_same_v<Target, Simd<uint32_t, Bits>>&& IS_FLOAT
         {
             Target s;
             if constexpr (Bits == 128)
@@ -1376,7 +1422,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<float, Bits>> && IS_INT32
+            requires std::is_same_v<Target, Simd<float, Bits>>&& IS_INT32
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_cvtepi32_ps(reg);
@@ -1386,7 +1432,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<float, Bits>> && IS_UINT32
+            requires std::is_same_v<Target, Simd<float, Bits>>&& IS_UINT32
         {
             Simd<uint32_t, Bits> biased = bitwiseXor(*this, Simd<uint32_t, Bits>(0x80000000u));
             Target as_signed_float;
@@ -1399,7 +1445,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<double, Bits>> && IS_INT64
+            requires std::is_same_v<Target, Simd<double, Bits>>&& IS_INT64
         {
             const Target magic(0x0018000000000000);
             const Simd biased = (*this) + magic.template as<Simd>();
@@ -1408,7 +1454,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target to() const noexcept
-            requires std::is_same_v<Target, Simd<double, Bits>> && IS_UINT64
+            requires std::is_same_v<Target, Simd<double, Bits>>&& IS_UINT64
         {
             const Target magic(0x0010000000000000);
             const Simd united = (*this) | magic.template as<Simd>();
@@ -1422,7 +1468,7 @@ namespace Ecstasy::Core
 
             const Target magicBits = Target::fillLanesWith(0x4330000000000000LL);
             const Simd magic(4503599627370496.0);
-            
+
             const Simd truncated = Simd::roundTowardsZero(*this);
             const Target biased = (truncated + magic).template as<Target>();
             return biased - magicBits;
@@ -1440,7 +1486,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<int32_t, Bits>> && IS_REAL
+            requires std::is_same_v<Target, Simd<int32_t, Bits>>&& IS_REAL
         {
             Target s;
             if constexpr (Bits == 256)
@@ -1458,7 +1504,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<uint32_t, Bits>> && IS_REAL
+            requires std::is_same_v<Target, Simd<uint32_t, Bits>>&& IS_REAL
         {
             Target s;
             if constexpr (Bits == 256)
@@ -1476,7 +1522,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<int64_t, Bits>> && IS_DOUBLE
+            requires std::is_same_v<Target, Simd<int64_t, Bits>>&& IS_DOUBLE
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
@@ -1486,7 +1532,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<uint64_t, Bits>> && IS_DOUBLE
+            requires std::is_same_v<Target, Simd<uint64_t, Bits>>&& IS_DOUBLE
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castpd_si256(reg);
@@ -1496,7 +1542,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<float, Bits>> && IS_INTEGER
+            requires std::is_same_v<Target, Simd<float, Bits>>&& IS_INTEGER
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_ps(reg);
@@ -1506,7 +1552,7 @@ namespace Ecstasy::Core
 
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
-            requires std::is_same_v<Target, Simd<double, Bits>> && IS_INTEGER
+            requires std::is_same_v<Target, Simd<double, Bits>>&& IS_INTEGER
         {
             Target s;
             if constexpr (Bits == 256) s.reg = _mm256_castsi256_pd(reg);
@@ -1517,10 +1563,10 @@ namespace Ecstasy::Core
         template<typename Target>
         [[nodiscard]] Target as() const noexcept
             requires (
-                (std::is_same_v<Target, Simd<uint32_t, Bits>> && IS_INT32) ||
-                (std::is_same_v<Target, Simd<int32_t, Bits>> && IS_UINT32) ||
-                (std::is_same_v<Target, Simd<uint64_t, Bits>> && IS_INT64) ||
-                (std::is_same_v<Target, Simd<int64_t, Bits>> && IS_UINT64)
+        (std::is_same_v<Target, Simd<uint32_t, Bits>>&& IS_INT32) ||
+            (std::is_same_v<Target, Simd<int32_t, Bits>> && IS_UINT32) ||
+            (std::is_same_v<Target, Simd<uint64_t, Bits>> && IS_INT64) ||
+            (std::is_same_v<Target, Simd<int64_t, Bits>> && IS_UINT64)
             )
         {
             Target s;
@@ -1549,25 +1595,4 @@ namespace Ecstasy::Core
             return s;
         }
     };
-
-    //using SimdI = Simd<int32_t>;
-    //using SimdL = Simd<int64_t>;
-    //using SimdU = Simd<uint32_t>;
-    //using SimdUL = Simd<uint64_t>;
-    //using SimdF = Simd<float>;
-    //using SimdD = Simd<double>;
-    //
-    //using Simd128I = Simd<int32_t, 128>;
-    //using Simd128L = Simd<int64_t, 128>;
-    //using Simd128U = Simd<uint32_t, 128>;
-    //using Simd128UL = Simd<uint64_t, 128>;
-    //using Simd128F = Simd<float, 128>;
-    //using Simd128D = Simd<double, 128>;
-    //
-    //using Simd256I = Simd<int32_t, 256>;
-    //using Simd256L = Simd<int64_t, 256>;
-    //using Simd256U = Simd<uint32_t, 256>;
-    //using Simd256UL = Simd<uint64_t, 256>;
-    //using Simd256F = Simd<float, 256>;
-    //using Simd256D = Simd<double, 256>;
 }
