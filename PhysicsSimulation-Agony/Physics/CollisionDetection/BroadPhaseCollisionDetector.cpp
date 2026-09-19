@@ -25,13 +25,6 @@ namespace PS_AGONY
 	>;
 
 
-	static constexpr uint64_t integralLog2(uint64_t n)
-	{
-		uint64_t d = 0ull;
-		while (n > 1) { n = (n + 1ull) >> 1ull; d++; }
-		return d;
-	}
-
 	static inline uint32_t part1By1(uint32_t x)
 	{
 		x &= 0x0000ffffu;
@@ -75,7 +68,7 @@ namespace PS_AGONY
 	{
 		constexpr uint32_t LANES = RealSimd::lanes;
 		constexpr uint32_t ALL_LANES_MASK = (1u << LANES) - 1u;
-		constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+		constexpr uint32_t LANES_LOG2 = BroadPhaseInternal::ceilLog2(LANES);
 
 		std::array<std::array<uint32_t, H>, W> arr{};
 		for (uint32_t i = 0; i < W; i++)
@@ -90,7 +83,7 @@ namespace PS_AGONY
 
 
 	constexpr uint32_t LANES = RealSimd::lanes;
-	constexpr uint32_t LANES_LOG2 = integralLog2(LANES);
+	constexpr uint32_t LANES_LOG2 = BroadPhaseInternal::ceilLog2(LANES);
 	constexpr auto maskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LANES>();
 	constexpr size_t PUSH_BUFFER_MAX_CAPACITY = 256;
 
@@ -262,7 +255,7 @@ namespace PS_AGONY
 
 		// Compute centroids.
 		size_t i = 0;
-		for (; i + RealSimd::lanes <= colliderCount; i += RealSimd::lanes)
+		for (; i + LANES <= colliderCount; i += LANES)
 		{
 			const RealSimd minX = RealSimd::load(aabbMinXPtr + i);
 			const RealSimd maxX = RealSimd::load(aabbMaxXPtr + i);
@@ -311,9 +304,9 @@ namespace PS_AGONY
 		size_t i = 0;
 
 		// SIMD loop. Runs only when lane counts match.
-		if constexpr (MortonU32Simd::lanes == RealSimd::lanes)
+		if constexpr (MortonU32Simd::lanes == TRealSimd::lanes)
 		{
-			for (; i + RealSimd::lanes <= colliderCount; i += TRealSimd::lanes)
+			for (; i + TRealSimd::lanes <= colliderCount; i += TRealSimd::lanes)
 			{
 				// Cx/cy are in range [0; 2^16]
 				const MortonU32Simd qx = TRealSimd::load(centroidXPtr + i).template to<MortonI32Simd>().template as<MortonU32Simd>();
@@ -481,10 +474,6 @@ namespace PS_AGONY
 			TRACY_SCOPE_N("Stack loop");
 			struct BuildTask { uint32_t nodeIdx; };
 
-			// LBVH depth bound: up to 32 bit-split levels (one per Morton-code bit)
-			// plus bvhDepth() median-fallback levels for same-code clusters.
-			constexpr uint64_t MAX_STACK_CAPACITY =
-				32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE) + 2ull;
 			std::array<BuildTask, MAX_STACK_CAPACITY> stack;
 			uint32_t stackSize = 0;
 
@@ -604,7 +593,7 @@ namespace PS_AGONY
 			Real* maxXPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxX.data());
 			Real* minYPtr = reinterpret_cast<Real*>(leafBodyAABBs.minY.data());
 			Real* maxYPtr = reinterpret_cast<Real*>(leafBodyAABBs.maxY.data());
-			for (size_t i = 0; i < totalReals; i += RealSimd::lanes)
+			for (size_t i = 0; i < totalReals; i += LANES)
 			{
 				deadMinV.store(minXPtr + i);
 				deadMaxV.store(maxXPtr + i);
@@ -712,7 +701,6 @@ namespace PS_AGONY
 		{
 			TRACY_SCOPE_N("Initial traverse");
 
-			constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
 
 			if (nodesPtr[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
 			{
@@ -1144,8 +1132,6 @@ namespace PS_AGONY
 		bvhFunctionResources.nodePairsToTraverse.clear();
 		bvhFunctionResources.leafPairsToTestCollisions.clear();
 		bvhFunctionResources.leavesToTestCollisions.clear();
-
-		constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
 
 		// Traverse 1.
 		{

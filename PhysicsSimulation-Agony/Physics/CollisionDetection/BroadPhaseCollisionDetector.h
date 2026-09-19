@@ -4,6 +4,7 @@
 
 #include "BroadPhaseInternal/BvhNode.h"
 #include "BroadPhaseInternal/QueryShapes.h"
+#include "BroadPhaseInternal/Math.h"
 
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
@@ -121,6 +122,8 @@ namespace PS_AGONY
 		LeafBodyAABBSoA leafBodyAABBs;
 
 		std::vector<ObjectPair> collisionData; // Pairs of COLLIDER indices.
+
+		static constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + BroadPhaseInternal::ceilLog2(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;
@@ -165,13 +168,6 @@ namespace PS_AGONY
 
 		size_t getMemoryUsage() const;
 	private:
-		static constexpr uint64_t bvhDepth(uint64_t n, uint64_t leafSize)
-		{
-			uint64_t d = 0ull;
-			while (n > leafSize) { n = (n + 1ull) >> 1ull; d++; }
-			return d;
-		}
-
 		void computeCentroidsWithTransformations(uint32_t colliderCount, Vec2 globalMin, Vec2 scale, Real clampMax);
 
 		template<std::floating_point TReal>
@@ -194,7 +190,6 @@ namespace PS_AGONY
 	inline void BroadPhaseCollisionDetector::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const
 	{
 		using RealSimd = Ecstasy::Core::Simd<Real>;
-		constexpr uint32_t LANES = RealSimd::lanes;
 
 		if (bvhFunctionResources.nodes.empty()) return;
 
@@ -209,8 +204,6 @@ namespace PS_AGONY
 		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
 
 		// Local stack traversal setup.
-		constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
-
 		uint32_t stack[MAX_STACK_CAPACITY];
 		uint32_t stackSize = 0;
 
@@ -243,7 +236,7 @@ namespace PS_AGONY
 				const Real* leafMaxY = leafMaxYPtr + srcIndex;
 
 				uint32_t mask = 0;
-				for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LANES)
+				for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += RealSimd::lanes)
 				{
 					const RealSimd minXV = RealSimd::load(leafMinX + j);
 					const RealSimd maxXV = RealSimd::load(leafMaxX + j);
@@ -293,8 +286,6 @@ namespace PS_AGONY
 		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
 
 		// Local stack traversal setup.
-		constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + bvhDepth(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
-
 		uint32_t stack[MAX_STACK_CAPACITY];
 		uint32_t stackSize = 0;
 

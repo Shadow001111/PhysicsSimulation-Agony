@@ -233,7 +233,7 @@ void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::G
 
 
     PS_AGONY::Material material0 = {
-        .elasticity = 0.8,
+        .elasticity = 0.5,
         .staticFriction = 0.0,
         .dynamicFriction = 0.0
     };

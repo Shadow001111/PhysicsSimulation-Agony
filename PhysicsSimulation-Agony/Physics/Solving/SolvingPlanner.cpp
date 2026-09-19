@@ -523,7 +523,6 @@ namespace PS_AGONY
         const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
 
         // Build cache-line group adjacency graph.
-        // TODO: Some bodies may be sparse in memory. Check if bodyCount matches actual all body count.
         std::vector<std::vector<size_t>> adjacency(groupCount);
         for (const auto& c : collisions)
         {
@@ -537,7 +536,7 @@ namespace PS_AGONY
         }
 
         // Deduplicate adjacency lists.
-        for (size_t g = 0; g < groupCount; ++g)
+        for (size_t g = 0; g < groupCount; g++)
         {
             std::sort(adjacency[g].begin(), adjacency[g].end());
             adjacency[g].erase(std::unique(adjacency[g].begin(), adjacency[g].end()), adjacency[g].end());

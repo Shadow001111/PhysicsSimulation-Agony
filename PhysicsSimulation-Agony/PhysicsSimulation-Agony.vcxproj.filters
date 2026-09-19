@@ -284,5 +284,8 @@
     <ClInclude Include="Physics\ExecutionPolicy.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\Math.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
