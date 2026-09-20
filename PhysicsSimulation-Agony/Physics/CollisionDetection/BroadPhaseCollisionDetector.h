@@ -3,6 +3,7 @@
 #include "Physics/ExecutionPolicy.h"
 
 #include "BroadPhaseInternal/BvhNode.h"
+#include "BroadPhaseInternal/BvhNodePair.h"
 #include "BroadPhaseInternal/QueryShapes.h"
 #include "BroadPhaseInternal/Math.h"
 
@@ -17,6 +18,7 @@
 namespace PS_AGONY
 {
 	using BvhNode = BroadPhaseInternal::BvhNode;
+	using BvhNodePair = BroadPhaseInternal::BvhNodePair;
 
 	// NOTE: This detector operates over COLLIDER AABBs, not body AABBs.
 	// Every ObjectIndex produced or consumed here (in ObjectPair results, or in
@@ -24,13 +26,6 @@ namespace PS_AGONY
 	// need the owning body must resolve it via ColliderSoAViewer::bodyIndex.
 	class BroadPhaseCollisionDetector
 	{
-		struct BvhNodePair
-		{
-			uint32_t a, b;
-
-			BvhNodePair swap() const noexcept { return { b, a }; }
-		};
-
 		struct alignas(64) PairVector
 		{
 			std::vector<ObjectPair> pairs;
@@ -123,7 +118,7 @@ namespace PS_AGONY
 
 		std::vector<ObjectPair> collisionData; // Pairs of COLLIDER indices.
 
-		static constexpr uint64_t MAX_STACK_CAPACITY = 2ull * (32ull + BroadPhaseInternal::ceilLog2(UINT32_MAX, BvhNode::KD_LEAF_SIZE)) + 1ull;
+		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;

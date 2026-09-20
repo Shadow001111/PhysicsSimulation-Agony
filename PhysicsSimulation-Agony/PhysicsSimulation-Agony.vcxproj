@@ -277,6 +277,9 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhPairTraversal.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\LeafPairTesting.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\Math.h" />
     <ClInclude Include="Physics\ExecutionPolicy.h" />
     <ClInclude Include="Physics\SoA\Constraints\RodSoA.h" />

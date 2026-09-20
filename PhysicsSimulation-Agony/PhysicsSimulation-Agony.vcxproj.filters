@@ -287,5 +287,14 @@
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\Math.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\LeafPairTesting.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhPairTraversal.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -415,11 +415,15 @@ namespace PS_AGONY
         if (objectManager.colliders.getCount() > 1)
         {
             // Broad phase.
-            const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions();
+            const std::vector<ObjectPair>& broadCollisionData = broadPhaseCollisionDetector.findCollisions(
+                ExecutionPolicy::ForceSingleThreaded
+            );
             if (broadCollisionData.empty()) return;
 
             // Narrow phase.
-            const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(broadCollisionData);
+            const std::vector<BodyCollisionData>& narrowCollisionData = narrowPhaseCollisionDetector.findCollisions(
+                broadCollisionData
+            );
             if (narrowCollisionData.empty()) return;
 
             // Collision resolution.

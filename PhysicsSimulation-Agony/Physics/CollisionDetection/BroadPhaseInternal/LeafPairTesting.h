@@ -1,0 +1,201 @@
+#pragma once
+#include "BvhNode.h"
+#include "Math.h"
+
+#include "Physics/ObjectSoA.h"
+
+#include "Ecstasy/Core/Portablity.h"
+#include "Ecstasy/Core/Simd.h"
+
+#include <array>
+#include <bit>
+#include <cstdint>
+#include <vector>
+
+namespace PS_AGONY::BroadPhaseInternal
+{
+	using RealSimd = Ecstasy::Core::Simd<Real>;
+
+	inline constexpr uint32_t upperTriMask(uint32_t i, uint32_t j_base, uint32_t LANES, uint32_t ALL_LANES_MASK)
+	{
+		if (i < j_base)          return ALL_LANES_MASK;
+		if (i >= j_base + LANES) return 0u;
+		const uint32_t offset = i - j_base; // 0 .. LANES-1.
+		return (ALL_LANES_MASK << (offset + 1)) & ALL_LANES_MASK;
+	}
+
+	template<uint32_t W, uint32_t H>
+	constexpr auto makeMaskArray()
+	{
+		constexpr uint32_t LANES = RealSimd::lanes;
+		constexpr uint32_t ALL_LANES_MASK = (1u << LANES) - 1u;
+		constexpr uint32_t LANES_LOG2 = ceilLog2(LANES);
+
+		std::array<std::array<uint32_t, H>, W> arr{};
+		for (uint32_t i = 0; i < W; i++)
+		{
+			for (uint32_t j_base = 0; j_base < H; j_base++)
+			{
+				arr[i][j_base] = upperTriMask(i, j_base << LANES_LOG2, LANES, ALL_LANES_MASK);
+			}
+		}
+		return arr;
+	}
+
+	inline constexpr uint32_t LEAF_TEST_LANES = RealSimd::lanes;
+	inline constexpr uint32_t LEAF_TEST_LANES_LOG2 = ceilLog2(LEAF_TEST_LANES);
+	inline constexpr auto leafSelfCrossMaskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LEAF_TEST_LANES>();
+	inline constexpr size_t PAIR_PUSH_BUFFER_CAPACITY = 256;
+
+	// Batches ObjectPair writes and flushes them to 'dest' in bulk. One instance
+	// per calling thread; never shared across threads.
+	struct PairPushBuffer
+	{
+		ObjectPair buffer[PAIR_PUSH_BUFFER_CAPACITY];
+		uint32_t size = 0;
+		std::vector<ObjectPair>& dest;
+
+		explicit PairPushBuffer(std::vector<ObjectPair>& destIn) noexcept : dest(destIn) {}
+
+		inline void push(ObjectIndex a, ObjectIndex b) noexcept
+		{
+			buffer[size++] = { a, b };
+			if (size == PAIR_PUSH_BUFFER_CAPACITY) flush();
+		}
+		inline void flush() noexcept
+		{
+			dest.insert(dest.end(), buffer, buffer + size);
+			size = 0;
+		}
+	};
+
+	// Tests all collider pairs within a single leaf node against each other.
+	// leafMin/MaxX/Y ptrs are base pointers to the FULL leaf AABB SoA (not
+	// offset to this node); node.leafIndex selects the slice.
+	// Used identically by the single-threaded and per-worker threaded query paths.
+	inline void testLeafSelfCross(
+		const BvhNode& node,
+		const Real* ECSTASY_RESTRICT leafMinXPtr,
+		const Real* ECSTASY_RESTRICT leafMaxXPtr,
+		const Real* ECSTASY_RESTRICT leafMinYPtr,
+		const Real* ECSTASY_RESTRICT leafMaxYPtr,
+		const ObjectIndex* ECSTASY_RESTRICT indicesPtr,
+		const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
+		std::array<uint32_t, BvhNode::KD_LEAF_SIZE>& masks,
+		PairPushBuffer& pushBuffer)
+	{
+		const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
+		const Real* leafMinX = leafMinXPtr + srcIndex;
+		const Real* leafMaxX = leafMaxXPtr + srcIndex;
+		const Real* leafMinY = leafMinYPtr + srcIndex;
+		const Real* leafMaxY = leafMaxYPtr + srcIndex;
+		const uint32_t count = node.end - node.start;
+
+		for (uint32_t i = 0; i < count; i++)
+		{
+			const RealSimd vMinXi(leafMinX[i]);
+			const RealSimd vMaxXi(leafMaxX[i]);
+			const RealSimd vMinYi(leafMinY[i]);
+			const RealSimd vMaxYi(leafMaxY[i]);
+
+			// Note: "jStart = i & LANES_UPPER_MASK" slows everything down.
+			auto maskRow = leafSelfCrossMaskArray[i];
+			uint32_t mask = 0;
+			for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LEAF_TEST_LANES)
+			{
+				const RealSimd vMinXj = RealSimd::load(leafMinX + j);
+				const RealSimd vMaxXj = RealSimd::load(leafMaxX + j);
+				const RealSimd vMinYj = RealSimd::load(leafMinY + j);
+				const RealSimd vMaxYj = RealSimd::load(leafMaxY + j);
+
+				const RealSimd overlap =
+					(vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+					(vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+				const uint32_t localMask = overlap.movemask() & maskRow[j >> LEAF_TEST_LANES_LOG2];
+				mask |= localMask << j;
+			}
+			masks[i] = mask;
+		}
+		for (uint32_t i = 0; i < count; i++)
+		{
+			uint32_t mask = masks[i];
+			while (mask)
+			{
+				const uint32_t lane = std::countr_zero(mask);
+				mask &= mask - 1;
+				const ObjectIndex idxA = indicesPtr[node.start + i];
+				const ObjectIndex idxB = indicesPtr[node.start + lane];
+				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body: never collide.
+				pushBuffer.push(idxA, idxB);
+			}
+		}
+	}
+
+	// Tests every collider in leaf A against every collider in leaf B. No
+	// self-pair mask needed since the two leaves are disjoint.
+	// Used identically by the single-threaded and per-worker threaded query paths.
+	inline void testLeafPairCross(
+		const BvhNode& nodeA,
+		const BvhNode& nodeB,
+		const Real* ECSTASY_RESTRICT leafMinXPtr,
+		const Real* ECSTASY_RESTRICT leafMaxXPtr,
+		const Real* ECSTASY_RESTRICT leafMinYPtr,
+		const Real* ECSTASY_RESTRICT leafMaxYPtr,
+		const ObjectIndex* ECSTASY_RESTRICT indicesPtr,
+		const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
+		std::array<uint32_t, BvhNode::KD_LEAF_SIZE>& masks,
+		PairPushBuffer& pushBuffer)
+	{
+		const uint32_t countA = nodeA.end - nodeA.start;
+
+		const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
+		const Real* leafAMinX = leafMinXPtr + srcIndexA;
+		const Real* leafAMaxX = leafMaxXPtr + srcIndexA;
+		const Real* leafAMinY = leafMinYPtr + srcIndexA;
+		const Real* leafAMaxY = leafMaxYPtr + srcIndexA;
+
+		const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
+		const Real* leafBMinX = leafMinXPtr + srcIndexB;
+		const Real* leafBMaxX = leafMaxXPtr + srcIndexB;
+		const Real* leafBMinY = leafMinYPtr + srcIndexB;
+		const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
+
+		for (uint32_t i = 0; i < countA; i++)
+		{
+			const RealSimd vMinXi(leafAMinX[i]);
+			const RealSimd vMaxXi(leafAMaxX[i]);
+			const RealSimd vMinYi(leafAMinY[i]);
+			const RealSimd vMaxYi(leafAMaxY[i]);
+
+			uint32_t mask = 0;
+			for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LEAF_TEST_LANES)
+			{
+				const RealSimd vMinXj = RealSimd::load(leafBMinX + j);
+				const RealSimd vMaxXj = RealSimd::load(leafBMaxX + j);
+				const RealSimd vMinYj = RealSimd::load(leafBMinY + j);
+				const RealSimd vMaxYj = RealSimd::load(leafBMaxY + j);
+
+				const RealSimd overlap =
+					(vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
+					(vMinYi < vMaxYj) & (vMaxYi > vMinYj);
+
+				mask |= overlap.movemask() << j;
+			}
+			masks[i] = mask;
+		}
+		for (uint32_t i = 0; i < countA; i++)
+		{
+			uint32_t mask = masks[i];
+			while (mask)
+			{
+				const uint32_t lane = std::countr_zero(mask);
+				mask &= mask - 1;
+				const ObjectIndex idxA = indicesPtr[nodeA.start + i];
+				const ObjectIndex idxB = indicesPtr[nodeB.start + lane];
+				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body: never collide.
+				pushBuffer.push(idxA, idxB);
+			}
+		}
+	}
+}
