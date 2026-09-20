@@ -8,10 +8,11 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
-#include <queue>
 
 namespace PS_AGONY
 {
+    using Pass = SolvingPlan::Pass;
+
     static inline size_t hashGroupPair(size_t lo, size_t hi)
     {
         uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
@@ -24,13 +25,14 @@ namespace PS_AGONY
         return static_cast<size_t>(key);
     }
 
-    void SolvingPlanner::planStandardExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount)
+    void SolvingPlanner::planStandardExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan)
     {
         const size_t collisionCount = collisions.size();
 
-        flatIndices.clear();
-        flatIndices.reserve(collisionCount);
-        passOffsets.clear();
+        outPlan.workerCount = workerCount;
+        outPlan.flatIndices.clear();
+        outPlan.flatIndices.reserve(collisionCount);
+        outPlan.passOffsets.clear();
 
         if (collisionCount == 0 || workerCount == 0)
             return;
@@ -45,12 +47,12 @@ namespace PS_AGONY
 
         waveAssignments.resize(workerCount);
 
-        std::vector<size_t> workerLoad(workerCount);
+        workerLoad.assign(workerCount, 0);
 
         while (!remainingIndices.empty())
         {
-            const size_t waveStartPass = passOffsets.size();
-            passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+            const size_t waveStartPass = outPlan.passOffsets.size();
+            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
             std::fill(workerLoad.begin(), workerLoad.end(), 0);
 
@@ -140,10 +142,10 @@ namespace PS_AGONY
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;
-                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
-                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
+                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
 
-                    flatIndices.insert(flatIndices.end(),
+                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
                         waveAssignments[w].begin(),
                         waveAssignments[w].end());
                 }
@@ -153,13 +155,14 @@ namespace PS_AGONY
         }
     }
 
-    void SolvingPlanner::planSimdAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t chunkSize)
+    void SolvingPlanner::planSimdAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t workerCount, size_t chunkSize, SolvingPlan& outPlan)
     {
         const size_t collisionCount = collisions.size();
 
-        flatIndices.clear();
-        flatIndices.reserve(collisionCount);
-        passOffsets.clear();
+        outPlan.workerCount = workerCount;
+        outPlan.flatIndices.clear();
+        outPlan.flatIndices.reserve(collisionCount);
+        outPlan.passOffsets.clear();
 
         if (collisionCount == 0 || workerCount == 0)
             return;
@@ -174,15 +177,15 @@ namespace PS_AGONY
 
         waveAssignments.resize(workerCount);
 
-        std::vector<size_t> workerLoad(workerCount);
+        workerLoad.assign(workerCount, 0);
 
-        std::vector<size_t> wavePool;
-        std::vector<size_t> simdRetry;
+        wavePool.clear();
+        simdRetry.clear();
 
         while (!remainingIndices.empty())
         {
-            const size_t waveStartPass = passOffsets.size();
-            passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+            const size_t waveStartPass = outPlan.passOffsets.size();
+            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
             std::fill(workerLoad.begin(), workerLoad.end(), 0);
 
@@ -349,10 +352,10 @@ namespace PS_AGONY
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;
-                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
-                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
+                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
 
-                    flatIndices.insert(flatIndices.end(),
+                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
                         waveAssignments[w].begin(),
                         waveAssignments[w].end());
                 }
@@ -365,14 +368,17 @@ namespace PS_AGONY
     void SolvingPlanner::planCacheLineAwareExecution(
         const std::vector<ObjectPair>& collisions,
         size_t bodyCount,
+        size_t workerCount,
         size_t bodyStrideBytes,
-        size_t cacheLineBytes)
+        size_t cacheLineBytes,
+        SolvingPlan& outPlan)
     {
         const size_t collisionCount = collisions.size();
 
-        flatIndices.clear();
-        flatIndices.reserve(collisionCount);
-        passOffsets.clear();
+        outPlan.workerCount = workerCount;
+        outPlan.flatIndices.clear();
+        outPlan.flatIndices.reserve(collisionCount);
+        outPlan.passOffsets.clear();
 
         if (collisionCount == 0 || workerCount == 0 || bodyStrideBytes == 0 || cacheLineBytes == 0)
             return;
@@ -393,12 +399,12 @@ namespace PS_AGONY
 
         waveAssignments.resize(workerCount);
 
-        std::vector<size_t> workerLoad(workerCount);
+        workerLoad.assign(workerCount, 0);
 
         while (!remainingIndices.empty())
         {
-            const size_t waveStartPass = passOffsets.size();
-            passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+            const size_t waveStartPass = outPlan.passOffsets.size();
+            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
             std::fill(workerLoad.begin(), workerLoad.end(), 0);
 
@@ -491,10 +497,10 @@ namespace PS_AGONY
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;
-                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
-                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
+                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
 
-                    flatIndices.insert(flatIndices.end(),
+                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
                         waveAssignments[w].begin(),
                         waveAssignments[w].end());
                 }
@@ -507,14 +513,17 @@ namespace PS_AGONY
     void SolvingPlanner::planCacheSharingAwareExecution(
         const std::vector<ObjectPair>& collisions,
         size_t bodyCount,
+        size_t workerCount,
         size_t bodyStrideBytes,
-        size_t cacheLineBytes)
+        size_t cacheLineBytes,
+        SolvingPlan& outPlan)
     {
         const size_t collisionCount = collisions.size();
 
-        flatIndices.clear();
-        flatIndices.reserve(collisionCount);
-        passOffsets.clear();
+        outPlan.workerCount = workerCount;
+        outPlan.flatIndices.clear();
+        outPlan.flatIndices.reserve(collisionCount);
+        outPlan.passOffsets.clear();
 
         if (collisionCount == 0 || workerCount == 0 || bodyStrideBytes == 0 || cacheLineBytes == 0)
             return;
@@ -523,7 +532,10 @@ namespace PS_AGONY
         const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
 
         // Build cache-line group adjacency graph.
-        std::vector<std::vector<size_t>> adjacency(groupCount);
+        adjacency.resize(groupCount);
+        for (auto& v : adjacency)
+            v.clear();
+
         for (const auto& c : collisions)
         {
             const size_t ga = c.a / bodiesPerCacheLine;
@@ -543,8 +555,8 @@ namespace PS_AGONY
         }
 
         // Persistent partitioning via Multi-Source BFS.
-        std::vector<uint8_t> groupOwner(groupCount, uint8_t(-1));
-        std::vector<size_t> groupSizes(workerCount, 0);
+        groupOwner.assign(groupCount, uint8_t(-1));
+        groupSizes.assign(workerCount, 0);
 
         if (workerCount == 1)
         {
@@ -552,7 +564,7 @@ namespace PS_AGONY
         }
         else if (groupCount > 0)
         {
-            std::vector<size_t> seeds(groupCount);
+            seeds.resize(groupCount);
             std::iota(seeds.begin(), seeds.end(), 0);
 
             // Deterministic LCG shuffle for seed candidates.
@@ -564,7 +576,9 @@ namespace PS_AGONY
                 std::swap(seeds[i], seeds[j]);
             }
 
-            std::queue<size_t> bfsQueue;
+            while (!bfsQueue.empty())
+                bfsQueue.pop();
+
             const size_t targetSize = std::max<size_t>(1, static_cast<size_t>(std::round(static_cast<double>(groupCount) / workerCount * 1.15)));
 
             for (size_t w = 0; w < workerCount && w < groupCount; ++w)
@@ -623,16 +637,16 @@ namespace PS_AGONY
         remainingIndices.resize(collisionCount);
         std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
 
-        std::vector<uint8_t> waveOwner(groupCount, uint8_t(-1));
+        waveOwner.assign(groupCount, uint8_t(-1));
         waveAssignments.resize(workerCount);
 
-        std::vector<size_t> interiorIndices;
-        std::vector<size_t> boundaryIndices;
+        interiorIndices.clear();
+        boundaryIndices.clear();
 
         while (!remainingIndices.empty())
         {
-            const size_t waveStartPass = passOffsets.size();
-            passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+            const size_t waveStartPass = outPlan.passOffsets.size();
+            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
             nextRemainingIndices.clear();
             std::fill(waveOwner.begin(), waveOwner.end(), uint8_t(-1));
@@ -730,10 +744,10 @@ namespace PS_AGONY
                 for (size_t w = 0; w < workerCount; w++)
                 {
                     const size_t passIndex = waveStartPass + w;
-                    passOffsets[passIndex].start = static_cast<uint32_t>(flatIndices.size());
-                    passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
+                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
+                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
 
-                    flatIndices.insert(flatIndices.end(),
+                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
                         waveAssignments[w].begin(),
                         waveAssignments[w].end());
                 }
@@ -743,7 +757,7 @@ namespace PS_AGONY
         }
     }
 
-    void SolvingPlanner::printExecutionPlan()
+    void SolvingPlan::printExecutionPlan() const
     {
         const size_t numWaves = (passOffsets.empty() ? 0 : passOffsets.size() / workerCount);
         const int colWidth = 6;
@@ -770,7 +784,7 @@ namespace PS_AGONY
         }
     }
 
-    double SolvingPlanner::computeEfficiency() const
+    double SolvingPlan::computeEfficiency() const
     {
         if (workerCount == 0 || flatIndices.empty())
             return 0.0;
@@ -792,7 +806,7 @@ namespace PS_AGONY
         return static_cast<double>(scheduled) / (static_cast<double>(workerCount) * maxLoad) * 100.0;
     }
 
-    bool SolvingPlanner::validateNoCrossing(const std::vector<ObjectPair>& collisions, size_t bodyCount) const
+    bool SolvingPlan::validateNoCrossing(const std::vector<ObjectPair>& collisions, size_t bodyCount) const
     {
         if (workerCount == 0) return passOffsets.empty();
 
@@ -828,11 +842,17 @@ namespace PS_AGONY
         return true;
     }
 
-    size_t SolvingPlanner::getMemoryUsage() const
+    size_t SolvingPlan::getMemoryUsage() const
     {
         size_t total = 0;
         total += getVectorMemoryUsage(flatIndices);
         total += getVectorMemoryUsage(passOffsets);
+        return total;
+    }
+
+    size_t SolvingPlanner::getMemoryUsage() const
+    {
+        size_t total = 0;
         total += getVectorMemoryUsage(remainingIndices);
         total += getVectorMemoryUsage(delayedIndices);
         total += getVectorMemoryUsage(nextRemainingIndices);
@@ -843,6 +863,25 @@ namespace PS_AGONY
         {
             total += getVectorMemoryUsage(assignment);
         }
+
+        total += getVectorMemoryUsage(workerLoad);
+        total += getVectorMemoryUsage(wavePool);
+        total += getVectorMemoryUsage(simdRetry);
+
+        total += getVectorMemoryUsage(adjacency);
+        for (const auto& adj : adjacency)
+        {
+            total += getVectorMemoryUsage(adj);
+        }
+
+        total += getVectorMemoryUsage(groupOwner);
+        total += getVectorMemoryUsage(groupSizes);
+        total += getVectorMemoryUsage(seeds);
+        total += getVectorMemoryUsage(waveOwner);
+        total += getVectorMemoryUsage(interiorIndices);
+        total += getVectorMemoryUsage(boundaryIndices);
+        // bfsQueue intentionally excluded: std::queue<size_t> exposes no way to
+        // inspect its backing container's capacity.
 
         return total;
     }

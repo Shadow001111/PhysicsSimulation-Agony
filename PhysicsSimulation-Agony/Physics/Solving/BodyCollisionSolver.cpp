@@ -37,7 +37,7 @@ namespace PS_AGONY
 			{
 				TRACY_SCOPE_N("Solve collision constraints (Single-threaded)");
 
-				const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(narrowPhaseCollisions.size()) };
+				const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(narrowPhaseCollisions.size()) };
 
 				applyWarmStarting(fullPass);
 
@@ -68,20 +68,20 @@ namespace PS_AGONY
 		}
 		{
 			TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-			solvingPlanner.setWorkerCount(workerCount);
 
-			solvingPlanner.planStandardExecution(collidingBodyPairs, bodies->getCount());
+			SolvingPlanner::threadLocal().planStandardExecution(collidingBodyPairs, bodies->getCount(), workerCount, solvingPlan);
 
-			//solvingPlanner.planCacheLineAwareExecution(
-			//	collidingBodyPairs, bodies->getCount(),
+			//SolvingPlanner::threadLocal().planCacheLineAwareExecution(
+			//	collidingBodyPairs, bodies->getCount(), workerCount,
 			//	sizeof(Real),
-			//	std::hardware_destructive_interference_size
+			//	std::hardware_destructive_interference_size,
+			//	solvingPlan
 			//);
 		}
 		{
 			TRACY_SCOPE_N("Reorder collision data");
 
-			const auto& flatIndices = solvingPlanner.getFlatIndices();
+			const auto& flatIndices = solvingPlan.getFlatIndices();
 			const size_t mappedCount = flatIndices.size();
 			const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
 
@@ -104,7 +104,7 @@ namespace PS_AGONY
 		if (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
 		{
 			TRACY_SCOPE_N("Scatter persistent contact data back");
-			const auto& flatIndices = solvingPlanner.getFlatIndices();
+			const auto& flatIndices = solvingPlan.getFlatIndices();
 			const size_t mappedCount = flatIndices.size();
 			for (size_t i = 0; i < mappedCount; i++)
 			{
@@ -210,7 +210,7 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(collidingBodyPairs);
 		total += getVectorMemoryUsage(orderedCollisionData);
 
-		total += solvingPlanner.getMemoryUsage();
+		total += solvingPlan.getMemoryUsage();
 
 		return total;
 	}
@@ -360,7 +360,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::applyWarmStarting(SolvingPlanner::Pass pass)
+	void BodyCollisionSolver::applyWarmStarting(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Apply warm starting (body collisions)", Ecstasy::Core::Color::Violet);
 
@@ -444,7 +444,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
+	void BodyCollisionSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Core::Color::Violet);
 
@@ -648,7 +648,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::solvePositionConstraints(SolvingPlanner::Pass pass)
+	void BodyCollisionSolver::solvePositionConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve collision position constraints", Ecstasy::Core::Color::Indigo);
 
@@ -728,9 +728,9 @@ namespace PS_AGONY
 		uint32_t positionIterations
 	)
 	{
-		const size_t workerCount = solvingPlanner.getWorkerCount();
+		const size_t workerCount = solvingPlan.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner.getPassOffsets();
+		const auto& passOffsets = solvingPlan.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

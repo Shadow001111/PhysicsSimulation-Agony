@@ -24,7 +24,7 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(orderedRodIndices);
 		total += getVectorMemoryUsage(rodConstraintContainer);
 
-		total += solvingPlanner.getMemoryUsage();
+		total += solvingPlan.getMemoryUsage();
 
 		return total;
 	}
@@ -56,7 +56,7 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedRodIndices);
 
-			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(rodCount) };
+			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(rodCount) };
 
 			for (uint32_t i = 0; i < rodIterations; i++)
 			{
@@ -67,7 +67,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		TRACY_SCOPE_NC("Solve rods (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (rodsWereChanged || solvingPlanner.getFlatIndices().size() != rodCount)
+		if (rodsWereChanged || solvingPlan.getFlatIndices().size() != rodCount)
 		{
 			{
 				TRACY_SCOPE_NC("Collect body pairs from rods", Ecstasy::Core::Color::Red);
@@ -79,19 +79,19 @@ namespace PS_AGONY
 			}
 			{
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-				solvingPlanner.setWorkerCount(workerCount);
 
-				solvingPlanner.planCacheSharingAwareExecution(
-					rodBodyPairs, bodies->getCount(),
+				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
+					rodBodyPairs, bodies->getCount(), workerCount,
 					sizeof(Real),
-					std::hardware_destructive_interference_size
+					std::hardware_destructive_interference_size,
+					solvingPlan
 				);
 			}
 		}
 		{
 			TRACY_SCOPE_N("Reorder rod indices");
 
-			const auto& flatIndices = solvingPlanner.getFlatIndices();
+			const auto& flatIndices = solvingPlan.getFlatIndices();
 			orderedRodIndices.assign(flatIndices.begin(), flatIndices.end());
 		}
 		computeConstraintData(deltaTime, orderedRodIndices);
@@ -229,7 +229,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void RodSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
+	void RodSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve rod velocity constraints", Ecstasy::Core::Color::Violet);
 
@@ -313,9 +313,9 @@ namespace PS_AGONY
 
 	void RodSolver::solveConstraintsThreaded(uint32_t rodIterations)
 	{
-		const size_t workerCount = solvingPlanner.getWorkerCount();
+		const size_t workerCount = solvingPlan.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner.getPassOffsets();
+		const auto& passOffsets = solvingPlan.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

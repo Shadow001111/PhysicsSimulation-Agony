@@ -47,8 +47,9 @@ namespace PS_AGONY
 			size_t narrowPhaseDetectorMemoryUsage = 0;
 
 			size_t bodyCollisionSolverMemoryUsage = 0;
-
 			std::array<size_t, size_t(ConstraintType::COUNT)> constraintDataMemoryUsage{};
+
+			size_t solvingPlannerMemoryUsage = 0;
 
 			// Debug.
 			Real bodyCollisionSolverVelocityError = 0;
@@ -225,7 +226,7 @@ namespace PS_AGONY
 
 		void destroyBody(ObjectIndex bodyIndex)
 		{
-			// Hack. TODO: Integrate it into attackment system or constraint system or whatever!
+			// Hack. TODO: Integrate it into attachment system or constraint system or whatever!
 			{
 				if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == bodyIndex)
 					mainBodyHolderRelease();

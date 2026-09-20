@@ -97,11 +97,11 @@ namespace PS_AGONY
 
 		void computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer);
 
-		void applyWarmStarting(SolvingPlanner::Pass pass);
+		void applyWarmStarting(SolvingPlan::Pass pass);
 
-		void solveVelocityConstraints(SolvingPlanner::Pass pass);
+		void solveVelocityConstraints(SolvingPlan::Pass pass);
 
-		void solvePositionConstraints(SolvingPlanner::Pass pass);
+		void solvePositionConstraints(SolvingPlan::Pass pass);
 
 		void solveConstraintsThreaded(
 			const std::vector<BodyCollisionData>& collisionDataContainer,

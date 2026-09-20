@@ -23,7 +23,7 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(springBodyPairs);
 		total += getVectorMemoryUsage(orderedSpringIndices);
 		total += getVectorMemoryUsage(springConstraintContainer);
-		total += solvingPlanner.getMemoryUsage();
+		total += solvingPlan.getMemoryUsage();
 
 		return total;
 	}
@@ -55,7 +55,7 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedSpringIndices);
 
-			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(springCount) };
+			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(springCount) };
 
 			for (uint32_t i = 0; i < springIterations; i++)
 			{
@@ -66,7 +66,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		TRACY_SCOPE_NC("Solve springs (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (springsWereChanged || solvingPlanner.getFlatIndices().size() != springCount)
+		if (springsWereChanged || solvingPlan.getFlatIndices().size() != springCount)
 		{
 			{
 				TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Core::Color::Red);
@@ -78,19 +78,19 @@ namespace PS_AGONY
 			}
 			{
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-				solvingPlanner.setWorkerCount(workerCount);
 
-				solvingPlanner.planCacheSharingAwareExecution(
-					springBodyPairs, bodies->getCount(),
+				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
+					springBodyPairs, bodies->getCount(), workerCount,
 					sizeof(Real),
-					std::hardware_destructive_interference_size
+					std::hardware_destructive_interference_size,
+					solvingPlan
 				);
 			}
 		}
 		{
 			TRACY_SCOPE_N("Reorder spring indices");
 
-			const auto& flatIndices = solvingPlanner.getFlatIndices();
+			const auto& flatIndices = solvingPlan.getFlatIndices();
 			orderedSpringIndices.assign(flatIndices.begin(), flatIndices.end());
 		}
 		computeConstraintData(deltaTime, orderedSpringIndices);
@@ -236,7 +236,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void SpringSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
+	void SpringSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve spring velocity constraints", Ecstasy::Core::Color::Violet);
 
@@ -320,9 +320,9 @@ namespace PS_AGONY
 
 	void SpringSolver::solveConstraintsThreaded(uint32_t springIterations)
 	{
-		const size_t workerCount = solvingPlanner.getWorkerCount();
+		const size_t workerCount = solvingPlan.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner.getPassOffsets();
+		const auto& passOffsets = solvingPlan.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

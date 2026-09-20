@@ -39,7 +39,7 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(prismaticJointBodyPairs);
 		total += getVectorMemoryUsage(orderedPrismaticJointIndices);
 		total += getVectorMemoryUsage(prismaticJointConstraintContainer);
-		total += solvingPlanner.getMemoryUsage();
+		total += solvingPlan.getMemoryUsage();
 
 		return total;
 	}
@@ -71,7 +71,7 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedPrismaticJointIndices);
 
-			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(jointCount) };
+			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(jointCount) };
 
 			for (uint32_t i = 0; i < iterations; i++)
 			{
@@ -82,7 +82,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		TRACY_SCOPE_NC("Solve prismatic joints (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (prismaticJointsWereChanged || solvingPlanner.getFlatIndices().size() != jointCount)
+		if (prismaticJointsWereChanged || solvingPlan.getFlatIndices().size() != jointCount)
 		{
 			{
 				TRACY_SCOPE_NC("Collect body pairs from prismatic joints", Ecstasy::Core::Color::Red);
@@ -94,19 +94,19 @@ namespace PS_AGONY
 			}
 			{
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-				solvingPlanner.setWorkerCount(workerCount);
 
-				solvingPlanner.planCacheSharingAwareExecution(
-					prismaticJointBodyPairs, bodies->getCount(),
+				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
+					prismaticJointBodyPairs, bodies->getCount(), workerCount,
 					sizeof(Real),
-					std::hardware_destructive_interference_size
+					std::hardware_destructive_interference_size,
+					solvingPlan
 				);
 			}
 		}
 		{
 			TRACY_SCOPE_N("Reorder prismatic joint indices");
 
-			const auto& flatIndices = solvingPlanner.getFlatIndices();
+			const auto& flatIndices = solvingPlan.getFlatIndices();
 			orderedPrismaticJointIndices.assign(flatIndices.begin(), flatIndices.end());
 		}
 		computeConstraintData(deltaTime, orderedPrismaticJointIndices);
@@ -324,7 +324,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void PrismaticJointSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
+	void PrismaticJointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve prismatic joint velocity constraints", Ecstasy::Core::Color::Violet);
 
@@ -436,9 +436,9 @@ namespace PS_AGONY
 
 	void PrismaticJointSolver::solveConstraintsThreaded(uint32_t iterations)
 	{
-		const size_t workerCount = solvingPlanner.getWorkerCount();
+		const size_t workerCount = solvingPlan.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner.getPassOffsets();
+		const auto& passOffsets = solvingPlan.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

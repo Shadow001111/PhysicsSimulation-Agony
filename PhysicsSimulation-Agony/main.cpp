@@ -228,7 +228,9 @@ static void renderGUI(
             constraintsTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage +
-            simulationData.bodyCollisionSolverMemoryUsage;
+            simulationData.bodyCollisionSolverMemoryUsage +
+            simulationData.solvingPlannerMemoryUsage
+            ;
 
         ImGui::Text("Total: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
@@ -318,6 +320,8 @@ static void renderGUI(
                     addMemoryRow(label.c_str(), solver->getMemoryUsage(), true);
                 }
             }
+
+            addMemoryRow("Solving Planner", simulationData.solvingPlannerMemoryUsage);
 
             ImGui::EndTable();
         }

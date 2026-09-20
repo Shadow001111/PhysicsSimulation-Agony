@@ -24,7 +24,7 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(orderedJointIndices);
 		total += getVectorMemoryUsage(jointConstraintContainer);
 
-		total += solvingPlanner.getMemoryUsage();
+		total += solvingPlan.getMemoryUsage();
 
 		return total;
 	}
@@ -56,7 +56,7 @@ namespace PS_AGONY
 
 			computeConstraintData(deltaTime, orderedJointIndices);
 
-			const SolvingPlanner::Pass fullPass{ 0, static_cast<uint32_t>(jointConstraintContainer.size()) };
+			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(jointConstraintContainer.size()) };
 
 			for (uint32_t i = 0; i < jointIterations; i++)
 			{
@@ -67,7 +67,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		TRACY_SCOPE_NC("Solve joints (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (jointsWereChanged || solvingPlanner.getFlatIndices().size() != jointCount)
+		if (jointsWereChanged || solvingPlan.getFlatIndices().size() != jointCount)
 		{
 			{
 				TRACY_SCOPE_NC("Collect body pairs from joints", Ecstasy::Core::Color::Red);
@@ -79,19 +79,19 @@ namespace PS_AGONY
 			}
 			{
 				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-				solvingPlanner.setWorkerCount(workerCount);
 
-				solvingPlanner.planCacheSharingAwareExecution(
-					jointBodyPairs, bodies->getCount(),
+				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
+					jointBodyPairs, bodies->getCount(), workerCount,
 					sizeof(Real),
-					std::hardware_destructive_interference_size
+					std::hardware_destructive_interference_size,
+					solvingPlan
 				);
 			}
 		}
 		{
 			TRACY_SCOPE_N("Reorder joint indices");
 
-			const auto& flatIndices = solvingPlanner.getFlatIndices();
+			const auto& flatIndices = solvingPlan.getFlatIndices();
 			orderedJointIndices.assign(flatIndices.begin(), flatIndices.end());
 		}
 		computeConstraintData(deltaTime, orderedJointIndices);
@@ -232,7 +232,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void JointSolver::solveVelocityConstraints(SolvingPlanner::Pass pass)
+	void JointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve joint velocity constraints", Ecstasy::Core::Color::Violet);
 
@@ -318,9 +318,9 @@ namespace PS_AGONY
 
 	void JointSolver::solveConstraintsThreaded(uint32_t jointIterations)
 	{
-		const size_t workerCount = solvingPlanner.getWorkerCount();
+		const size_t workerCount = solvingPlan.getWorkerCount();
 
-		const auto& passOffsets = solvingPlanner.getPassOffsets();
+		const auto& passOffsets = solvingPlan.getPassOffsets();
 		const size_t waveCount = passOffsets.size() / workerCount;
 		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
 

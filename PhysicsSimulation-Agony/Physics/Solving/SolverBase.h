@@ -57,7 +57,12 @@ namespace PS_AGONY
 		using WaveTaskFunc = std::function<void(size_t waveIndex, size_t workerIndex, uint32_t passTicket)>;
 
 		BodySoA* bodies = nullptr;
-		SolvingPlanner solvingPlanner;
+
+		// Each solver keeps its own plan (flatIndices/passOffsets) so its buffers'
+		// capacity persists frame to frame. Planning itself is done through the
+		// shared SolvingPlanner::threadLocal(), whose scratch buffers are reused
+		// across every solver on this thread rather than duplicated per solver.
+		SolvingPlan solvingPlan;
 
 		WorkerResources workerResources;
 

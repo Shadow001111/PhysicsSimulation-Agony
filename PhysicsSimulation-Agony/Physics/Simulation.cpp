@@ -933,5 +933,7 @@ namespace PS_AGONY
         data.constraintDataMemoryUsage[size_t(ConstraintType::Joint)] = joints.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Rod)] = rods.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Prismatic)] = prismaticJoints.getMemoryUsage();
+
+        data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage();
     }
 }
