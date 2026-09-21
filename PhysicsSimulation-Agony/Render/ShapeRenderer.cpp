@@ -3,7 +3,7 @@
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-namespace Render
+namespace PS_AGONY_RENDER
 {
     void ShapeRenderer::init()
     {

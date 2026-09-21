@@ -10,7 +10,7 @@
 
 #include <cmath>
 
-namespace Render
+namespace PS_AGONY_RENDER
 {
     void SimulationRenderer::init()
     {

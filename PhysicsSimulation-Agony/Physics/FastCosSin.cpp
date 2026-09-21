@@ -5,11 +5,25 @@
 
 namespace PS_AGONY::FastCosSin
 {
+	// Constants.
+
+	constexpr Real coeff0 = 9.9999999999953215e-01;
+	constexpr Real coeff1 = -1.6666666534403832e-01;
+	constexpr Real coeff2 = 8.3332302391869520e-03;
+	constexpr Real coeff3 = -1.9818200679665358e-04;
+	constexpr Real coeff4 = 2.6182346015248291e-06;
+
+	constexpr int signMaskShift = sizeof(Real) * 8 - 2;
+
+	// Other.
+
 	using IntSimd = std::conditional_t<sizeof(Real) == 8,
 		Ecstasy::Core::Simd<int64_t>,
 		Ecstasy::Core::Simd<int32_t>>;
 
-	void order4Array(
+	// Functions.
+
+	void order5Array(
 		const Real* ECSTASY_RESTRICT inAngleArray,
 		Real* ECSTASY_RESTRICT outCosArray,
 		Real* ECSTASY_RESTRICT outSinArray,
@@ -17,12 +31,8 @@ namespace PS_AGONY::FastCosSin
 	)
 	{
 		// Constants.
-		constexpr Real coeff2 = 0.012238f;
-		constexpr Real coeff3 = -0.199387f;
-		constexpr Real coeff4 = 0.0282173f;
-
-		constexpr int signMaskShift = sizeof(Real) * 8 - 2;
-
+		const RealSimd coeff0V(coeff0);
+		const RealSimd coeff1V(coeff1);
 		const RealSimd coeff2V(coeff2);
 		const RealSimd coeff3V(coeff3);
 		const RealSimd coeff4V(coeff4);
@@ -53,11 +63,13 @@ namespace PS_AGONY::FastCosSin
 			RealSimd sinMask = ((quadrantIndex & IntSimd(2)) << signMaskShift).as<RealSimd>();
 			RealSimd cosMask = (((quadrantIndex + IntSimd(1)) & IntSimd(2)) << signMaskShift).as<RealSimd>();
 
+			RealSimd a2 = a * a;
 			RealSimd sinMag = coeff4V;
-			sinMag = RealSimd::mulAdd(sinMag, a, coeff3V);
-			sinMag = RealSimd::mulAdd(sinMag, a, coeff2V);
-			sinMag = RealSimd::mulAdd(sinMag, a, RealSimd(1));
-			sinMag = a * sinMag;
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff3V);
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff2V);
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff1V);
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff0V);
+			sinMag = sinMag * a;
 			sinMag = RealSimd::min(sinMag, RealSimd(1));
 
 			RealSimd cosMag = RealSimd::sqrt(RealSimd::negMulAdd(sinMag, sinMag, RealSimd(1)));
@@ -81,11 +93,13 @@ namespace PS_AGONY::FastCosSin
 			Real sinSign = Real(1) - Real(2) * Real(quadrantIndex >> 1);
 			Real cosSign = Real(1) - Real(2) * Real(((quadrantIndex + 1) >> 1) & 1);
 
+			Real a2 = a * a;
 			Real sinMag = coeff4;
-			sinMag = sinMag * a + coeff3;
-			sinMag = sinMag * a + coeff2;
-			sinMag = sinMag * a + Real(1);
-			sinMag = a * sinMag;
+			sinMag = sinMag * a2 + coeff3;
+			sinMag = sinMag * a2 + coeff2;
+			sinMag = sinMag * a2 + coeff1;
+			sinMag = sinMag * a2 + coeff0;
+			sinMag = sinMag * a;
 			sinMag = std::fmin(sinMag, Real(1));
 
 			Real cosMag = std::sqrt(Real(1) - sinMag * sinMag);
@@ -98,15 +112,11 @@ namespace PS_AGONY::FastCosSin
 		}
 	}
 
-	void order4Simd(const RealSimd& inAngle, RealSimd& outCos, RealSimd& outSin)
+	void order5Simd(const RealSimd& inAngle, RealSimd& outCos, RealSimd& outSin)
 	{
 		// Constants.
-		constexpr Real coeff2 = 0.012238f;
-		constexpr Real coeff3 = -0.199387f;
-		constexpr Real coeff4 = 0.0282173f;
-
-		constexpr int signMaskShift = sizeof(Real) * 8 - 2;
-
+		const RealSimd coeff0V(coeff0);
+		const RealSimd coeff1V(coeff1);
 		const RealSimd coeff2V(coeff2);
 		const RealSimd coeff3V(coeff3);
 		const RealSimd coeff4V(coeff4);
@@ -132,11 +142,13 @@ namespace PS_AGONY::FastCosSin
 			RealSimd sinMask = ((quadrantIndex & IntSimd(2)) << signMaskShift).as<RealSimd>();
 			RealSimd cosMask = (((quadrantIndex + IntSimd(1)) & IntSimd(2)) << signMaskShift).as<RealSimd>();
 
+			RealSimd a2 = a * a;
 			RealSimd sinMag = coeff4V;
-			sinMag = RealSimd::mulAdd(sinMag, a, coeff3V);
-			sinMag = RealSimd::mulAdd(sinMag, a, coeff2V);
-			sinMag = RealSimd::mulAdd(sinMag, a, RealSimd(1));
-			sinMag = a * sinMag;
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff3V);
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff2V);
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff1V);
+			sinMag = RealSimd::mulAdd(sinMag, a2, coeff0V);
+			sinMag = sinMag * a;
 			sinMag = RealSimd::min(sinMag, RealSimd(1));
 
 			RealSimd cosMag = RealSimd::sqrt(RealSimd::negMulAdd(sinMag, sinMag, RealSimd(1)));
@@ -146,36 +158,31 @@ namespace PS_AGONY::FastCosSin
 		}
 	}
 
-	std::pair<Real, Real> order4Scalar(const Real x)
+	std::pair<Real, Real> order5Scalar(const Real x)
 	{
-		// Constants.
-		constexpr Real coeff2 = 0.012238f;
-		constexpr Real coeff3 = -0.199387f;
-		constexpr Real coeff4 = 0.0282173f;
+		int quadrantIndex = (int)(x * Real(Constants::INV_HALF_PI));
+		Real u = x - quadrantIndex * Real(Constants::HALF_PI);
 
-		{
-			int quadrantIndex = (int)(x * Real(Constants::INV_HALF_PI));
-			Real u = x - quadrantIndex * Real(Constants::HALF_PI);
+		Real mirror = Real(quadrantIndex & 1);
+		Real a = u + mirror * (Real(Constants::HALF_PI) - Real(2) * u);
 
-			Real mirror = Real(quadrantIndex & 1);
-			Real a = u + mirror * (Real(Constants::HALF_PI) - Real(2) * u);
+		Real sinSign = Real(1) - Real(2) * Real(quadrantIndex >> 1);
+		Real cosSign = Real(1) - Real(2) * Real(((quadrantIndex + 1) >> 1) & 1);
 
-			Real sinSign = Real(1) - Real(2) * Real(quadrantIndex >> 1);
-			Real cosSign = Real(1) - Real(2) * Real(((quadrantIndex + 1) >> 1) & 1);
+		Real a2 = a * a;
+		Real sinMag = coeff4;
+		sinMag = sinMag * a2 + coeff3;
+		sinMag = sinMag * a2 + coeff2;
+		sinMag = sinMag * a2 + coeff1;
+		sinMag = sinMag * a2 + coeff0;
+		sinMag = sinMag * a;
+		sinMag = std::fmin(sinMag, Real(1));
 
-			Real sinMag = coeff4;
-			sinMag = sinMag * a + coeff3;
-			sinMag = sinMag * a + coeff2;
-			sinMag = sinMag * a + Real(1);
-			sinMag = a * sinMag;
-			sinMag = std::fmin(sinMag, Real(1));
+		Real cosMag = std::sqrt(Real(1) - sinMag * sinMag);
 
-			Real cosMag = std::sqrt(Real(1) - sinMag * sinMag);
+		Real sin = sinSign * sinMag;
+		Real cos = cosSign * cosMag;
 
-			Real sin = sinSign * sinMag;
-			Real cos = cosSign * cosMag;
-
-			return { cos, sin };
-		}
+		return { cos, sin };
 	}
 }

@@ -12,7 +12,7 @@
 
 #include <cstdint>
 
-namespace Render
+namespace PS_AGONY_RENDER
 {
 	using namespace PS_AGONY;
 
@@ -105,14 +105,14 @@ namespace Render
 					alpha
 				);
 
-				const auto [c, s] = FastCosSin::order4Scalar(interpolatedRotation);
+				const auto [c, s] = FastCosSin::order5Scalar(interpolatedRotation);
 
 				return { interpolatedX, interpolatedY, c, s, interpolatedRotation };
 			}
 			else
 			{
 				const Real rotation = rot[bodyIndex];
-				const auto [c, s] = FastCosSin::order4Scalar(rotation);
+				const auto [c, s] = FastCosSin::order5Scalar(rotation);
 
 				return { x[bodyIndex], y[bodyIndex], c, s, rotation };
 			}

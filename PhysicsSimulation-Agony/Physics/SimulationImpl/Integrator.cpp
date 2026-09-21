@@ -196,7 +196,7 @@ namespace PS_AGONY::Integrator
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", Ecstasy::Core::Color::Teal);
 
-        FastCosSin::order4Array(
+        FastCosSin::order5Array(
             bodies.rotation.data(),
             bodies.rotationCos.data(),
             bodies.rotationSin.data(),

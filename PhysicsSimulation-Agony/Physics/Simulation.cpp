@@ -717,7 +717,7 @@ namespace PS_AGONY
         wrapColliderRotations();
 
         // 3) Batch cos/sin, same approximation/approach bodies use.
-        FastCosSin::order4Array(
+        FastCosSin::order5Array(
             objectManager.colliders.worldRotation.data(),
             objectManager.colliders.worldRotationCos.data(),
             objectManager.colliders.worldRotationSin.data(),

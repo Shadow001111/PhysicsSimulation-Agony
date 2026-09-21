@@ -77,8 +77,8 @@ struct ObjectCreatorState
 
 static void renderGUI(
     PS_AGONY::Simulation& simulation,
-    Render::SimulationRenderer& simulationRenderer,
-    Render::RenderOptions& renderOptions,
+    PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
+    PS_AGONY_RENDER::RenderOptions& renderOptions,
     const DebugData& debugData,
     bool& pauseSimulation
 )
@@ -627,10 +627,10 @@ static int gameFunc()
     }
 
     // Text renderer.
-    Ecstasy::Graphics::TextRenderer::init();
-    Ecstasy::Graphics::TextRenderer::loadFont("RusEngMinecraft", 8);
-    Ecstasy::Graphics::TextRenderer::setCurrentFont("RusEngMinecraft");
-    Ecstasy::Graphics::TextRenderer::setGlyphInstanceBatchSize(1024);
+    //Ecstasy::Graphics::TextRenderer::init();
+    //Ecstasy::Graphics::TextRenderer::loadFont("RusEngMinecraft", 8);
+    //Ecstasy::Graphics::TextRenderer::setCurrentFont("RusEngMinecraft");
+    //Ecstasy::Graphics::TextRenderer::setGlyphInstanceBatchSize(1024);
 
     // Simulation.
     PS_AGONY::Simulation simulation{};
@@ -638,16 +638,16 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 0);
+    loadScene(simulation, 3);
 
     // Simulation renderer.
-    Render::SimulationRenderer simulationRenderer;
+    PS_AGONY_RENDER::SimulationRenderer simulationRenderer;
     simulationRenderer.init();
 
     auto& camera = simulationRenderer.getCamera();
 	camera.setViewRangeH(20.0f, wnd.getAspectRatio());
 
-    Render::RenderOptions renderOptions{}; // Default.
+    PS_AGONY_RENDER::RenderOptions renderOptions{}; // Default.
 
     // OpenGL states.
     glDisable(GL_DEPTH_TEST);

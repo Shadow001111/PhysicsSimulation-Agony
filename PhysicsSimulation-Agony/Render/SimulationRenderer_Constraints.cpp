@@ -9,7 +9,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace Render
+namespace PS_AGONY_RENDER
 {
     void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
     {

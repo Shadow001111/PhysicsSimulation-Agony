@@ -9,7 +9,7 @@ namespace PS_AGONY
 	class Simulation;
 }
 
-namespace Render
+namespace PS_AGONY_RENDER
 {
 	using namespace PS_AGONY;
 

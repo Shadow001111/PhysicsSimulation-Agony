@@ -10,7 +10,7 @@
 #include <span>
 #include <cstdint>
 
-namespace Render
+namespace PS_AGONY_RENDER
 {
 	using namespace Ecstasy::OpenGL;
 
