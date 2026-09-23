@@ -3,8 +3,6 @@
 #include "FastCosSin.h"
 #include "Constants.h"
 
-#include "SimulationImpl/PhysicsGeometry.h"
-
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
@@ -28,11 +26,13 @@ namespace PS_AGONY
         constraintSystems[size_t(ConstraintType::Joint)] = &jointConstraintSystem;
         constraintSystems[size_t(ConstraintType::Rod)] = &rodConstraintSystem;
         constraintSystems[size_t(ConstraintType::Prismatic)] = &prismaticJointConstraintSystem;
+        constraintSystems[size_t(ConstraintType::Slider)] = &sliderJointConstraintSystem;
 
         constraintSystemSolvers[size_t(ConstraintType::Spring)] = &springSolver;
         constraintSystemSolvers[size_t(ConstraintType::Joint)] = &jointSolver;
         constraintSystemSolvers[size_t(ConstraintType::Rod)] = &rodSolver;
         constraintSystemSolvers[size_t(ConstraintType::Prismatic)] = &prismaticJointSolver;
+        constraintSystemSolvers[size_t(ConstraintType::Slider)] = &sliderJointSolver;
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -183,7 +183,6 @@ namespace PS_AGONY
             params.enableLimit,
             objectManager.bodies
         );
-
         prismaticJointsWereChanged = true;
     }
 
@@ -191,6 +190,30 @@ namespace PS_AGONY
     {
         prismaticJointConstraintSystem.removeConstraint(prismaticJointIndex, objectManager.bodies);
         prismaticJointsWereChanged = true;
+    }
+
+    void Simulation::createSliderJoint(const SliderJointCreateParams& params)
+    {
+        sliderJointConstraintSystem.createSliderJoint(
+            params.bodyIndexA,
+            params.bodyIndexB,
+            params.localAnchorA,
+            params.localAnchorB,
+            params.localAxisA,
+            params.stiffness,
+            params.damping,
+            params.lowerLimit,
+            params.upperLimit,
+            params.enableLimit,
+            objectManager.bodies
+        );
+        sliderJointsWereChanged = true;
+    }
+
+    void Simulation::destroySliderJoint(uint32_t sliderJointIndex)
+    {
+        sliderJointConstraintSystem.removeConstraint(sliderJointIndex, objectManager.bodies);
+        sliderJointsWereChanged = true;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -354,6 +377,11 @@ namespace PS_AGONY
             PrismaticJointSoAViewer(prismaticJoints)
         );
 
+        sliderJointSolver.setDataViewers(
+            objectManager.bodies,
+            SliderJointSoAViewer(sliderJoints)
+        );
+
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
         // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
         narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
@@ -407,6 +435,14 @@ namespace PS_AGONY
             prismaticJointsWereChanged
         );
         prismaticJointsWereChanged = false;
+
+        // Slider joints.
+        sliderJointSolver.solveSliderJoints(
+            deltaTime,
+            simulationSettings.constraintIterations[size_t(ConstraintType::Slider)],
+            sliderJointsWereChanged
+        );
+        sliderJointsWereChanged = false;
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
@@ -933,6 +969,7 @@ namespace PS_AGONY
         data.constraintDataMemoryUsage[size_t(ConstraintType::Joint)] = joints.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Rod)] = rods.getMemoryUsage();
         data.constraintDataMemoryUsage[size_t(ConstraintType::Prismatic)] = prismaticJoints.getMemoryUsage();
+        data.constraintDataMemoryUsage[size_t(ConstraintType::Slider)] = sliderJoints.getMemoryUsage();
 
         data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage();
     }

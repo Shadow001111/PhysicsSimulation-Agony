@@ -45,6 +45,7 @@ namespace PS_AGONY
 		Joint,
 		Rod,
 		Prismatic,
+		Slider,
 		COUNT
 	};
 

@@ -4,6 +4,7 @@
 #include "SoA/Constraints/RevoluteJointSoA.h"
 #include "SoA/Constraints/RodSoA.h"
 #include "SoA/Constraints/PrismaticJointSoA.h"
+#include "SoA/Constraints/SliderJointSoA.h"
 
 #include <array>
 #include <cmath>
@@ -258,5 +259,76 @@ namespace PS_AGONY
 		}
 
 		const char* getName() const noexcept override { return "PrismaticJoint"; }
+	};
+
+	class SliderJointConstraintSystem final : public IConstraintSystem
+	{
+		SliderJointSoA& sliderJoints;
+	public:
+		explicit SliderJointConstraintSystem(SliderJointSoA& sliderJoints) noexcept : sliderJoints(sliderJoints) {}
+
+		// Creates a slider (slider/piston) joint and registers it with both bodies it touches.
+		// axisA is given in body A's local space and need not be pre-normalized.
+		void createSliderJoint(
+			ObjectIndex indexA, ObjectIndex indexB,
+			Vec2 anchorA, Vec2 anchorB, Vec2 axisA,
+			Real stiffness, Real damping,
+			Real lowerLimit, Real upperLimit, bool enableLimit,
+			BodySoA& bodies)
+		{
+			// Normalize the axis defensively; a zero-length axis would make the joint singular.
+			const Real axisLenSq = glm::dot(axisA, axisA);
+			const Vec2 normalizedAxis = axisLenSq > Real(1e-12) ? axisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
+
+			// Capture the current relative angle so the joint locks rotation at its creation pose,
+			// wrapped to (-pi, pi] so it stays robust to each body's rotation wrapping independently.
+			constexpr Real PI = Real(3.14159265358979323846);
+			constexpr Real TWO_PI = Real(2) * PI;
+
+			const uint32_t newIndex = sliderJoints.append(
+				indexA, indexB, anchorA, anchorB, normalizedAxis,
+				stiffness, damping, lowerLimit, upperLimit, enableLimit
+			);
+			bodies.addAttachment(indexA, ConstraintType::Slider, newIndex);
+			bodies.addAttachment(indexB, ConstraintType::Slider, newIndex);
+		}
+
+		void removeConstraint(uint32_t index, BodySoA& bodies) override
+		{
+			if (index >= sliderJoints.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+
+			// Unlink the slider joint being removed from both of its bodies.
+			bodies.removeAttachment(sliderJoints.bodyIndexA[index], ConstraintType::Slider, index);
+			bodies.removeAttachment(sliderJoints.bodyIndexB[index], ConstraintType::Slider, index);
+
+			const size_t oldBackIndex = sliderJoints.swapRemove(index);
+
+			// If a slider joint got swapped into 'index', relink it there.
+			if (oldBackIndex != index)
+			{
+				const uint32_t newIndex = static_cast<uint32_t>(index);
+				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
+
+				bodies.removeAttachment(sliderJoints.bodyIndexA[index], ConstraintType::Slider, oldIndex);
+				bodies.addAttachment(sliderJoints.bodyIndexA[index], ConstraintType::Slider, newIndex);
+				bodies.removeAttachment(sliderJoints.bodyIndexB[index], ConstraintType::Slider, oldIndex);
+				bodies.addAttachment(sliderJoints.bodyIndexB[index], ConstraintType::Slider, newIndex);
+			}
+		}
+
+		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
+		{
+			if (index >= sliderJoints.bodyIndexA.size()) [[unlikely]]
+			{
+				return;
+			}
+			if (sliderJoints.bodyIndexA[index] == oldBodyIndex) sliderJoints.bodyIndexA[index] = newBodyIndex;
+			if (sliderJoints.bodyIndexB[index] == oldBodyIndex) sliderJoints.bodyIndexB[index] = newBodyIndex;
+		}
+
+		const char* getName() const noexcept override { return "SliderJoint"; }
 	};
 }

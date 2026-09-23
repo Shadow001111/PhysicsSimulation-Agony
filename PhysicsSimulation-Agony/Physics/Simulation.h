@@ -6,12 +6,12 @@
 #include "Physics/CollisionDetection/BroadPhaseCollisionDetector.h"
 #include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
 
-#include "Solving/SolvingPlanner.h"
 #include "Solving/BodyCollisionSolver.h"
 #include "Solving/SpringSolver.h"
 #include "Solving/RevoluteJointSolver.h"
 #include "Solving/RodSolver.h"
 #include "Solving/PrismaticJointSolver.h"
+#include "Solving/SliderJointSolver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -94,7 +94,21 @@ namespace PS_AGONY
 			ObjectIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
-			Vec2 localAxisA;      // Axis in body A's local space that translation is locked to; need not be pre-normalized.
+			Vec2 localAxisA; // Axis in body A's local space that translation is locked to; need not be pre-normalized.
+			Real stiffness;
+			Real damping;
+			Real lowerLimit = 0;
+			Real upperLimit = 0;
+			bool enableLimit = false;
+		};
+
+		struct SliderJointCreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Vec2 localAxisA;
 			Real stiffness;
 			Real damping;
 			Real lowerLimit = 0;
@@ -138,6 +152,9 @@ namespace PS_AGONY
 		PrismaticJointSoA prismaticJoints;
 		PrismaticJointConstraintSystem prismaticJointConstraintSystem{ prismaticJoints };
 
+		SliderJointSoA sliderJoints;
+		SliderJointConstraintSystem sliderJointConstraintSystem{ sliderJoints };
+
 		ConstraintSystemArray constraintSystems{};
 		std::array<const SolverBase*, size_t(ConstraintType::COUNT)> constraintSystemSolvers{};
 
@@ -157,6 +174,7 @@ namespace PS_AGONY
 		RevoluteJointSolver jointSolver;
 		RodSolver rodSolver;
 		PrismaticJointSolver prismaticJointSolver;
+		SliderJointSolver sliderJointSolver;
 
 		// Time.
 		Real simulationRunTimer = 0;
@@ -171,10 +189,12 @@ namespace PS_AGONY
 		Interactivity::BodyHolder mainBodyHolder;
 
 		// Booleans.
+		// TODO: Move those to constraint system.
 		bool springsWereChanged = false;
 		bool jointsWereChanged = false;
 		bool rodsWereChanged = false;
 		bool prismaticJointsWereChanged = false;
+		bool sliderJointsWereChanged = false;
 
 		// Render.
 		Real renderAlpha = 0;
@@ -244,24 +264,19 @@ namespace PS_AGONY
 		}
 
 		void createSpring(const SpringCreateParams& params);
-
-		// Destroys a single spring by its index in the spring constraint system.
 		void destroySpring(uint32_t springIndex);
 
 		void createRevoluteJoint(const RevoluteJointCreateParams& params);
-
-		// Destroys a single joint by its index in the joint constraint system.
 		void destroyRevoluteJoint(uint32_t jointIndex);
 
 		void createRod(const RodCreateParams& params);
-
-		// Destroys a single rod by its index in the rod constraint system.
 		void destroyRod(uint32_t rodIndex);
 
 		void createPrismaticJoint(const PrismaticJointCreateParams& params);
-
-		// Destroys a single prismatic joint by its index in the prismatic joint constraint system.
 		void destroyPrismaticJoint(uint32_t prismaticJointIndex);
+
+		void createSliderJoint(const SliderJointCreateParams& params);
+		void destroySliderJoint(uint32_t sliderJointIndex);
 
 		MaterialIndex createMaterial(const Material& material);
 

@@ -75,8 +75,7 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& 
 void load_ObjectCar(PS_AGONY::Simulation& simulation,
     float positionX,
     float positionY,
-    float rotation
-)
+    float rotation)
 {
     // === CONFIGURATION ===
     constexpr float frameWidth = 6.0f;
@@ -85,39 +84,33 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
 
     constexpr float wheelRadius = 0.9f;
     constexpr float wheelMass = 3.0f;
-    constexpr float wheelOffset = 2.2f;      // Horizontal distance from chassis center
+    constexpr float wheelOffset = 2.2f;   // Horizontal distance from chassis center
     constexpr float suspensionDrop = 2.2f;   // Vertical distance down to wheel center
 
-    constexpr float suspensionK = 999999999;// 6000.0f;
+    constexpr float suspensionK = 6000.0f; // was 999999999 (debug value?)
     constexpr float suspensionD = 45.0f;
+    constexpr float suspensionTravel = 0.5f;   // Max +/- travel from rest length
 
-    PS_AGONY::Material carMaterial = {
-        .elasticity = 0.1f,
-        .staticFriction = 0.8f,
-        .dynamicFriction = 0.6f
-    };
-    PS_AGONY::MaterialIndex carMatIdx = simulation.createMaterial(carMaterial);
+    // Slider joint (keeps the wheel on the axis, so it is a stiff constraint)
+    constexpr float sliderStiffness = 1.0e6f;
+    constexpr float sliderDamping = 1.0e3f;
 
-    PS_AGONY::Material wheelMaterial = {
-        .elasticity = 0.1f,
-        .staticFriction = 1.2f,
-        .dynamicFriction = 0.9f
-    };
-    PS_AGONY::MaterialIndex wheelMatIdx = simulation.createMaterial(wheelMaterial);
+    // === MATERIALS ===
+    const PS_AGONY::MaterialIndex carMatIdx = simulation.createMaterial({
+        .elasticity = 0.1f, .staticFriction = 0.8f, .dynamicFriction = 0.6f });
 
-    // === 1. CALCULATE ROTATED WHEEL POSITIONS ===
-    float cosR = std::cos(rotation);
-    float sinR = std::sin(rotation);
+    const PS_AGONY::MaterialIndex wheelMatIdx = simulation.createMaterial({
+        .elasticity = 0.1f, .staticFriction = 1.2f, .dynamicFriction = 0.9f });
 
-    // Left wheel center relative to chassis is (-wheelOffset, -suspensionDrop)
-    float leftX = positionX + (-wheelOffset * cosR - (-suspensionDrop) * sinR);
-    float leftY = positionY + (-wheelOffset * sinR + (-suspensionDrop) * cosR);
+    // === CHASSIS-LOCAL -> WORLD ===
+    const float cosR = std::cos(rotation);
+    const float sinR = std::sin(rotation);
+    auto toWorld = [&](float lx, float ly) -> PS_AGONY::Vec2 {
+        return { positionX + lx * cosR - ly * sinR,
+                 positionY + lx * sinR + ly * cosR };
+        };
 
-    // Right wheel center relative to chassis is (wheelOffset, -suspensionDrop)
-    float rightX = positionX + (wheelOffset * cosR - (-suspensionDrop) * sinR);
-    float rightY = positionY + (wheelOffset * sinR + (-suspensionDrop) * cosR);
-
-    // === 2. CREATE CHASSIS & WHEELS ===
+    // === CHASSIS ===
     auto chassisOpt = simulation.createBox({
         .base.position = { positionX, positionY },
         .base.velocity = { 0.0f, 0.0f },
@@ -127,80 +120,81 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
         .base.materialIndex = carMatIdx,
         .size = { frameWidth, frameHeight }
         });
-
     if (!chassisOpt) return;
-    PS_AGONY::ObjectIndex chassis = *chassisOpt;
+    const PS_AGONY::ObjectIndex chassis = *chassisOpt;
 
-    auto leftWheelOpt = simulation.createCircle({
-        .base.position = { leftX, leftY },
-        .base.velocity = { 0.0f, 0.0f },
-        .base.rotation = rotation,
-        .base.angularVelocity = 0.0f,
-        .base.mass = wheelMass,
-        .base.materialIndex = wheelMatIdx,
-        .radius = wheelRadius
-        });
+    // === WHEEL FACTORY ===
+    auto createWheel = [&](float side) -> std::optional<PS_AGONY::ObjectIndex> {
+        return simulation.createCircle({
+            .base.position = toWorld(side * wheelOffset, -suspensionDrop),
+            .base.velocity = { 0.0f, 0.0f },
+            .base.rotation = rotation,
+            .base.angularVelocity = 0.0f,
+            .base.mass = wheelMass,
+            .base.materialIndex = wheelMatIdx,
+            .radius = wheelRadius
+            });
+        };
 
-    auto rightWheelOpt = simulation.createCircle({
-        .base.position = { rightX, rightY },
-        .base.velocity = { 0.0f, 0.0f },
-        .base.rotation = rotation,
-        .base.angularVelocity = 0.0f,
-        .base.mass = wheelMass,
-        .base.materialIndex = wheelMatIdx,
-        .radius = wheelRadius
-        });
-
+    auto leftWheelOpt = createWheel(-1.0f);
+    auto rightWheelOpt = createWheel(+1.0f);
     if (!leftWheelOpt || !rightWheelOpt) return;
-    PS_AGONY::ObjectIndex leftWheel = *leftWheelOpt;
-    PS_AGONY::ObjectIndex rightWheel = *rightWheelOpt;
 
-    // === 3. SUSPENSION (TRIANGULATED SPRINGS) ===
-    constexpr float anchorSpread = 0.6f;
+    // === SUSPENSION FACTORY ===
+    // side = -1 (left) or +1 (right)
+    auto createSuspension = [&](PS_AGONY::ObjectIndex wheel, float side)
+        {
+            const float anchorX = side * wheelOffset;
+            const float anchorY = -frameHeight * 0.5f;
+            const float restLength = suspensionDrop - frameHeight * 0.5f;
 
-    // FIX: Account for the local anchor frame offset to completely eliminate initial spring tension popping
-    const float deltaY = suspensionDrop - (frameHeight * 0.5f);
-    const float diagonalRestLength = std::sqrt((anchorSpread * anchorSpread) + (deltaY * deltaY));
+            /* ---------------- OLD: triangulated springs ----------------
+            constexpr float anchorSpread = 0.6f;
+            const float diagonalRestLength =
+                std::sqrt(anchorSpread * anchorSpread + restLength * restLength);
 
-    // Left Suspension
-    simulation.createSpring({
-        .bodyIndexA = chassis,
-        .bodyIndexB = leftWheel,
-        .localAnchorA = { -wheelOffset - anchorSpread, -frameHeight * 0.5f },
-        .localAnchorB = { 0.0f, 0.0f },
-        .restLength = diagonalRestLength,
-        .stiffness = suspensionK,
-        .damping = suspensionD
-        });
-    simulation.createSpring({
-        .bodyIndexA = chassis,
-        .bodyIndexB = leftWheel,
-        .localAnchorA = { -wheelOffset + anchorSpread, -frameHeight * 0.5f },
-        .localAnchorB = { 0.0f, 0.0f },
-        .restLength = diagonalRestLength,
-        .stiffness = suspensionK,
-        .damping = suspensionD
-        });
+            for (float spread : { -anchorSpread, +anchorSpread })
+            {
+                simulation.createSpring({
+                    .bodyIndexA   = chassis,
+                    .bodyIndexB   = wheel,
+                    .localAnchorA = { anchorX + spread, anchorY },
+                    .localAnchorB = { 0.0f, 0.0f },
+                    .restLength   = diagonalRestLength,
+                    .stiffness    = suspensionK,
+                    .damping      = suspensionD
+                });
+            }
+            ------------------------------------------------------------ */
 
-    // Right Suspension
-    simulation.createSpring({
-        .bodyIndexA = chassis,
-        .bodyIndexB = rightWheel,
-        .localAnchorA = { wheelOffset - anchorSpread, -frameHeight * 0.5f },
-        .localAnchorB = { 0.0f, 0.0f },
-        .restLength = diagonalRestLength,
-        .stiffness = suspensionK,
-        .damping = suspensionD
-        });
-    simulation.createSpring({
-        .bodyIndexA = chassis,
-        .bodyIndexB = rightWheel,
-        .localAnchorA = { wheelOffset + anchorSpread, -frameHeight * 0.5f },
-        .localAnchorB = { 0.0f, 0.0f },
-        .restLength = diagonalRestLength,
-        .stiffness = suspensionK,
-        .damping = suspensionD
-        });
+            // NEW: one spring along the suspension axis...
+            simulation.createSpring({
+                .bodyIndexA = chassis,
+                .bodyIndexB = wheel,
+                .localAnchorA = { anchorX, anchorY },
+                .localAnchorB = { 0.0f, 0.0f },
+                .restLength = restLength,
+                .stiffness = suspensionK,
+                .damping = suspensionD
+                });
+
+            // ...plus a prismatic joint that restricts the wheel to that axis.
+            simulation.createSliderJoint({
+                .bodyIndexA = chassis,
+                .bodyIndexB = wheel,
+                .localAnchorA = { anchorX, anchorY },
+                .localAnchorB = { 0.0f, 0.0f },
+                .localAxisA = { 0.0f, -1.0f },   // chassis-local "down"
+                .stiffness = sliderStiffness,
+                .damping = sliderDamping,
+                .lowerLimit = restLength - suspensionTravel,
+                .upperLimit = restLength + suspensionTravel,
+                .enableLimit = true
+                });
+        };
+
+    createSuspension(*leftWheelOpt, -1.0f);
+    createSuspension(*rightWheelOpt, +1.0f);
 }
 
 

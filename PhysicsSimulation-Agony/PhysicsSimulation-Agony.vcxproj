@@ -250,6 +250,7 @@
     <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp" />
     <ClCompile Include="Physics\SoA\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
+    <ClCompile Include="Physics\Solving\SliderJointSolver.cpp" />
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp" />
     <ClCompile Include="Physics\FastCosSin.cpp" />
     <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp" />
@@ -283,6 +284,7 @@
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\Math.h" />
     <ClInclude Include="Physics\ExecutionPolicy.h" />
     <ClInclude Include="Physics\SoA\Constraints\RodSoA.h" />
+    <ClInclude Include="Physics\SoA\Constraints\SliderJointSoA.h" />
     <ClInclude Include="Physics\Solving\RevoluteJointSolver.h" />
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNode.h" />
@@ -302,6 +304,7 @@
     <ClInclude Include="Physics\SoA\Shapes\PolygonSoA.h" />
     <ClInclude Include="Physics\Solving\BodyCollisionSolver.h" />
     <ClInclude Include="Physics\ContainerUtilities.h" />
+    <ClInclude Include="Physics\Solving\SliderJointSolver.h" />
     <ClInclude Include="Physics\Solving\SolvingPlanner.h" />
     <ClInclude Include="Physics\Constants.h" />
     <ClInclude Include="Physics\FastCosSin.h" />
