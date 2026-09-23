@@ -8,7 +8,7 @@ namespace PS_AGONY
 {
 	// Revolute joint: pins localAnchorA (on bodyA) to localAnchorB (on bodyB) together,
 	// leaving rotation free.
-	struct JointSoA
+	struct RevoluteJointSoA
 	{
 		std::vector<ObjectIndex> bodyIndexA;
 		std::vector<ObjectIndex> bodyIndexB;
@@ -82,7 +82,7 @@ namespace PS_AGONY
 
 		JointSoAViewer() = default;
 
-		explicit JointSoAViewer(const JointSoA& data) noexcept :
+		explicit JointSoAViewer(const RevoluteJointSoA& data) noexcept :
 			count(data.getCount()),
 			bodyIndexA(data.bodyIndexA.data()),
 			bodyIndexB(data.bodyIndexB.data()),

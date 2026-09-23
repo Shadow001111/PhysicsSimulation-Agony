@@ -2,7 +2,7 @@
 #include "SolverBase.h"
 
 #include "Physics/SoA/BodySoA.h"
-#include "Physics/SoA/Constraints/JointSoA.h"
+#include "Physics/SoA/Constraints/RevoluteJointSoA.h"
 
 #include <span>
 #include <vector>
@@ -13,7 +13,7 @@ namespace PS_AGONY
 	// leaving rotation free. Same soft-constraint (gamma/beta) derivation as SpringSolver,
 	// just with a 2x2 effective mass matrix instead of a scalar since the constraint has
 	// two degrees of freedom instead of one.
-	class JointSolver : public SolverBase
+	class RevoluteJointSolver : public SolverBase
 	{
 		// Structures / classes.
 
@@ -37,12 +37,12 @@ namespace PS_AGONY
 
 		std::vector<JointConstraintData> jointConstraintContainer;
 	public:
-		JointSolver() = default;
-		~JointSolver() override = default;
-		JointSolver(const JointSolver&) = delete;
-		JointSolver& operator=(const JointSolver&) = delete;
-		JointSolver(JointSolver&&) = delete;
-		JointSolver& operator=(JointSolver&&) = delete;
+		RevoluteJointSolver() = default;
+		~RevoluteJointSolver() override = default;
+		RevoluteJointSolver(const RevoluteJointSolver&) = delete;
+		RevoluteJointSolver& operator=(const RevoluteJointSolver&) = delete;
+		RevoluteJointSolver(RevoluteJointSolver&&) = delete;
+		RevoluteJointSolver& operator=(RevoluteJointSolver&&) = delete;
 
 		void setDataViewers(
 			BodySoA& bodies,

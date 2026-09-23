@@ -127,7 +127,7 @@ namespace PS_AGONY
         springsWereChanged = true;
     }
 
-    void Simulation::createJoint(const JointCreateParams& params)
+    void Simulation::createRevoluteJoint(const RevoluteJointCreateParams& params)
     {
         jointConstraintSystem.createJoint(
             params.bodyIndexA,
@@ -142,7 +142,7 @@ namespace PS_AGONY
         jointsWereChanged = true;
     }
 
-    void Simulation::destroyJoint(uint32_t jointIndex)
+    void Simulation::destroyRevoluteJoint(uint32_t jointIndex)
     {
         jointConstraintSystem.removeConstraint(jointIndex, objectManager.bodies);
         jointsWereChanged = true;

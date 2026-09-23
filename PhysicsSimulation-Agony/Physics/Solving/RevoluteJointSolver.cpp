@@ -1,4 +1,4 @@
-#include "JointSolver.h"
+#include "RevoluteJointSolver.h"
 
 #include "Physics/Threading.h"
 
@@ -7,7 +7,7 @@
 
 namespace PS_AGONY
 {
-	void JointSolver::setDataViewers(
+	void RevoluteJointSolver::setDataViewers(
 		BodySoA& bodiesIn,
 		const JointSoAViewer& jointsIn
 	)
@@ -16,7 +16,7 @@ namespace PS_AGONY
 		joints = jointsIn;
 	}
 
-	size_t JointSolver::getMemoryUsage() const
+	size_t RevoluteJointSolver::getMemoryUsage() const
 	{
 		size_t total = 0;
 
@@ -29,7 +29,7 @@ namespace PS_AGONY
 		return total;
 	}
 
-	void JointSolver::solveJoints(
+	void RevoluteJointSolver::solveJoints(
 		Real deltaTime,
 		uint32_t jointIterations,
 		bool jointsWereChanged
@@ -99,7 +99,7 @@ namespace PS_AGONY
 		solveConstraintsThreaded(jointIterations);
 	}
 
-	size_t JointSolver::planWorkerCount(size_t jointCount) const
+	size_t RevoluteJointSolver::planWorkerCount(size_t jointCount) const
 	{
 		// Note: mirrors SpringSolver's threshold as-is; re-profile once joints are a bottleneck
 		// on their own (a joint's constraint data is heavier than a spring's, so this may be
@@ -122,7 +122,7 @@ namespace PS_AGONY
 		return std::min(availableWorkerCount, neededWorkerCount);
 	}
 
-	void JointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices)
+	void RevoluteJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices)
 	{
 		TRACY_SCOPE_NC("Compute joint constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -232,7 +232,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void JointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
+	void RevoluteJointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve joint velocity constraints", Ecstasy::Core::Color::Violet);
 
@@ -316,7 +316,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void JointSolver::solveConstraintsThreaded(uint32_t jointIterations)
+	void RevoluteJointSolver::solveConstraintsThreaded(uint32_t jointIterations)
 	{
 		const size_t workerCount = solvingPlan.getWorkerCount();
 

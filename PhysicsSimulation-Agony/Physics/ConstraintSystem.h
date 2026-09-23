@@ -1,7 +1,7 @@
 #pragma once
 #include "SoA/BodySoA.h"
 #include "SoA/Constraints/SpringSoA.h"
-#include "SoA/Constraints/JointSoA.h"
+#include "SoA/Constraints/RevoluteJointSoA.h"
 #include "SoA/Constraints/RodSoA.h"
 #include "SoA/Constraints/PrismaticJointSoA.h"
 
@@ -81,11 +81,11 @@ namespace PS_AGONY
 		const char* getName() const noexcept override { return "Spring"; }
 	};
 
-	class JointConstraintSystem final : public IConstraintSystem
+	class RevoluteJointConstraintSystem final : public IConstraintSystem
 	{
-		JointSoA& joints;
+		RevoluteJointSoA& joints;
 	public:
-		explicit JointConstraintSystem(JointSoA& joints) noexcept : joints(joints) {}
+		explicit RevoluteJointConstraintSystem(RevoluteJointSoA& joints) noexcept : joints(joints) {}
 
 		// Creates a revolute joint and registers it with both bodies it touches.
 		void createJoint(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping, BodySoA& bodies)
@@ -131,7 +131,7 @@ namespace PS_AGONY
 			if (joints.bodyIndexB[index] == oldBodyIndex) joints.bodyIndexB[index] = newBodyIndex;
 		}
 
-		const char* getName() const noexcept override { return "Joint"; }
+		const char* getName() const noexcept override { return "RevoluteJoint"; }
 	};
 
 	class RodConstraintSystem final : public IConstraintSystem

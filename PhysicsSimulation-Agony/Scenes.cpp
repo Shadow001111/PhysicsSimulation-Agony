@@ -736,7 +736,7 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
         PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB, float /*restLen*/)
         {
             // Point constraint - distance is implicit in the anchor placement, not a parameter.
-            simulation.createJoint({
+            simulation.createRevoluteJoint({
                 .bodyIndexA = bodyA,
                 .bodyIndexB = bodyB,
                 .localAnchorA = localA,
@@ -1138,7 +1138,7 @@ void load_JointedCircles(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random
     constexpr float jointK = 50'000.0f;
     constexpr float jointD = 1000.0f;
 
-    simulation.createJoint({
+    simulation.createRevoluteJoint({
         .bodyIndexA = staticCircle,
         .bodyIndexB = dynamicCircle,
         .localAnchorA = { 0.8f, 0.0f },

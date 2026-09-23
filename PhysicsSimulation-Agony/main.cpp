@@ -634,13 +634,13 @@ static int gameFunc()
 
     // Simulation.
     PS_AGONY::Simulation simulation{};
-    simulation.getSimulationSettings().clockSettings.updateInterval = 1.0 / 40.0;
+    //simulation.getSimulationSettings().clockSettings.updateInterval = 1.0 / 40.0;
 
     bool pauseSimulation = false;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 6);
+    loadScene(simulation, 4);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;

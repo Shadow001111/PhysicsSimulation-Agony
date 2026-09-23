@@ -9,7 +9,7 @@
 #include "Solving/SolvingPlanner.h"
 #include "Solving/BodyCollisionSolver.h"
 #include "Solving/SpringSolver.h"
-#include "Solving/JointSolver.h"
+#include "Solving/RevoluteJointSolver.h"
 #include "Solving/RodSolver.h"
 #include "Solving/PrismaticJointSolver.h"
 
@@ -69,7 +69,7 @@ namespace PS_AGONY
 			Real damping;
 		};
 
-		struct JointCreateParams
+		struct RevoluteJointCreateParams
 		{
 			ObjectIndex bodyIndexA;
 			ObjectIndex bodyIndexB;
@@ -129,8 +129,8 @@ namespace PS_AGONY
 		SpringSoA springs;
 		SpringConstraintSystem springConstraintSystem{ springs };
 
-		JointSoA joints;
-		JointConstraintSystem jointConstraintSystem{ joints };
+		RevoluteJointSoA joints;
+		RevoluteJointConstraintSystem jointConstraintSystem{ joints };
 
 		RodSoA rods;
 		RodConstraintSystem rodConstraintSystem{ rods };
@@ -154,7 +154,7 @@ namespace PS_AGONY
 		// Solvers.
 		BodyCollisionSolver bodyCollisionSolver;
 		SpringSolver springSolver;
-		JointSolver jointSolver;
+		RevoluteJointSolver jointSolver;
 		RodSolver rodSolver;
 		PrismaticJointSolver prismaticJointSolver;
 
@@ -248,10 +248,10 @@ namespace PS_AGONY
 		// Destroys a single spring by its index in the spring constraint system.
 		void destroySpring(uint32_t springIndex);
 
-		void createJoint(const JointCreateParams& params);
+		void createRevoluteJoint(const RevoluteJointCreateParams& params);
 
 		// Destroys a single joint by its index in the joint constraint system.
-		void destroyJoint(uint32_t jointIndex);
+		void destroyRevoluteJoint(uint32_t jointIndex);
 
 		void createRod(const RodCreateParams& params);
 
