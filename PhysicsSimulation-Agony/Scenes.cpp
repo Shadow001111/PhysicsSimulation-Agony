@@ -88,7 +88,7 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
     constexpr float wheelOffset = 2.2f;      // Horizontal distance from chassis center
     constexpr float suspensionDrop = 2.2f;   // Vertical distance down to wheel center
 
-    constexpr float suspensionK = 6000.0f;
+    constexpr float suspensionK = 999999999;// 6000.0f;
     constexpr float suspensionD = 45.0f;
 
     PS_AGONY::Material carMaterial = {

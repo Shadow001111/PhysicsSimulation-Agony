@@ -105,6 +105,11 @@ namespace PS_AGONY::PhysicsGeometry
             Real deltaSquared = glm::dot(finalCOM, finalCOM);
             inertia += mass * deltaSquared;
         }
+        else
+        {
+            // Moments were accumulated about the origin; move them to the COM (parallel axis theorem).
+            inertia -= mass * glm::dot(finalCOM, finalCOM);
+        }
 
         return { inertia, finalCOM };
     }

@@ -84,11 +84,11 @@ namespace PS_AGONY::FastCosSin
 		{
 			Real x = inAngleArray[i];
 
-			int quadrantIndex = (int)(x * Real(Constants::INV_HALF_PI));
-			Real u = x - quadrantIndex * Real(Constants::HALF_PI);
+			int quadrantIndex = (int)(x * Constants::INV_HALF_PI);
+			Real u = x - quadrantIndex * Constants::HALF_PI;
 
 			Real mirror = Real(quadrantIndex & 1);
-			Real a = u + mirror * (Real(Constants::HALF_PI) - Real(2) * u);
+			Real a = u + mirror * (Constants::HALF_PI - Real(2) * u);
 
 			Real sinSign = Real(1) - Real(2) * Real(quadrantIndex >> 1);
 			Real cosSign = Real(1) - Real(2) * Real(((quadrantIndex + 1) >> 1) & 1);
@@ -160,8 +160,8 @@ namespace PS_AGONY::FastCosSin
 
 	std::pair<Real, Real> order5Scalar(const Real x)
 	{
-		int quadrantIndex = (int)(x * Real(Constants::INV_HALF_PI));
-		Real u = x - quadrantIndex * Real(Constants::HALF_PI);
+		int quadrantIndex = (int)(x * Constants::INV_HALF_PI);
+		Real u = x - quadrantIndex * Constants::HALF_PI;
 
 		Real mirror = Real(quadrantIndex & 1);
 		Real a = u + mirror * (Real(Constants::HALF_PI) - Real(2) * u);

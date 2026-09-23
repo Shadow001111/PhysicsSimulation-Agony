@@ -206,11 +206,9 @@ namespace PS_AGONY
         Vec2 neededCenterOfMass = params.base.centerOfMass.value_or(trueCenterOfMass);
 
         // This makes: position == true position == world COM.
-        // TODO: This probably invalidates inertia. Need second pass.
-        // NOTE: 'vertices' is a view over uniqueVertices, so this also reorders/shifts
-        // uniqueVertices itself (calculatePolygonInertia may have already reversed its
-        // winding to CCW in-place above) - decomposeConvex() below sees the final result.
-        for (Vec2& v : vertices)
+        // NOTE: 'vertices' is an owning COPY (used only for inertia/COM above), so the shift
+        // must be applied to uniqueVertices, which feeds decomposeConvex() (it normalizes winding itself).
+        for (Vec2& v : uniqueVertices)
         {
             v -= trueCenterOfMass;
         }
