@@ -138,16 +138,13 @@ static void renderGUI(
 
         for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
         {
-            auto& iterationSetting = settings.constraintIterations[i];
-            int iters = int(iterationSetting);
+            auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
+            int iters = int(system.iterations);
 
-            const auto* system = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i)).first;
-            if (!system) continue;
-
-            const std::string label = std::string(system->getName()) + " Iterations";
+            const std::string label = std::string(system.getName()) + " Iterations";
             if (ImGui::SliderInt(label.c_str(), &iters, 1, 50))
             {
-                iterationSetting = iters;
+                system.iterations = static_cast<uint32_t>(iters);
             }
         }
     }
@@ -215,10 +212,7 @@ static void renderGUI(
         {
             constraintsTotal += simulationData.constraintDataMemoryUsage[i];
 
-            const auto pair = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i));
-            const auto* solver = pair.second;
-            if (!solver) continue;
-            solversTotal += solver->getMemoryUsage();
+            solversTotal += simulation.getConstraintSystem(PS_AGONY::ConstraintType(i)).getSolverMemoryUsage();
         }
 
         const size_t totalMemory =
@@ -277,18 +271,8 @@ static void renderGUI(
                 addMemoryRow("Constraints", constraintsTotal);
                 for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
                 {
-                    const auto pair = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i));
-
-                    const auto* system = pair.first;
-                    std::string label;
-                    if (system)
-                    {
-                        label = std::string(system->getName()) + "s";
-                    }
-                    else
-                    {
-                        label = std::string("Unnamed constraint type");
-                    }
+                    const auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
+                    const std::string label = std::string(system.getName()) + "s";
 
                     addMemoryRow(label.c_str(), simulationData.constraintDataMemoryUsage[i], true);
                 }
@@ -302,22 +286,10 @@ static void renderGUI(
                 addMemoryRow("Body Collision Solver", simulationData.bodyCollisionSolverMemoryUsage, true);
                 for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
                 {
-                    const auto pair = simulation.getConstraintSystemAndSolver(PS_AGONY::ConstraintType(i));
-                    const auto* solver = pair.second;
-                    if (!solver) continue;
+                    const auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
+                    const std::string label = std::string(system.getName()) + " Solver";
 
-                    const auto* system = pair.first;
-                    std::string label;
-                    if (system)
-                    {
-                        label = std::string(system->getName()) + " Solver";
-                    }
-                    else
-                    {
-                        label = std::string("Unnamed Solver");
-                    }
-
-                    addMemoryRow(label.c_str(), solver->getMemoryUsage(), true);
+                    addMemoryRow(label.c_str(), system.getSolverMemoryUsage(), true);
                 }
             }
 
@@ -375,7 +347,7 @@ ObjectCreatorState renderObjectCreatorUI(
     auto buildBaseParams = [&]() {
         PS_AGONY::BodyCreateParams base;
         base.position = camera.screenToWorldSpace({ 0.0, 0.0 });
-        base.velocity = { static_cast<PS_AGONY::Real>(vel[0]), static_cast<PS_AGONY::Real>(vel[1])};
+        base.velocity = { static_cast<PS_AGONY::Real>(vel[0]), static_cast<PS_AGONY::Real>(vel[1]) };
         base.rotation = static_cast<PS_AGONY::Real>(rotation);
         base.angularVelocity = static_cast<PS_AGONY::Real>(angularVelocity);
         base.mass = static_cast<PS_AGONY::Real>(mass);
@@ -647,7 +619,7 @@ static int gameFunc()
     simulationRenderer.init();
 
     auto& camera = simulationRenderer.getCamera();
-	camera.setViewRangeH(20.0f, wnd.getAspectRatio());
+    camera.setViewRangeH(20.0f, wnd.getAspectRatio());
 
     PS_AGONY_RENDER::RenderOptions renderOptions{}; // Default.
 
@@ -682,11 +654,11 @@ static int gameFunc()
 
         debugData.deltaTime = deltaTime;
 
-		// Handle input.
+        // Handle input.
         if (!io.WantCaptureKeyboard)
         {
             const PS_AGONY::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
-			const PS_AGONY::Real zoomSpeed = 2.0 * deltaTime;
+            const PS_AGONY::Real zoomSpeed = 2.0 * deltaTime;
 
             if (windowInputManager.isKeyPressed(GLFW_KEY_W))
                 camera.position.y += cameraSpeed;
@@ -699,7 +671,7 @@ static int gameFunc()
             if (windowInputManager.isKeyPressed(GLFW_KEY_Q))
                 camera.setViewRangeH(camera.viewRange * (1.0 + zoomSpeed), wnd.getAspectRatio());
             if (windowInputManager.isKeyPressed(GLFW_KEY_E))
-				camera.setViewRangeH(camera.viewRange / (1.0 + zoomSpeed), wnd.getAspectRatio());
+                camera.setViewRangeH(camera.viewRange / (1.0 + zoomSpeed), wnd.getAspectRatio());
 
             pauseSimulation ^= windowInputManager.isKeyJustPressed(GLFW_KEY_P);
         }

@@ -1,7 +1,5 @@
 #include "PrismaticJointSolver.h"
 
-#include "Physics/Threading.h"
-
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
@@ -21,118 +19,6 @@ namespace PS_AGONY
 			angle -= PJ_TWO_PI * std::floor((angle + PJ_PI) / PJ_TWO_PI);
 			return angle;
 		}
-	}
-
-	void PrismaticJointSolver::setDataViewers(
-		BodySoA& bodiesIn,
-		const PrismaticJointSoAViewer& prismaticJointsIn
-	)
-	{
-		setResources(bodiesIn);
-		prismaticJoints = prismaticJointsIn;
-	}
-
-	size_t PrismaticJointSolver::getMemoryUsage() const
-	{
-		size_t total = 0;
-
-		total += getVectorMemoryUsage(prismaticJointBodyPairs);
-		total += getVectorMemoryUsage(orderedPrismaticJointIndices);
-		total += getVectorMemoryUsage(prismaticJointConstraintContainer);
-		total += solvingPlan.getMemoryUsage();
-
-		return total;
-	}
-
-	void PrismaticJointSolver::solvePrismaticJoints(
-		Real deltaTime,
-		uint32_t iterations,
-		bool prismaticJointsWereChanged
-	)
-	{
-		const size_t jointCount = prismaticJoints.getCount();
-		if (jointCount == 0) return;
-
-		const size_t workerCount = planWorkerCount(jointCount);
-
-		// Single-threaded path.
-		if (workerCount <= 1)
-		{
-			TRACY_SCOPE_NC("Solve prismatic joints (Single-threaded)", Ecstasy::Core::Color::OliveDrab);
-
-			if (orderedPrismaticJointIndices.size() != jointCount)
-			{
-				orderedPrismaticJointIndices.resize(jointCount);
-				for (size_t i = 0; i < jointCount; i++)
-				{
-					orderedPrismaticJointIndices[i] = i;
-				}
-			}
-
-			computeConstraintData(deltaTime, orderedPrismaticJointIndices);
-
-			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(jointCount) };
-
-			for (uint32_t i = 0; i < iterations; i++)
-			{
-				solveVelocityConstraints(fullPass);
-			}
-			return;
-		}
-
-		// Multi-threading path.
-		TRACY_SCOPE_NC("Solve prismatic joints (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (prismaticJointsWereChanged || solvingPlan.getFlatIndices().size() != jointCount)
-		{
-			{
-				TRACY_SCOPE_NC("Collect body pairs from prismatic joints", Ecstasy::Core::Color::Red);
-				prismaticJointBodyPairs.resize(jointCount);
-				for (size_t i = 0; i < jointCount; i++)
-				{
-					prismaticJointBodyPairs[i] = { prismaticJoints.bodyIndexA[i], prismaticJoints.bodyIndexB[i] };
-				}
-			}
-			{
-				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-
-				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-					prismaticJointBodyPairs, bodies->getCount(), workerCount,
-					sizeof(Real),
-					std::hardware_destructive_interference_size,
-					solvingPlan
-				);
-			}
-		}
-		{
-			TRACY_SCOPE_N("Reorder prismatic joint indices");
-
-			const auto& flatIndices = solvingPlan.getFlatIndices();
-			orderedPrismaticJointIndices.assign(flatIndices.begin(), flatIndices.end());
-		}
-		computeConstraintData(deltaTime, orderedPrismaticJointIndices);
-
-		solveConstraintsThreaded(iterations);
-	}
-
-	size_t PrismaticJointSolver::planWorkerCount(size_t jointCount) const
-	{
-		// Note: tuned for collisions; re-profile once prismatic joints are a bottleneck on their own.
-		static constexpr size_t JOINT_COUNT_PER_WORKER = 7'000;
-		static constexpr size_t MIN_JOINT_COUNT_FOR_THREADING = JOINT_COUNT_PER_WORKER * 3;
-
-		// Single-threaded path.
-		if (jointCount < MIN_JOINT_COUNT_FOR_THREADING)
-		{
-			return 0;
-		}
-
-		// Multi-threading path.
-		auto& threadPool = Threading::getGlobalThreadPool();
-
-		const size_t availableWorkerCount = threadPool.getThreadCount();
-		const size_t neededWorkerCount = jointCount / JOINT_COUNT_PER_WORKER;
-
-		return std::min(availableWorkerCount, neededWorkerCount);
 	}
 
 	void PrismaticJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices)
@@ -158,17 +44,17 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
-		const Vec2* ECSTASY_RESTRICT localAxisAPtr = prismaticJoints.localAxisA;
-		const Real* ECSTASY_RESTRICT referenceAnglePtr = prismaticJoints.referenceAngle;
-		const Real* ECSTASY_RESTRICT stiffnessPtr = prismaticJoints.stiffness;
-		const Real* ECSTASY_RESTRICT dampingPtr = prismaticJoints.damping;
-		const Real* ECSTASY_RESTRICT lowerLimitPtr = prismaticJoints.lowerLimit;
-		const Real* ECSTASY_RESTRICT upperLimitPtr = prismaticJoints.upperLimit;
-		const uint8_t* ECSTASY_RESTRICT enableLimitPtr = prismaticJoints.enableLimit;
+		const Vec2* ECSTASY_RESTRICT localAxisAPtr = viewer.localAxisA;
+		const Real* ECSTASY_RESTRICT referenceAnglePtr = viewer.referenceAngle;
+		const Real* ECSTASY_RESTRICT stiffnessPtr = viewer.stiffness;
+		const Real* ECSTASY_RESTRICT dampingPtr = viewer.damping;
+		const Real* ECSTASY_RESTRICT lowerLimitPtr = viewer.lowerLimit;
+		const Real* ECSTASY_RESTRICT upperLimitPtr = viewer.upperLimit;
+		const uint8_t* ECSTASY_RESTRICT enableLimitPtr = viewer.enableLimit;
 
 		// Resize container.
 		const size_t jointCount = jointIndices.size();
-		prismaticJointConstraintContainer.resize(jointCount);
+		constraintContainer.resize(jointCount);
 
 		const size_t* ECSTASY_RESTRICT jointIndicesPtr = jointIndices.data();
 
@@ -181,10 +67,10 @@ namespace PS_AGONY
 		for (size_t jointIndex = 0; jointIndex < jointCount; jointIndex++)
 		{
 			const size_t i = jointIndicesPtr[jointIndex];
-			PrismaticJointConstraintData& constraintData = prismaticJointConstraintContainer[jointIndex];
+			PrismaticJointConstraintData& constraintData = constraintContainer[jointIndex];
 
-			const ObjectIndex bodyIndexA = prismaticJoints.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = prismaticJoints.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
+			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;
@@ -218,8 +104,8 @@ namespace PS_AGONY
 			const Real cosB = rotationCosPtr[bodyIndexB];
 			const Real sinB = rotationSinPtr[bodyIndexB];
 
-			const Vec2 rotatedAnchorA = rotate(prismaticJoints.localAnchorA[i], cosA, sinA);
-			const Vec2 rotatedAnchorB = rotate(prismaticJoints.localAnchorB[i], cosB, sinB);
+			const Vec2 rotatedAnchorA = rotate(viewer.localAnchorA[i], cosA, sinA);
+			const Vec2 rotatedAnchorB = rotate(viewer.localAnchorB[i], cosB, sinB);
 
 			const Vec2 worldAnchorA = worldCenterA + rotatedAnchorA;
 			const Vec2 worldAnchorB = worldCenterB + rotatedAnchorB;
@@ -328,7 +214,7 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve prismatic joint velocity constraints", Ecstasy::Core::Color::Violet);
 
-		std::span<PrismaticJointConstraintData> constraintDataSpan(prismaticJointConstraintContainer.data() + pass.start, pass.size);
+		std::span<PrismaticJointConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -432,34 +318,5 @@ namespace PS_AGONY
 				angularVelocityPtr[bodyIndexB] = angularVelocityB;
 			}
 		}
-	}
-
-	void PrismaticJointSolver::solveConstraintsThreaded(uint32_t iterations)
-	{
-		const size_t workerCount = solvingPlan.getWorkerCount();
-
-		const auto& passOffsets = solvingPlan.getPassOffsets();
-		const size_t waveCount = passOffsets.size() / workerCount;
-		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
-
-		if (waveCount == 0 || iterations == 0) [[unlikely]]
-		{
-			return;
-		}
-
-		const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * iterations;
-
-		runThreadedWaves(workerCount, waveCount, totalTicks,
-			[&](size_t waveIndex, size_t workerIndex, uint32_t /*passTicket*/)
-			{
-				const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-				const auto& passOffset = passOffsetsPtr[passGlobalIndex];
-
-				// Get work from current wave and execute it. If empty, skip.
-				if (passOffset.size == 0) return;
-
-				solveVelocityConstraints(passOffset);
-			}
-		);
 	}
 }

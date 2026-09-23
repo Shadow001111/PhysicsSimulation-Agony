@@ -7,11 +7,6 @@
 #include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
 
 #include "Solving/BodyCollisionSolver.h"
-#include "Solving/SpringSolver.h"
-#include "Solving/RevoluteJointSolver.h"
-#include "Solving/RodSolver.h"
-#include "Solving/PrismaticJointSolver.h"
-#include "Solving/SliderJointSolver.h"
 
 #include "Interactivity/BodyHolder.h"
 
@@ -58,74 +53,14 @@ namespace PS_AGONY
 			Real bodyKineticEnergySum = 0;
 		};
 
-		struct SpringCreateParams
-		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
-			Real restLength;
-			Real stiffness;
-			Real damping;
-		};
-
-		struct RevoluteJointCreateParams
-		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
-			Real stiffness;
-			Real damping;
-		};
-
-		struct RodCreateParams
-		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
-			Real length;
-		};
-
-		struct PrismaticJointCreateParams
-		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
-			Vec2 localAxisA; // Axis in body A's local space that translation is locked to; need not be pre-normalized.
-			Real stiffness;
-			Real damping;
-			Real lowerLimit = 0;
-			Real upperLimit = 0;
-			bool enableLimit = false;
-		};
-
-		struct SliderJointCreateParams
-		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
-			Vec2 localAxisA;
-			Real stiffness;
-			Real damping;
-			Real lowerLimit = 0;
-			Real upperLimit = 0;
-			bool enableLimit = false;
-		};
-
 		struct SimulationSettings
 		{
 			// Clock.
 			FixedClock::Settings clockSettings;
 
-			// Solving.
+			// Solving. Constraint iterations live in IConstraintSystem::iterations.
 			uint32_t collisionVelocitySolvingIterations = 6;
 			uint32_t collisionPositionSolvingIterations = 3;
-
-			std::array<uint32_t, size_t(ConstraintType::COUNT)> constraintIterations{}; // Set to 6 on start.
 
 			// Integration.
 			Integrator::IntegrationSettings integratorSettings;
@@ -139,24 +74,14 @@ namespace PS_AGONY
 		ObjectManager objectManager;
 		FixedClock clock;
 
-		// Constraints.
-		SpringSoA springs;
-		SpringConstraintSystem springConstraintSystem{ springs };
+		// Constraints. Each system owns its SoA and solver.
+		SpringConstraintSystem springConstraintSystem;
+		RevoluteJointConstraintSystem jointConstraintSystem;
+		RodConstraintSystem rodConstraintSystem;
+		PrismaticJointConstraintSystem prismaticJointConstraintSystem;
+		SliderJointConstraintSystem sliderJointConstraintSystem;
 
-		RevoluteJointSoA joints;
-		RevoluteJointConstraintSystem jointConstraintSystem{ joints };
-
-		RodSoA rods;
-		RodConstraintSystem rodConstraintSystem{ rods };
-
-		PrismaticJointSoA prismaticJoints;
-		PrismaticJointConstraintSystem prismaticJointConstraintSystem{ prismaticJoints };
-
-		SliderJointSoA sliderJoints;
-		SliderJointConstraintSystem sliderJointConstraintSystem{ sliderJoints };
-
-		ConstraintSystemArray constraintSystems{};
-		std::array<const SolverBase*, size_t(ConstraintType::COUNT)> constraintSystemSolvers{};
+		ConstraintSystemArray constraintSystems{}; // Indexed by ConstraintType, which is also the solving order.
 
 		// Materials.
 		std::vector<Material> materials;
@@ -170,15 +95,9 @@ namespace PS_AGONY
 
 		// Solvers.
 		BodyCollisionSolver bodyCollisionSolver;
-		SpringSolver springSolver;
-		RevoluteJointSolver jointSolver;
-		RodSolver rodSolver;
-		PrismaticJointSolver prismaticJointSolver;
-		SliderJointSolver sliderJointSolver;
 
 		// Time.
 		Real simulationRunTimer = 0;
-		Real updateTimeAccumulator = 0;
 
 		// Debug data.
 		Real debugDataResetTimeAccumulator = 0;
@@ -188,17 +107,8 @@ namespace PS_AGONY
 		// Interactivity.
 		Interactivity::BodyHolder mainBodyHolder;
 
-		// Booleans.
-		// TODO: Move those to constraint system.
-		bool springsWereChanged = false;
-		bool jointsWereChanged = false;
-		bool rodsWereChanged = false;
-		bool prismaticJointsWereChanged = false;
-		bool sliderJointsWereChanged = false;
-
 		// Render.
 		Real renderAlpha = 0;
-		uint32_t lastStepCount = 1;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -263,20 +173,20 @@ namespace PS_AGONY
 			return objectManager.destroyCollider(colliderIndex, constraintSystems);
 		}
 
-		void createSpring(const SpringCreateParams& params);
-		void destroySpring(uint32_t springIndex);
+		void createSpring(const SpringConstraintSystem::CreateParams& params) { springConstraintSystem.create(params, objectManager.bodies); }
+		void destroySpring(uint32_t index) { springConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
-		void createRevoluteJoint(const RevoluteJointCreateParams& params);
-		void destroyRevoluteJoint(uint32_t jointIndex);
+		void createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& params) { jointConstraintSystem.create(params, objectManager.bodies); }
+		void destroyRevoluteJoint(uint32_t index) { jointConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
-		void createRod(const RodCreateParams& params);
-		void destroyRod(uint32_t rodIndex);
+		void createRod(const RodConstraintSystem::CreateParams& params) { rodConstraintSystem.create(params, objectManager.bodies); }
+		void destroyRod(uint32_t index) { rodConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
-		void createPrismaticJoint(const PrismaticJointCreateParams& params);
-		void destroyPrismaticJoint(uint32_t prismaticJointIndex);
+		void createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& params) { prismaticJointConstraintSystem.create(params, objectManager.bodies); }
+		void destroyPrismaticJoint(uint32_t index) { prismaticJointConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
-		void createSliderJoint(const SliderJointCreateParams& params);
-		void destroySliderJoint(uint32_t sliderJointIndex);
+		void createSliderJoint(const SliderJointConstraintSystem::CreateParams& params) { sliderJointConstraintSystem.create(params, objectManager.bodies); }
+		void destroySliderJoint(uint32_t index) { sliderJointConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
 		MaterialIndex createMaterial(const Material& material);
 
@@ -298,15 +208,14 @@ namespace PS_AGONY
 		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(objectManager.boxes); }
 		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(objectManager.polygons); }
 
-		SpringSoAViewer getSprings() const noexcept { return SpringSoAViewer(springs); }
-		JointSoAViewer getJoints() const noexcept { return JointSoAViewer(joints); }
-		RodSoAViewer getRods() const noexcept { return RodSoAViewer(rods); }
-		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return PrismaticJointSoAViewer(prismaticJoints); }
+		SpringSoAViewer getSprings() const noexcept { return springConstraintSystem.getViewer(); }
+		JointSoAViewer getJoints() const noexcept { return jointConstraintSystem.getViewer(); }
+		RodSoAViewer getRods() const noexcept { return rodConstraintSystem.getViewer(); }
+		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return prismaticJointConstraintSystem.getViewer(); }
+		SliderJointSoAViewer getSliderJoints() const noexcept { return sliderJointConstraintSystem.getViewer(); }
 
-		std::pair<const IConstraintSystem*, const SolverBase*> getConstraintSystemAndSolver(ConstraintType type) const noexcept
-		{
-			return { constraintSystems[size_t(type)], constraintSystemSolvers[size_t(type)] };
-		}
+		IConstraintSystem& getConstraintSystem(ConstraintType type) noexcept { return *constraintSystems[size_t(type)]; }
+		const IConstraintSystem& getConstraintSystem(ConstraintType type) const noexcept { return *constraintSystems[size_t(type)]; }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 

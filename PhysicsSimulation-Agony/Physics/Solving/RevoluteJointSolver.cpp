@@ -1,127 +1,10 @@
 #include "RevoluteJointSolver.h"
 
-#include "Physics/Threading.h"
-
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
 {
-	void RevoluteJointSolver::setDataViewers(
-		BodySoA& bodiesIn,
-		const JointSoAViewer& jointsIn
-	)
-	{
-		setResources(bodiesIn);
-		joints = jointsIn;
-	}
-
-	size_t RevoluteJointSolver::getMemoryUsage() const
-	{
-		size_t total = 0;
-
-		total += getVectorMemoryUsage(jointBodyPairs);
-		total += getVectorMemoryUsage(orderedJointIndices);
-		total += getVectorMemoryUsage(jointConstraintContainer);
-
-		total += solvingPlan.getMemoryUsage();
-
-		return total;
-	}
-
-	void RevoluteJointSolver::solveJoints(
-		Real deltaTime,
-		uint32_t jointIterations,
-		bool jointsWereChanged
-	)
-	{
-		const size_t jointCount = joints.getCount();
-		if (jointCount == 0) return;
-
-		const size_t workerCount = planWorkerCount(jointCount);
-
-		// Single-threaded path.
-		if (workerCount <= 1)
-		{
-			TRACY_SCOPE_NC("Solve joints (Single-threaded)", Ecstasy::Core::Color::OliveDrab);
-
-			if (orderedJointIndices.size() != jointCount)
-			{
-				orderedJointIndices.resize(jointCount);
-				for (size_t i = 0; i < jointCount; i++)
-				{
-					orderedJointIndices[i] = i;
-				}
-			}
-
-			computeConstraintData(deltaTime, orderedJointIndices);
-
-			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(jointConstraintContainer.size()) };
-
-			for (uint32_t i = 0; i < jointIterations; i++)
-			{
-				solveVelocityConstraints(fullPass);
-			}
-			return;
-		}
-
-		// Multi-threading path.
-		TRACY_SCOPE_NC("Solve joints (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (jointsWereChanged || solvingPlan.getFlatIndices().size() != jointCount)
-		{
-			{
-				TRACY_SCOPE_NC("Collect body pairs from joints", Ecstasy::Core::Color::Red);
-				jointBodyPairs.resize(jointCount);
-				for (size_t i = 0; i < jointCount; i++)
-				{
-					jointBodyPairs[i] = { joints.bodyIndexA[i], joints.bodyIndexB[i] };
-				}
-			}
-			{
-				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-
-				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-					jointBodyPairs, bodies->getCount(), workerCount,
-					sizeof(Real),
-					std::hardware_destructive_interference_size,
-					solvingPlan
-				);
-			}
-		}
-		{
-			TRACY_SCOPE_N("Reorder joint indices");
-
-			const auto& flatIndices = solvingPlan.getFlatIndices();
-			orderedJointIndices.assign(flatIndices.begin(), flatIndices.end());
-		}
-		computeConstraintData(deltaTime, orderedJointIndices);
-
-		solveConstraintsThreaded(jointIterations);
-	}
-
-	size_t RevoluteJointSolver::planWorkerCount(size_t jointCount) const
-	{
-		// Note: mirrors SpringSolver's threshold as-is; re-profile once joints are a bottleneck
-		// on their own (a joint's constraint data is heavier than a spring's, so this may be
-		// too generous).
-		static constexpr size_t JOINT_COUNT_PER_WORKER = 7'000;
-		static constexpr size_t MIN_JOINT_COUNT_FOR_THREADING = JOINT_COUNT_PER_WORKER * 3;
-
-		// Single-threaded path.
-		if (jointCount < MIN_JOINT_COUNT_FOR_THREADING)
-		{
-			return 0;
-		}
-
-		// Multi-threading path.
-		auto& threadPool = Threading::getGlobalThreadPool();
-
-		const size_t availableWorkerCount = threadPool.getThreadCount();
-		const size_t neededWorkerCount = jointCount / JOINT_COUNT_PER_WORKER;
-
-		return std::min(availableWorkerCount, neededWorkerCount);
-	}
-
 	void RevoluteJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices)
 	{
 		TRACY_SCOPE_NC("Compute joint constraint data", Ecstasy::Core::Color::Chocolate);
@@ -140,12 +23,12 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
-		const Real* ECSTASY_RESTRICT jointStiffnessPtr = joints.stiffness;
-		const Real* ECSTASY_RESTRICT jointDampingPtr = joints.damping;
+		const Real* ECSTASY_RESTRICT jointStiffnessPtr = viewer.stiffness;
+		const Real* ECSTASY_RESTRICT jointDampingPtr = viewer.damping;
 
 		// Resize container.
 		const size_t jointCount = jointIndices.size();
-		jointConstraintContainer.resize(jointCount);
+		constraintContainer.resize(jointCount);
 
 		const size_t* ECSTASY_RESTRICT jointIndicesPtr = jointIndices.data();
 
@@ -153,10 +36,10 @@ namespace PS_AGONY
 		for (size_t jointIndex = 0; jointIndex < jointCount; jointIndex++)
 		{
 			const size_t i = jointIndicesPtr[jointIndex];
-			JointConstraintData& constraintData = jointConstraintContainer[jointIndex];
+			RevoluteJointConstraintData& constraintData = constraintContainer[jointIndex];
 
-			const ObjectIndex bodyIndexA = joints.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = joints.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
+			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;
@@ -182,8 +65,8 @@ namespace PS_AGONY
 				positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB]
 			};
 
-			const Vec2 rotatedAnchorA = rotate(joints.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-			const Vec2 rotatedAnchorB = rotate(joints.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+			const Vec2 rotatedAnchorA = rotate(viewer.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+			const Vec2 rotatedAnchorB = rotate(viewer.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
 			const Vec2 worldAnchorA = worldCenterA + rotatedAnchorA;
 			const Vec2 worldAnchorB = worldCenterB + rotatedAnchorB;
@@ -236,7 +119,7 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve joint velocity constraints", Ecstasy::Core::Color::Violet);
 
-		std::span<const JointConstraintData> constraintDataSpan(jointConstraintContainer.data() + pass.start, pass.size);
+		std::span<const RevoluteJointConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -250,7 +133,7 @@ namespace PS_AGONY
 
 		for (size_t c = 0; c < jointCount; c++)
 		{
-			const JointConstraintData& constraintData = constraintDataSpan[c];
+			const RevoluteJointConstraintData& constraintData = constraintDataSpan[c];
 			if (constraintData.invK11 == Real(0) && constraintData.invK12 == Real(0) && constraintData.invK22 == Real(0)) continue;
 
 			// Get body indices.
@@ -314,34 +197,5 @@ namespace PS_AGONY
 				angularVelocityPtr[bodyIndexB] = angularVelocityB;
 			}
 		}
-	}
-
-	void RevoluteJointSolver::solveConstraintsThreaded(uint32_t jointIterations)
-	{
-		const size_t workerCount = solvingPlan.getWorkerCount();
-
-		const auto& passOffsets = solvingPlan.getPassOffsets();
-		const size_t waveCount = passOffsets.size() / workerCount;
-		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
-
-		if (waveCount == 0 || jointIterations == 0) [[unlikely]]
-		{
-			return;
-		}
-
-		const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * jointIterations;
-
-		runThreadedWaves(workerCount, waveCount, totalTicks,
-			[&](size_t waveIndex, size_t workerIndex, uint32_t /*passTicket*/)
-			{
-				const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-				const auto& passOffset = passOffsetsPtr[passGlobalIndex];
-
-				// Get work from current wave and execute it. If empty, skip.
-				if (passOffset.size == 0) return;
-
-				solveVelocityConstraints(passOffset);
-			}
-		);
 	}
 }

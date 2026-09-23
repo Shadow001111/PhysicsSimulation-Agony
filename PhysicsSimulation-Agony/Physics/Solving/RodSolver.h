@@ -1,65 +1,29 @@
 #pragma once
-#include "SolverBase.h"
+#include "ConstraintSolverBase.h"
 
-#include "Physics/SoA/BodySoA.h"
 #include "Physics/SoA/Constraints/RodSoA.h"
-
-#include <span>
-#include <vector>
 
 namespace PS_AGONY
 {
-	class RodSolver : public SolverBase
+	struct RodConstraintData
 	{
-		// Structures / classes.
+		ObjectIndex bodyIndexA, bodyIndexB;
+		Vec2 dir;
+		Vec2 rotatedAnchorA, rotatedAnchorB;
+		Real invEffectiveMass; // 1 / effectiveMass (no compliance - rod is rigid).
+		Real bias; // Baumgarte term: (baumgarteFactor / dt) * C.
+	};
 
-		struct RodConstraintData
-		{
-			ObjectIndex bodyIndexA, bodyIndexB;
-			Vec2 dir;
-			Vec2 rotatedAnchorA, rotatedAnchorB;
-			Real invEffectiveMass; // 1 / effectiveMass (no compliance - rod is rigid).
-			Real bias; // Baumgarte term: (baumgarteFactor / dt) * C.
-		};
-
-		// Member fields.
-
-		RodSoAViewer rods;
-
-		std::vector<ObjectPair> rodBodyPairs;
-
-		std::vector<size_t> orderedRodIndices;
-
-		std::vector<RodConstraintData> rodConstraintContainer;
+	class RodSolver final : public ConstraintSolverBase<RodSolver, RodSoAViewer, RodConstraintData>
+	{
+		using Base = ConstraintSolverBase<RodSolver, RodSoAViewer, RodConstraintData>;
+		friend Base;
 	public:
-		RodSolver() = default;
-		~RodSolver() override = default;
-		RodSolver(const RodSolver&) = delete;
-		RodSolver& operator=(const RodSolver&) = delete;
-		RodSolver(RodSolver&&) = delete;
-		RodSolver& operator=(RodSolver&&) = delete;
-
-		void setDataViewers(
-			BodySoA& bodies,
-			const RodSoAViewer& rods
-		);
-
-		size_t getMemoryUsage() const override;
-
-		void solveRods(
-			Real deltaTime,
-			uint32_t rodIterations,
-			bool rodsWereChanged
-		);
+		// Placeholder value; rod's per-constraint cost/count profile hasn't been measured yet.
+		RodSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
 	private:
-		// Rod constraint solving.
-
-		size_t planWorkerCount(size_t rodCount) const;
-
-		void computeConstraintData(Real deltaTime, std::span<const size_t> rodIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);
-
-		void solveConstraintsThreaded(uint32_t rodIterations);
 	};
 }

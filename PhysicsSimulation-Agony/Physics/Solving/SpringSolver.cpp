@@ -1,124 +1,10 @@
 #include "SpringSolver.h"
 
-#include "Physics/Threading.h"
-
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
 {
-	void SpringSolver::setDataViewers(
-		BodySoA& bodiesIn,
-		const SpringSoAViewer& springsIn
-	)
-	{
-		setResources(bodiesIn);
-		springs = springsIn;
-	}
-
-	size_t SpringSolver::getMemoryUsage() const
-	{
-		size_t total = 0;
-
-		total += getVectorMemoryUsage(springBodyPairs);
-		total += getVectorMemoryUsage(orderedSpringIndices);
-		total += getVectorMemoryUsage(springConstraintContainer);
-		total += solvingPlan.getMemoryUsage();
-
-		return total;
-	}
-
-	void SpringSolver::solveSprings(
-		Real deltaTime,
-		uint32_t springIterations,
-		bool springsWereChanged
-	)
-	{
-		const size_t springCount = springs.getCount();
-		if (springCount == 0) return;
-
-		const size_t workerCount = planWorkerCount(springCount);
-
-		// Single-threaded path.
-		if (workerCount <= 1)
-		{
-			TRACY_SCOPE_NC("Solve springs (Single-threaded)", Ecstasy::Core::Color::OliveDrab);
-
-			if (orderedSpringIndices.size() != springCount)
-			{
-				orderedSpringIndices.resize(springCount);
-				for (size_t i = 0; i < springCount; i++)
-				{
-					orderedSpringIndices[i] = i;
-				}
-			}
-
-			computeConstraintData(deltaTime, orderedSpringIndices);
-
-			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(springCount) };
-
-			for (uint32_t i = 0; i < springIterations; i++)
-			{
-				solveVelocityConstraints(fullPass);
-			}
-			return;
-		}
-
-		// Multi-threading path.
-		TRACY_SCOPE_NC("Solve springs (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (springsWereChanged || solvingPlan.getFlatIndices().size() != springCount)
-		{
-			{
-				TRACY_SCOPE_NC("Collect body pairs from springs", Ecstasy::Core::Color::Red);
-				springBodyPairs.resize(springCount);
-				for (size_t i = 0; i < springCount; i++)
-				{
-					springBodyPairs[i] = { springs.bodyIndexA[i], springs.bodyIndexB[i] };
-				}
-			}
-			{
-				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-
-				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-					springBodyPairs, bodies->getCount(), workerCount,
-					sizeof(Real),
-					std::hardware_destructive_interference_size,
-					solvingPlan
-				);
-			}
-		}
-		{
-			TRACY_SCOPE_N("Reorder spring indices");
-
-			const auto& flatIndices = solvingPlan.getFlatIndices();
-			orderedSpringIndices.assign(flatIndices.begin(), flatIndices.end());
-		}
-		computeConstraintData(deltaTime, orderedSpringIndices);
-
-		solveConstraintsThreaded(springIterations);
-	}
-
-	size_t SpringSolver::planWorkerCount(size_t springCount) const
-	{
-		// Note: tuned for collisions; re-profile once springs are a bottleneck on their own.
-		static constexpr size_t SPRING_COUNT_PER_WORKER = 7'000;
-		static constexpr size_t MIN_SPRING_COUNT_FOR_THREADING = SPRING_COUNT_PER_WORKER * 3;
-
-		// Single-threaded path.
-		if (springCount < MIN_SPRING_COUNT_FOR_THREADING)
-		{
-			return 0;
-		}
-
-		// Multi-threading path.
-		auto& threadPool = Threading::getGlobalThreadPool();
-
-		const size_t availableWorkerCount = threadPool.getThreadCount();
-		const size_t neededWorkerCount = springCount / SPRING_COUNT_PER_WORKER;
-
-		return std::min(availableWorkerCount, neededWorkerCount);
-	}
-
 	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices)
 	{
 		TRACY_SCOPE_NC("Compute spring constraint data", Ecstasy::Core::Color::Chocolate);
@@ -137,13 +23,13 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
-		const Real* ECSTASY_RESTRICT springRestLengthPtr = springs.restLength;
-		const Real* ECSTASY_RESTRICT springStiffnessPtr = springs.stiffness;
-		const Real* ECSTASY_RESTRICT springDampingPtr = springs.damping;
+		const Real* ECSTASY_RESTRICT springRestLengthPtr = viewer.restLength;
+		const Real* ECSTASY_RESTRICT springStiffnessPtr = viewer.stiffness;
+		const Real* ECSTASY_RESTRICT springDampingPtr = viewer.damping;
 
 		// Resize container.
 		const size_t springCount = springIndices.size();
-		springConstraintContainer.resize(springCount);
+		constraintContainer.resize(springCount);
 
 		const size_t* ECSTASY_RESTRICT springIndicesPtr = springIndices.data();
 
@@ -151,10 +37,10 @@ namespace PS_AGONY
 		for (size_t springIndex = 0; springIndex < springCount; springIndex++)
 		{
 			const size_t i = springIndicesPtr[springIndex];
-			SpringConstraintData& constraintData = springConstraintContainer[springIndex];
+			SpringConstraintData& constraintData = constraintContainer[springIndex];
 
-			const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
+			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;
@@ -178,8 +64,8 @@ namespace PS_AGONY
 				positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB]
 			};
 
-			const Vec2 rotatedAnchorA = rotate(springs.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-			const Vec2 rotatedAnchorB = rotate(springs.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+			const Vec2 rotatedAnchorA = rotate(viewer.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+			const Vec2 rotatedAnchorB = rotate(viewer.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
 			const Vec2 worldAnchorA = worldCenterA + rotatedAnchorA;
 			const Vec2 worldAnchorB = worldCenterB + rotatedAnchorB;
@@ -240,7 +126,7 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve spring velocity constraints", Ecstasy::Core::Color::Violet);
 
-		std::span<const SpringConstraintData> constraintDataSpan(springConstraintContainer.data() + pass.start, pass.size);
+		std::span<const SpringConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -316,34 +202,5 @@ namespace PS_AGONY
 				angularVelocityPtr[bodyIndexB] = angularVelocityB;
 			}
 		}
-	}
-
-	void SpringSolver::solveConstraintsThreaded(uint32_t springIterations)
-	{
-		const size_t workerCount = solvingPlan.getWorkerCount();
-
-		const auto& passOffsets = solvingPlan.getPassOffsets();
-		const size_t waveCount = passOffsets.size() / workerCount;
-		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
-
-		if (waveCount == 0 || springIterations == 0) [[unlikely]]
-		{
-			return;
-		}
-
-		const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * springIterations;
-
-		runThreadedWaves(workerCount, waveCount, totalTicks,
-			[&](size_t waveIndex, size_t workerIndex, uint32_t /*passTicket*/)
-			{
-				const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-				const auto& passOffset = passOffsetsPtr[passGlobalIndex];
-
-				// Get work from current wave and execute it. If empty, skip.
-				if (passOffset.size == 0) return;
-
-				solveVelocityConstraints(passOffset);
-			}
-		);
 	}
 }

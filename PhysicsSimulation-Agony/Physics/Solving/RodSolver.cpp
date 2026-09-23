@@ -1,127 +1,10 @@
 #include "RodSolver.h"
 
-#include "Physics/Threading.h"
-
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
 {
-	void RodSolver::setDataViewers(
-		BodySoA& bodiesIn,
-		const RodSoAViewer& rodsIn
-	)
-	{
-		setResources(bodiesIn);
-		rods = rodsIn;
-	}
-
-	size_t RodSolver::getMemoryUsage() const
-	{
-		size_t total = 0;
-
-		total += getVectorMemoryUsage(rodBodyPairs);
-		total += getVectorMemoryUsage(orderedRodIndices);
-		total += getVectorMemoryUsage(rodConstraintContainer);
-
-		total += solvingPlan.getMemoryUsage();
-
-		return total;
-	}
-
-	void RodSolver::solveRods(
-		Real deltaTime,
-		uint32_t rodIterations,
-		bool rodsWereChanged
-	)
-	{
-		const size_t rodCount = rods.getCount();
-		if (rodCount == 0) return;
-
-		const size_t workerCount = planWorkerCount(rodCount);
-
-		// Single-threaded path.
-		if (workerCount <= 1)
-		{
-			TRACY_SCOPE_NC("Solve rods (Single-threaded)", Ecstasy::Core::Color::OliveDrab);
-
-			if (orderedRodIndices.size() != rodCount)
-			{
-				orderedRodIndices.resize(rodCount);
-				for (size_t i = 0; i < rodCount; i++)
-				{
-					orderedRodIndices[i] = i;
-				}
-			}
-
-			computeConstraintData(deltaTime, orderedRodIndices);
-
-			const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(rodCount) };
-
-			for (uint32_t i = 0; i < rodIterations; i++)
-			{
-				solveVelocityConstraints(fullPass);
-			}
-			return;
-		}
-
-		// Multi-threading path.
-		TRACY_SCOPE_NC("Solve rods (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
-		if (rodsWereChanged || solvingPlan.getFlatIndices().size() != rodCount)
-		{
-			{
-				TRACY_SCOPE_NC("Collect body pairs from rods", Ecstasy::Core::Color::Red);
-				rodBodyPairs.resize(rodCount);
-				for (size_t i = 0; i < rodCount; i++)
-				{
-					rodBodyPairs[i] = { rods.bodyIndexA[i], rods.bodyIndexB[i] };
-				}
-			}
-			{
-				TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-
-				SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-					rodBodyPairs, bodies->getCount(), workerCount,
-					sizeof(Real),
-					std::hardware_destructive_interference_size,
-					solvingPlan
-				);
-			}
-		}
-		{
-			TRACY_SCOPE_N("Reorder rod indices");
-
-			const auto& flatIndices = solvingPlan.getFlatIndices();
-			orderedRodIndices.assign(flatIndices.begin(), flatIndices.end());
-		}
-		computeConstraintData(deltaTime, orderedRodIndices);
-
-		solveConstraintsThreaded(rodIterations);
-	}
-
-	size_t RodSolver::planWorkerCount(size_t rodCount) const
-	{
-		// Note: placeholder thresholds copied in shape from SpringSolver, not in value -
-		// rod's per-constraint cost/count profile hasn't been measured yet. Re-profile
-		// before relying on these once rods are used at scale.
-		static constexpr size_t ROD_COUNT_PER_WORKER = 7'000;
-		static constexpr size_t MIN_ROD_COUNT_FOR_THREADING = ROD_COUNT_PER_WORKER * 3;
-
-		// Single-threaded path.
-		if (rodCount < MIN_ROD_COUNT_FOR_THREADING)
-		{
-			return 0;
-		}
-
-		// Multi-threading path.
-		auto& threadPool = Threading::getGlobalThreadPool();
-
-		const size_t availableWorkerCount = threadPool.getThreadCount();
-		const size_t neededWorkerCount = rodCount / ROD_COUNT_PER_WORKER;
-
-		return std::min(availableWorkerCount, neededWorkerCount);
-	}
-
 	void RodSolver::computeConstraintData(Real deltaTime, std::span<const size_t> rodIndices)
 	{
 		TRACY_SCOPE_NC("Compute rod constraint data", Ecstasy::Core::Color::Chocolate);
@@ -145,11 +28,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
-		const Real* ECSTASY_RESTRICT rodLengthPtr = rods.length;
+		const Real* ECSTASY_RESTRICT rodLengthPtr = viewer.length;
 
 		// Resize container.
 		const size_t rodCount = rodIndices.size();
-		rodConstraintContainer.resize(rodCount);
+		constraintContainer.resize(rodCount);
 
 		const size_t* ECSTASY_RESTRICT rodIndicesPtr = rodIndices.data();
 
@@ -159,10 +42,10 @@ namespace PS_AGONY
 		for (size_t rodIndex = 0; rodIndex < rodCount; rodIndex++)
 		{
 			const size_t i = rodIndicesPtr[rodIndex];
-			RodConstraintData& constraintData = rodConstraintContainer[rodIndex];
+			RodConstraintData& constraintData = constraintContainer[rodIndex];
 
-			const ObjectIndex bodyIndexA = rods.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = rods.bodyIndexB[i];
+			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
+			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;
@@ -186,8 +69,8 @@ namespace PS_AGONY
 				positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB]
 			};
 
-			const Vec2 rotatedAnchorA = rotate(rods.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-			const Vec2 rotatedAnchorB = rotate(rods.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+			const Vec2 rotatedAnchorA = rotate(viewer.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
+			const Vec2 rotatedAnchorB = rotate(viewer.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
 
 			const Vec2 worldAnchorA = worldCenterA + rotatedAnchorA;
 			const Vec2 worldAnchorB = worldCenterB + rotatedAnchorB;
@@ -233,7 +116,7 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve rod velocity constraints", Ecstasy::Core::Color::Violet);
 
-		std::span<const RodConstraintData> constraintDataSpan(rodConstraintContainer.data() + pass.start, pass.size);
+		std::span<const RodConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
@@ -309,34 +192,5 @@ namespace PS_AGONY
 				angularVelocityPtr[bodyIndexB] = angularVelocityB;
 			}
 		}
-	}
-
-	void RodSolver::solveConstraintsThreaded(uint32_t rodIterations)
-	{
-		const size_t workerCount = solvingPlan.getWorkerCount();
-
-		const auto& passOffsets = solvingPlan.getPassOffsets();
-		const size_t waveCount = passOffsets.size() / workerCount;
-		const auto* ECSTASY_RESTRICT passOffsetsPtr = passOffsets.data();
-
-		if (waveCount == 0 || rodIterations == 0) [[unlikely]]
-		{
-			return;
-		}
-
-		const uint32_t totalTicks = static_cast<uint32_t>(waveCount) * rodIterations;
-
-		runThreadedWaves(workerCount, waveCount, totalTicks,
-			[&](size_t waveIndex, size_t workerIndex, uint32_t /*passTicket*/)
-			{
-				const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-				const auto& passOffset = passOffsetsPtr[passGlobalIndex];
-
-				// Get work from current wave and execute it. If empty, skip.
-				if (passOffset.size == 0) return;
-
-				solveVelocityConstraints(passOffset);
-			}
-		);
 	}
 }

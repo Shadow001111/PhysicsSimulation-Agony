@@ -17,22 +17,15 @@ namespace PS_AGONY
     Simulation::Simulation() :
         objectManager(materials)
     {
-        simulationSettings.constraintIterations.fill(6);
-
         materials.reserve(16);
         materials.emplace_back(); // Default material.
 
-        constraintSystems[size_t(ConstraintType::Spring)] = &springConstraintSystem;
-        constraintSystems[size_t(ConstraintType::Joint)] = &jointConstraintSystem;
-        constraintSystems[size_t(ConstraintType::Rod)] = &rodConstraintSystem;
-        constraintSystems[size_t(ConstraintType::Prismatic)] = &prismaticJointConstraintSystem;
-        constraintSystems[size_t(ConstraintType::Slider)] = &sliderJointConstraintSystem;
-
-        constraintSystemSolvers[size_t(ConstraintType::Spring)] = &springSolver;
-        constraintSystemSolvers[size_t(ConstraintType::Joint)] = &jointSolver;
-        constraintSystemSolvers[size_t(ConstraintType::Rod)] = &rodSolver;
-        constraintSystemSolvers[size_t(ConstraintType::Prismatic)] = &prismaticJointSolver;
-        constraintSystemSolvers[size_t(ConstraintType::Slider)] = &sliderJointSolver;
+        const auto registerSystem = [this](IConstraintSystem& system) { constraintSystems[size_t(system.getType())] = &system; };
+        registerSystem(springConstraintSystem);
+        registerSystem(jointConstraintSystem);
+        registerSystem(rodConstraintSystem);
+        registerSystem(prismaticJointConstraintSystem);
+        registerSystem(sliderJointConstraintSystem);
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
@@ -103,117 +96,6 @@ namespace PS_AGONY
                 runtimeDebugData.bodyKineticEnergySum = 0;
             }
         }
-    }
-
-    void Simulation::createSpring(const SpringCreateParams& params)
-    {
-        springConstraintSystem.createSpring(
-            params.bodyIndexA,
-            params.bodyIndexB,
-            params.localAnchorA,
-            params.localAnchorB,
-            params.restLength,
-            params.stiffness,
-            params.damping,
-            objectManager.bodies
-        );
-
-        springsWereChanged = true;
-    }
-
-    void Simulation::destroySpring(uint32_t springIndex)
-    {
-        springConstraintSystem.removeConstraint(springIndex, objectManager.bodies);
-        springsWereChanged = true;
-    }
-
-    void Simulation::createRevoluteJoint(const RevoluteJointCreateParams& params)
-    {
-        jointConstraintSystem.createJoint(
-            params.bodyIndexA,
-            params.bodyIndexB,
-            params.localAnchorA,
-            params.localAnchorB,
-            params.stiffness,
-            params.damping,
-            objectManager.bodies
-        );
-
-        jointsWereChanged = true;
-    }
-
-    void Simulation::destroyRevoluteJoint(uint32_t jointIndex)
-    {
-        jointConstraintSystem.removeConstraint(jointIndex, objectManager.bodies);
-        jointsWereChanged = true;
-    }
-
-    void Simulation::createRod(const RodCreateParams& params)
-    {
-        rodConstraintSystem.createRod(
-            params.bodyIndexA,
-            params.bodyIndexB,
-            params.localAnchorA,
-            params.localAnchorB,
-            params.length,
-            objectManager.bodies
-        );
-
-        rodsWereChanged = true;
-    }
-
-    void Simulation::destroyRod(uint32_t rodIndex)
-    {
-        rodConstraintSystem.removeConstraint(rodIndex, objectManager.bodies);
-        rodsWereChanged = true;
-    }
-
-    void Simulation::createPrismaticJoint(const PrismaticJointCreateParams& params)
-    {
-        prismaticJointConstraintSystem.createPrismaticJoint(
-            params.bodyIndexA,
-            params.bodyIndexB,
-            params.localAnchorA,
-            params.localAnchorB,
-            params.localAxisA,
-            params.stiffness,
-            params.damping,
-            params.lowerLimit,
-            params.upperLimit,
-            params.enableLimit,
-            objectManager.bodies
-        );
-        prismaticJointsWereChanged = true;
-    }
-
-    void Simulation::destroyPrismaticJoint(uint32_t prismaticJointIndex)
-    {
-        prismaticJointConstraintSystem.removeConstraint(prismaticJointIndex, objectManager.bodies);
-        prismaticJointsWereChanged = true;
-    }
-
-    void Simulation::createSliderJoint(const SliderJointCreateParams& params)
-    {
-        sliderJointConstraintSystem.createSliderJoint(
-            params.bodyIndexA,
-            params.bodyIndexB,
-            params.localAnchorA,
-            params.localAnchorB,
-            params.localAxisA,
-            params.stiffness,
-            params.damping,
-            params.lowerLimit,
-            params.upperLimit,
-            params.enableLimit,
-            objectManager.bodies
-        );
-        sliderJointsWereChanged = true;
-    }
-
-    void Simulation::destroySliderJoint(uint32_t sliderJointIndex)
-    {
-        sliderJointConstraintSystem.removeConstraint(sliderJointIndex, objectManager.bodies);
-        sliderJointsWereChanged = true;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -357,31 +239,6 @@ namespace PS_AGONY
             materials
         );
 
-        springSolver.setDataViewers(
-            objectManager.bodies,
-            SpringSoAViewer(springs)
-        );
-
-        jointSolver.setDataViewers(
-            objectManager.bodies,
-            JointSoAViewer(joints)
-        );
-
-        rodSolver.setDataViewers(
-            objectManager.bodies,
-            RodSoAViewer(rods)
-        );
-
-        prismaticJointSolver.setDataViewers(
-            objectManager.bodies,
-            PrismaticJointSoAViewer(prismaticJoints)
-        );
-
-        sliderJointSolver.setDataViewers(
-            objectManager.bodies,
-            SliderJointSoAViewer(sliderJoints)
-        );
-
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
         // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
         narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
@@ -404,45 +261,11 @@ namespace PS_AGONY
         // Rebuild AABBs.
         buildColliderAABBs();
 
-        // Springs.
-        springSolver.solveSprings(
-            deltaTime,
-            simulationSettings.constraintIterations[size_t(ConstraintType::Spring)],
-            springsWereChanged
-        );
-        springsWereChanged = false;
-
-        // Joints.
-        jointSolver.solveJoints(
-            deltaTime,
-            simulationSettings.constraintIterations[size_t(ConstraintType::Joint)],
-            jointsWereChanged
-        );
-        jointsWereChanged = false;
-
-        // Rods.
-        rodSolver.solveRods(
-            deltaTime,
-            simulationSettings.constraintIterations[size_t(ConstraintType::Rod)],
-            rodsWereChanged
-        );
-        rodsWereChanged = false;
-
-        // Prismatic joints.
-        prismaticJointSolver.solvePrismaticJoints(
-            deltaTime,
-            simulationSettings.constraintIterations[size_t(ConstraintType::Prismatic)],
-            prismaticJointsWereChanged
-        );
-        prismaticJointsWereChanged = false;
-
-        // Slider joints.
-        sliderJointSolver.solveSliderJoints(
-            deltaTime,
-            simulationSettings.constraintIterations[size_t(ConstraintType::Slider)],
-            sliderJointsWereChanged
-        );
-        sliderJointsWereChanged = false;
+        // Constraints (solving order is the ConstraintType order).
+        for (IConstraintSystem* constraintSystem : constraintSystems)
+        {
+            constraintSystem->solve(deltaTime, objectManager.bodies);
+        }
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
@@ -965,11 +788,10 @@ namespace PS_AGONY
 
         data.bodyCollisionSolverMemoryUsage = bodyCollisionSolver.getMemoryUsage();
 
-        data.constraintDataMemoryUsage[size_t(ConstraintType::Spring)] = springs.getMemoryUsage();
-        data.constraintDataMemoryUsage[size_t(ConstraintType::Joint)] = joints.getMemoryUsage();
-        data.constraintDataMemoryUsage[size_t(ConstraintType::Rod)] = rods.getMemoryUsage();
-        data.constraintDataMemoryUsage[size_t(ConstraintType::Prismatic)] = prismaticJoints.getMemoryUsage();
-        data.constraintDataMemoryUsage[size_t(ConstraintType::Slider)] = sliderJoints.getMemoryUsage();
+        for (size_t i = 0; i < constraintSystems.size(); ++i)
+        {
+            data.constraintDataMemoryUsage[i] = constraintSystems[i]->getMemoryUsage();
+        }
 
         data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage();
     }

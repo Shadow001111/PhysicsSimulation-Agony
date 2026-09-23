@@ -6,327 +6,254 @@
 #include "SoA/Constraints/PrismaticJointSoA.h"
 #include "SoA/Constraints/SliderJointSoA.h"
 
+#include "Solving/SpringSolver.h"
+#include "Solving/RevoluteJointSolver.h"
+#include "Solving/RodSolver.h"
+#include "Solving/PrismaticJointSolver.h"
+#include "Solving/SliderJointSolver.h"
+
 #include <array>
 #include <cmath>
+#include <utility>
 
 namespace PS_AGONY
 {
-	// One implementation per ConstraintType, letting a body cascade-delete
-	// whatever is attached to it without BodySoA needing to know concrete
-	// constraint types. Each system is also where its constraint SoA gets
-	// wired up to BodySoA - the SoA itself (e.g. SpringSoA) stays ignorant
-	// of bodies entirely.
+	// One implementation per ConstraintType. Owns the constraint SoA and its solver, wires
+	// them to BodySoA (attachments, cascade deletion, index remapping) and solves them.
 	class IConstraintSystem
 	{
 	public:
+		uint32_t iterations = 6;
+
 		virtual ~IConstraintSystem() = default;
 
 		virtual void removeConstraint(uint32_t index, BodySoA& bodies) = 0;
 		virtual void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) = 0;
 
+		virtual void solve(Real deltaTime, BodySoA& bodies) = 0;
+
+		virtual size_t getCount() const noexcept = 0;
+		virtual size_t getMemoryUsage() const noexcept = 0;
+		virtual size_t getSolverMemoryUsage() const noexcept = 0;
+
+		virtual ConstraintType getType() const noexcept = 0;
 		virtual const char* getName() const noexcept = 0;
 	};
 
 	using ConstraintSystemArray = std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)>;
 
-	class SpringConstraintSystem final : public IConstraintSystem
+	// Everything that is identical between constraint types.
+	// Requirements:
+	//   SoA    : bodyIndexA, bodyIndexB, append(a, b, ...), swapRemove(i), getCount(), getMemoryUsage().
+	//   Solver : ConstraintSolverBase<Solver, Viewer, ConstraintData>-derived (provides setDataViewers, solve, getMemoryUsage).
+	//   Viewer : constructible from const SoA&.
+	// A concrete system only adds a nested CreateParams, create() and getName().
+	template<ConstraintType Type, class SoA, class Solver, class Viewer>
+	class ConstraintSystemBase : public IConstraintSystem
 	{
-		SpringSoA& springs;
-	public:
-		explicit SpringConstraintSystem(SpringSoA& springs) noexcept : springs(springs) {}
+	protected:
+		SoA soa;
+		Solver solver;
+		bool wasSoAChanged = false;
 
-		// Creates a spring and registers it with both bodies it touches.
-		void createSpring(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real restLen, Real stiffness, Real damping, BodySoA& bodies)
+		// Appends a constraint and registers it with both bodies it touches.
+		template<class... Args>
+		uint32_t createImpl(ObjectIndex indexA, ObjectIndex indexB, BodySoA& bodies, Args&&... args)
 		{
-			const uint32_t newIndex = springs.append(indexA, indexB, anchorA, anchorB, restLen, stiffness, damping);
-			bodies.addAttachment(indexA, ConstraintType::Spring, newIndex);
-			bodies.addAttachment(indexB, ConstraintType::Spring, newIndex);
+			const uint32_t newIndex = static_cast<uint32_t>(soa.append(indexA, indexB, std::forward<Args>(args)...));
+			bodies.addAttachment(indexA, Type, newIndex);
+			bodies.addAttachment(indexB, Type, newIndex);
+			wasSoAChanged = true;
+			return newIndex;
 		}
-
-		void removeConstraint(uint32_t index, BodySoA& bodies) override
+	public:
+		void removeConstraint(uint32_t index, BodySoA& bodies) final
 		{
-			if (index >= springs.bodyIndexA.size()) [[unlikely]]
+			if (index >= soa.getCount()) [[unlikely]]
 			{
 				return;
 			}
 
-			// Unlink the spring being removed from both of its bodies.
-			bodies.removeAttachment(springs.bodyIndexA[index], ConstraintType::Spring, index);
-			bodies.removeAttachment(springs.bodyIndexB[index], ConstraintType::Spring, index);
+			// Unlink the constraint being removed from both of its bodies.
+			bodies.removeAttachment(soa.bodyIndexA[index], Type, index);
+			bodies.removeAttachment(soa.bodyIndexB[index], Type, index);
 
-			const size_t oldBackIndex = springs.swapRemove(index);
+			const uint32_t oldBackIndex = static_cast<uint32_t>(soa.swapRemove(index));
 
-			// If a spring got swapped into 'index', relink it there.
+			// If a constraint got swapped into 'index', relink it there.
 			if (oldBackIndex != index)
 			{
-				const uint32_t newIndex = static_cast<uint32_t>(index);
-				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
-
-				bodies.removeAttachment(springs.bodyIndexA[index], ConstraintType::Spring, oldIndex);
-				bodies.addAttachment(springs.bodyIndexA[index], ConstraintType::Spring, newIndex);
-				bodies.removeAttachment(springs.bodyIndexB[index], ConstraintType::Spring, oldIndex);
-				bodies.addAttachment(springs.bodyIndexB[index], ConstraintType::Spring, newIndex);
+				bodies.removeAttachment(soa.bodyIndexA[index], Type, oldBackIndex);
+				bodies.addAttachment(soa.bodyIndexA[index], Type, index);
+				bodies.removeAttachment(soa.bodyIndexB[index], Type, oldBackIndex);
+				bodies.addAttachment(soa.bodyIndexB[index], Type, index);
 			}
+
+			wasSoAChanged = true;
 		}
 
-		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
+		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) final
 		{
-			if (index >= springs.bodyIndexA.size()) [[unlikely]]
+			if (index >= soa.getCount()) [[unlikely]]
 			{
 				return;
 			}
-			if (springs.bodyIndexA[index] == oldBodyIndex) springs.bodyIndexA[index] = newBodyIndex;
-			if (springs.bodyIndexB[index] == oldBodyIndex) springs.bodyIndexB[index] = newBodyIndex;
+			if (soa.bodyIndexA[index] == oldBodyIndex) soa.bodyIndexA[index] = newBodyIndex;
+			if (soa.bodyIndexB[index] == oldBodyIndex) soa.bodyIndexB[index] = newBodyIndex;
+		}
+
+		void solve(Real deltaTime, BodySoA& bodies) final
+		{
+			solver.setDataViewers(bodies, Viewer(soa));
+			solver.solve(deltaTime, iterations, wasSoAChanged);
+			wasSoAChanged = false;
+		}
+
+		Viewer getViewer() const noexcept { return Viewer(soa); }
+
+		size_t getCount() const noexcept final { return soa.getCount(); }
+		size_t getMemoryUsage() const noexcept final { return soa.getMemoryUsage(); }
+		size_t getSolverMemoryUsage() const noexcept final { return solver.getMemoryUsage(); }
+
+		ConstraintType getType() const noexcept final { return Type; }
+	};
+
+	class SpringConstraintSystem final :
+		public ConstraintSystemBase<ConstraintType::Spring, SpringSoA, SpringSolver, SpringSoAViewer>
+	{
+	public:
+		struct CreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Real restLength;
+			Real stiffness;
+			Real damping;
+		};
+
+		void create(const CreateParams& p, BodySoA& bodies)
+		{
+			createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.restLength, p.stiffness, p.damping);
 		}
 
 		const char* getName() const noexcept override { return "Spring"; }
 	};
 
-	class RevoluteJointConstraintSystem final : public IConstraintSystem
+	class RevoluteJointConstraintSystem final :
+		public ConstraintSystemBase<ConstraintType::Joint, RevoluteJointSoA, RevoluteJointSolver, JointSoAViewer>
 	{
-		RevoluteJointSoA& joints;
 	public:
-		explicit RevoluteJointConstraintSystem(RevoluteJointSoA& joints) noexcept : joints(joints) {}
-
-		// Creates a revolute joint and registers it with both bodies it touches.
-		void createJoint(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping, BodySoA& bodies)
+		struct CreateParams
 		{
-			const uint32_t newIndex = joints.append(indexA, indexB, anchorA, anchorB, stiffness, damping);
-			bodies.addAttachment(indexA, ConstraintType::Joint, newIndex);
-			bodies.addAttachment(indexB, ConstraintType::Joint, newIndex);
-		}
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Real stiffness;
+			Real damping;
+		};
 
-		void removeConstraint(uint32_t index, BodySoA& bodies) override
+		void create(const CreateParams& p, BodySoA& bodies)
 		{
-			if (index >= joints.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-
-			// Unlink the joint being removed from both of its bodies.
-			bodies.removeAttachment(joints.bodyIndexA[index], ConstraintType::Joint, index);
-			bodies.removeAttachment(joints.bodyIndexB[index], ConstraintType::Joint, index);
-
-			const size_t oldBackIndex = joints.swapRemove(index);
-
-			// If a joint got swapped into 'index', relink it there.
-			if (oldBackIndex != index)
-			{
-				const uint32_t newIndex = static_cast<uint32_t>(index);
-				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
-
-				bodies.removeAttachment(joints.bodyIndexA[index], ConstraintType::Joint, oldIndex);
-				bodies.addAttachment(joints.bodyIndexA[index], ConstraintType::Joint, newIndex);
-				bodies.removeAttachment(joints.bodyIndexB[index], ConstraintType::Joint, oldIndex);
-				bodies.addAttachment(joints.bodyIndexB[index], ConstraintType::Joint, newIndex);
-			}
-		}
-
-		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
-		{
-			if (index >= joints.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-			if (joints.bodyIndexA[index] == oldBodyIndex) joints.bodyIndexA[index] = newBodyIndex;
-			if (joints.bodyIndexB[index] == oldBodyIndex) joints.bodyIndexB[index] = newBodyIndex;
+			createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.stiffness, p.damping);
 		}
 
 		const char* getName() const noexcept override { return "RevoluteJoint"; }
 	};
 
-	class RodConstraintSystem final : public IConstraintSystem
+	class RodConstraintSystem final :
+		public ConstraintSystemBase<ConstraintType::Rod, RodSoA, RodSolver, RodSoAViewer>
 	{
-		RodSoA& rods;
 	public:
-		explicit RodConstraintSystem(RodSoA& rods) noexcept : rods(rods) {}
-
-		// Creates a rod and registers it with both bodies it touches.
-		void createRod(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real length, BodySoA& bodies)
+		struct CreateParams
 		{
-			const uint32_t newIndex = rods.append(indexA, indexB, anchorA, anchorB, length);
-			bodies.addAttachment(indexA, ConstraintType::Rod, newIndex);
-			bodies.addAttachment(indexB, ConstraintType::Rod, newIndex);
-		}
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Real length;
+		};
 
-		void removeConstraint(uint32_t index, BodySoA& bodies) override
+		void create(const CreateParams& p, BodySoA& bodies)
 		{
-			if (index >= rods.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-
-			// Unlink the rod being removed from both of its bodies.
-			bodies.removeAttachment(rods.bodyIndexA[index], ConstraintType::Rod, index);
-			bodies.removeAttachment(rods.bodyIndexB[index], ConstraintType::Rod, index);
-
-			const size_t oldBackIndex = rods.swapRemove(index);
-
-			// If a rod got swapped into 'index', relink it there.
-			if (oldBackIndex != index)
-			{
-				const uint32_t newIndex = static_cast<uint32_t>(index);
-				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
-
-				bodies.removeAttachment(rods.bodyIndexA[index], ConstraintType::Rod, oldIndex);
-				bodies.addAttachment(rods.bodyIndexA[index], ConstraintType::Rod, newIndex);
-				bodies.removeAttachment(rods.bodyIndexB[index], ConstraintType::Rod, oldIndex);
-				bodies.addAttachment(rods.bodyIndexB[index], ConstraintType::Rod, newIndex);
-			}
-		}
-
-		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
-		{
-			if (index >= rods.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-			if (rods.bodyIndexA[index] == oldBodyIndex) rods.bodyIndexA[index] = newBodyIndex;
-			if (rods.bodyIndexB[index] == oldBodyIndex) rods.bodyIndexB[index] = newBodyIndex;
+			createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.length);
 		}
 
 		const char* getName() const noexcept override { return "Rod"; }
 	};
 
-	class PrismaticJointConstraintSystem final : public IConstraintSystem
+	class PrismaticJointConstraintSystem final :
+		public ConstraintSystemBase<ConstraintType::Prismatic, PrismaticJointSoA, PrismaticJointSolver, PrismaticJointSoAViewer>
 	{
-		PrismaticJointSoA& prismaticJoints;
 	public:
-		explicit PrismaticJointConstraintSystem(PrismaticJointSoA& prismaticJoints) noexcept : prismaticJoints(prismaticJoints) {}
+		struct CreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Vec2 localAxisA; // Axis in body A's local space that translation is locked to; need not be pre-normalized.
+			Real stiffness;
+			Real damping;
+			Real lowerLimit = 0;
+			Real upperLimit = 0;
+			bool enableLimit = false;
+		};
 
-		// Creates a prismatic (slider/piston) joint and registers it with both bodies it touches.
-		// axisA is given in body A's local space and need not be pre-normalized.
-		void createPrismaticJoint(
-			ObjectIndex indexA, ObjectIndex indexB,
-			Vec2 anchorA, Vec2 anchorB, Vec2 axisA,
-			Real stiffness, Real damping,
-			Real lowerLimit, Real upperLimit, bool enableLimit,
-			BodySoA& bodies)
+		void create(const CreateParams& p, BodySoA& bodies)
 		{
 			// Normalize the axis defensively; a zero-length axis would make the joint singular.
-			const Real axisLenSq = glm::dot(axisA, axisA);
-			const Vec2 normalizedAxis = axisLenSq > Real(1e-12) ? axisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
+			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
+			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
 
 			// Capture the current relative angle so the joint locks rotation at its creation pose,
 			// wrapped to (-pi, pi] so it stays robust to each body's rotation wrapping independently.
 			constexpr Real PI = Real(3.14159265358979323846);
 			constexpr Real TWO_PI = Real(2) * PI;
-			Real refAngle = bodies.rotation[indexB] - bodies.rotation[indexA];
+			Real refAngle = bodies.rotation[p.bodyIndexB] - bodies.rotation[p.bodyIndexA];
 			refAngle -= TWO_PI * std::floor((refAngle + PI) / TWO_PI);
 
-			const uint32_t newIndex = prismaticJoints.append(
-				indexA, indexB, anchorA, anchorB, normalizedAxis, refAngle,
-				stiffness, damping, lowerLimit, upperLimit, enableLimit
+			createImpl(
+				p.bodyIndexA, p.bodyIndexB, bodies,
+				p.localAnchorA, p.localAnchorB, axis, refAngle,
+				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
-			bodies.addAttachment(indexA, ConstraintType::Prismatic, newIndex);
-			bodies.addAttachment(indexB, ConstraintType::Prismatic, newIndex);
-		}
-
-		void removeConstraint(uint32_t index, BodySoA& bodies) override
-		{
-			if (index >= prismaticJoints.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-
-			// Unlink the prismatic joint being removed from both of its bodies.
-			bodies.removeAttachment(prismaticJoints.bodyIndexA[index], ConstraintType::Prismatic, index);
-			bodies.removeAttachment(prismaticJoints.bodyIndexB[index], ConstraintType::Prismatic, index);
-
-			const size_t oldBackIndex = prismaticJoints.swapRemove(index);
-
-			// If a prismatic joint got swapped into 'index', relink it there.
-			if (oldBackIndex != index)
-			{
-				const uint32_t newIndex = static_cast<uint32_t>(index);
-				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
-
-				bodies.removeAttachment(prismaticJoints.bodyIndexA[index], ConstraintType::Prismatic, oldIndex);
-				bodies.addAttachment(prismaticJoints.bodyIndexA[index], ConstraintType::Prismatic, newIndex);
-				bodies.removeAttachment(prismaticJoints.bodyIndexB[index], ConstraintType::Prismatic, oldIndex);
-				bodies.addAttachment(prismaticJoints.bodyIndexB[index], ConstraintType::Prismatic, newIndex);
-			}
-		}
-
-		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
-		{
-			if (index >= prismaticJoints.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-			if (prismaticJoints.bodyIndexA[index] == oldBodyIndex) prismaticJoints.bodyIndexA[index] = newBodyIndex;
-			if (prismaticJoints.bodyIndexB[index] == oldBodyIndex) prismaticJoints.bodyIndexB[index] = newBodyIndex;
 		}
 
 		const char* getName() const noexcept override { return "PrismaticJoint"; }
 	};
 
-	class SliderJointConstraintSystem final : public IConstraintSystem
+	class SliderJointConstraintSystem final :
+		public ConstraintSystemBase<ConstraintType::Slider, SliderJointSoA, SliderJointSolver, SliderJointSoAViewer>
 	{
-		SliderJointSoA& sliderJoints;
 	public:
-		explicit SliderJointConstraintSystem(SliderJointSoA& sliderJoints) noexcept : sliderJoints(sliderJoints) {}
+		struct CreateParams
+		{
+			ObjectIndex bodyIndexA;
+			ObjectIndex bodyIndexB;
+			Vec2 localAnchorA;
+			Vec2 localAnchorB;
+			Vec2 localAxisA; // Axis in body A's local space; need not be pre-normalized.
+			Real stiffness;
+			Real damping;
+			Real lowerLimit = 0;
+			Real upperLimit = 0;
+			bool enableLimit = false;
+		};
 
-		// Creates a slider (slider/piston) joint and registers it with both bodies it touches.
-		// axisA is given in body A's local space and need not be pre-normalized.
-		void createSliderJoint(
-			ObjectIndex indexA, ObjectIndex indexB,
-			Vec2 anchorA, Vec2 anchorB, Vec2 axisA,
-			Real stiffness, Real damping,
-			Real lowerLimit, Real upperLimit, bool enableLimit,
-			BodySoA& bodies)
+		void create(const CreateParams& p, BodySoA& bodies)
 		{
 			// Normalize the axis defensively; a zero-length axis would make the joint singular.
-			const Real axisLenSq = glm::dot(axisA, axisA);
-			const Vec2 normalizedAxis = axisLenSq > Real(1e-12) ? axisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
+			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
+			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
 
-			// Capture the current relative angle so the joint locks rotation at its creation pose,
-			// wrapped to (-pi, pi] so it stays robust to each body's rotation wrapping independently.
-			constexpr Real PI = Real(3.14159265358979323846);
-			constexpr Real TWO_PI = Real(2) * PI;
-
-			const uint32_t newIndex = sliderJoints.append(
-				indexA, indexB, anchorA, anchorB, normalizedAxis,
-				stiffness, damping, lowerLimit, upperLimit, enableLimit
+			createImpl(
+				p.bodyIndexA, p.bodyIndexB, bodies,
+				p.localAnchorA, p.localAnchorB, axis,
+				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
-			bodies.addAttachment(indexA, ConstraintType::Slider, newIndex);
-			bodies.addAttachment(indexB, ConstraintType::Slider, newIndex);
-		}
-
-		void removeConstraint(uint32_t index, BodySoA& bodies) override
-		{
-			if (index >= sliderJoints.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-
-			// Unlink the slider joint being removed from both of its bodies.
-			bodies.removeAttachment(sliderJoints.bodyIndexA[index], ConstraintType::Slider, index);
-			bodies.removeAttachment(sliderJoints.bodyIndexB[index], ConstraintType::Slider, index);
-
-			const size_t oldBackIndex = sliderJoints.swapRemove(index);
-
-			// If a slider joint got swapped into 'index', relink it there.
-			if (oldBackIndex != index)
-			{
-				const uint32_t newIndex = static_cast<uint32_t>(index);
-				const uint32_t oldIndex = static_cast<uint32_t>(oldBackIndex);
-
-				bodies.removeAttachment(sliderJoints.bodyIndexA[index], ConstraintType::Slider, oldIndex);
-				bodies.addAttachment(sliderJoints.bodyIndexA[index], ConstraintType::Slider, newIndex);
-				bodies.removeAttachment(sliderJoints.bodyIndexB[index], ConstraintType::Slider, oldIndex);
-				bodies.addAttachment(sliderJoints.bodyIndexB[index], ConstraintType::Slider, newIndex);
-			}
-		}
-
-		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) override
-		{
-			if (index >= sliderJoints.bodyIndexA.size()) [[unlikely]]
-			{
-				return;
-			}
-			if (sliderJoints.bodyIndexA[index] == oldBodyIndex) sliderJoints.bodyIndexA[index] = newBodyIndex;
-			if (sliderJoints.bodyIndexB[index] == oldBodyIndex) sliderJoints.bodyIndexB[index] = newBodyIndex;
 		}
 
 		const char* getName() const noexcept override { return "SliderJoint"; }

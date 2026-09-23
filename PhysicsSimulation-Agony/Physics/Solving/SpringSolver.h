@@ -1,65 +1,29 @@
 #pragma once
-#include "SolverBase.h"
+#include "ConstraintSolverBase.h"
 
-#include "Physics/SoA/BodySoA.h"
 #include "Physics/SoA/Constraints/SpringSoA.h"
-
-#include <span>
-#include <vector>
 
 namespace PS_AGONY
 {
-	class SpringSolver : public SolverBase
+	struct SpringConstraintData
 	{
-		// Structures / classes.
+		ObjectIndex bodyIndexA, bodyIndexB;
+		Vec2 dir;
+		Vec2 rotatedAnchorA, rotatedAnchorB;
+		Real invEffectiveMass; // 1 / (effectiveMass + gamma).
+		Real bias; // beta * C.
+	};
 
-		struct SpringConstraintData
-		{
-			ObjectIndex bodyIndexA, bodyIndexB;
-			Vec2 dir;
-			Vec2 rotatedAnchorA, rotatedAnchorB;
-			Real invEffectiveMass; // 1 / (effectiveMass + gamma).
-			Real bias; // beta * C.
-		};
-
-		// Member fields.
-
-		SpringSoAViewer springs;
-
-		std::vector<ObjectPair> springBodyPairs;
-
-		std::vector<size_t> orderedSpringIndices;
-
-		std::vector<SpringConstraintData> springConstraintContainer;
+	class SpringSolver final : public ConstraintSolverBase<SpringSolver, SpringSoAViewer, SpringConstraintData>
+	{
+		using Base = ConstraintSolverBase<SpringSolver, SpringSoAViewer, SpringConstraintData>;
+		friend Base;
 	public:
-		SpringSolver() = default;
-		~SpringSolver() override = default;
-		SpringSolver(const SpringSolver&) = delete;
-		SpringSolver& operator=(const SpringSolver&) = delete;
-		SpringSolver(SpringSolver&&) = delete;
-		SpringSolver& operator=(SpringSolver&&) = delete;
-
-		void setDataViewers(
-			BodySoA& bodies,
-			const SpringSoAViewer& springs
-		);
-
-		size_t getMemoryUsage() const override;
-
-		void solveSprings(
-			Real deltaTime,
-			uint32_t springIterations,
-			bool springsWereChanged
-		);
+		// Tuned for collisions; re-profile once springs are a bottleneck on their own.
+		SpringSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
 	private:
-		// Spring constraint solving.
-
-		size_t planWorkerCount(size_t springCount) const;
-
-		void computeConstraintData(Real deltaTime, std::span<const size_t> springIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);
-
-		void solveConstraintsThreaded(uint32_t springIterations);
 	};
 }
