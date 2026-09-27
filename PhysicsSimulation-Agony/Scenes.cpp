@@ -955,13 +955,7 @@ void load_SoftBodyComparisonTest(PS_AGONY::Simulation& simulation, Ecstasy::Core
 
 void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
-    // === CONFIGURATION ===
-    constexpr int rampSegments = 120;        // 120 segments ensures an incredibly silky continuous slide
-    constexpr float R = 65.0f;               // WAY BIGGER: Massive scaling factor for the cycloid curve
-    constexpr float xStart = -180.0f;        // Shifted deep left to host the long drop
-    constexpr float yStart = 90.0f;          // Sky-high peak starting height
-    constexpr float terrainBaseY = -60.0f;   // Secure bottom baseline for static ground polygons[cite: 1]
-
+    // Set up physical properties for the environment.
     PS_AGONY::Material envMaterial = {
         .elasticity = 0.05f,
         .staticFriction = 0.9f,
@@ -969,85 +963,157 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
     };
     PS_AGONY::MaterialIndex envMatIdx = simulation.createMaterial(envMaterial);
 
-    // === 1. GENERATE MONUMENTAL SMOOTH SLIDE ===
-    for (int i = 0; i < rampSegments; ++i)
-    {
-        float theta1 = (static_cast<float>(i) / rampSegments) * 3.14159265359f;
-        float theta2 = (static_cast<float>(i + 1) / rampSegments) * 3.14159265359f;
+    // Define ramp geometry parameters and ground limits.
+    constexpr int rampPoints = 120 / 6;
+    constexpr float R = 65.0f;
+    constexpr float yStart = 90.0f;
+    constexpr float terrainBaseY = -60.0f;
+    constexpr float flatWidth = 350.0f;
+    constexpr float flatGroundY = yStart - 2.0f * R;
 
-        float x1 = xStart + R * (theta1 - std::sin(theta1));
-        float y1 = yStart - R * (1.0f - std::cos(theta1));
+    constexpr float pi = 3.14159265359f;
+    const float rampWidth = R * pi;
 
-        float x2 = xStart + R * (theta2 - std::sin(theta2));
-        float y2 = yStart - R * (1.0f - std::cos(theta2));
+    const float leftRampStartX = -flatWidth * 0.5f - rampWidth;
+    const float leftRampEndX = -flatWidth * 0.5f;
 
-        float posX = (x1 + x2) * 0.5f;
-        float posY = terrainBaseY;
-        float halfSegmentWidth = (x2 - x1) * 0.5f;
+    // Create the left cycloid ramp polygon with points evenly spaced on X.
+    std::vector<PS_AGONY::Vec2> leftVertices;
+    leftVertices.reserve(rampPoints + 3);
 
-        PS_AGONY::Vec2 localVertices[4] = {
-            { -halfSegmentWidth, 0.0f },
-            {  halfSegmentWidth, 0.0f },
-            {  halfSegmentWidth, y2 - terrainBaseY },
-            { -halfSegmentWidth, y1 - terrainBaseY }
+    leftVertices.push_back({ leftRampStartX, terrainBaseY });
+    leftVertices.push_back({ leftRampEndX, terrainBaseY });
+
+    // Solver for theta in: theta - sin(theta) = S
+    auto solveTheta = [pi](float S) {
+        if (S <= 0.0f) return 0.0f;
+        if (S >= pi) return pi;
+
+        // Initial guess based on cubic approximation near S = 0
+        float theta = std::cbrt(6.0f * S);
+        if (theta > pi) theta = pi;
+
+        for (int iter = 0; iter < 5; ++iter)
+        {
+            float f = theta - std::sin(theta) - S;
+            float df = 1.0f - std::cos(theta);
+            if (std::abs(df) < 1e-6f) break;
+            theta -= f / df;
+        }
+        return std::clamp(theta, 0.0f, pi);
         };
 
-        simulation.createPolygon({
-            .base.position = { posX, posY },
-            .base.mass = 0,
-            .base.materialIndex = envMatIdx,
-            .localVertices = localVertices,
-            .verticesCount = 4
-            });
+    for (int i = rampPoints; i >= 0; --i)
+    {
+        float t = static_cast<float>(i) / rampPoints; // Normalized 1.0 -> 0.0
+        float x = leftRampStartX + t * rampWidth;     // Even spacing along X
+
+        float S = t * pi;                             // S in [0, pi]
+        float theta = solveTheta(S);
+        float y = yStart - R * (1.0f - std::cos(theta));
+
+        leftVertices.push_back({ x, y });
     }
 
-    // === 2. EXTEND FLAT RUNOUT GROUND ===
-    float flatStartX = xStart + R * 3.14159265359f;
-    float flatWidth = 350.0f;              // Super long runway to catch extreme speeds
-    float flatGroundY = yStart - 2.0f * R; // Flat runway sits perfectly at the bottom of the cycloidal arc
+    // Create right ramp by mirroring leftVertices across X axis (-x)
+    // Iterating in reverse preserves Counter-Clockwise (CCW) winding order
+    std::vector<PS_AGONY::Vec2> rightVertices;
+    rightVertices.reserve(leftVertices.size());
+    for (auto it = leftVertices.rbegin(); it != leftVertices.rend(); ++it)
+    {
+        rightVertices.push_back({ -it->x, it->y });
+    }
 
+    simulation.createPolygon({
+        .base.position = { 0.0f, 0.0f },
+        .base.mass = 0,
+        .base.materialIndex = envMatIdx,
+        .localVertices = leftVertices.data(),
+        .verticesCount = static_cast<uint32_t>(leftVertices.size()),
+        .decompositionMethod = PS_AGONY::PhysicsGeometry::DecompositionMethod::ReflexAngleBisector
+        });
+
+    simulation.createPolygon({
+        .base.position = { 0.0f, 0.0f },
+        .base.mass = 0,
+        .base.materialIndex = envMatIdx,
+        .localVertices = rightVertices.data(),
+        .verticesCount = static_cast<uint32_t>(rightVertices.size()),
+        .decompositionMethod = PS_AGONY::PhysicsGeometry::DecompositionMethod::ReflexAngleBisector
+        });
+
+    // Create the central flat ground runout area centered at zero.
     simulation.createBox({
-        .base.position = { flatStartX + flatWidth * 0.5f, flatGroundY - 2.0f },
+        .base.position = { 0.0f, flatGroundY - 2.0f },
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
         .size = { flatWidth, 4.0f }
         });
 
-    // === 3. CALCULATE CAR SPAWN POSITION AND ROTATION ===
-    // Spawning slightly down the peak (theta = 0.35) where the descent begins safely
+    // Position and rotate the car on the left ramp.
     float spawnTheta = 0.35f;
-    float carX = xStart + 0.7f + R * (spawnTheta - std::sin(spawnTheta));
+    float carX = leftRampStartX + 0.7f + R * (spawnTheta - std::sin(spawnTheta));
     float carY = yStart + 20.4f - R * (1.0f - std::cos(spawnTheta));
 
-    // Calculate instantaneous slope tangent angle
     float carRotation = std::atan2(-std::sin(spawnTheta), 1.0f - std::cos(spawnTheta));
-
-    // FIX: Lift distance perfectly calculated to prevent clipping or dropping (Drop + Radius + Margin)
     float suspensionLift = 1.2f + 0.9f + 0.02f;
     carX += -std::sin(carRotation) * suspensionLift;
     carY += std::cos(carRotation) * suspensionLift;
 
     load_ObjectCar(simulation, carX, carY, carRotation);
 
-    // === 4. GIANT IMPACT TARGET WALL ===
-    constexpr int wallRows = 12; // Tall destructible structure to fully absorb the collision
-    constexpr int wallCols = 4;
+    // Build the destructible target wall on the flat ground.
+    constexpr int wallRows = 12;
+    constexpr int wallCols = 3;
     constexpr float boxSize = 2.0f;
-    const float targetStartX = flatStartX + 230.0f;
+    const float targetStartX = 50.0f;
     const float targetStartY = flatGroundY + (boxSize * 0.5f);
+
+    PS_AGONY::Vec2 boxPolyVertices[4] = {
+        { -boxSize * 0.5f, -boxSize * 0.5f },
+        {  boxSize * 0.5f, -boxSize * 0.5f },
+        {  boxSize * 0.5f,  boxSize * 0.5f },
+        { -boxSize * 0.5f,  boxSize * 0.5f }
+    };
 
     for (int r = 0; r < wallRows; ++r)
     {
         for (int c = 0; c < wallCols; ++c)
         {
-            simulation.createBox({
-                .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
-                .base.velocity = { 0.0f, 0.0f },
-                .base.rotation = 0.0f,
-                .base.mass = 2.5f,
-                .base.materialIndex = envMatIdx,
-                .size = { boxSize, boxSize }
-                });
+            if (c == 0)
+            {
+                simulation.createBox({
+                    .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
+                    .base.velocity = { 0.0f, 0.0f },
+                    .base.rotation = 0.0f,
+                    .base.mass = 2.5f,
+                    .base.materialIndex = envMatIdx,
+                    .size = { boxSize, boxSize }
+                    });
+            }
+            else if (c == 1)
+            {
+                simulation.createCircle({
+                    .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
+                    .base.velocity = { 0.0f, 0.0f },
+                    .base.rotation = 0.0f,
+                    .base.mass = 2.5f,
+                    .base.materialIndex = envMatIdx,
+                    .radius = boxSize * 0.5f
+                    });
+            }
+            else if (c == 2)
+            {
+                simulation.createPolygon({
+                    .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
+                    .base.velocity = { 0.0f, 0.0f },
+                    .base.rotation = 0.0f,
+                    .base.mass = 2.5f,
+                    .base.materialIndex = envMatIdx,
+                    .localVertices = boxPolyVertices,
+                    .verticesCount = 4
+                    });
+            }
         }
     }
 }
@@ -1293,7 +1359,7 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 2)
     {
-        load_LargeWorld(simulation, rvg, {}, 4000);
+        load_LargeWorld(simulation, rvg, {}, 2000);
 
         //load_LargeWorld(simulation, rvg, { -70.0f, -50.0f }, 2500 / 4);
         //load_LargeWorld(simulation, rvg, {  70.0f, -50.0f }, 2500 / 4);

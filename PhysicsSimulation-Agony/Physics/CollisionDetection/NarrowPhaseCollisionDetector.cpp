@@ -953,7 +953,7 @@ namespace PS_AGONY
             Real separation;
             if (maxSeparation >= ZERO_DIVISION_BOUNDARY)
             {
-                // Center is outside the polygon but possibly within radiusA of it.
+                // Center is outside the polygon but within radiusA of it.
                 const Vec2 a = localVerts[supportEdge];
                 const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
                 const Vec2 q = closestPointOnSegment(circleLocal, a, b);
@@ -981,12 +981,10 @@ namespace PS_AGONY
                 separation = maxSeparation;
             }
 
-            Vec2 normal = {
+            Vec2 normal = -Vec2{
                 rightB.x * normalLocal.x + upB.x * normalLocal.y,
                 rightB.y * normalLocal.x + upB.y * normalLocal.y
             };
-
-            flipSignIfNegative(normal, glm::dot(positionB - positionA, normal));
 
             const Real depth = radiusA - separation;
             const Vec2 contactOnCircle = positionA + normal * radiusA;
@@ -1284,52 +1282,64 @@ namespace PS_AGONY
             uint32_t bestAxisIndex = 0;
             Real bestAxisFacing = std::numeric_limits<Real>::max();
 
+            Real polyMinX = polyVertsB_inA[0].x;
+            Real polyMaxX = polyMinX;
+            Real polyMinY = polyVertsB_inA[0].y;
+            Real polyMaxY = polyMinY;
+
             // Test Box X axis in local space.
             {
-                Real polyMinX = polyVertsB_inA[0].x;
-                Real polyMaxX = polyMinX;
                 for (size_t i = 1; i < vertexCount; i++)
                 {
                     polyMinX = std::fmin(polyMinX, polyVertsB_inA[i].x);
                     polyMaxX = std::fmax(polyMaxX, polyVertsB_inA[i].x);
                 }
-                const Real overlap = std::fmin(halfWidthA, polyMaxX) - std::fmax(-halfWidthA, polyMinX);
+
+                // SAT penetration depth calculation.
+                const Real overlap = std::fmin(halfWidthA - polyMinX, polyMaxX + halfWidthA);
                 if (overlap < Real(0)) continue;
 
-                const Real axisFacing = centerDeltaLocal.x;
+                const Real polyCenterX = Real(0.5) * (polyMinX + polyMaxX);
+                const Real axisFacing = polyCenterX;
                 depth = overlap;
                 normalLocal = Vec2(1, 0);
-                flipSignIfNegative(normalLocal, centerDeltaLocal.x);
+                flipSignIfNegative(normalLocal, polyCenterX);
                 bestAxisType = SATAxis::BOX_RIGHT;
                 bestAxisFacing = axisFacing;
             }
 
             // Test Box Y axis in local space.
             {
-                Real polyMinY = polyVertsB_inA[0].y;
-                Real polyMaxY = polyMinY;
                 for (size_t i = 1; i < vertexCount; i++)
                 {
                     polyMinY = std::fmin(polyMinY, polyVertsB_inA[i].y);
                     polyMaxY = std::fmax(polyMaxY, polyVertsB_inA[i].y);
                 }
-                const Real overlap = std::fmin(halfHeightA, polyMaxY) - std::fmax(-halfHeightA, polyMinY);
+
+                // SAT penetration depth calculation.
+                const Real overlap = std::fmin(halfHeightA - polyMinY, polyMaxY + halfHeightA);
                 if (overlap < Real(0)) continue;
 
-                const Real axisFacing = centerDeltaLocal.y;
+                const Real polyCenterY = Real(0.5) * (polyMinY + polyMaxY);
+                const Real axisFacing = polyCenterY;
                 const bool strictlyBetter = overlap < depth;
                 const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
                 if (strictlyBetter || tiedButBetterFacing)
                 {
                     depth = overlap;
                     normalLocal = Vec2(0, 1);
-                    flipSignIfNegative(normalLocal, centerDeltaLocal.y);
+                    flipSignIfNegative(normalLocal, polyCenterY);
                     bestAxisType = SATAxis::BOX_UP;
                     bestAxisFacing = axisFacing;
                 }
             }
 
             // Test Polygon edge outward normals in Box local space.
+            const Vec2 polyCenterLocal = {
+                Real(0.5) * (polyMinX + polyMaxX),
+                Real(0.5) * (polyMinY + polyMaxY)
+            };
+
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
                 const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
@@ -1344,18 +1354,20 @@ namespace PS_AGONY
                 Real polyMin, polyMax;
                 projectVerticesOnAxis(polyVertsB_inA.data(), polyVertsB_inA.size(), axisLocal, polyMin, polyMax);
 
-                const Real overlap = std::fmin(boxRadius, polyMax) - std::fmax(-boxRadius, polyMin);
+                // SAT penetration depth calculation.
+                const Real overlap = std::fmin(boxRadius - polyMin, polyMax + boxRadius);
                 if (overlap < Real(0)) goto nextPair;
 
-                const Real axisFacing = glm::dot(axisLocal, centerDeltaLocal);
+                const Real axisFacing = glm::dot(axisLocal, polyCenterLocal);
                 const bool strictlyBetter = overlap < depth;
                 const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
 
                 if (strictlyBetter || tiedButBetterFacing)
                 {
                     depth = overlap;
-                    normalLocal = axisLocal;
-                    flipSignIfNegative(normalLocal, glm::dot(centerDeltaLocal, normalLocal));
+                    // axisLocal is B's own outward edge normal (unambiguous from local winding);
+                    // negate to match the "A to B" normal convention, no position heuristic needed.
+                    normalLocal = -axisLocal;
                     bestAxisType = SATAxis::POLY_EDGE;
                     bestAxisIndex = i;
                     bestAxisFacing = axisFacing;
@@ -1560,7 +1572,7 @@ namespace PS_AGONY
             const Vec2 upA = { -sinA, cosA };
 
             const Vec2 centerDelta = positionB - positionA;
-            const Vec2 centerDeltaLocal = {
+            const Vec2 bodyDeltaLocal = {
                 glm::dot(centerDelta, rightA),
                 glm::dot(centerDelta, upA)
             };
@@ -1572,14 +1584,49 @@ namespace PS_AGONY
             const Vec2* localVertsB = localVertsBContainer.data();
 
             vertsB_inA.resize(countB);
+            Real polyMinX_B = std::numeric_limits<Real>::max();
+            Real polyMaxX_B = -std::numeric_limits<Real>::max();
+            Real polyMinY_B = std::numeric_limits<Real>::max();
+            Real polyMaxY_B = -std::numeric_limits<Real>::max();
+
             for (size_t i = 0; i < countB; i++)
             {
                 const Vec2 v = localVertsB[i];
-                vertsB_inA[i] = {
-                    centerDeltaLocal.x + relCos * v.x - relSin * v.y,
-                    centerDeltaLocal.y + relSin * v.x + relCos * v.y
+                const Vec2 vInA = {
+                    bodyDeltaLocal.x + relCos * v.x - relSin * v.y,
+                    bodyDeltaLocal.y + relSin * v.x + relCos * v.y
                 };
+                vertsB_inA[i] = vInA;
+
+                polyMinX_B = std::fmin(polyMinX_B, vInA.x);
+                polyMaxX_B = std::fmax(polyMaxX_B, vInA.x);
+                polyMinY_B = std::fmin(polyMinY_B, vInA.y);
+                polyMaxY_B = std::fmax(polyMaxY_B, vInA.y);
             }
+
+            Real polyMinX_A = localVertsA[0].x;
+            Real polyMaxX_A = polyMinX_A;
+            Real polyMinY_A = localVertsA[0].y;
+            Real polyMaxY_A = polyMinY_A;
+
+            for (size_t i = 1; i < countA; i++)
+            {
+                polyMinX_A = std::fmin(polyMinX_A, localVertsA[i].x);
+                polyMaxX_A = std::fmax(polyMaxX_A, localVertsA[i].x);
+                polyMinY_A = std::fmin(polyMinY_A, localVertsA[i].y);
+                polyMaxY_A = std::fmax(polyMaxY_A, localVertsA[i].y);
+            }
+
+            const Vec2 polyCenterA_inA = {
+                Real(0.5) * (polyMinX_A + polyMaxX_A),
+                Real(0.5) * (polyMinY_A + polyMaxY_A)
+            };
+            const Vec2 polyCenterB_inA = {
+                Real(0.5) * (polyMinX_B + polyMaxX_B),
+                Real(0.5) * (polyMinY_B + polyMaxY_B)
+            };
+
+            const Vec2 centerDeltaLocal = polyCenterB_inA - polyCenterA_inA;
 
             Vec2 normalLocal;
             Real depth = std::numeric_limits<Real>::max();
@@ -1600,7 +1647,8 @@ namespace PS_AGONY
                     Real minB, maxB;
                     projectVerticesOnAxis(vertsB_inA.data(), vertsB_inA.size(), axisLocal, minB, maxB);
 
-                    const Real overlap = std::fmin(maxA, maxB) - std::fmax(minA, minB);
+                    // Correct SAT penetration depth calculation
+                    const Real overlap = std::fmin(maxA - minB, maxB - minA);
                     if (overlap < Real(0)) return false;
 
                     const Real facingSign = Real(axisType == SATAxis::B_EDGE) * Real(2) - Real(1);
@@ -1612,8 +1660,9 @@ namespace PS_AGONY
                     if (strictlyBetter || tiedButBetterFacing)
                     {
                         depth = overlap;
-                        normalLocal = axisLocal;
-                        flipSignIfNegative(normalLocal, glm::dot(centerDeltaLocal, normalLocal));
+                        // axisLocal is that shape's own outward edge normal (unambiguous from local
+                        // winding): A's points from A to B already; B's must be negated to match.
+                        normalLocal = (axisType == SATAxis::A_EDGE) ? axisLocal : -axisLocal;
 
                         bestAxisType = axisType;
                         bestAxisIndex = axisIndex;

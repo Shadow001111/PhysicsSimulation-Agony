@@ -99,9 +99,6 @@
     <ClCompile Include="Physics\SimulationImpl\FixedClock.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\JointSolver.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Physics\Solving\RodSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -115,6 +112,15 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Render\SimulationRenderer_Constraints.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\RevoluteJointSolver.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\SliderJointSolver.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\SimulationImpl\PolygonDecomposition.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -257,12 +263,6 @@
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\JointSoA.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="Physics\Solving\JointSolver.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\SoA\Constraints\RodSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -294,6 +294,24 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhPairTraversal.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\ConstraintSolverBase.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Constraints\SliderJointSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\RevoluteJointSolver.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SoA\Constraints\RevoluteJointSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\SliderJointSolver.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SimulationImpl\PolygonDecomposition.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

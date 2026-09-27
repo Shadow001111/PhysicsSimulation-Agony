@@ -1,10 +1,13 @@
 #pragma once
+
 #include "Physics/GlmTypes.h"
 #include "Physics/SoA/Shapes/PolygonSoA.h"
+#include "PolygonDecomposition.h"
 
 #include <utility>
 #include <optional>
 #include <vector>
+#include <span>
 
 namespace PS_AGONY::PhysicsGeometry
 {
@@ -26,22 +29,10 @@ namespace PS_AGONY::PhysicsGeometry
 		std::optional<Vec2> centerOfMass = std::nullopt
 	);
 
-	// Filters out consecutive/any duplicate vertices from a raw vertex buffer.
-	// Shared by createPolygon() and createPolygonCollider().
-	std::vector<Vec2> filterDuplicateVertices(const Vec2* localVertices, size_t verticesCount);
-
-	// Returns true if 'vertices' form a convex polygon (either winding order).
-	// Fewer than 4 vertices is trivially convex.
-	bool isConvexPolygon(const std::vector<Vec2>& vertices);
-
-	// Decomposes a simple (non-self-intersecting) polygon - convex or concave, either winding -
-	// into a small set of non-overlapping convex polygons, via ear-clipping triangulation
-	// followed by greedy convex merging (Hertel-Mehlhorn: at most 4x the optimal piece count,
-	// usually far fewer in practice). Every returned piece is wound CCW.
-	// If the input is already convex, a single CCW-normalized piece is returned with no
-	// triangulation cost.
-	// NOTE: this is an O(n^2)-ish one-time authoring-cost routine (triangulate + merge),
-	// meant to run once at collider-creation time, not per physics step.
-	// Shared by createPolygon() and createPolygonCollider().
-	std::vector<std::vector<Vec2>> decomposeConvex(const std::vector<Vec2>& vertices);
+	// Filters out adjacent (neighboring) duplicate vertices using a distance epsilon check.
+	// Preserves non-adjacent identical vertices to maintain polygon topology.
+	std::vector<Vec2> filterDuplicateVertices(
+		std::span<const Vec2> vertices,
+		Real epsilon = Real(1e-5)
+	);
 }

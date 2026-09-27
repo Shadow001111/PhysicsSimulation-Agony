@@ -212,11 +212,8 @@ namespace PS_AGONY
 			// Fast path: fully contained node allows bulk-inserting all leaf elements.
 			if (shape.contains(node))
 			{
-				outColliders.insert(
-					outColliders.end(),
-					&bvhFunctionResources.mainColliderIndices[node.start],
-					&bvhFunctionResources.mainColliderIndices[node.end]
-				);
+				const ObjectIndex* base = bvhFunctionResources.mainColliderIndices.data();
+				outColliders.insert(outColliders.end(), base + node.start, base + node.end);
 				continue;
 			}
 

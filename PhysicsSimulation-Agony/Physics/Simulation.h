@@ -13,6 +13,7 @@
 #include "SimulationImpl/Integrator.h"
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
+#include "SimulationImpl/PolygonDecomposition.h"
 
 #include <vector>
 #include <optional>

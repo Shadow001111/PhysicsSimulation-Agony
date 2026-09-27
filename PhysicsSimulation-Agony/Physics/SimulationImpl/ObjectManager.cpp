@@ -92,7 +92,7 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices(params.localVertices, params.verticesCount);
+        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices({ params.localVertices, params.verticesCount });
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: unique vertices count is less than three.\n";
@@ -103,7 +103,7 @@ namespace PS_AGONY
 
         // Concave outlines are split into multiple convex pieces here; an already-convex
         // outline comes back as a single (CCW-normalized) piece at no extra cost.
-        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices);
+        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices, params.decompositionMethod);
 
         const ColliderIndex firstCollider = createConvexPolygonColliderInternal(
             params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
@@ -186,7 +186,7 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices(params.localVertices, params.verticesCount);
+        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices({ params.localVertices, params.verticesCount });
         if (uniqueVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
@@ -232,7 +232,7 @@ namespace PS_AGONY
 
         // Split the already de-duplicated/re-centered outline into convex colliders (one
         // piece if it was already convex) via the same helper createPolygonCollider() uses.
-        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices);
+        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices, params.decompositionMethod);
         for (std::vector<Vec2>& piece : convexPieces)
         {
             createConvexPolygonColliderInternal(

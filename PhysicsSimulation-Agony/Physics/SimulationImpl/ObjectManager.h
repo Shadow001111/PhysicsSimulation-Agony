@@ -1,4 +1,6 @@
 #pragma once
+#include "PolygonDecomposition.h"
+
 #include "Physics/ObjectSoA.h"
 #include "Physics/GlmTypes.h"
 #include "Physics/ConstraintSystem.h"
@@ -46,6 +48,7 @@ namespace PS_AGONY
 		MaterialIndex materialIndex{ 0 };
 		Vec2* localVertices = nullptr;
 		size_t verticesCount = 0;
+		PhysicsGeometry::DecompositionMethod decompositionMethod = PhysicsGeometry::DecompositionMethod::Bayazit;
 	};
 
 	// Result of createPolygonCollider(). A concave input outline may be split into several
@@ -75,6 +78,7 @@ namespace PS_AGONY
 		BodyCreateParams base;
 		Vec2* localVertices = nullptr;
 		size_t verticesCount = 0;
+		PhysicsGeometry::DecompositionMethod decompositionMethod = PhysicsGeometry::DecompositionMethod::Bayazit;
 		// TODO: Make it use std::span.
 	};
 
