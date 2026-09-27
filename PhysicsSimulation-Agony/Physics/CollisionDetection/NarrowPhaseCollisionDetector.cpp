@@ -93,6 +93,7 @@ namespace PS_AGONY
         }
     };
 
+    // Returns normalized or zero vector.
     [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
     {
         const Vec2 p0 = vertsPtr[edgeIndex];
@@ -101,11 +102,12 @@ namespace PS_AGONY
 
         Vec2 n = Vec2{ edge.y, -edge.x };
         const Real lenSquared = glm::dot(n, n);
-        if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
+        if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED) [[likely]]
         {
             n *= Real(1) / std::sqrt(lenSquared);
+            return n;
         }
-        return n;
+        return Vec2(0, 0);
     };
 
     /*               */
@@ -267,8 +269,7 @@ namespace PS_AGONY
                     const Vec2 a = localVerts[supportEdge];
                     const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
                     const Vec2 q = closestPointOnSegment(circleLocal, a, b);
-                    const Vec2 d = circleLocal - q;
-                    sdf = std::sqrt(glm::dot(d, d));
+                    sdf = glm::length(circleLocal - q);
                 }
                 else
                 {
@@ -627,6 +628,9 @@ namespace PS_AGONY
 
             alignas(RealSimd::bytes) Real depthBatch[RealSimd::lanes];
 
+            const RealSimd normalBX(1);
+            const RealSimd normalBY(0);
+
             for (; i + RealSimd::lanes <= pairCount; i += RealSimd::lanes)
             {
                 for (size_t j = 0; j < RealSimd::lanes; j++)
@@ -677,9 +681,6 @@ namespace PS_AGONY
                 const RealSimd normalAX = deltaPositionX * invDistance;
                 const RealSimd normalAY = deltaPositionY * invDistance;
 
-                const RealSimd normalBX(1);
-                const RealSimd normalBY(0);
-
                 const RealSimd normalX = RealSimd::blendv(normalAX, normalBX, isCloseToZeroMask);
                 const RealSimd normalY = RealSimd::blendv(normalAY, normalBY, isCloseToZeroMask);
 
@@ -689,7 +690,6 @@ namespace PS_AGONY
 
                 {
                     unsigned int collisionMask = isCollidingMask.movemask();
-
                     while (collisionMask != 0)
                     {
                         const int lane = std::countr_zero(collisionMask);
@@ -1354,7 +1354,7 @@ namespace PS_AGONY
                 const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
                 if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]] continue;
 
-                axisLocal *= Real(1) / std::sqrt(axisLenSquared);
+                // Either normalized or zero. No need to normalize 'axisLocal'.
 
                 const Real boxRadius = halfWidthA * std::fabs(glm::dot(axisLocal, rightA_inB)) + halfHeightA * std::fabs(glm::dot(axisLocal, upA_inB));
 
@@ -1653,10 +1653,9 @@ namespace PS_AGONY
 
             auto sat = [&](Vec2 axisLocal, SATAxis axisType, uint32_t axisIndex) -> bool
                 {
+                    // 'axisLocal' is normalized or zero.
                     const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
                     if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
-
-                    axisLocal *= Real(1) / std::sqrt(axisLenSquared);
 
                     Real minA, maxA;
                     projectVerticesOnAxis(localVertsAContainer.data(), localVertsAContainer.size(), axisLocal, minA, maxA);
