@@ -964,7 +964,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
     PS_AGONY::MaterialIndex envMatIdx = simulation.createMaterial(envMaterial);
 
     // Define ramp geometry parameters and ground limits.
-    constexpr int rampPoints = 120 / 6;
+    constexpr int rampPoints = 120;
     constexpr float R = 65.0f;
     constexpr float yStart = 90.0f;
     constexpr float terrainBaseY = -60.0f;

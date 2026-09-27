@@ -1211,6 +1211,13 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Box-polygon collision");
 
+        // NOTE: This routine works in Polygon B's local space rather than Box A's.
+        // The box is described by only a center point and two axes, so transforming
+        // it into B's frame is O(1); transforming B's (potentially large) vertex
+        // list into A's frame, as the box-box/polygon-polygon routines do, would be
+        // O(N). Polygon vertices are therefore read directly from localVertsB with
+        // no per-pair transform or scratch buffer.
+
         enum class SATAxis : uint32_t
         {
             BOX_RIGHT,
@@ -1229,8 +1236,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
-
-        static thread_local std::vector<Vec2> polyVertsB_inA;
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1253,28 +1258,23 @@ namespace PS_AGONY
             const size_t vertexCount = localPolygonVertices.size();
             if (vertexCount < 3) [[unlikely]] continue;
 
-            const Vec2 rightA = { cosA, sinA };
-            const Vec2 upA = { -sinA, cosA };
+            const Vec2 rightB = { cosB, sinB };
+            const Vec2 upB = { -sinB, cosB };
 
-            // Transform Collider B into Collider A's local space.
-            const Vec2 centerDelta = positionB - positionA;
-            const Vec2 centerDeltaLocal = {
-                glm::dot(centerDelta, rightA),
-                glm::dot(centerDelta, upA)
-            };
-
+            // Rotation taking a vector from Box A's local space into Polygon B's
+            // local space (the inverse of the A<-B rotation used elsewhere in this
+            // file), plus Box A's center expressed in B's local space.
             const Real relCos = cosA * cosB + sinA * sinB;
             const Real relSin = cosA * sinB - sinA * cosB;
 
-            polyVertsB_inA.resize(vertexCount);
-            for (size_t i = 0; i < vertexCount; i++)
-            {
-                const Vec2& v = localVertsB[i];
-                polyVertsB_inA[i] = {
-                    centerDeltaLocal.x + relCos * v.x - relSin * v.y,
-                    centerDeltaLocal.y + relSin * v.x + relCos * v.y
-                };
-            }
+            const Vec2 rightA_inB = { relCos, -relSin };
+            const Vec2 upA_inB = { relSin, relCos };
+
+            const Vec2 centerDeltaBA = positionA - positionB;
+            const Vec2 boxCenterInB = {
+                glm::dot(centerDeltaBA, rightB),
+                glm::dot(centerDeltaBA, upB)
+            };
 
             Vec2 normalLocal;
             Real depth = std::numeric_limits<Real>::max();
@@ -1282,18 +1282,17 @@ namespace PS_AGONY
             uint32_t bestAxisIndex = 0;
             Real bestAxisFacing = std::numeric_limits<Real>::max();
 
-            Real polyMinX = polyVertsB_inA[0].x;
-            Real polyMaxX = polyMinX;
-            Real polyMinY = polyVertsB_inA[0].y;
-            Real polyMaxY = polyMinY;
+            Real polyMinX, polyMaxX, polyMinY, polyMaxY;
 
-            // Test Box X axis in local space.
+            // Test Box X axis (rightA_inB), values kept relative to the box center
+            // to match the box-local-space convention the rest of the routine uses.
             {
-                for (size_t i = 1; i < vertexCount; i++)
-                {
-                    polyMinX = std::fmin(polyMinX, polyVertsB_inA[i].x);
-                    polyMaxX = std::fmax(polyMaxX, polyVertsB_inA[i].x);
-                }
+                Real polyMinXRaw, polyMaxXRaw;
+                projectVerticesOnAxis(localVertsB, vertexCount, rightA_inB, polyMinXRaw, polyMaxXRaw);
+
+                const Real boxCenterProjX = glm::dot(boxCenterInB, rightA_inB);
+                polyMinX = polyMinXRaw - boxCenterProjX;
+                polyMaxX = polyMaxXRaw - boxCenterProjX;
 
                 // SAT penetration depth calculation.
                 const Real overlap = std::fmin(halfWidthA - polyMinX, polyMaxX + halfWidthA);
@@ -1302,23 +1301,23 @@ namespace PS_AGONY
                 const Real polyCenterX = Real(0.5) * (polyMinX + polyMaxX);
                 const Real axisFacing = polyCenterX;
                 depth = overlap;
-                normalLocal = Vec2(1, 0);
+                normalLocal = rightA_inB;
                 flipSignIfNegative(normalLocal, polyCenterX);
                 bestAxisType = SATAxis::BOX_RIGHT;
                 bestAxisFacing = axisFacing;
             }
 
-            // Test Box Y axis in local space.
+            // Test Box Y axis (upA_inB).
             {
-                for (size_t i = 1; i < vertexCount; i++)
-                {
-                    polyMinY = std::fmin(polyMinY, polyVertsB_inA[i].y);
-                    polyMaxY = std::fmax(polyMaxY, polyVertsB_inA[i].y);
-                }
+                Real polyMinYRaw, polyMaxYRaw;
+                projectVerticesOnAxis(localVertsB, vertexCount, upA_inB, polyMinYRaw, polyMaxYRaw);
+
+                const Real boxCenterProjY = glm::dot(boxCenterInB, upA_inB);
+                polyMinY = polyMinYRaw - boxCenterProjY;
+                polyMaxY = polyMaxYRaw - boxCenterProjY;
 
                 // SAT penetration depth calculation.
                 const Real overlap = std::fmin(halfHeightA - polyMinY, polyMaxY + halfHeightA);
-                if (overlap < Real(0)) continue;
 
                 const Real polyCenterY = Real(0.5) * (polyMinY + polyMaxY);
                 const Real axisFacing = polyCenterY;
@@ -1327,38 +1326,42 @@ namespace PS_AGONY
                 if (strictlyBetter || tiedButBetterFacing)
                 {
                     depth = overlap;
-                    normalLocal = Vec2(0, 1);
+                    normalLocal = upA_inB;
                     flipSignIfNegative(normalLocal, polyCenterY);
                     bestAxisType = SATAxis::BOX_UP;
                     bestAxisFacing = axisFacing;
                 }
             }
 
-            // Test Polygon edge outward normals in Box local space.
-            const Vec2 polyCenterLocal = {
-                Real(0.5) * (polyMinX + polyMaxX),
-                Real(0.5) * (polyMinY + polyMaxY)
-            };
-
+            // Test Polygon edge outward normals. These are already expressed in
+            // Polygon B's own local space, so no per-edge rotation is needed here
+            // (unlike the box-local-space version of this routine).
+            const Real polyCenterX = Real(0.5) * (polyMinX + polyMaxX);
+            const Real polyCenterY = Real(0.5) * (polyMinY + polyMaxY);
+            const Vec2 polyCenterRelVec = polyCenterX * rightA_inB + polyCenterY * upA_inB;
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
                 const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
-                Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                Vec2 axisLocal = nB;
                 const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
                 if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]] continue;
 
                 axisLocal *= Real(1) / std::sqrt(axisLenSquared);
 
-                const Real boxRadius = halfWidthA * std::fabs(axisLocal.x) + halfHeightA * std::fabs(axisLocal.y);
+                const Real boxRadius = halfWidthA * std::fabs(glm::dot(axisLocal, rightA_inB)) + halfHeightA * std::fabs(glm::dot(axisLocal, upA_inB));
 
                 Real polyMin, polyMax;
-                projectVerticesOnAxis(polyVertsB_inA.data(), polyVertsB_inA.size(), axisLocal, polyMin, polyMax);
+                projectVerticesOnAxis(localVertsB, vertexCount, axisLocal, polyMin, polyMax);
+
+                const Real boxCenterProj = glm::dot(boxCenterInB, axisLocal);
+                const Real polyMinRel = polyMin - boxCenterProj;
+                const Real polyMaxRel = polyMax - boxCenterProj;
 
                 // SAT penetration depth calculation.
-                const Real overlap = std::fmin(boxRadius - polyMin, polyMax + boxRadius);
+                const Real overlap = std::fmin(boxRadius - polyMinRel, polyMaxRel + boxRadius);
                 if (overlap < Real(0)) goto nextPair;
 
-                const Real axisFacing = glm::dot(axisLocal, polyCenterLocal);
+                const Real axisFacing = glm::dot(axisLocal, polyCenterRelVec);
                 const bool strictlyBetter = overlap < depth;
                 const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
 
@@ -1387,20 +1390,21 @@ namespace PS_AGONY
                 {
                     refNormalLocal = normalLocal;
 
-                    const Real dotX = refNormalLocal.x;
-                    const Real dotY = refNormalLocal.y;
-                    const bool useX = std::fabs(dotX) > std::fabs(dotY);
-                    const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
+                    // normalLocal is exactly +-rightA_inB (BOX_RIGHT) or +-upA_inB (BOX_UP),
+                    // so its box-local "x"/"y" components collapse to a known best-axis
+                    // check plus a dot product against the corresponding box axis.
+                    const bool useX = bestAxisType == SATAxis::BOX_RIGHT;
+                    const Real sign = useX ? glm::dot(refNormalLocal, rightA_inB) : glm::dot(refNormalLocal, upA_inB);
 
                     if (useX)
                     {
-                        refFaceCenterLocal = Vec2(sign * halfWidthA, 0);
-                        sideDirLocal = Vec2(0, 1);
+                        refFaceCenterLocal = boxCenterInB + rightA_inB * (sign * halfWidthA);
+                        sideDirLocal = upA_inB;
                     }
                     else
                     {
-                        refFaceCenterLocal = Vec2(0, sign * halfHeightA);
-                        sideDirLocal = Vec2(1, 0);
+                        refFaceCenterLocal = boxCenterInB + upA_inB * (sign * halfHeightA);
+                        sideDirLocal = rightA_inB;
                     }
 
                     const Vec2 edgeOffset = sideDirLocal * (useX ? halfHeightA : halfWidthA);
@@ -1414,8 +1418,8 @@ namespace PS_AGONY
                     const uint32_t i0 = bestAxisIndex;
                     const uint32_t i1 = (i0 + 1) % uint32_t(vertexCount);
 
-                    refEdgeStartLocal = polyVertsB_inA[i0];
-                    refEdgeEndLocal = polyVertsB_inA[i1];
+                    refEdgeStartLocal = localVertsB[i0];
+                    refEdgeEndLocal = localVertsB[i1];
                     refFaceCenterLocal = (refEdgeStartLocal + refEdgeEndLocal) * Real(0.5);
 
                     const Vec2 edge = refEdgeEndLocal - refEdgeStartLocal;
@@ -1435,9 +1439,10 @@ namespace PS_AGONY
 
                     for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
                     {
+                        // Already in Polygon B's local space, same frame as refNormalLocal:
+                        // no per-edge rotation needed here (unlike the box-local-space version).
                         const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
-                        const Vec2 nA = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
-                        const Real d = glm::dot(refNormalLocal, nA);
+                        const Real d = glm::dot(refNormalLocal, nB);
                         if (d < minDot)
                         {
                             minDot = d;
@@ -1446,13 +1451,17 @@ namespace PS_AGONY
                     }
 
                     incidentEdge2 = (incidentEdge + 1) % uint32_t(vertexCount);
-                    incEdgeStartLocal = polyVertsB_inA[incidentEdge];
-                    incEdgeEndLocal = polyVertsB_inA[incidentEdge2];
+                    incEdgeStartLocal = localVertsB[incidentEdge];
+                    incEdgeEndLocal = localVertsB[incidentEdge2];
                 }
                 else
                 {
-                    const Real dotX = refNormalLocal.x;
-                    const Real dotY = refNormalLocal.y;
+                    // refNormalLocal is B's polygon-edge normal expressed in B's local
+                    // space already; project it onto the box's axes-in-B to recover the
+                    // same box-local x/y components the box-local-space version reads
+                    // directly, then pick the box's incident edge exactly as before.
+                    const Real dotX = glm::dot(refNormalLocal, rightA_inB);
+                    const Real dotY = glm::dot(refNormalLocal, upA_inB);
                     const bool useX = std::fabs(dotX) > std::fabs(dotY);
                     const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
 
@@ -1461,16 +1470,16 @@ namespace PS_AGONY
                     Vec2 faceCenter, edgeOffset;
                     if (useX)
                     {
-                        faceCenter = Vec2(sign * halfWidthA, 0);
-                        edgeOffset = Vec2(0, halfHeightA);
+                        faceCenter = boxCenterInB + rightA_inB * (sign * halfWidthA);
+                        edgeOffset = upA_inB * halfHeightA;
 
                         incidentEdge = (1 - signBool) * 3;
                         incidentEdge2 = 2 - signBool;
                     }
                     else
                     {
-                        faceCenter = Vec2(0, sign * halfHeightA);
-                        edgeOffset = Vec2(halfWidthA, 0);
+                        faceCenter = boxCenterInB + upA_inB * (sign * halfHeightA);
+                        edgeOffset = rightA_inB * halfWidthA;
 
                         incidentEdge = 1 - signBool;
                         incidentEdge2 = 2 + signBool;
@@ -1493,13 +1502,13 @@ namespace PS_AGONY
                 uint32_t contactCount = 0;
                 const Real refPlaneDist = glm::dot(refFaceCenterLocal, refNormalLocal);
 
-                const Vec2 normalWorld = rightA * normalLocal.x + upA * normalLocal.y;
+                const Vec2 normalWorld = rightB * normalLocal.x + upB * normalLocal.y;
 
                 for (uint32_t i = 0; i < 2; i++)
                 {
                     if (glm::dot(clipped[i], refNormalLocal) <= refPlaneDist + SAT_EPSILON)
                     {
-                        contactPoints[contactCount] = positionA + rightA * clipped[i].x + upA * clipped[i].y;
+                        contactPoints[contactCount] = positionB + rightB * clipped[i].x + upB * clipped[i].y;
                         contactIds[contactCount] = (i == 0) ? id1 : id2;
                         contactCount++;
                     }
