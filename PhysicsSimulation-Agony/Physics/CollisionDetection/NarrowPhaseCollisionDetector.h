@@ -194,7 +194,7 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const;
 	private:
 		void findCollisionsSingleThreaded(const std::vector<ObjectPair>& colliderPairs);
-		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs);
+		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs, size_t workerCount);
 
 		void processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData);
 

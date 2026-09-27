@@ -6,6 +6,7 @@
 #include "Ecstasy/Core/Portablity.h"
 
 #include <bit>
+#include <iostream>
 
 namespace PS_AGONY
 {
@@ -161,7 +162,7 @@ namespace PS_AGONY
         // Find collisions.
         if (useThreading)
         {
-            findCollisionsMultiThreaded(colliderPairs);
+            findCollisionsMultiThreaded(colliderPairs, colliderPairs.size() / 3000);
         }
         else
         {
@@ -412,14 +413,14 @@ namespace PS_AGONY
         allCollisionData.swap(cd.results);
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs)
+    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs, size_t workerCount)
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
         constexpr size_t LOAD_BALANCING_FACTOR = 4;
 
         auto& threadPool = Threading::getGlobalThreadPool();
-        const size_t workerCount = threadPool.getThreadCount();
+        workerCount = std::min<size_t>(workerCount, threadPool.getThreadCount());
 
         auto [chunkCount, chunkSize] = Ecstasy::Core::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
             threadPool, colliderPairs.size(), LOAD_BALANCING_FACTOR);
