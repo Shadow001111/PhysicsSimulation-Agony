@@ -458,11 +458,18 @@ namespace PS_AGONY
                 destroyedWorkerCount.notify_one();
             };
 
-        for (size_t i = 0; i < workerCount; i++)
+        // One less task submitted to the pool: the calling thread takes that slot itself
+        // below, instead of only submitting work and idling until it's done.
+        for (size_t i = 0; i + 1 < workerCount; i++)
         {
             tasks.emplace_back(workerFunc);
         }
         threadPool.enqueueBulk(tasks);
+
+        {
+            TRACY_SCOPE_N("Participate in work");
+            workerFunc();
+        }
 
         {
             TRACY_SCOPE_N("Wait for workers to finish and combine data");
