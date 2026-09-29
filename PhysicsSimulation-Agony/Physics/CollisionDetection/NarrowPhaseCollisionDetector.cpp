@@ -332,7 +332,9 @@ namespace PS_AGONY
         constexpr ColliderIndex INVALID_INDEX = std::numeric_limits<ColliderIndex>::max();
 
         // Compose the whole deletion log once, tracking only touched indices.
-        // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot.
+        // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot,
+        // or INVALID_INDEX if the slot holds a collider created after the cache was built
+        // (or was vacated). Slots never touched are identity.
         robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> slotToEntity;
         robin_hood::unordered_flat_set<ColliderIndex> dead;
         slotToEntity.reserve(deletedColliders.size() * 2);
@@ -349,17 +351,18 @@ namespace PS_AGONY
             const ColliderIndex d = deletion.deletedIndex;
             const ColliderIndex s = deletion.swappedFromIndex;
 
-            dead.insert(entityAt(d));
+            const ColliderIndex victim = entityAt(d);
+            if (victim != INVALID_INDEX) dead.insert(victim);
 
             if (s != INVALID_INDEX && s != d)
             {
                 const ColliderIndex moved = entityAt(s);
                 slotToEntity[d] = moved;
-                slotToEntity.erase(s);
+                slotToEntity[s] = INVALID_INDEX; // Vacated; a later create may reuse it.
             }
             else
             {
-                slotToEntity.erase(d);
+                slotToEntity[d] = INVALID_INDEX;
             }
         }
 
@@ -369,7 +372,7 @@ namespace PS_AGONY
         for (const ColliderIndex e : dead) remap[e] = INVALID_INDEX;
         for (const auto& [slot, entity] : slotToEntity)
         {
-            if (entity != slot) remap[entity] = slot;
+            if (entity != INVALID_INDEX && entity != slot) remap[entity] = slot;
         }
 
         // Update in place: only affected entries are extracted and re-inserted.
