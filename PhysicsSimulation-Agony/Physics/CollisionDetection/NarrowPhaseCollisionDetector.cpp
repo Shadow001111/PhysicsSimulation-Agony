@@ -45,15 +45,21 @@ namespace PS_AGONY
 
     static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
     {
-        using Int = std::conditional_t<sizeof(Real) == 8,
-            uint64_t,
-            uint32_t>;
-
-        constexpr Int signBit = 1ull << (sizeof(Real) * 8 - 1);
+        using Int = std::conditional_t<sizeof(Real) == 8, uint64_t, uint32_t>;
+        constexpr Int signBit = Int(1) << (sizeof(Real) * 8 - 1);
 
         const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
         reinterpret_cast<Int&>(v.x) ^= signMask;
         reinterpret_cast<Int&>(v.y) ^= signMask;
+
+        //const Int signMask = std::bit_cast<Int>(sign) & signBit;
+        //v.x = std::bit_cast<Real>(std::bit_cast<Int>(v.x) ^ signMask);
+        //v.y = std::bit_cast<Real>(std::bit_cast<Int>(v.y) ^ signMask);
+
+        //if (sign < Real(0))
+        //{
+        //    v = -v;
+        //}
     }
 
     [[nodiscard]] static bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
@@ -97,7 +103,8 @@ namespace PS_AGONY
     [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
     {
         const Vec2 p0 = vertsPtr[edgeIndex];
-        const Vec2 p1 = vertsPtr[(edgeIndex + 1) % verticesCount];
+        const size_t next = (size_t(edgeIndex) + 1 == verticesCount) ? 0 : size_t(edgeIndex) + 1;
+        const Vec2 p1 = vertsPtr[next];
         const Vec2 edge = p1 - p0;
 
         Vec2 n = Vec2{ edge.y, -edge.x };
@@ -180,8 +187,6 @@ namespace PS_AGONY
         std::vector<std::pair<ObjectIndex, Real>>& outColliding
     ) const
     {
-        constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
-
         // Lambda to find the closest point on an edge segment
         auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
             {
@@ -302,11 +307,9 @@ namespace PS_AGONY
         {
             ColliderPairKey key{ collData.colliderA , collData.colliderB };
 
-            CachedContactPair& data = previousContactDataContainer.emplace(key, CachedContactPair{}).first->second;
-
-            // Reset contact ids.
-            data.contactIds[0] = 0xFFFFFFFF;
-            data.contactIds[1] = 0xFFFFFFFF;
+            // Default CachedContactPair already has invalid ids; reassign in case of a duplicate key.
+            CachedContactPair& data = previousContactDataContainer.try_emplace(key).first->second;
+            data = CachedContactPair{};
 
             // Only cache valid active contacts.
             for (uint32_t i = 0; i < collData.contactCount; i++)
@@ -326,53 +329,89 @@ namespace PS_AGONY
 
         TRACY_SCOPE_N("Remap persistent contact data");
 
-        // Temporary container to safely transition into.
-        robin_hood::unordered_flat_map<ColliderPairKey, CachedContactPair, ColliderPairKeyHasher> newContainer;
-        newContainer.reserve(previousContactDataContainer.size());
-
         constexpr ColliderIndex INVALID_INDEX = std::numeric_limits<ColliderIndex>::max();
 
-        for (const auto& [key, data] : previousContactDataContainer)
+        // Compose the whole deletion log once, tracking only touched indices.
+        // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot.
+        robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> slotToEntity;
+        robin_hood::unordered_flat_set<ColliderIndex> dead;
+        slotToEntity.reserve(deletedColliders.size() * 2);
+        dead.reserve(deletedColliders.size());
+
+        auto entityAt = [&](ColliderIndex slot) -> ColliderIndex
+            {
+                const auto it = slotToEntity.find(slot);
+                return it == slotToEntity.end() ? slot : it->second;
+            };
+
+        for (const auto& deletion : deletedColliders)
         {
-            ColliderIndex a = key.colliderA;
-            ColliderIndex b = key.colliderB;
-            bool alive = true;
+            const ColliderIndex d = deletion.deletedIndex;
+            const ColliderIndex s = deletion.swappedFromIndex;
 
-            // Sequentially replay the deletions/swaps exactly as they occurred.
-            for (const auto& deletion : deletedColliders)
+            dead.insert(entityAt(d));
+
+            if (s != INVALID_INDEX && s != d)
             {
-                if (a == deletion.deletedIndex || b == deletion.deletedIndex)
-                {
-                    alive = false;
-                    break;
-                }
-                if (deletion.swappedFromIndex != INVALID_INDEX)
-                {
-                    if (a == deletion.swappedFromIndex) a = deletion.deletedIndex;
-                    if (b == deletion.swappedFromIndex) b = deletion.deletedIndex;
-                }
+                const ColliderIndex moved = entityAt(s);
+                slotToEntity[d] = moved;
+                slotToEntity.erase(s);
             }
-
-            if (alive)
+            else
             {
-                // Re-sort the indices to preserve narrow-phase invariants.
-                BodyType typeA = colliders.shapeType[a];
-                BodyType typeB = colliders.shapeType[b];
-
-                if (typeA > typeB)
-                {
-                    std::swap(a, b);
-                }
-                else if (typeA == typeB && b > a)
-                {
-                    std::swap(a, b);
-                }
-
-                newContainer[ColliderPairKey{ a, b }] = data;
+                slotToEntity.erase(d);
             }
         }
 
-        previousContactDataContainer = std::move(newContainer);
+        // original index -> final index (INVALID_INDEX if deleted). Untouched indices are absent.
+        robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> remap;
+        remap.reserve(dead.size() + slotToEntity.size());
+        for (const ColliderIndex e : dead) remap[e] = INVALID_INDEX;
+        for (const auto& [slot, entity] : slotToEntity)
+        {
+            if (entity != slot) remap[entity] = slot;
+        }
+
+        // Update in place: only affected entries are extracted and re-inserted.
+        std::vector<std::pair<ColliderPairKey, CachedContactPair>> reinsert;
+
+        for (auto it = previousContactDataContainer.begin(); it != previousContactDataContainer.end();)
+        {
+            ColliderIndex a = it->first.colliderA;
+            ColliderIndex b = it->first.colliderB;
+
+            const auto ra = remap.find(a);
+            const auto rb = remap.find(b);
+            if (ra == remap.end() && rb == remap.end())
+            {
+                ++it;
+                continue;
+            }
+
+            if (ra != remap.end()) a = ra->second;
+            if (rb != remap.end()) b = rb->second;
+
+            if (a != INVALID_INDEX && b != INVALID_INDEX)
+            {
+                // Re-sort the indices to preserve narrow-phase invariants.
+                const BodyType typeA = colliders.shapeType[a];
+                const BodyType typeB = colliders.shapeType[b];
+
+                if (typeA > typeB || (typeA == typeB && b > a))
+                {
+                    std::swap(a, b);
+                }
+
+                reinsert.emplace_back(ColliderPairKey{ a, b }, it->second);
+            }
+
+            it = previousContactDataContainer.erase(it);
+        }
+
+        for (auto& [key, data] : reinsert)
+        {
+            previousContactDataContainer.insert_or_assign(key, data);
+        }
     }
 
     void NarrowPhaseCollisionDetector::clearData()
@@ -937,9 +976,10 @@ namespace PS_AGONY
             const Vec2 rightB = { cosB,  sinB };
             const Vec2 upB = { -sinB, cosB };
 
+            const Vec2 abPosDelta = positionA - positionB;
             const Vec2 circleLocal = {
-                glm::dot(positionA - positionB, rightB),
-                glm::dot(positionA - positionB, upB)
+                glm::dot(abPosDelta, rightB),
+                glm::dot(abPosDelta, upB)
             };
 
             Real maxSeparation = -std::numeric_limits<Real>::max();
@@ -1564,6 +1604,8 @@ namespace PS_AGONY
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
         static thread_local std::vector<Vec2> vertsB_inA;
+        static thread_local std::vector<Vec2> normalsA;      // A edge normals, A-local.
+        static thread_local std::vector<Vec2> normalsB_inA;  // B edge normals rotated into A-local.
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1601,6 +1643,8 @@ namespace PS_AGONY
             const Vec2* localVertsB = localVertsBContainer.data();
 
             vertsB_inA.resize(countB);
+            normalsA.resize(countA);
+            normalsB_inA.resize(countB);
             Real polyMinX_B = std::numeric_limits<Real>::max();
             Real polyMaxX_B = -std::numeric_limits<Real>::max();
             Real polyMinY_B = std::numeric_limits<Real>::max();
@@ -1690,7 +1734,8 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
-                Vec2 axisLocal = edgeOutwardNormal(localVertsA, countA, i);
+                const Vec2 axisLocal = edgeOutwardNormal(localVertsA, countA, i);
+                normalsA[i] = axisLocal;
                 if (!sat(axisLocal, SATAxis::A_EDGE, i))
                     goto nextPair;
             }
@@ -1698,7 +1743,8 @@ namespace PS_AGONY
             for (uint32_t i = 0; i < uint32_t(countB); i++)
             {
                 Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
-                Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                const Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
+                normalsB_inA[i] = axisLocal;
                 if (!sat(axisLocal, SATAxis::B_EDGE, i))
                     goto nextPair;
             }
@@ -1742,16 +1788,7 @@ namespace PS_AGONY
 
                 for (uint32_t i = 0; i < uint32_t(incCount); i++)
                 {
-                    Vec2 nLocal;
-                    if (refIsA)
-                    {
-                        Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
-                        nLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
-                    }
-                    else
-                    {
-                        nLocal = edgeOutwardNormal(localVertsA, countA, i);
-                    }
+                    const Vec2 nLocal = refIsA ? normalsB_inA[i] : normalsA[i];
 
                     const Real d = glm::dot(refNormalLocal, nLocal);
                     if (d < minDot)
