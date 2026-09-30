@@ -23,7 +23,8 @@ namespace PS_AGONY_RENDER
         const Simulation& simulation,
         Real simRenderAlpha,
         const AABB& cameraAABB,
-        const RenderOptions& renderOptions
+        const RenderOptions& renderOptions,
+        GLuint idTextureID
     )
     {
         TRACY_SCOPE_N("Render simulation");
@@ -50,9 +51,15 @@ namespace PS_AGONY_RENDER
         queryCollidersForRender(simulation, cameraAABB);
 
         // Render.
-        glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         renderColliders(viewProjectionMatrix, transformContext);
-        glColorMaski(1, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+        // Color-only from here: avoids a feedback loop when sampling the id texture.
+        glDrawBuffers(1, &RenderAttachments::colorDrawBuffer);
+
+        if (renderOptions.outlineColliders)
+        {
+            renderOutlines(idTextureID, renderOptions.outlineColor);
+        }
 
         renderSprings(simulation, viewProjectionMatrix, transformContext, cameraAABB);
         renderJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);

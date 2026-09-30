@@ -743,7 +743,7 @@ static int gameFunc()
             framebuffer.setDrawBuffers({ "color", "id" });
 
             glDisable(GL_BLEND);
-            glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glColorMaski(PS_AGONY_RENDER::RenderAttachments::idIndex, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
             // Clean screen and other buffers.
             const float bgColor[4] = { 0.0f, 0.0f, 0.1f, 0.0f };
@@ -772,15 +772,8 @@ static int gameFunc()
 
             // Render simulation to FBO.
             renderOptions.interpolation = deltaTime < simulation.getSimulationSettings().clockSettings.updateInterval;
-            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions);
-
-            framebuffer.setDrawBuffers({ "color" });
-
-            if (renderOptions.outlineColliders)
-            {
-                GLuint idTex = framebuffer.getTexture("id").value()->getID();
-                simulationRenderer.renderOutlines(idTex, renderOptions.outlineColor);
-            }
+            const GLuint idTex = framebuffer.getTexture("id").value()->getID();
+            simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions, idTex);
 
             if (creatorState.isFocused)
             {

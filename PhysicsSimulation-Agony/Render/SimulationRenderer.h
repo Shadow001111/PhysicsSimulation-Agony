@@ -17,6 +17,14 @@ namespace PS_AGONY_RENDER
 	// the public header stays free of private implementation detail.
 	struct BodyTransformContext;
 
+	// Must match the framebuffer attachment order.
+	namespace RenderAttachments
+	{
+		inline constexpr GLuint colorIndex = 0;
+		inline constexpr GLuint idIndex = 1;
+		inline constexpr GLenum colorDrawBuffer = GL_COLOR_ATTACHMENT0 + colorIndex;
+	}
+
 	struct RenderOptions
 	{
 		bool colliderAABBs = false;
@@ -77,10 +85,9 @@ namespace PS_AGONY_RENDER
 			const Simulation& simulation,
 			Real simRenderAlpha,
 			const AABB& cameraAABB,
-			const RenderOptions& renderOptions
+			const RenderOptions& renderOptions,
+			GLuint idTextureID
 		);
-
-		void renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor);
 
 		void renderObjectPreview(const void* params, BodyType type);
 
@@ -89,6 +96,7 @@ namespace PS_AGONY_RENDER
 		size_t getMemoryUsage() const noexcept;
 		size_t getVideoMemoryUsage() const noexcept;
 	private:
+		void renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor);
 		void queryCollidersForRender(const Simulation& simulation, const AABB& cameraAABB);
 
 		// Collect data and render.
