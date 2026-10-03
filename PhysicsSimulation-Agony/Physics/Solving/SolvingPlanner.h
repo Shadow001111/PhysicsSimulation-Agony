@@ -95,6 +95,7 @@ namespace PS_AGONY
             size_t bodyStrideBytes,
             size_t cacheLineBytes,
             SolvingPlan& outPlan);
+        void planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan);
 
         [[nodiscard]] size_t getMemoryUsage() const;
     };

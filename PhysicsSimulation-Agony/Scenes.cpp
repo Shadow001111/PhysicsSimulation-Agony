@@ -72,28 +72,39 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& 
 }
 
 
+// Chassis-center height above flat ground at rest, for scale = 1 (multiply by scale).
+static constexpr float kCarRestHeight = 0.9f + 2.2f + 0.02f;
+
 void load_ObjectCar(PS_AGONY::Simulation& simulation,
     float positionX,
     float positionY,
-    float rotation)
+    float rotation,
+    float scale = 1.0f)
 {
+    // Scaling: lengths x s, mass x s^2 (constant density), stiffness x s, damping x s^1.5
+    // (keeps sag and damping ratio proportional to size).
+    const float s = scale;
+    const float massScale = s * s;
+    const float stiffScale = s;
+    const float dampScale = s * std::sqrt(s);
+
     // === CONFIGURATION ===
-    constexpr float frameWidth = 6.0f;
-    constexpr float frameHeight = 1.2f;
-    constexpr float chassisMass = 150.0f;
+    const float frameWidth = 6.0f * s;
+    const float frameHeight = 1.2f * s;
+    const float chassisMass = 150.0f * massScale;
 
-    constexpr float wheelRadius = 0.9f;
-    constexpr float wheelMass = 3.0f;
-    constexpr float wheelOffset = 2.2f;   // Horizontal distance from chassis center
-    constexpr float suspensionDrop = 2.2f;   // Vertical distance down to wheel center
+    const float wheelRadius = 0.9f * s;
+    const float wheelMass = 3.0f * massScale;
+    const float wheelOffset = 2.2f * s;   // Horizontal distance from chassis center
+    const float suspensionDrop = 2.2f * s;   // Vertical distance down to wheel center
 
-    constexpr float suspensionK = 6000.0f; // was 999999999 (debug value?)
-    constexpr float suspensionD = 45.0f;
-    constexpr float suspensionTravel = 0.5f;   // Max +/- travel from rest length
+    const float suspensionK = 6000.0f * stiffScale; // was 999999999 (debug value?)
+    const float suspensionD = 45.0f * dampScale;
+    const float suspensionTravel = 0.5f * s;   // Max +/- travel from rest length
 
     // Slider joint (keeps the wheel on the axis, so it is a stiff constraint)
-    constexpr float sliderStiffness = 1.0e6f;
-    constexpr float sliderDamping = 1.0e3f;
+    const float sliderStiffness = 1.0e6f * stiffScale;
+    const float sliderDamping = 1.0e3f * dampScale;
 
     // === MATERIALS ===
     const PS_AGONY::MaterialIndex carMatIdx = simulation.createMaterial({
@@ -1344,6 +1355,317 @@ void load_PrismaticJointGallery(PS_AGONY::Simulation& simulation, Ecstasy::Core:
         1.0f);
 }
 
+// Hull-center height above flat ground at rest, for scale = 1 (multiply by scale).
+// = wheelY (trackRadius + linkHeight / 2 + 5 mm) + suspensionDrop + hullHeight / 2.
+static constexpr float kTankRestHeight = 0.725f + 1.2f + 0.6f;
+
+void load_ObjectTank(PS_AGONY::Simulation& simulation,
+    float positionX,
+    float positionY,
+    float rotation,
+    float scale = 1.0f)
+{
+    // Scaling: lengths x s, mass x s^2 (constant density), stiffness x s, damping x s^1.5.
+    const float s = scale;
+    const float massScale = s * s;
+    const float stiffScale = s;
+    const float dampScale = s * std::sqrt(s);
+
+    // === CONFIGURATION ===
+    constexpr float PI = 3.14159265358979f;
+
+    // Hull
+    const float hullWidth = 8.0f * s;
+    const float hullHeight = 1.2f * s;
+    const float hullMass = 300.0f * massScale;
+
+    // Wheels (all identical: road wheels, idler and sprocket)
+    constexpr int wheelCount = 7;
+    const float wheelRadius = 0.5f * s;
+    const float wheelMass = 10.0f * massScale;
+    const float wheelSpacing = 1.2f * s;                  // Center-to-center, leaves a 0.2 * s gap between wheels.
+
+    // Track
+    constexpr int linkCount = 70;
+    const float linkHeight = 0.2f * s;
+    const float linkGap = 0.04f * s;                      // Total gap between neighbouring link boxes; prevents overlap on the arcs at spawn.
+    const float linkMass = 3.0f * massScale;
+    const float trackRadius = wheelRadius + linkHeight * 0.5f + 0.02f * s; // Link centerline radius around the end wheels.
+    const float jointStiffness = 3.0e6f * stiffScale;
+    const float jointDamping = 1.0e3f * dampScale;
+
+    // Suspension
+    const float suspensionDrop = 1.2f * s;                // Hull bottom edge to wheel center. Keeps the upper track run clear of the hull.
+    const float suspensionK = 25000.0f * stiffScale;
+    const float suspensionD = 900.0f * dampScale;
+    const float suspensionTravel = 0.3f * s;              // Max +/- from rest length (hull still clears the upper run when fully compressed).
+    const float sliderStiffness = 1.0e6f * stiffScale;
+    const float sliderDamping = 1.0e3f * dampScale;
+
+    // Spring rest length exceeds the spawn length so the road wheel springs carry the hull weight
+    // (the rigidly mounted sprocket/idler then barely load the ground). Hull settles ~5 mm higher.
+    const float suspensionPreload = 0.03f * s;
+
+    // Sprocket (rear wheel): fixed axle on the hull.
+    const float axleStiffness = 3.0e6f * stiffScale;
+    const float axleDamping = 1.0e3f * dampScale;
+
+    // Idler (front wheel): spring-loaded tensioner sliding along hull X. The spring is pre-compressed,
+    // so it always pushes the idler forward and takes up any track slack.
+    const float tensionerLen = 0.4f * s;                  // Anchor-to-idler distance at spawn.
+    const float tensionerTravel = 0.15f * s;
+    const float tensionerPreload = 0.08f * s;
+    const float tensionerK = 30000.0f * stiffScale;
+    const float tensionerD = 600.0f * dampScale;
+
+    // Local frame: origin at hull center. Wheels sit at localY = -(hullHeight / 2 + suspensionDrop).
+    const float wheelLocalY = -(hullHeight * 0.5f + suspensionDrop);
+
+    // === MATERIALS ===
+    // Elasticity 0 everywhere: nothing should bounce on a tank.
+    const PS_AGONY::MaterialIndex linkMat = simulation.createMaterial({       // Rubber/cleats: grips ground and wheels.
+        .elasticity = 0.0f, .staticFriction = 1.2f, .dynamicFriction = 1.0f });
+    const PS_AGONY::MaterialIndex wheelMat = simulation.createMaterial({      // Grips the track so it can drive it.
+        .elasticity = 0.0f, .staticFriction = 0.8f, .dynamicFriction = 0.7f });
+    const PS_AGONY::MaterialIndex hullMat = simulation.createMaterial({       // Slippery: the track slides under it if they touch.
+        .elasticity = 0.0f, .staticFriction = 0.05f, .dynamicFriction = 0.03f });
+
+    // === HULL-LOCAL -> WORLD ===
+    const float cosR = std::cos(rotation);
+    const float sinR = std::sin(rotation);
+    auto toWorld = [&](float lx, float ly) -> PS_AGONY::Vec2 {
+        return { positionX + lx * cosR - ly * sinR,
+                 positionY + lx * sinR + ly * cosR };
+        };
+
+    // === HULL ===
+    auto hullOpt = simulation.createBox({
+        .base.position = { positionX, positionY },
+        .base.rotation = rotation,
+        .base.mass = hullMass,
+        .base.materialIndex = hullMat,
+        .size = { hullWidth, hullHeight }
+        });
+    if (!hullOpt) return;
+    const PS_AGONY::ObjectIndex hull = *hullOpt;
+
+    // === WHEELS + SUSPENSION ===
+    const float firstWheelX = -0.5f * wheelSpacing * static_cast<float>(wheelCount - 1);
+    for (int i = 0; i < wheelCount; ++i)
+    {
+        const float localX = firstWheelX + wheelSpacing * static_cast<float>(i);
+
+        auto wheelOpt = simulation.createCircle({
+            .base.position = toWorld(localX, wheelLocalY),
+            .base.rotation = rotation,
+            .base.mass = wheelMass,
+            .base.materialIndex = wheelMat,
+            .radius = wheelRadius
+            });
+        if (!wheelOpt) return;
+
+        // Sprocket: fixed axle, only free to spin.
+        if (i == 0)
+        {
+            simulation.createRevoluteJoint({
+                .bodyIndexA = hull,
+                .bodyIndexB = *wheelOpt,
+                .localAnchorA = { localX, wheelLocalY },
+                .localAnchorB = { 0.0f, 0.0f },
+                .stiffness = axleStiffness,
+                .damping = axleDamping
+                });
+            continue;
+        }
+
+        // Idler: horizontal slider + pre-compressed spring (track tensioner).
+        if (i == wheelCount - 1)
+        {
+            const float tensionerX = localX - tensionerLen;
+            simulation.createSpring({
+                .bodyIndexA = hull,
+                .bodyIndexB = *wheelOpt,
+                .localAnchorA = { tensionerX, wheelLocalY },
+                .localAnchorB = { 0.0f, 0.0f },
+                .restLength = tensionerLen + tensionerPreload,
+                .stiffness = tensionerK,
+                .damping = tensionerD
+                });
+            simulation.createSliderJoint({
+                .bodyIndexA = hull,
+                .bodyIndexB = *wheelOpt,
+                .localAnchorA = { tensionerX, wheelLocalY },
+                .localAnchorB = { 0.0f, 0.0f },
+                .localAxisA = { 1.0f, 0.0f },
+                .stiffness = sliderStiffness,
+                .damping = sliderDamping,
+                .lowerLimit = tensionerLen - tensionerTravel,
+                .upperLimit = tensionerLen + tensionerTravel,
+                .enableLimit = true
+                });
+            continue;
+        }
+
+        // Road wheels: independent vertical suspension.
+        const float anchorY = -hullHeight * 0.5f;
+
+        simulation.createSpring({
+            .bodyIndexA = hull,
+            .bodyIndexB = *wheelOpt,
+            .localAnchorA = { localX, anchorY },
+            .localAnchorB = { 0.0f, 0.0f },
+            .restLength = suspensionDrop + suspensionPreload,
+            .stiffness = suspensionK,
+            .damping = suspensionD
+            });
+
+        simulation.createSliderJoint({
+            .bodyIndexA = hull,
+            .bodyIndexB = *wheelOpt,
+            .localAnchorA = { localX, anchorY },
+            .localAnchorB = { 0.0f, 0.0f },
+            .localAxisA = { 0.0f, -1.0f },
+            .stiffness = sliderStiffness,
+            .damping = sliderDamping,
+            .lowerLimit = suspensionDrop - suspensionTravel,
+            .upperLimit = suspensionDrop + suspensionTravel,
+            .enableLimit = true
+            });
+    }
+
+    // === TRACK PATH (hull-local) ===
+    // Closed stadium around the first and last wheel, counter-clockwise starting on the bottom run:
+    // bottom run (+x) -> right arc -> top run (-x) -> left arc.
+    const float xL = firstWheelX;
+    const float xR = -firstWheelX;
+    const float straight = xR - xL;
+    const float arcLen = PI * trackRadius;
+    const float perimeter = 2.0f * straight + 2.0f * arcLen;
+
+    auto pathPoint = [&](float d) -> PS_AGONY::Vec2
+        {
+            if (d < straight)
+                return { xL + d, wheelLocalY - trackRadius };
+            d -= straight;
+            if (d < arcLen)
+            {
+                const float a = -0.5f * PI + d / trackRadius;
+                return { xR + trackRadius * std::cos(a), wheelLocalY + trackRadius * std::sin(a) };
+            }
+            d -= arcLen;
+            if (d < straight)
+                return { xR - d, wheelLocalY + trackRadius };
+            d -= straight;
+            const float a = 0.5f * PI + d / trackRadius;
+            return { xL + trackRadius * std::cos(a), wheelLocalY + trackRadius * std::sin(a) };
+        };
+
+    // Pivot i is the joint point between link i-1 and link i; link i spans pivot i -> pivot i+1.
+    std::vector<PS_AGONY::Vec2> pivots(linkCount);
+    for (int i = 0; i < linkCount; ++i)
+        pivots[i] = pathPoint(perimeter * static_cast<float>(i) / static_cast<float>(linkCount));
+
+    // === TRACK LINKS ===
+    std::vector<PS_AGONY::ObjectIndex> links(linkCount);
+    std::vector<float> halfChord(linkCount);
+    for (int i = 0; i < linkCount; ++i)
+    {
+        const PS_AGONY::Vec2 a = pivots[i];
+        const PS_AGONY::Vec2 b = pivots[(i + 1) % linkCount];
+        const float dx = b.x - a.x;
+        const float dy = b.y - a.y;
+        const float chord = std::sqrt(dx * dx + dy * dy);
+        halfChord[i] = 0.5f * chord;
+
+        auto linkOpt = simulation.createBox({
+            .base.position = toWorld(0.5f * (a.x + b.x), 0.5f * (a.y + b.y)),
+            .base.rotation = rotation + std::atan2(dy, dx),
+            .base.mass = linkMass,
+            .base.materialIndex = linkMat,
+            .size = { chord - linkGap, linkHeight }
+            });
+        if (!linkOpt) return;
+        links[i] = *linkOpt;
+    }
+
+    // === TRACK JOINTS ===
+    // Anchors sit at the chord ends, slightly outside the box edges (by linkGap / 2).
+    for (int i = 0; i < linkCount; ++i)
+    {
+        const int next = (i + 1) % linkCount;
+        simulation.createRevoluteJoint({
+            .bodyIndexA = links[i],
+            .bodyIndexB = links[next],
+            .localAnchorA = { +halfChord[i], 0.0f },
+            .localAnchorB = { -halfChord[next], 0.0f },
+            .stiffness = jointStiffness,
+            .damping = jointDamping
+            });
+    }
+}
+
+// Scene: flat ground with configurable obstacles, a tank (scale 2) and a car (scale 1) in front of it.
+void load_Tank(PS_AGONY::Simulation& simulation)
+{
+    // === CONFIGURATION ===
+    constexpr float groundWidth = 400.0f;
+    constexpr float groundThickness = 4.0f;
+
+    constexpr float tankScale = 2.0f;
+    constexpr float carScale = 1.0f;
+    constexpr float tankX = 0.0f;
+    constexpr float carX = 16.0f;       // Tank front reaches ~8.6, car rear wheel edge ~12.9.
+
+    // Obstacles. x = center. Trenches must be sorted by x and must not overlap.
+    // Car chassis is 6 long, so any trench > 6 wide can't be bridged by it.
+    // Tank track contact spans ~14.4, so it bridges up to roughly that.
+    struct Trench { float x; float width; float depth; };
+    struct Bump { float x; float width; float height; };
+
+    const std::vector<Trench> trenches = {
+        { 35.5f, 7.0f, 4.0f },
+        { 58.5f, 9.0f, 4.0f },
+    };
+    const std::vector<Bump> bumps = {
+        { 22.0f, 1.4f, 0.5f },
+        { 26.0f, 1.4f, 0.5f },
+        { 45.0f, 1.4f, 0.5f },
+    };
+
+    // === MATERIAL ===
+    const PS_AGONY::MaterialIndex groundMat = simulation.createMaterial({
+        .elasticity = 0.0f, .staticFriction = 1.0f, .dynamicFriction = 0.9f });
+
+    // === TERRAIN ===
+    auto addBlock = [&](float x0, float x1, float topY)
+        {
+            simulation.createBox({
+                .base.position = { 0.5f * (x0 + x1), topY - groundThickness * 0.5f },
+                .base.mass = 0.0f,
+                .base.materialIndex = groundMat,
+                .size = { x1 - x0, groundThickness }
+                });
+        };
+
+    float cursor = -groundWidth * 0.5f;
+    for (const Trench& t : trenches)
+    {
+        const float x0 = t.x - t.width * 0.5f;
+        const float x1 = t.x + t.width * 0.5f;
+        addBlock(cursor, x0, 0.0f);     // Ground up to the trench.
+        addBlock(x0, x1, -t.depth);     // Trench floor.
+        cursor = x1;
+    }
+    addBlock(cursor, groundWidth * 0.5f, 0.0f);
+
+    for (const Bump& b : bumps)
+        addBlock(b.x - b.width * 0.5f, b.x + b.width * 0.5f, b.height);
+
+    // === VEHICLES ===
+    load_ObjectTank(simulation, tankX, kTankRestHeight * tankScale, 0.0f, tankScale);
+    load_ObjectCar(simulation, carX, kCarRestHeight * carScale, 0.0f, carScale);
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Core::Random::Generator rvg; // Random value generator.
@@ -1393,5 +1715,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 9)
     {
         load_PrismaticJointGallery(simulation, rvg);
+    }
+    else if (scene == 10)
+    {
+        load_Tank(simulation);
     }
 }

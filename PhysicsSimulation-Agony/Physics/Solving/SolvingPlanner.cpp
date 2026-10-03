@@ -758,6 +758,11 @@ namespace PS_AGONY
         }
     }
 
+    void SolvingPlanner::planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan)
+    {
+        // TODO: Implement.
+    }
+
     void SolvingPlan::printExecutionPlan() const
     {
         const size_t numWaves = (passOffsets.empty() ? 0 : passOffsets.size() / workerCount);
