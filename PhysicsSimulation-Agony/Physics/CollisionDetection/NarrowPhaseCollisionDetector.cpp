@@ -567,12 +567,6 @@ namespace PS_AGONY
                     continue;
                 }
 
-                if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
-                {
-                    std::cout << "AAAAA\n";
-                    continue;
-                }
-
                 BodyType typeA = shapeTypePtr[colliderIndexA];
                 BodyType typeB = shapeTypePtr[colliderIndexB];
 
