@@ -68,8 +68,10 @@ namespace PS_AGONY
 	void BroadPhaseCollisionDetector::clearData()
 	{
 		collisionData.clear();
-		dynamicTree.clear();
-		staticTree.clear();
+		for (auto& tree : trees)
+		{
+			tree.clear();
+		}
 		staticRebuildRequested = true;
 	}
 
@@ -80,21 +82,21 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_N("Build broad-phase trees");
 
-		dynamicTree.build(collidersAABB, dynamicIds);
+		trees[0].build(collidersAABB, dynamicIds);
 
 		const bool rebuildStatic =
 			staticUpdate == StaticTreeUpdate::Rebuild ||
 			staticRebuildRequested ||
-			staticTree.colliderCount() != staticIds.size();
+			trees[1].colliderCount() != staticIds.size();
 
 		if (rebuildStatic)
 		{
-			staticTree.build(collidersAABB, staticIds);
+			trees[1].build(collidersAABB, staticIds);
 			staticRebuildRequested = false;
 		}
 		else if (staticUpdate == StaticTreeUpdate::Refit)
 		{
-			staticTree.refit(collidersAABB);
+			trees[1].refit(collidersAABB);
 		}
 	}
 
@@ -104,14 +106,14 @@ namespace PS_AGONY
 
 		collisionData.clear();
 
-		if (dynamicTree.empty()) return collisionData;
+		if (trees[0].empty()) return collisionData;
 
-		collisionData.reserve(dynamicTree.colliderCount());
+		collisionData.reserve(trees[0].colliderCount());
 
 		const bool useThreading =
 			executionPolicy == ExecutionPolicy::ForceMultiThreaded ||
 			(executionPolicy != ExecutionPolicy::ForceSingleThreaded &&
-				dynamicTree.nodeCount() + staticTree.nodeCount() > THREADING_NODE_THRESHOLD);
+				trees[0].nodeCount() + trees[1].nodeCount() > THREADING_NODE_THRESHOLD);
 
 		if (useThreading)
 		{
@@ -125,28 +127,23 @@ namespace PS_AGONY
 		return collisionData;
 	}
 
-	void BroadPhaseCollisionDetector::getDynamicLeafNodeAABBs(std::vector<AABB>& outAABBs) const
+	void BroadPhaseCollisionDetector::getLeafNodeAABBs(BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<AABB>& outAABBs) const
 	{
-		dynamicTree.getLeafNodeAABBs(outAABBs);
-	}
-
-	void BroadPhaseCollisionDetector::getStaticLeafNodeAABBs(std::vector<AABB>& outAABBs) const
-	{
-		staticTree.getLeafNodeAABBs(outAABBs);
-	}
-
-	void BroadPhaseCollisionDetector::getAllLeafNodeAABBs(std::vector<AABB>& outAABBs) const
-	{
-		dynamicTree.getLeafNodeAABBs(outAABBs);
-		staticTree.getLeafNodeAABBs(outAABBs);
+		uint32_t mask = static_cast<uint32_t>(flags);
+		while (mask)
+		{
+			const uint32_t treeIndex = std::countr_zero(mask);
+			mask &= mask - 1;
+			trees[treeIndex].getLeafNodeAABBs(outAABBs);
+		}
 	}
 
 	size_t BroadPhaseCollisionDetector::getMemoryUsage() const
 	{
 		size_t total = sizeof(BroadPhaseCollisionDetector);
 
-		total += dynamicTree.getMemoryUsage();
-		total += staticTree.getMemoryUsage();
+		total += trees[0].getMemoryUsage();
+		total += trees[1].getMemoryUsage();
 
 		total += getVectorMemoryUsage(queryResources.selfNodePairs);
 		total += getVectorMemoryUsage(queryResources.selfLeafPairs);
@@ -171,9 +168,9 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_N("Query pairs");
 
-		const BPI::BvhTreeView dyn = dynamicTree.view();
-		const BPI::BvhTreeView stat = staticTree.view();
-		const bool hasStatic = !staticTree.empty();
+		const BPI::BvhTreeView dyn = trees[0].view();
+		const BPI::BvhTreeView stat = trees[1].view();
+		const bool hasStatic = !trees[1].empty();
 
 		auto& r = queryResources;
 		r.selfNodePairs.clear();
@@ -215,9 +212,9 @@ namespace PS_AGONY
 		auto& threadPool = Threading::getGlobalThreadPool();
 		const size_t workerCount = threadPool.getThreadCount() - 1;
 
-		const BPI::BvhTreeView dyn = dynamicTree.view();
-		const BPI::BvhTreeView stat = staticTree.view();
-		const bool hasStatic = !staticTree.empty();
+		const BPI::BvhTreeView dyn = trees[0].view();
+		const BPI::BvhTreeView stat = trees[1].view();
+		const bool hasStatic = !trees[1].empty();
 
 		auto& r = queryResources;
 		r.selfNodePairs.clear();

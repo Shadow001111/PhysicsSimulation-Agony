@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <span>
 #include <vector>
+#include <array>
 
 namespace PS_AGONY
 {
@@ -88,8 +89,8 @@ namespace PS_AGONY
 		AABBSoAViewer collidersAABB;
 		const ObjectIndex* colliderBodyIndex = nullptr; // Collider -> owning body; rejects same-body pairs.
 
-		BroadPhaseInternal::BvhTree dynamicTree;
-		BroadPhaseInternal::BvhTree staticTree;
+		std::array<BroadPhaseInternal::BvhTree, 2> trees;
+
 		bool staticRebuildRequested = true;
 
 		QueryResources queryResources;
@@ -131,17 +132,15 @@ namespace PS_AGONY
 		// pairs are ordered (dynamic, static). Returns empty if there are no dynamic colliders.
 		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Auto);
 
-		void getDynamicLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
-		void getStaticLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
-		void getAllLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
+		void getLeafNodeAABBs(BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<AABB>& outAABBs) const;
 
 		// Returns COLLIDER indices (dynamic first, then static) whose AABB overlaps the query shape.
 		template <typename ShapeQuery>
-		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const;
+		void queryCollidersInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<ColliderIndex>& outColliders) const;
 
 		// Returns the AABBs of leaf nodes (of both trees) overlapping the query shape.
 		template <typename ShapeQuery>
-		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const;
+		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<AABB>& outAABBs) const;
 
 		size_t getMemoryUsage() const;
 	private:
@@ -150,16 +149,34 @@ namespace PS_AGONY
 	};
 
 	template <typename ShapeQuery>
-	inline void BroadPhaseCollisionDetector::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const
+	inline void BroadPhaseCollisionDetector::queryCollidersInShape(
+		const ShapeQuery& shape,
+		BroadPhaseInternal::BvhTreeTypeFlag flags,
+		std::vector<ColliderIndex>& outColliders
+	) const
 	{
-		dynamicTree.queryCollidersInShape(shape, outColliders);
-		staticTree.queryCollidersInShape(shape, outColliders);
+		uint32_t mask = static_cast<uint32_t>(flags);
+		while (mask)
+		{
+			const uint32_t treeIndex = std::countr_zero(mask);
+			mask &= mask - 1;
+			trees[treeIndex].queryCollidersInShape(shape, outColliders);
+		}
 	}
 
 	template <typename ShapeQuery>
-	inline void BroadPhaseCollisionDetector::queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const
+	inline void BroadPhaseCollisionDetector::queryLeafNodeAABBsInShape(
+		const ShapeQuery& shape,
+		BroadPhaseInternal::BvhTreeTypeFlag flags,
+		std::vector<AABB>& outAABBs
+	) const
 	{
-		dynamicTree.queryLeafNodeAABBsInShape(shape, outAABBs);
-		staticTree.queryLeafNodeAABBsInShape(shape, outAABBs);
+		uint32_t mask = static_cast<uint32_t>(flags);
+		while (mask)
+		{
+			const uint32_t treeIndex = std::countr_zero(mask);
+			mask &= mask - 1;
+			trees[treeIndex].queryLeafNodeAABBsInShape(shape, outAABBs);
+		}
 	}
 }

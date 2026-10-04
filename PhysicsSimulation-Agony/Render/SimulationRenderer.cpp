@@ -70,9 +70,25 @@ namespace PS_AGONY_RENDER
         {
             renderColliderAABBs(foundColliders, viewProjectionMatrix);
         }
-        if (renderOptions.broadPhaseAABBs)
+        if (renderOptions.broadPhaseDynamicAABBs || renderOptions.broadPhaseStaticAABBs)
         {
-            renderBroadPhaseAABBs(simulation, viewProjectionMatrix, cameraAABB);
+            TRACY_SCOPE_N("Broad phase leaf AABBs");
+
+            const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
+            const BroadPhaseInternal::AABBQuery query(cameraAABB);
+
+            if (renderOptions.broadPhaseDynamicAABBs)
+            {
+                queriedAABBs.clear();
+                bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Dynamic, queriedAABBs);
+                renderLeafAABBs(queriedAABBs, { 0.0f, 1.0f, 0.0f }, viewProjectionMatrix); // Green.
+            }
+            if (renderOptions.broadPhaseStaticAABBs)
+            {
+                queriedAABBs.clear();
+                bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Static, queriedAABBs);
+                renderLeafAABBs(queriedAABBs, { 0.2f, 0.4f, 1.0f }, viewProjectionMatrix); // Blue.
+            }
         }
         if (renderOptions.contactPoints)
         {
@@ -177,7 +193,11 @@ namespace PS_AGONY_RENDER
             const auto& collisionDetector = simulation.getBroadPhaseCollisionDetector();
 
             foundColliders.clear();
-            collisionDetector.queryCollidersInShape(BroadPhaseInternal::AABBQuery(cameraAABB), foundColliders);
+            collisionDetector.queryCollidersInShape(
+                BroadPhaseInternal::AABBQuery(cameraAABB),
+                BroadPhaseInternal::BvhTreeTypeFlag::All,
+                foundColliders
+            );
         }
         {
             TRACY_SCOPE_N("Partition found colliders");

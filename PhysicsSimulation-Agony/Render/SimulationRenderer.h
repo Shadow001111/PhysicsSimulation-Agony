@@ -1,6 +1,8 @@
 #pragma once
 #include "ShapeRenderer.h"
 
+#include <span>
+
 #include "Physics/Camera2D.h"
 #include "Physics/ObjectSoA.h"
 
@@ -28,7 +30,8 @@ namespace PS_AGONY_RENDER
 	struct RenderOptions
 	{
 		bool colliderAABBs = false;
-		bool broadPhaseAABBs = false;
+		bool broadPhaseDynamicAABBs = false;
+		bool broadPhaseStaticAABBs = false;
 		bool contactPoints = false;
 		bool outlineColliders = true;
 		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
@@ -111,7 +114,7 @@ namespace PS_AGONY_RENDER
 		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 
 		void renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix);
-		void renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
+		void renderLeafAABBs(std::span<const AABB> aabbs, const glm::vec3& color, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
 		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB);

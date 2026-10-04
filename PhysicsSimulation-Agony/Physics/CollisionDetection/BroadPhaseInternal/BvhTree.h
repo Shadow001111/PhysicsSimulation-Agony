@@ -16,6 +16,19 @@
 
 namespace PS_AGONY::BroadPhaseInternal
 {
+	enum class BvhTreeTypeFlag : uint8_t
+	{
+		None = 0,
+		Dynamic = 1 << 0,
+		Static = 1 << 1,
+		All = Static | Dynamic
+	};
+
+	constexpr BvhTreeTypeFlag operator|(BvhTreeTypeFlag a, BvhTreeTypeFlag b) noexcept
+	{
+		return static_cast<BvhTreeTypeFlag>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+	}
+
 	// Morton-ordered BVH over a subset of collider AABBs.
 	class BvhTree
 	{

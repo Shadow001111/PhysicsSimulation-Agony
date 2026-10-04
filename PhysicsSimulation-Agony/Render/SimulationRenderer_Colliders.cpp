@@ -366,42 +366,32 @@ namespace PS_AGONY_RENDER
         for (size_t i = 0; i < colliderCount; i++)
         {
             ColliderIndex colliderIndex = givenColliders[i];
-            renderDataPtr[i].minX = minXPtr[colliderIndex];
-            renderDataPtr[i].minY = minYPtr[colliderIndex];
-            renderDataPtr[i].maxX = maxXPtr[colliderIndex];
-            renderDataPtr[i].maxY = maxYPtr[colliderIndex];
+            renderDataPtr[i].minX = static_cast<float>(minXPtr[colliderIndex]);
+            renderDataPtr[i].minY = static_cast<float>(minYPtr[colliderIndex]);
+            renderDataPtr[i].maxX = static_cast<float>(maxXPtr[colliderIndex]);
+            renderDataPtr[i].maxY = static_cast<float>(maxYPtr[colliderIndex]);
         }
 
         shapeRenderer.renderAABBShapes(aabbInstanceData, { 1.0f, 0.0f, 0.0f }, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
+    void SimulationRenderer::renderLeafAABBs(std::span<const AABB> aabbs, const glm::vec3& color, const Mat4& viewProjectionMatrix)
     {
-        TRACY_SCOPE_N("Render broad phase AABBs");
+        TRACY_SCOPE_N("Render leaf AABBs");
 
-        // Fetch AABBs.
-        queriedAABBs.clear();
-        aabbInstanceData.clear();
+        if (aabbs.empty()) return;
 
-        const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
-        bfcd.queryLeafNodeAABBsInShape(BroadPhaseInternal::AABBQuery(cameraAABB), queriedAABBs);
+        aabbInstanceData.resize(aabbs.size());
 
-        if (queriedAABBs.empty()) return;
-
-        // Allocate space for instance data
-        aabbInstanceData.resize(queriedAABBs.size());
-
-        // Copy and cast values. 
-        for (size_t i = 0; i < queriedAABBs.size(); i++)
+        for (size_t i = 0; i < aabbs.size(); i++)
         {
-            aabbInstanceData[i].minX = static_cast<float>(queriedAABBs[i].minX);
-            aabbInstanceData[i].minY = static_cast<float>(queriedAABBs[i].minY);
-            aabbInstanceData[i].maxX = static_cast<float>(queriedAABBs[i].maxX);
-            aabbInstanceData[i].maxY = static_cast<float>(queriedAABBs[i].maxY);
+            aabbInstanceData[i].minX = static_cast<float>(aabbs[i].minX);
+            aabbInstanceData[i].minY = static_cast<float>(aabbs[i].minY);
+            aabbInstanceData[i].maxX = static_cast<float>(aabbs[i].maxX);
+            aabbInstanceData[i].maxY = static_cast<float>(aabbs[i].maxY);
         }
 
-        // Render.
-        shapeRenderer.renderAABBShapes(aabbInstanceData, { 0.0f, 1.0f, 0.0f }, viewProjectionMatrix);
+        shapeRenderer.renderAABBShapes(aabbInstanceData, color, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB)

@@ -121,7 +121,10 @@ namespace PS_AGONY
         // Broad-phase.
         std::vector<ColliderIndex> broadPhaseColliders; // TODO: Get rid of allocation.
         broadPhaseColliders.reserve(128);
-        broadPhaseCollisionDetector.queryCollidersInShape(BroadPhaseInternal::CircleQuery(grabPosition, MAX_GRAB_DISTANCE), broadPhaseColliders);
+        broadPhaseCollisionDetector.queryCollidersInShape(
+            BroadPhaseInternal::CircleQuery(grabPosition, MAX_GRAB_DISTANCE),
+            BroadPhaseInternal::BvhTreeTypeFlag::All,
+            broadPhaseColliders);
         if (broadPhaseColliders.empty()) return;
 
         // Narrow phase.
