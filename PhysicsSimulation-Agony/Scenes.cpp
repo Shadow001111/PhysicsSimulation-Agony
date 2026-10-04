@@ -1356,9 +1356,21 @@ void load_PrismaticJointGallery(PS_AGONY::Simulation& simulation, Ecstasy::Core:
 }
 
 // Hull-center height above flat ground at rest, for scale = 1 (multiply by scale).
-// = wheelY (trackRadius + linkHeight / 2 + 5 mm) + suspensionDrop + hullHeight / 2.
-static constexpr float kTankRestHeight = 0.725f + 1.2f + 0.6f;
+// = road wheel axle height (wheelRadius + linkHeight + clearance + 5 mm = 0.725)
+//   + hullHeight / 2 (0.6) + suspensionDrop (1.6, hull bottom edge to road wheel axle).
+static constexpr float kTankRestHeight = 0.725f + 0.6f + 1.6f;
 
+// Side-view tank with an upside-down trapezoid track, modelled on a real tracked vehicle:
+//
+//          .--o--o--o--.            top row:    sprocket (rear) + idler (front), both smaller than the
+//         /  small      \                       road wheels, plus 3 small return rollers between them.
+//        o  return        o                     The tops of all top-row wheels are at the same height, so
+//         \ rollers      /                      the upper run is flat and rests on the rollers.
+//          '-o-o-o-o-o-'            bottom row: 5 big road wheels on independent sprung suspension.
+//
+// The end wheels sit outside the road wheels on x and higher up, so the front and rear of the
+// track slope upward and climb obstacles. The rollers stay inside the road wheels' x range.
+// Forward is +x; the sprocket (powered) is at the rear, the idler (tensioner) at the front.
 void load_ObjectTank(PS_AGONY::Simulation& simulation,
     float positionX,
     float positionY,
@@ -1373,40 +1385,61 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
 
     // === CONFIGURATION ===
     constexpr float PI = 3.14159265358979f;
+    constexpr float TWO_PI = 2.0f * PI;
 
     // Hull
     const float hullWidth = 8.0f * s;
     const float hullHeight = 1.2f * s;
     const float hullMass = 300.0f * massScale;
 
-    // Wheels (all identical: road wheels, idler and sprocket)
-    constexpr int wheelCount = 7;
-    const float wheelRadius = 0.5f * s;
-    const float wheelMass = 10.0f * massScale;
-    const float wheelSpacing = 1.2f * s;                  // Center-to-center, leaves a 0.2 * s gap between wheels.
+    // Road wheels (bottom row)
+    constexpr int roadWheelCount = 5;
+    const float roadWheelRadius = 0.5f * s;
+    const float roadWheelSpacing = 1.1f * s;              // Center-to-center, leaves a 0.1 * s gap.
+    const float roadWheelMass = 10.0f * massScale;        // Other wheels scale with radius^2.
+
+    // End wheels (top row): sprocket at the rear, idler at the front. Smaller than the road wheels.
+    const float endWheelRadius = 0.4f * s;
+    const float endWheelX = 3.6f * s;                     // |x| from hull center; outside the outermost road wheel (2.2 * s).
+    const float endWheelRise = 0.9f * s;                  // Height of the end wheel centers above the road wheel axle line.
+
+    // Return rollers (top row, between the end wheels): the smallest wheels.
+    constexpr int rollerCount = 3;
+    const float rollerRadius = 0.2f * s;
+    const float rollerSpacing = 1.6f * s;                 // Stays inside the road wheels' x range (+/- 2.2 * s).
+
+    // All top-row wheels share the same top edge, so the upper run is flat.
+    // Smaller wheels are offset up to match.
+    const float topEdgeRise = endWheelRise + endWheelRadius;
+    const float rollerRise = topEdgeRise - rollerRadius;
 
     // Track
-    constexpr int linkCount = 70;
     const float linkHeight = 0.2f * s;
-    const float linkGap = 0.04f * s;                      // Total gap between neighbouring link boxes; prevents overlap on the arcs at spawn.
+    const float linkGap = 0.05f * s;                      // Total gap between neighbouring link boxes; must exceed the inner-corner overlap on the tightest arc.
+    const float linkPitch = 0.24f * s;                    // Target link length (~0.25 x road wheel diameter, like a real track).
     const float linkMass = 3.0f * massScale;
-    const float trackRadius = wheelRadius + linkHeight * 0.5f + 0.02f * s; // Link centerline radius around the end wheels.
+    const float beltClearance = 0.02f * s;                // Gap between the wheel rims and the inner face of the track.
     const float jointStiffness = 3.0e6f * stiffScale;
     const float jointDamping = 1.0e3f * dampScale;
 
+    // Link centerline radius around a wheel of the given radius.
+    auto beltRadius = [&](float wheelRadius) { return wheelRadius + linkHeight * 0.5f + beltClearance; };
+
+    // Hull bottom edge sits just above the outer face of the upper run.
+    const float hullClearance = 0.08f * s;
+    const float suspensionDrop = topEdgeRise + beltClearance + linkHeight + hullClearance;   // Hull bottom edge to road wheel axle (1.6 * s).
+
     // Suspension
-    const float suspensionDrop = 1.2f * s;                // Hull bottom edge to wheel center. Keeps the upper track run clear of the hull.
     const float suspensionK = 25000.0f * stiffScale;
     const float suspensionD = 900.0f * dampScale;
-    const float suspensionTravel = 0.3f * s;              // Max +/- from rest length (hull still clears the upper run when fully compressed).
+    const float suspensionTravel = 0.3f * s;              // Max +/- from rest length. Road wheel tops stay below the rollers when fully compressed.
     const float sliderStiffness = 1.0e6f * stiffScale;
     const float sliderDamping = 1.0e3f * dampScale;
 
-    // Spring rest length exceeds the spawn length so the road wheel springs carry the hull weight
-    // (the rigidly mounted sprocket/idler then barely load the ground). Hull settles ~5 mm higher.
+    // Spring rest length exceeds the spawn length so the road wheel springs carry the hull weight.
     const float suspensionPreload = 0.03f * s;
 
-    // Sprocket (rear wheel): fixed axle on the hull.
+    // Sprocket: fixed axle on the hull.
     const float axleStiffness = 3.0e6f * stiffScale;
     const float axleDamping = 1.0e3f * dampScale;
 
@@ -1414,16 +1447,18 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
     const float driveSpeed = 6.0f * std::sqrt(s);          // Track speed, m/s.
     const float driveTorque = 3000.0f * s * s * s;         // Force ~ s^2, radius ~ s.
 
-    // Idler (front wheel): spring-loaded tensioner sliding along hull X. The spring is pre-compressed,
-    // so it always pushes the idler forward and takes up any track slack.
+    // Idler: spring-loaded tensioner sliding along hull X (keeps the upper run level while taking up
+    // slack). The spring is pre-compressed, so it always pushes the idler forward.
     const float tensionerLen = 0.4f * s;                  // Anchor-to-idler distance at spawn.
     const float tensionerTravel = 0.15f * s;
     const float tensionerPreload = 0.08f * s;
     const float tensionerK = 30000.0f * stiffScale;
     const float tensionerD = 600.0f * dampScale;
 
-    // Local frame: origin at hull center. Wheels sit at localY = -(hullHeight / 2 + suspensionDrop).
-    const float wheelLocalY = -(hullHeight * 0.5f + suspensionDrop);
+    // Local frame: origin at hull center.
+    const float axleLocalY = -(hullHeight * 0.5f + suspensionDrop);   // Road wheel centers.
+    const float endLocalY = axleLocalY + endWheelRise;                // Sprocket and idler centers.
+    const float rollerLocalY = axleLocalY + rollerRise;               // Return roller centers.
 
     // === MATERIALS ===
     // Elasticity 0 everywhere: nothing should bounce on a tank.
@@ -1453,70 +1488,80 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
     if (!hullOpt) return;
     const PS_AGONY::ObjectIndex hull = *hullOpt;
 
-    // === WHEELS + SUSPENSION ===
-    const float firstWheelX = -0.5f * wheelSpacing * static_cast<float>(wheelCount - 1);
-    for (int i = 0; i < wheelCount; ++i)
-    {
-        const float localX = firstWheelX + wheelSpacing * static_cast<float>(i);
+    // === WHEEL FACTORY ===
+    // Mass scales with area (radius^2), anchored to the road wheel.
+    auto createWheel = [&](float localX, float localY, float radius) -> std::optional<PS_AGONY::ObjectIndex>
+        {
+            const float ratio = radius / roadWheelRadius;
+            return simulation.createCircle({
+                .base.position = toWorld(localX, localY),
+                .base.rotation = rotation,
+                .base.mass = roadWheelMass * ratio * ratio,
+                .base.materialIndex = wheelMat,
+                .radius = radius
+                });
+        };
 
-        auto wheelOpt = simulation.createCircle({
-            .base.position = toWorld(localX, wheelLocalY),
-            .base.rotation = rotation,
-            .base.mass = wheelMass,
-            .base.materialIndex = wheelMat,
-            .radius = wheelRadius
-            });
+    // === SPROCKET (rear, top row): fixed axle, driven ===
+    const float sprocketX = -endWheelX;
+    {
+        auto wheelOpt = createWheel(sprocketX, endLocalY, endWheelRadius);
         if (!wheelOpt) return;
 
-        // Sprocket: fixed axle, only free to spin.
-        if (i == 0)
-        {
-            simulation.createRevoluteJoint({
-                .bodyIndexA = hull,
-                .bodyIndexB = *wheelOpt,
-                .localAnchorA = { localX, wheelLocalY },
-                .localAnchorB = { 0.0f, 0.0f },
-                .stiffness = axleStiffness,
-                .damping = axleDamping
-                });
-            simulation.createMotor({
-                .bodyIndex = *wheelOpt,
-                .targetSpeed = -driveSpeed / trackRadius,
-                .maxTorque = driveTorque
-                });
-            continue;
-        }
+        simulation.createRevoluteJoint({
+            .bodyIndexA = hull,
+            .bodyIndexB = *wheelOpt,
+            .localAnchorA = { sprocketX, endLocalY },
+            .localAnchorB = { 0.0f, 0.0f },
+            .stiffness = axleStiffness,
+            .damping = axleDamping
+            });
+        simulation.createMotor({
+            .bodyIndex = *wheelOpt,
+            .targetSpeed = -driveSpeed / beltRadius(endWheelRadius),
+            .maxTorque = driveTorque
+            });
+    }
 
-        // Idler: horizontal slider + pre-compressed spring (track tensioner).
-        if (i == wheelCount - 1)
-        {
-            const float tensionerX = localX - tensionerLen;
-            simulation.createSpring({
-                .bodyIndexA = hull,
-                .bodyIndexB = *wheelOpt,
-                .localAnchorA = { tensionerX, wheelLocalY },
-                .localAnchorB = { 0.0f, 0.0f },
-                .restLength = tensionerLen + tensionerPreload,
-                .stiffness = tensionerK,
-                .damping = tensionerD
-                });
-            simulation.createSliderJoint({
-                .bodyIndexA = hull,
-                .bodyIndexB = *wheelOpt,
-                .localAnchorA = { tensionerX, wheelLocalY },
-                .localAnchorB = { 0.0f, 0.0f },
-                .localAxisA = { 1.0f, 0.0f },
-                .stiffness = sliderStiffness,
-                .damping = sliderDamping,
-                .lowerLimit = tensionerLen - tensionerTravel,
-                .upperLimit = tensionerLen + tensionerTravel,
-                .enableLimit = true
-                });
-            continue;
-        }
+    // === IDLER (front, top row): horizontal slider + pre-compressed spring (track tensioner) ===
+    const float idlerX = endWheelX;
+    {
+        auto wheelOpt = createWheel(idlerX, endLocalY, endWheelRadius);
+        if (!wheelOpt) return;
 
-        // Road wheels: independent vertical suspension.
+        const float tensionerX = idlerX - tensionerLen;
+        simulation.createSpring({
+            .bodyIndexA = hull,
+            .bodyIndexB = *wheelOpt,
+            .localAnchorA = { tensionerX, endLocalY },
+            .localAnchorB = { 0.0f, 0.0f },
+            .restLength = tensionerLen + tensionerPreload,
+            .stiffness = tensionerK,
+            .damping = tensionerD
+            });
+        simulation.createSliderJoint({
+            .bodyIndexA = hull,
+            .bodyIndexB = *wheelOpt,
+            .localAnchorA = { tensionerX, endLocalY },
+            .localAnchorB = { 0.0f, 0.0f },
+            .localAxisA = { 1.0f, 0.0f },
+            .stiffness = sliderStiffness,
+            .damping = sliderDamping,
+            .lowerLimit = tensionerLen - tensionerTravel,
+            .upperLimit = tensionerLen + tensionerTravel,
+            .enableLimit = true
+            });
+    }
+
+    // === ROAD WHEELS (bottom row): independent vertical suspension ===
+    const float firstRoadWheelX = -0.5f * roadWheelSpacing * static_cast<float>(roadWheelCount - 1);
+    for (int i = 0; i < roadWheelCount; ++i)
+    {
+        const float localX = firstRoadWheelX + roadWheelSpacing * static_cast<float>(i);
         const float anchorY = -hullHeight * 0.5f;
+
+        auto wheelOpt = createWheel(localX, axleLocalY, roadWheelRadius);
+        if (!wheelOpt) return;
 
         simulation.createSpring({
             .bodyIndexA = hull,
@@ -1542,32 +1587,129 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
             });
     }
 
+    // === RETURN ROLLERS (top row, between the end wheels): free-spinning on fixed axles ===
+    for (int i = 0; i < rollerCount; ++i)
+    {
+        const float localX = rollerSpacing * (static_cast<float>(i) - 0.5f * static_cast<float>(rollerCount - 1));
+
+        auto wheelOpt = createWheel(localX, rollerLocalY, rollerRadius);
+        if (!wheelOpt) return;
+
+        simulation.createRevoluteJoint({
+            .bodyIndexA = hull,
+            .bodyIndexB = *wheelOpt,
+            .localAnchorA = { localX, rollerLocalY },
+            .localAnchorB = { 0.0f, 0.0f },
+            .stiffness = axleStiffness,
+            .damping = axleDamping
+            });
+    }
+
     // === TRACK PATH (hull-local) ===
-    // Closed stadium around the first and last wheel, counter-clockwise starting on the bottom run:
-    // bottom run (+x) -> right arc -> top run (-x) -> left arc.
-    const float xL = firstWheelX;
-    const float xR = -firstWheelX;
-    const float straight = xR - xL;
-    const float arcLen = PI * trackRadius;
-    const float perimeter = 2.0f * straight + 2.0f * arcLen;
+    // The track only wraps around four wheels: the outer road wheels and the two end wheels. The
+    // middle road wheels and the rollers touch the straight runs. The path is the convex loop around
+    // those four circles: counter-clockwise from the bottom run -> front road wheel arc -> front
+    // slope -> idler arc -> top run -> sprocket arc -> rear slope -> rear road wheel arc.
+    struct BeltCircle { float x, y, r; };
+
+    // Order: rear road wheel, front road wheel, idler, sprocket (counter-clockwise).
+    const BeltCircle circles[4] = {
+        { firstRoadWheelX,  axleLocalY, beltRadius(roadWheelRadius) },
+        { -firstRoadWheelX, axleLocalY, beltRadius(roadWheelRadius) },
+        { idlerX,           endLocalY,  beltRadius(endWheelRadius) },
+        { sprocketX,        endLocalY,  beltRadius(endWheelRadius) }
+    };
+
+    // External tangent between circle i and circle i+1, with the loop interior on the left of travel.
+    // phi[i] is the angle of the outward normal of that tangent line (also the angle, on both circles,
+    // of the tangent points). Derived from (c_j - c_i) . n = r_i - r_j.
+    float phi[4];
+    float lineLength[4];
+    for (int i = 0; i < 4; ++i)
+    {
+        const BeltCircle& from = circles[i];
+        const BeltCircle& to = circles[(i + 1) % 4];
+        const float dx = to.x - from.x;
+        const float dy = to.y - from.y;
+        const float dist = std::sqrt(dx * dx + dy * dy);
+        const float dr = from.r - to.r;
+        phi[i] = std::atan2(dy, dx) - std::acos(dr / dist);
+        lineLength[i] = std::sqrt(dist * dist - dr * dr);
+    }
+
+    // Path as alternating segments: line 0, arc 1, line 1, arc 2, line 2, arc 3, line 3, arc 0.
+    struct PathSegment
+    {
+        bool isArc;
+        float x, y;         // Line: start point. Arc: center.
+        float dirX, dirY;   // Line: unit direction.
+        float radius;       // Arc.
+        float angle0;       // Arc: start angle (increasing = counter-clockwise).
+        float length;
+    };
+    std::vector<PathSegment> path;
+    path.reserve(8);
+
+    auto addLine = [&](int i)
+        {
+            const BeltCircle& from = circles[i];
+            PathSegment seg{};
+            seg.isArc = false;
+            seg.x = from.x + from.r * std::cos(phi[i]);
+            seg.y = from.y + from.r * std::sin(phi[i]);
+            seg.dirX = -std::sin(phi[i]);
+            seg.dirY = std::cos(phi[i]);
+            seg.length = lineLength[i];
+            path.push_back(seg);
+        };
+    auto addArc = [&](int i)
+        {
+            const BeltCircle& c = circles[i];
+            const float a0 = phi[(i + 3) % 4];
+            float sweep = phi[i] - a0;
+            while (sweep < 0.0f) sweep += TWO_PI;
+            while (sweep >= TWO_PI) sweep -= TWO_PI;
+
+            PathSegment seg{};
+            seg.isArc = true;
+            seg.x = c.x;
+            seg.y = c.y;
+            seg.radius = c.r;
+            seg.angle0 = a0;
+            seg.length = c.r * sweep;
+            path.push_back(seg);
+        };
+
+    addLine(0); addArc(1);
+    addLine(1); addArc(2);
+    addLine(2); addArc(3);
+    addLine(3); addArc(0);
+
+    float perimeter = 0.0f;
+    for (const PathSegment& seg : path)
+        perimeter += seg.length;
 
     auto pathPoint = [&](float d) -> PS_AGONY::Vec2
         {
-            if (d < straight)
-                return { xL + d, wheelLocalY - trackRadius };
-            d -= straight;
-            if (d < arcLen)
+            for (size_t k = 0; k < path.size(); ++k)
             {
-                const float a = -0.5f * PI + d / trackRadius;
-                return { xR + trackRadius * std::cos(a), wheelLocalY + trackRadius * std::sin(a) };
+                const PathSegment& seg = path[k];
+                if (d > seg.length && k + 1 < path.size())
+                {
+                    d -= seg.length;
+                    continue;
+                }
+                if (seg.isArc)
+                {
+                    const float a = seg.angle0 + d / seg.radius;
+                    return { seg.x + seg.radius * std::cos(a), seg.y + seg.radius * std::sin(a) };
+                }
+                return { seg.x + seg.dirX * d, seg.y + seg.dirY * d };
             }
-            d -= arcLen;
-            if (d < straight)
-                return { xR - d, wheelLocalY + trackRadius };
-            d -= straight;
-            const float a = 0.5f * PI + d / trackRadius;
-            return { xL + trackRadius * std::cos(a), wheelLocalY + trackRadius * std::sin(a) };
+            return { 0.0f, 0.0f };
         };
+
+    const int linkCount = static_cast<int>(perimeter / linkPitch + 0.5f);
 
     // Pivot i is the joint point between link i-1 and link i; link i spans pivot i -> pivot i+1.
     std::vector<PS_AGONY::Vec2> pivots(linkCount);
@@ -1623,11 +1765,11 @@ void load_Tank(PS_AGONY::Simulation& simulation)
     constexpr float tankScale = 2.0f;
     constexpr float carScale = 1.0f;
     constexpr float tankX = 0.0f;
-    constexpr float carX = 16.0f;       // Tank front reaches ~8.6, car rear wheel edge ~12.9.
+    constexpr float carX = 16.0f;       // Tank front reaches ~8.3, car rear wheel edge ~12.9.
 
     // Obstacles. x = center. Trenches must be sorted by x and must not overlap.
     // Car chassis is 6 long, so any trench > 6 wide can't be bridged by it.
-    // Tank track contact spans ~14.4, so it bridges up to roughly that.
+    // Tank flat track contact spans ~8.8 (5 road wheels, scale 2) plus the sloped nose, so it bridges up to roughly that.
     struct Trench { float x; float width; float depth; };
     struct Bump { float x; float width; float height; };
 
