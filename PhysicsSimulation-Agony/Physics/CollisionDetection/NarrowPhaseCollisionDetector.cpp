@@ -560,7 +560,7 @@ namespace PS_AGONY
                 const ObjectIndex bodyIndexA = colliderOwnerPtr[colliderIndexA];
                 const ObjectIndex bodyIndexB = colliderOwnerPtr[colliderIndexB];
 
-                if (bodyIndexA == bodyIndexB) [[unlikely]]
+                if (bodyIndexA == bodyIndexB)
                 {
                     // Colliders on the same body never collide. Broad phase already
                     // filters this; kept here as a cheap safety net.
@@ -569,6 +569,7 @@ namespace PS_AGONY
 
                 if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
                 {
+                    std::cout << "AAAAA\n";
                     continue;
                 }
 

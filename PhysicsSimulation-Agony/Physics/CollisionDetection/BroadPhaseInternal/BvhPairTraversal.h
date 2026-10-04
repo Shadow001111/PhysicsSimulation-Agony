@@ -17,11 +17,9 @@ namespace PS_AGONY::BroadPhaseInternal
 			a.minY < b.maxY && a.maxY > b.minY;
 	}
 
-	// Walks down from the root to build the initial frontier of work: leaves
-	// ready for self-cross testing, leaf/leaf pairs ready for AxB testing, and
-	// node/node pairs still needing further splitting. Each 'outNodePairsToTraverse'
-	// entry roots an independent sub-traversal, which is what lets the threaded
-	// path hand them out to workers as separate tasks.
+	// Self-tree only. Walks down from the root to build the initial frontier:
+	// leaves for self-cross testing, leaf/leaf pairs for AxB testing, and
+	// node/node pairs that still need splitting (independent sub-traversals).
 	inline void traverseRootForInitialPairs(
 		const BvhNode* ECSTASY_RESTRICT nodesPtr,
 		std::vector<BvhNodePair>& outNodePairsToTraverse,
@@ -84,74 +82,109 @@ namespace PS_AGONY::BroadPhaseInternal
 		}
 	}
 
-	// Drains 'stack' (a LIFO of node-pairs still needing splitting), recursively
-	// splitting the larger of the two nodes and pushing surviving sub-pairs back
-	// onto 'stack', until every pair has either been discarded (no overlap) or
-	// resolved to a leaf/leaf pair (appended to 'outLeafPairsToTestCollisions').
-	// Used identically by the single-threaded path (stack pre-seeded with the
-	// whole initial frontier, drained once) and by each worker thread (stack
-	// re-seeded with one stolen task at a time and drained per task).
+	// Splits the larger node of 'pair' (a in nodesA, b in nodesB) and appends the
+	// overlapping child pairs to 'out'. The pair must not be leaf/leaf.
+	inline void splitLargerNode(
+		const BvhNode* nodesA,
+		const BvhNode* nodesB,
+		const BvhNodePair pair,
+		std::vector<BvhNodePair>& out)
+	{
+		const BvhNode& nodeA = nodesA[pair.a];
+		const BvhNode& nodeB = nodesB[pair.b];
+
+		const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
+		const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
+
+		const Real areaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
+		const Real areaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
+
+		const bool splitB = aLeaf || (!bLeaf && (areaB > areaA));
+		if (splitB)
+		{
+			const uint32_t leftChildB = nodeB.leftChildIndex;
+			const uint32_t rightChildB = leftChildB + 1;
+
+			if (overlaps(nodeA, nodesB[leftChildB]))
+			{
+				out.push_back({ pair.a, leftChildB });
+			}
+			if (overlaps(nodeA, nodesB[rightChildB]))
+			{
+				out.push_back({ pair.a, rightChildB });
+			}
+		}
+		else
+		{
+			const uint32_t leftChildA = nodeA.leftChildIndex;
+			const uint32_t rightChildA = leftChildA + 1;
+
+			if (overlaps(nodesA[leftChildA], nodeB))
+			{
+				out.push_back({ leftChildA, pair.b });
+			}
+			if (overlaps(nodesA[rightChildA], nodeB))
+			{
+				out.push_back({ rightChildA, pair.b });
+			}
+		}
+	}
+
+	// Drains 'stack' down to leaf/leaf pairs (appended to 'outLeafPairsToTestCollisions').
+	// Pairs are (node in nodesA, node in nodesB); pass the same array twice for self-tree traversal.
 	inline void traverseNodePairStack(
-		const BvhNode* ECSTASY_RESTRICT nodesPtr,
+		const BvhNode* nodesA,
+		const BvhNode* nodesB,
 		std::vector<BvhNodePair>& stack,
 		std::vector<BvhNodePair>& outLeafPairsToTestCollisions)
 	{
-		while (stack.size() > 0)
+		while (!stack.empty())
 		{
 			const BvhNodePair nodePair = stack.back();
 			stack.pop_back();
 
-			const BvhNode& nodeA = nodesPtr[nodePair.a];
-			const BvhNode& nodeB = nodesPtr[nodePair.b];
-
-			const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
-			const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
+			const bool aLeaf = nodesA[nodePair.a].leftChildIndex == BvhNode::INVALID_INDEX;
+			const bool bLeaf = nodesB[nodePair.b].leftChildIndex == BvhNode::INVALID_INDEX;
 			if (aLeaf && bLeaf)
 			{
-				outLeafPairsToTestCollisions.emplace_back(nodePair);
+				outLeafPairsToTestCollisions.push_back(nodePair);
 				continue;
 			}
 
-			const Real nodeAreaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
-			const Real nodeAreaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
-
-			const bool splitB = aLeaf || (!bLeaf && (nodeAreaB > nodeAreaA));
-			if (splitB)
-			{
-				// Split node B: check overlap with each child before pushing.
-				const uint32_t leftChildB = nodeB.leftChildIndex;
-				const uint32_t rightChildB = leftChildB + 1;
-
-				const BvhNode& leftNodeB = nodesPtr[leftChildB];
-				const BvhNode& rightNodeB = nodesPtr[rightChildB];
-
-				if (overlaps(nodeA, leftNodeB))
-				{
-					stack.emplace_back(nodePair.a, leftChildB);
-				}
-				if (overlaps(nodeA, rightNodeB))
-				{
-					stack.emplace_back(nodePair.a, rightChildB);
-				}
-			}
-			else
-			{
-				// Split node A: check overlap with each child before pushing.
-				const uint32_t leftChildA = nodeA.leftChildIndex;
-				const uint32_t rightChildA = leftChildA + 1;
-
-				const BvhNode& leftNodeA = nodesPtr[leftChildA];
-				const BvhNode& rightNodeA = nodesPtr[rightChildA];
-
-				if (overlaps(leftNodeA, nodeB))
-				{
-					stack.emplace_back(leftChildA, nodePair.b);
-				}
-				if (overlaps(rightNodeA, nodeB))
-				{
-					stack.emplace_back(rightChildA, nodePair.b);
-				}
-			}
+			splitLargerNode(nodesA, nodesB, nodePair, stack);
 		}
+	}
+
+	// Cross-tree only. Expands (rootA, rootB) breadth-first until at least 'minTasks'
+	// independent node pairs are pending (or none can be split further).
+	// 'outNodePairs' must be empty on entry; leaf/leaf pairs found go to 'outLeafPairs'.
+	inline void expandCrossRootPairs(
+		const BvhNode* nodesA,
+		const BvhNode* nodesB,
+		size_t minTasks,
+		std::vector<BvhNodePair>& outNodePairs,
+		std::vector<BvhNodePair>& outLeafPairs)
+	{
+		if (!overlaps(nodesA[0], nodesB[0])) return;
+
+		outNodePairs.push_back({ 0, 0 });
+
+		size_t head = 0;
+		while (head < outNodePairs.size() && outNodePairs.size() - head < minTasks)
+		{
+			const BvhNodePair pair = outNodePairs[head++];
+
+			const bool aLeaf = nodesA[pair.a].leftChildIndex == BvhNode::INVALID_INDEX;
+			const bool bLeaf = nodesB[pair.b].leftChildIndex == BvhNode::INVALID_INDEX;
+			if (aLeaf && bLeaf)
+			{
+				outLeafPairs.push_back(pair);
+				continue;
+			}
+
+			splitLargerNode(nodesA, nodesB, pair, outNodePairs);
+		}
+
+		outNodePairs.erase(outNodePairs.begin(), outNodePairs.begin() + head);
 	}
 }

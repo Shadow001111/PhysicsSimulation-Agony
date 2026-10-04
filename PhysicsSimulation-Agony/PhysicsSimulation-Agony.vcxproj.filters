@@ -126,6 +126,9 @@
     <ClCompile Include="Physics\Solving\MotorSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Physics\Simulation.h">
@@ -321,6 +324,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Solving\MotorSolver.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

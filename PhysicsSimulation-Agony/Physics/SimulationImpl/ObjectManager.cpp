@@ -300,6 +300,12 @@ namespace PS_AGONY
             bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
         );
         bodies.addCollider(bodyIndex, newCollider);
+
+        std::vector<ObjectIndex>& list = bodies.isStatic[bodyIndex] ? staticColliderIDs : dynamicColliderIDs;
+        colliderSlot.resize(colliders.getCount());
+        colliderSlot[newCollider] = static_cast<uint32_t>(list.size());
+        list.push_back(static_cast<ObjectIndex>(newCollider));
+
         return newCollider;
     }
 
@@ -366,6 +372,16 @@ namespace PS_AGONY
             polygons.localVertices.pop_back();
         }
 
+        // Remove from the persistent ID list (swap-remove, O(1)).
+        {
+            std::vector<ObjectIndex>& list = bodies.isStatic[bodyIndex] ? staticColliderIDs : dynamicColliderIDs;
+            const uint32_t slot = colliderSlot[colliderIdx];
+            const ObjectIndex lastID = list.back();
+            list[slot] = lastID;
+            colliderSlot[lastID] = slot;
+            list.pop_back();
+        }
+
         // Remove from ColliderSoA itself.
         bodies.removeCollider(bodyIndex, colliderIdx);
         const size_t oldBackCollider = colliders.swapRemove(colliderIdx);
@@ -374,6 +390,12 @@ namespace PS_AGONY
             const ObjectIndex swappedOwner = colliders.bodyIndex[colliderIdx];
             bodies.removeCollider(swappedOwner, static_cast<ColliderIndex>(oldBackCollider));
             bodies.addCollider(swappedOwner, colliderIdx);
+
+            // Moved collider: oldBackCollider -> colliderIdx in its ID list.
+            std::vector<ObjectIndex>& movedList = bodies.isStatic[swappedOwner] ? staticColliderIDs : dynamicColliderIDs;
+            const uint32_t movedSlot = colliderSlot[oldBackCollider];
+            movedList[movedSlot] = static_cast<ObjectIndex>(colliderIdx);
+            colliderSlot[colliderIdx] = movedSlot;
 
             // Fix the shape SoA's back-reference: it still points at the collider's old index.
             const BodyType movedShapeType = colliders.shapeType[colliderIdx];
@@ -393,5 +415,7 @@ namespace PS_AGONY
         {
             deletedColliders.emplace_back(static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(colliderIdx));
         }
+
+        colliderSlot.pop_back();
     }
 }

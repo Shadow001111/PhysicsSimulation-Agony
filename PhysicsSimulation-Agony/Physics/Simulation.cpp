@@ -270,7 +270,10 @@ namespace PS_AGONY
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
-        broadPhaseCollisionDetector.buildTree(true);
+        broadPhaseCollisionDetector.buildTrees(
+            objectManager.getDynamicColliderIDs(),
+            objectManager.getStaticColliderIDs(),
+            StaticTreeUpdate::Refit);
 
         if (objectManager.colliders.getCount() > 1)
         {

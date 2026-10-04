@@ -1,5 +1,6 @@
 #pragma once
 #include "BvhNode.h"
+#include "BvhTreeView.h"
 #include "Math.h"
 
 #include "Physics/ObjectSoA.h"
@@ -47,8 +48,7 @@ namespace PS_AGONY::BroadPhaseInternal
 	inline constexpr auto leafSelfCrossMaskArray = makeMaskArray<BvhNode::KD_LEAF_SIZE, BvhNode::KD_LEAF_SIZE / LEAF_TEST_LANES>();
 	inline constexpr size_t PAIR_PUSH_BUFFER_CAPACITY = 256;
 
-	// Batches ObjectPair writes and flushes them to 'dest' in bulk. One instance
-	// per calling thread; never shared across threads.
+	// Batches ObjectPair writes and flushes them to 'dest' in bulk. One instance per thread.
 	struct PairPushBuffer
 	{
 		ObjectPair buffer[PAIR_PUSH_BUFFER_CAPACITY];
@@ -69,26 +69,20 @@ namespace PS_AGONY::BroadPhaseInternal
 		}
 	};
 
-	// Tests all collider pairs within a single leaf node against each other.
-	// leafMin/MaxX/Y ptrs are base pointers to the FULL leaf AABB SoA (not
-	// offset to this node); node.leafIndex selects the slice.
-	// Used identically by the single-threaded and per-worker threaded query paths.
+	// Tests all colliders within one leaf against each other.
 	inline void testLeafSelfCross(
 		const BvhNode& node,
-		const Real* ECSTASY_RESTRICT leafMinXPtr,
-		const Real* ECSTASY_RESTRICT leafMaxXPtr,
-		const Real* ECSTASY_RESTRICT leafMinYPtr,
-		const Real* ECSTASY_RESTRICT leafMaxYPtr,
-		const ObjectIndex* ECSTASY_RESTRICT indicesPtr,
+		const BvhTreeView& tree,
 		const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
 		std::array<uint32_t, BvhNode::KD_LEAF_SIZE>& masks,
 		PairPushBuffer& pushBuffer)
 	{
 		const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
-		const Real* leafMinX = leafMinXPtr + srcIndex;
-		const Real* leafMaxX = leafMaxXPtr + srcIndex;
-		const Real* leafMinY = leafMinYPtr + srcIndex;
-		const Real* leafMaxY = leafMaxYPtr + srcIndex;
+		const Real* ECSTASY_RESTRICT leafMinX = tree.leafMinX + srcIndex;
+		const Real* ECSTASY_RESTRICT leafMaxX = tree.leafMaxX + srcIndex;
+		const Real* ECSTASY_RESTRICT leafMinY = tree.leafMinY + srcIndex;
+		const Real* ECSTASY_RESTRICT leafMaxY = tree.leafMaxY + srcIndex;
+		const ObjectIndex* ECSTASY_RESTRICT indicesPtr = tree.indices;
 		const uint32_t count = node.end - node.start;
 
 		for (uint32_t i = 0; i < count; i++)
@@ -126,40 +120,39 @@ namespace PS_AGONY::BroadPhaseInternal
 				mask &= mask - 1;
 				const ObjectIndex idxA = indicesPtr[node.start + i];
 				const ObjectIndex idxB = indicesPtr[node.start + lane];
-				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body: never collide.
+				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body.
 				pushBuffer.push(idxA, idxB);
 			}
 		}
 	}
 
-	// Tests every collider in leaf A against every collider in leaf B. No
-	// self-pair mask needed since the two leaves are disjoint.
-	// Used identically by the single-threaded and per-worker threaded query paths.
+	// Tests every collider in leaf A against every collider in leaf B.
+	// CheckSameBody = true for leaves of one tree; false for leaves of different trees
+	// (a body lives in one tree only), where 'colliderOwnerPtr' may be null.
+	// Pairs are pushed as (A, B).
+	template<bool CheckSameBody>
 	inline void testLeafPairCross(
 		const BvhNode& nodeA,
+		const BvhTreeView& treeA,
 		const BvhNode& nodeB,
-		const Real* ECSTASY_RESTRICT leafMinXPtr,
-		const Real* ECSTASY_RESTRICT leafMaxXPtr,
-		const Real* ECSTASY_RESTRICT leafMinYPtr,
-		const Real* ECSTASY_RESTRICT leafMaxYPtr,
-		const ObjectIndex* ECSTASY_RESTRICT indicesPtr,
-		const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
+		const BvhTreeView& treeB,
+		[[maybe_unused]] const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
 		std::array<uint32_t, BvhNode::KD_LEAF_SIZE>& masks,
 		PairPushBuffer& pushBuffer)
 	{
 		const uint32_t countA = nodeA.end - nodeA.start;
 
 		const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
-		const Real* leafAMinX = leafMinXPtr + srcIndexA;
-		const Real* leafAMaxX = leafMaxXPtr + srcIndexA;
-		const Real* leafAMinY = leafMinYPtr + srcIndexA;
-		const Real* leafAMaxY = leafMaxYPtr + srcIndexA;
+		const Real* leafAMinX = treeA.leafMinX + srcIndexA;
+		const Real* leafAMaxX = treeA.leafMaxX + srcIndexA;
+		const Real* leafAMinY = treeA.leafMinY + srcIndexA;
+		const Real* leafAMaxY = treeA.leafMaxY + srcIndexA;
 
 		const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
-		const Real* leafBMinX = leafMinXPtr + srcIndexB;
-		const Real* leafBMaxX = leafMaxXPtr + srcIndexB;
-		const Real* leafBMinY = leafMinYPtr + srcIndexB;
-		const Real* leafBMaxY = leafMaxYPtr + srcIndexB;
+		const Real* leafBMinX = treeB.leafMinX + srcIndexB;
+		const Real* leafBMaxX = treeB.leafMaxX + srcIndexB;
+		const Real* leafBMinY = treeB.leafMinY + srcIndexB;
+		const Real* leafBMaxY = treeB.leafMaxY + srcIndexB;
 
 		for (uint32_t i = 0; i < countA; i++)
 		{
@@ -191,9 +184,12 @@ namespace PS_AGONY::BroadPhaseInternal
 			{
 				const uint32_t lane = std::countr_zero(mask);
 				mask &= mask - 1;
-				const ObjectIndex idxA = indicesPtr[nodeA.start + i];
-				const ObjectIndex idxB = indicesPtr[nodeB.start + lane];
-				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body: never collide.
+				const ObjectIndex idxA = treeA.indices[nodeA.start + i];
+				const ObjectIndex idxB = treeB.indices[nodeB.start + lane];
+				if constexpr (CheckSameBody)
+				{
+					if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue;
+				}
 				pushBuffer.push(idxA, idxB);
 			}
 		}

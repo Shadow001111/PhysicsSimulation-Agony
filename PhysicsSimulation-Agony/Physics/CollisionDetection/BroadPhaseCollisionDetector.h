@@ -4,59 +4,46 @@
 
 #include "BroadPhaseInternal/BvhNode.h"
 #include "BroadPhaseInternal/BvhNodePair.h"
+#include "BroadPhaseInternal/BvhTree.h"
 #include "BroadPhaseInternal/QueryShapes.h"
 #include "BroadPhaseInternal/Math.h"
 
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 
-#include <vector>
 #include <atomic>
-#include <array>
-#include <bit>
+#include <cstdint>
+#include <span>
+#include <vector>
 
 namespace PS_AGONY
 {
 	using BvhNode = BroadPhaseInternal::BvhNode;
 	using BvhNodePair = BroadPhaseInternal::BvhNodePair;
 
+	// How the static tree is updated by buildTrees.
+	enum class StaticTreeUpdate : uint8_t
+	{
+		None,    // Static colliders did not change.
+		Refit,   // Same membership, some AABBs moved (e.g. kinematic bodies).
+		Rebuild  // Membership changed or a full rebuild is wanted.
+	};
+
 	// NOTE: This detector operates over COLLIDER AABBs, not body AABBs.
-	// Every ObjectIndex produced or consumed here (in ObjectPair results, or in
-	// fetchBodiesInCircle's output) is therefore a ColliderIndex. Callers that
+	// Every ObjectIndex produced or consumed here is a ColliderIndex. Callers that
 	// need the owning body must resolve it via ColliderSoAViewer::bodyIndex.
+	//
+	// Dynamic and static colliders live in separate trees. Static-static pairs are
+	// never tested.
 	class BroadPhaseCollisionDetector
 	{
-		struct alignas(64) PairVector
+		struct QueryResources
 		{
-			std::vector<ObjectPair> pairs;
-		};
-
-		struct PackedBodyIndex
-		{
-			uint32_t key;
-			ObjectIndex index; // Collider index.
-		};
-
-		struct BvhFunctionResources
-		{
-			// Must keep their state between frames:
-
-			std::vector<BvhNode> nodes;
-			std::vector<ObjectIndex> mainColliderIndices; // Collider indices, sorted by Morton code.
-
-			// The rest (Build):
-
-			SimdAlignedVector<Real> transformedCentroidX;
-			SimdAlignedVector<Real> transformedCentroidY;
-			SimdAlignedVector<uint32_t> mortonCodes;
-			std::vector<PackedBodyIndex> tempPackedBodyIndicesToSort;
-			std::vector<PackedBodyIndex> tempPackedBodyIndicesToSort2;
-
-			// The rest (Query):
-
-			std::vector<BvhNodePair> nodePairsToTraverse;
-			std::vector<BvhNodePair> leafPairsToTestCollisions;
-			std::vector<uint32_t> leavesToTestCollisions;
+			std::vector<BvhNodePair> selfNodePairs;
+			std::vector<BvhNodePair> selfLeafPairs;
+			std::vector<uint32_t> selfLeaves;
+			std::vector<BvhNodePair> crossNodePairs;
+			std::vector<BvhNodePair> crossLeafPairs;
 		};
 
 		struct QueryPairsThreadedResources
@@ -64,7 +51,8 @@ namespace PS_AGONY
 			struct alignas(64) WorkerData
 			{
 				std::vector<BvhNodePair> nodePairsToTraverse;
-				std::vector<BvhNodePair> leafPairsToTestCollisions;
+				std::vector<BvhNodePair> selfLeafPairs;
+				std::vector<BvhNodePair> crossLeafPairs;
 				std::vector<ObjectPair> collisionData;
 
 				std::atomic<bool> isDone{ false };
@@ -77,7 +65,8 @@ namespace PS_AGONY
 				WorkerData(WorkerData&& other) noexcept
 				{
 					nodePairsToTraverse = std::move(other.nodePairsToTraverse);
-					leafPairsToTestCollisions = std::move(other.leafPairsToTestCollisions);
+					selfLeafPairs = std::move(other.selfLeafPairs);
+					crossLeafPairs = std::move(other.crossLeafPairs);
 					collisionData = std::move(other.collisionData);
 				}
 				WorkerData& operator=(WorkerData&& other) noexcept
@@ -85,7 +74,8 @@ namespace PS_AGONY
 					if (this != &other)
 					{
 						nodePairsToTraverse = std::move(other.nodePairsToTraverse);
-						leafPairsToTestCollisions = std::move(other.leafPairsToTestCollisions);
+						selfLeafPairs = std::move(other.selfLeafPairs);
+						crossLeafPairs = std::move(other.crossLeafPairs);
 						collisionData = std::move(other.collisionData);
 					}
 					return *this;
@@ -95,30 +85,17 @@ namespace PS_AGONY
 			std::vector<WorkerData> workerData;
 		};
 
-		struct LeafBodyAABBSoA
-		{
-			struct LeafData
-			{
-				std::array<Real, BvhNode::KD_LEAF_SIZE> data;
-			};
-
-			RealSimdAlignedVector<LeafData> minX;
-			RealSimdAlignedVector<LeafData> maxX;
-			RealSimdAlignedVector<LeafData> minY;
-			RealSimdAlignedVector<LeafData> maxY;
-		};
-
 		AABBSoAViewer collidersAABB;
-		const ObjectIndex* colliderBodyIndex = nullptr; // Collider -> owning body; used to reject same-body pairs.
+		const ObjectIndex* colliderBodyIndex = nullptr; // Collider -> owning body; rejects same-body pairs.
 
-		BvhFunctionResources bvhFunctionResources;
+		BroadPhaseInternal::BvhTree dynamicTree;
+		BroadPhaseInternal::BvhTree staticTree;
+		bool staticRebuildRequested = true;
+
+		QueryResources queryResources;
 		QueryPairsThreadedResources queryPairsThreadedResources;
 
-		LeafBodyAABBSoA leafBodyAABBs;
-
 		std::vector<ObjectPair> collisionData; // Pairs of COLLIDER indices.
-
-		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;
@@ -134,178 +111,55 @@ namespace PS_AGONY
 			const ObjectIndex* colliderBodyIndexIn
 		);
 
-		// Clears all broad-phase state (BVH tree, cached indices, pairs). Call when there are
-		// zero colliders so stale tree data isn't served to fetchAABBs/fetchCollidersInCircle/
-		// fetchCollidersInAABB.
+		// Clears both trees and cached pairs. Call when there are zero colliders so stale
+		// tree data isn't served to queries.
 		void clearData();
 
-		// Builds (rebuild=true) or refits (rebuild=false) the BVH tree from the current collider
-		// AABBs. Safe to call with 0 or 1 colliders: 0 clears the tree, 1 produces a single-leaf
-		// tree. Needed so downstream queries reflect the current scene even when there are too
-		// few colliders to collide.
-		void buildTree(bool rebuild);
+		// Rebuilds the dynamic tree every call. The static tree follows 'staticUpdate', and is
+		// also rebuilt if requestStaticRebuild() was called or its collider count differs from
+		// 'staticIds'. Spans hold COLLIDER indices; either may be empty.
+		void buildTrees(
+			std::span<const ColliderIndex> dynamicIds,
+			std::span<const ColliderIndex> staticIds,
+			StaticTreeUpdate staticUpdate
+		);
 
-		// Queries the already-built tree for overlapping collider pairs. Caller must ensure at
-		// least 2 colliders exist (checked defensively); returns empty otherwise.
-		// Returned pairs are COLLIDER index pairs.
+		// Forces a static tree rebuild on the next buildTrees.
+		void requestStaticRebuild() noexcept { staticRebuildRequested = true; }
+
+		// Finds overlapping collider pairs: dynamic-dynamic and dynamic-static. Dynamic-static
+		// pairs are ordered (dynamic, static). Returns empty if there are no dynamic colliders.
 		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Auto);
 
-		// Returns all leaf node aabbs.
+		void getDynamicLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
+		void getStaticLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
 		void getAllLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
 
-		// Returns COLLIDER indices whose AABB overlaps the query shape.
+		// Returns COLLIDER indices (dynamic first, then static) whose AABB overlaps the query shape.
 		template <typename ShapeQuery>
 		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const;
 
-		// Returns the AABBs of leaf nodes whose AABB overlaps the query shape.
+		// Returns the AABBs of leaf nodes (of both trees) overlapping the query shape.
 		template <typename ShapeQuery>
 		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const;
 
 		size_t getMemoryUsage() const;
 	private:
-		void computeCentroidsWithTransformations(uint32_t colliderCount, Vec2 globalMin, Vec2 scale, Real clampMax);
-
-		template<std::floating_point TReal>
-		void computeMortonCodes(uint32_t colliderCount);
-
-		void sortBodyIndicesByMortonCodes(uint32_t colliderCount);
-
-		void buildBvhTree(const uint32_t colliderCount);
-
-		void fitBvhNodeAABBs(bool isRebuild);
-
-		void queryBvhPairs();
-		void queryBvhPairsThreaded();
-
-		void traverseNodesToGetOverlappingLeafPairs();
-		void testCollisionsInLeaves();
+		void queryPairs();
+		void queryPairsThreaded();
 	};
 
 	template <typename ShapeQuery>
 	inline void BroadPhaseCollisionDetector::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const
 	{
-		using RealSimd = Ecstasy::Core::Simd<Real>;
-
-		if (bvhFunctionResources.nodes.empty()) return;
-
-		// Quick escape if root node does not overlap shape.
-		if (!shape.overlaps(bvhFunctionResources.nodes[0])) return;
-
-		// Fetch base pointers.
-		const Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<const Real*>(leafBodyAABBs.minX.data());
-		const Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<const Real*>(leafBodyAABBs.maxX.data());
-		const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<const Real*>(leafBodyAABBs.minY.data());
-		const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<const Real*>(leafBodyAABBs.maxY.data());
-		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
-
-		// Local stack traversal setup.
-		uint32_t stack[MAX_STACK_CAPACITY];
-		uint32_t stackSize = 0;
-
-		stack[stackSize++] = 0;
-
-		while (stackSize > 0)
-		{
-			const uint32_t nodeIdx = stack[--stackSize];
-			const BvhNode& node = nodePtr[nodeIdx];
-
-			// Fast path: fully contained node allows bulk-inserting all leaf elements.
-			if (shape.contains(node))
-			{
-				const ObjectIndex* base = bvhFunctionResources.mainColliderIndices.data();
-				outColliders.insert(outColliders.end(), base + node.start, base + node.end);
-				continue;
-			}
-
-			if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf Node.
-			{
-				const uint32_t count = node.end - node.start;
-
-				const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
-				const Real* leafMinX = leafMinXPtr + srcIndex;
-				const Real* leafMaxX = leafMaxXPtr + srcIndex;
-				const Real* leafMinY = leafMinYPtr + srcIndex;
-				const Real* leafMaxY = leafMaxYPtr + srcIndex;
-
-				uint32_t mask = 0;
-				for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += RealSimd::lanes)
-				{
-					const RealSimd minXV = RealSimd::load(leafMinX + j);
-					const RealSimd maxXV = RealSimd::load(leafMaxX + j);
-					const RealSimd minYV = RealSimd::load(leafMinY + j);
-					const RealSimd maxYV = RealSimd::load(leafMaxY + j);
-
-					const auto overlap = shape.simdOverlap(minXV, maxXV, minYV, maxYV);
-
-					mask |= overlap.movemask() << j;
-				}
-
-				// Mask out invalid padded elements past count boundary.
-				mask &= static_cast<uint32_t>((1ULL << count) - 1ULL);
-
-				while (mask)
-				{
-					const uint32_t lane = std::countr_zero(mask);
-					mask &= mask - 1;
-					outColliders.push_back(bvhFunctionResources.mainColliderIndices[node.start + lane]);
-				}
-			}
-			else // Internal Node.
-			{
-				const BvhNode& left = nodePtr[node.leftChildIndex];
-				const BvhNode& right = nodePtr[node.leftChildIndex + 1];
-
-				if (shape.overlaps(right))
-				{
-					stack[stackSize++] = node.leftChildIndex + 1;
-				}
-				if (shape.overlaps(left))
-				{
-					stack[stackSize++] = node.leftChildIndex;
-				}
-			}
-		}
+		dynamicTree.queryCollidersInShape(shape, outColliders);
+		staticTree.queryCollidersInShape(shape, outColliders);
 	}
 
 	template <typename ShapeQuery>
 	inline void BroadPhaseCollisionDetector::queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const
 	{
-		if (bvhFunctionResources.nodes.empty()) return;
-
-		// Quick escape if root node does not overlap shape.
-		if (!shape.overlaps(bvhFunctionResources.nodes[0])) return;
-
-		const BvhNode* ECSTASY_RESTRICT nodePtr = bvhFunctionResources.nodes.data();
-
-		// Local stack traversal setup.
-		uint32_t stack[MAX_STACK_CAPACITY];
-		uint32_t stackSize = 0;
-
-		stack[stackSize++] = 0;
-
-		while (stackSize > 0)
-		{
-			const uint32_t nodeIdx = stack[--stackSize];
-			const BvhNode& node = nodePtr[nodeIdx];
-
-			if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf Node.
-			{
-				outAABBs.push_back(AABB{ node.minX, node.minY, node.maxX, node.maxY });
-			}
-			else // Internal Node.
-			{
-				const BvhNode& left = nodePtr[node.leftChildIndex];
-				const BvhNode& right = nodePtr[node.leftChildIndex + 1];
-
-				if (shape.overlaps(right))
-				{
-					stack[stackSize++] = node.leftChildIndex + 1;
-				}
-				if (shape.overlaps(left))
-				{
-					stack[stackSize++] = node.leftChildIndex;
-				}
-			}
-		}
+		dynamicTree.queryLeafNodeAABBsInShape(shape, outAABBs);
+		staticTree.queryLeafNodeAABBsInShape(shape, outAABBs);
 	}
 }

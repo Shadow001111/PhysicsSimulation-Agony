@@ -6,6 +6,8 @@
 #include "Physics/ConstraintSystem.h"
 
 #include <optional>
+#include <span>
+#include <vector>
 
 namespace PS_AGONY
 {
@@ -95,7 +97,18 @@ namespace PS_AGONY
 		std::vector<ObjectDeletion> deletedColliders;
 
 		const std::vector<Material>& materials;
+
+	private:
+		// Persistent collider ID lists (maintained in O(1) on create/destroy; never rebuilt per frame).
+		// A collider lives in exactly one list, chosen by its body's isStatic flag (fixed at creation).
+		std::vector<ObjectIndex> dynamicColliderIDs;
+		std::vector<ObjectIndex> staticColliderIDs;
+		std::vector<uint32_t> colliderSlot; // colliderIndex -> position inside its list.
+
 	public:
+		std::span<const ObjectIndex> getDynamicColliderIDs() const noexcept { return dynamicColliderIDs; }
+		std::span<const ObjectIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
+
 		explicit ObjectManager(const std::vector<Material>& materials);
 
 		// Creates a body with NO colliders attached. Mass/inertia are taken directly

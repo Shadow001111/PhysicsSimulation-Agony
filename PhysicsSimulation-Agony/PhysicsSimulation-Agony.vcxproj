@@ -243,6 +243,7 @@
     <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp" />
     <ClCompile Include="Physics\Solving\MotorSolver.cpp" />
     <ClCompile Include="Physics\Solving\RevoluteJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\FixedClock.cpp" />
@@ -280,6 +281,8 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h" />
+    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h" />
     <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h" />
     <ClInclude Include="Physics\Solving\ConstraintSolverBase.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h" />
