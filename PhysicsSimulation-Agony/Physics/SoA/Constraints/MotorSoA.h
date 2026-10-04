@@ -66,11 +66,11 @@ namespace PS_AGONY
 		const ObjectIndex* bodyIndex = nullptr;
 		const Real* targetSpeed = nullptr;
 		const Real* maxTorque = nullptr;
-		Real* accumulatedImpulse = nullptr; // Written by the solver.
+		mutable const Real* accumulatedImpulse = nullptr; // Written by the solver.
 
 		MotorSoAViewer() = default;
 
-		explicit MotorSoAViewer(MotorSoA& data) noexcept :
+		explicit MotorSoAViewer(const MotorSoA& data) noexcept :
 			count(data.getCount()),
 			bodyIndex(data.bodyIndex.data()),
 			targetSpeed(data.targetSpeed.data()),

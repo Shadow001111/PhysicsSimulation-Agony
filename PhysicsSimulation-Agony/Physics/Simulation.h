@@ -218,6 +218,7 @@ namespace PS_AGONY
 		RodSoAViewer getRods() const noexcept { return rodConstraintSystem.getViewer(); }
 		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return prismaticJointConstraintSystem.getViewer(); }
 		SliderJointSoAViewer getSliderJoints() const noexcept { return sliderJointConstraintSystem.getViewer(); }
+		MotorSoAViewer getMotors() const noexcept { return motorConstraintSystem.getViewer(); }
 
 		IConstraintSystem& getConstraintSystem(ConstraintType type) noexcept { return *constraintSystems[size_t(type)]; }
 		const IConstraintSystem& getConstraintSystem(ConstraintType type) const noexcept { return *constraintSystems[size_t(type)]; }

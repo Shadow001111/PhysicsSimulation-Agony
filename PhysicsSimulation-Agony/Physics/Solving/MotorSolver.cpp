@@ -15,7 +15,7 @@ namespace PS_AGONY
 		const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = viewer.bodyIndex;
 		const Real* ECSTASY_RESTRICT targetSpeedPtr = viewer.targetSpeed;
 		const Real* ECSTASY_RESTRICT maxTorquePtr = viewer.maxTorque;
-		Real* ECSTASY_RESTRICT accumulatedImpulsePtr = viewer.accumulatedImpulse;
+		Real* ECSTASY_RESTRICT accumulatedImpulsePtr = const_cast<Real*>(viewer.accumulatedImpulse);
 
 		const size_t count = constraintIndices.size();
 		constraintContainer.resize(count);
@@ -61,7 +61,7 @@ namespace PS_AGONY
 
 		MotorConstraintData* ECSTASY_RESTRICT dataPtr = constraintContainer.data() + pass.start;
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-		Real* ECSTASY_RESTRICT accumulatedImpulsePtr = viewer.accumulatedImpulse;
+		Real* ECSTASY_RESTRICT accumulatedImpulsePtr = const_cast<Real*>(viewer.accumulatedImpulse);
 
 		const size_t count = pass.size;
 
