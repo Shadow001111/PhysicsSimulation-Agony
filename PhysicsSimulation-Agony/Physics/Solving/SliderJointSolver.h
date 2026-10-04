@@ -31,14 +31,13 @@ namespace PS_AGONY
 	// travel limit along the axis. The perpendicular translation is a soft scalar row
 	// (stiffness/damping), same soft-constraint technique as SpringSolver.
 	// The axis limit is a separate hard, one-sided, impulse-clamped stop.
-	class SliderJointSolver final : public ConstraintSolverBase<SliderJointSolver, SliderJointSoAViewer, SliderJointConstraintData>
+	class SliderJointSolver final : public PairConstraintSolverBase<SliderJointSolver, SliderJointSoAViewer, SliderJointConstraintData>
 	{
-		using Base = ConstraintSolverBase<SliderJointSolver, SliderJointSoAViewer, SliderJointConstraintData>;
-		friend Base;
+		using Base = PairConstraintSolverBase<SliderJointSolver, SliderJointSoAViewer, SliderJointConstraintData>;
 	public:
 		// Tuned for collisions; re-profile once slider joints are a bottleneck on their own.
 		SliderJointSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
-	private:
+
 		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);

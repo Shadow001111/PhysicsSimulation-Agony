@@ -34,14 +34,13 @@ namespace PS_AGONY
 	// along the axis. The (perpendicular translation, relative angle) pair is solved as
 	// a soft 2x2 block (stiffness/damping), same soft-constraint technique as SpringSolver.
 	// The axis limit is a separate hard, one-sided, impulse-clamped stop.
-	class PrismaticJointSolver final : public ConstraintSolverBase<PrismaticJointSolver, PrismaticJointSoAViewer, PrismaticJointConstraintData>
+	class PrismaticJointSolver final : public PairConstraintSolverBase<PrismaticJointSolver, PrismaticJointSoAViewer, PrismaticJointConstraintData>
 	{
-		using Base = ConstraintSolverBase<PrismaticJointSolver, PrismaticJointSoAViewer, PrismaticJointConstraintData>;
-		friend Base;
+		using Base = PairConstraintSolverBase<PrismaticJointSolver, PrismaticJointSoAViewer, PrismaticJointConstraintData>;
 	public:
 		// Tuned for collisions; re-profile once prismatic joints are a bottleneck on their own.
 		PrismaticJointSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
-	private:
+
 		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);

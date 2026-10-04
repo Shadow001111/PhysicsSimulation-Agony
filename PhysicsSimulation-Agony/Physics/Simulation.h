@@ -81,6 +81,7 @@ namespace PS_AGONY
 		RodConstraintSystem rodConstraintSystem;
 		PrismaticJointConstraintSystem prismaticJointConstraintSystem;
 		SliderJointConstraintSystem sliderJointConstraintSystem;
+		MotorConstraintSystem motorConstraintSystem;
 
 		ConstraintSystemArray constraintSystems{}; // Indexed by ConstraintType, which is also the solving order.
 
@@ -188,6 +189,9 @@ namespace PS_AGONY
 
 		void createSliderJoint(const SliderJointConstraintSystem::CreateParams& params) { sliderJointConstraintSystem.create(params, objectManager.bodies); }
 		void destroySliderJoint(uint32_t index) { sliderJointConstraintSystem.removeConstraint(index, objectManager.bodies); }
+
+		void createMotor(const MotorConstraintSystem::CreateParams& params) { motorConstraintSystem.create(params, objectManager.bodies); }
+		void destroySliderMotor(uint32_t index) { motorConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
 		MaterialIndex createMaterial(const Material& material);
 

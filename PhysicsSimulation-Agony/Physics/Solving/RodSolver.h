@@ -14,14 +14,13 @@ namespace PS_AGONY
 		Real bias; // Baumgarte term: (baumgarteFactor / dt) * C.
 	};
 
-	class RodSolver final : public ConstraintSolverBase<RodSolver, RodSoAViewer, RodConstraintData>
+	class RodSolver final : public PairConstraintSolverBase<RodSolver, RodSoAViewer, RodConstraintData>
 	{
-		using Base = ConstraintSolverBase<RodSolver, RodSoAViewer, RodConstraintData>;
-		friend Base;
+		using Base = PairConstraintSolverBase<RodSolver, RodSoAViewer, RodConstraintData>;
 	public:
 		// Placeholder value; rod's per-constraint cost/count profile hasn't been measured yet.
 		RodSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
-	private:
+
 		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);

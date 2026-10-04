@@ -16,35 +16,30 @@
 
 namespace PS_AGONY
 {
-	// Threading thresholds of a constraint solver. Passed by the concrete solver to the base.
 	struct ConstraintSolverTuning
 	{
-		size_t constraintsPerWorker;        // Constraints one worker thread handles.
-		size_t minWorkersForThreading = 3;  // Threading starts at constraintsPerWorker * minWorkersForThreading constraints.
+		size_t constraintsPerWorker;
+		size_t minWorkersForThreading = 3;
 	};
 
-	// Shared solving pipeline of all constraint solvers (CRTP, no virtual calls):
-	// planning, single/multi-threaded dispatch, wave execution and memory stats.
-	//
-	// Derived must provide (private is fine if it befriends the base):
-	//   void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
-	//     - fills `constraintContainer` (one ConstraintData per index, in the given order).
-	//   void solveVelocityConstraints(SolvingPlan::Pass pass);
-	//     - solves constraintContainer[pass.start, pass.start + pass.size).
-	// ConstraintData must be defined at namespace scope before the derived class.
-	// Viewer must expose getCount(), bodyIndexA, bodyIndexB.
-	template<class Derived, class Viewer, class ConstraintData>
+	// Shared solving logic. Derived provides:
+	//   BodyRef makeBodyRef(size_t i) const;
+	//   void planExecution(size_t workerCount);
+	//   void computeConstraintData(Real, std::span/vector indices);
+	//   void solveVelocityConstraints(const SolvingPlan::Pass&);
+	template<class Derived, class Viewer, class ConstraintData, class BodyRef>
 	class ConstraintSolverBase : public SolverBase
 	{
 		ConstraintSolverTuning tuning;
-
-		std::vector<ObjectPair> bodyPairs;
 		std::vector<size_t> orderedIndices;
+
 	protected:
 		Viewer viewer;
 		std::vector<ConstraintData> constraintContainer;
+		std::vector<BodyRef> bodyRefs;
 
 		explicit ConstraintSolverBase(const ConstraintSolverTuning& tuningIn) noexcept : tuning(tuningIn) {}
+
 	public:
 		void setDataViewers(BodySoA& bodiesIn, const Viewer& viewerIn)
 		{
@@ -55,7 +50,7 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const override
 		{
 			return
-				getVectorMemoryUsage(bodyPairs) +
+				getVectorMemoryUsage(bodyRefs) +
 				getVectorMemoryUsage(orderedIndices) +
 				getVectorMemoryUsage(constraintContainer) +
 				solvingPlan.getMemoryUsage();
@@ -70,7 +65,6 @@ namespace PS_AGONY
 
 			const size_t workerCount = planWorkerCount(count);
 
-			// Single-threaded path.
 			if (workerCount <= 1)
 			{
 				TRACY_SCOPE_NC("Solve constraints (Single-threaded)", Ecstasy::Core::Color::OliveDrab);
@@ -91,27 +85,20 @@ namespace PS_AGONY
 				return;
 			}
 
-			// Multi-threading path.
 			TRACY_SCOPE_NC("Solve constraints (Multi-threaded)", Ecstasy::Core::Color::OliveDrab);
 			if (wasSoAChanged || solvingPlan.getFlatIndices().size() != count)
 			{
 				{
-					TRACY_SCOPE_NC("Collect body pairs from constraints", Ecstasy::Core::Color::Red);
-					bodyPairs.resize(count);
+					TRACY_SCOPE_NC("Collect body refs from constraints", Ecstasy::Core::Color::Red);
+					bodyRefs.resize(count);
 					for (size_t i = 0; i < count; i++)
 					{
-						bodyPairs[i] = { viewer.bodyIndexA[i], viewer.bodyIndexB[i] };
+						bodyRefs[i] = self.makeBodyRef(i);
 					}
 				}
 				{
 					TRACY_SCOPE_NC("Plan execution", Ecstasy::Core::Color::Blue);
-
-					SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-						bodyPairs, bodies->getCount(), workerCount,
-						sizeof(Real),
-						std::hardware_destructive_interference_size,
-						solvingPlan
-					);
+					self.planExecution(workerCount);
 				}
 			}
 			{
@@ -124,18 +111,17 @@ namespace PS_AGONY
 
 			solveThreaded(iterations);
 		}
+
 	private:
 		size_t planWorkerCount(size_t count) const
 		{
 			const size_t minCountForThreading = tuning.constraintsPerWorker * tuning.minWorkersForThreading;
 
-			// Single-threaded path.
 			if (count < minCountForThreading)
 			{
 				return 0;
 			}
 
-			// Multi-threading path.
 			auto& threadPool = Threading::getGlobalThreadPool();
 
 			const size_t availableWorkerCount = threadPool.getThreadCount();
@@ -167,11 +153,54 @@ namespace PS_AGONY
 					const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
 					const auto& passOffset = passOffsetsPtr[passGlobalIndex];
 
-					// Get work from current wave and execute it. If empty, skip.
 					if (passOffset.size == 0) return;
 
 					self.solveVelocityConstraints(passOffset);
 				}
+			);
+		}
+	};
+
+	template<class Derived, class Viewer, class ConstraintData>
+	class PairConstraintSolverBase : public ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectPair>
+	{
+	protected:
+		using ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectPair>::ConstraintSolverBase;
+
+	public:
+		ObjectPair makeBodyRef(size_t i) const
+		{
+			return { this->viewer.bodyIndexA[i], this->viewer.bodyIndexB[i] };
+		}
+
+		void planExecution(size_t workerCount)
+		{
+			SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
+				this->bodyRefs, this->bodies->getCount(), workerCount,
+				sizeof(Real),
+				std::hardware_destructive_interference_size,
+				this->solvingPlan
+			);
+		}
+	};
+
+	template<class Derived, class Viewer, class ConstraintData>
+	class SingleConstraintSolverBase : public ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectIndex>
+	{
+	protected:
+		using ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectIndex>::ConstraintSolverBase;
+
+	public:
+		ObjectIndex makeBodyRef(size_t i) const
+		{
+			return this->viewer.bodyIndex[i];
+		}
+
+		void planExecution(size_t workerCount)
+		{
+			SolvingPlanner::threadLocal().planSingleStandardExecution(
+				this->bodyRefs, this->bodies->getCount(), workerCount,
+				this->solvingPlan
 			);
 		}
 	};

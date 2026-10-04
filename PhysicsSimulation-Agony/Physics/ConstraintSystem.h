@@ -5,12 +5,14 @@
 #include "SoA/Constraints/RodSoA.h"
 #include "SoA/Constraints/PrismaticJointSoA.h"
 #include "SoA/Constraints/SliderJointSoA.h"
+#include "SoA/Constraints/MotorSoA.h"
 
 #include "Solving/SpringSolver.h"
 #include "Solving/RevoluteJointSolver.h"
 #include "Solving/RodSolver.h"
 #include "Solving/PrismaticJointSolver.h"
 #include "Solving/SliderJointSolver.h"
+#include "Solving/MotorSolver.h"
 
 #include <array>
 #include <cmath>
@@ -42,12 +44,6 @@ namespace PS_AGONY
 
 	using ConstraintSystemArray = std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)>;
 
-	// Everything that is identical between constraint types.
-	// Requirements:
-	//   SoA    : bodyIndexA, bodyIndexB, append(a, b, ...), swapRemove(i), getCount(), getMemoryUsage().
-	//   Solver : ConstraintSolverBase<Solver, Viewer, ConstraintData>-derived (provides setDataViewers, solve, getMemoryUsage).
-	//   Viewer : constructible from const SoA&.
-	// A concrete system only adds a nested CreateParams, create() and getName().
 	template<ConstraintType Type, class SoA, class Solver, class Viewer>
 	class ConstraintSystemBase : public IConstraintSystem
 	{
@@ -55,6 +51,19 @@ namespace PS_AGONY
 		SoA soa;
 		Solver solver;
 		bool wasSoAChanged = false;
+
+		// Single-body constraints (motors) expose `bodyIndex` instead of `bodyIndexA/B`.
+		static constexpr bool IsSingleBody = requires(SoA & s) { s.bodyIndex; };
+
+		// Appends a single-body constraint and registers it with its body.
+		template<class... Args>
+		uint32_t createSingleImpl(ObjectIndex index, BodySoA& bodies, Args&&... args)
+		{
+			const uint32_t newIndex = static_cast<uint32_t>(soa.append(index, std::forward<Args>(args)...));
+			bodies.addAttachment(index, Type, newIndex);
+			wasSoAChanged = true;
+			return newIndex;
+		}
 
 		// Appends a constraint and registers it with both bodies it touches.
 		template<class... Args>
@@ -74,22 +83,39 @@ namespace PS_AGONY
 				return;
 			}
 
-			// Unlink the constraint being removed from both of its bodies.
-			bodies.removeAttachment(soa.bodyIndexA[index], Type, index);
-			bodies.removeAttachment(soa.bodyIndexB[index], Type, index);
-
-			const uint32_t oldBackIndex = static_cast<uint32_t>(soa.swapRemove(index));
-
-			// If a constraint got swapped into 'index', relink it there.
-			if (oldBackIndex != index)
+			if constexpr (IsSingleBody)
 			{
-				bodies.removeAttachment(soa.bodyIndexA[index], Type, oldBackIndex);
-				bodies.addAttachment(soa.bodyIndexA[index], Type, index);
-				bodies.removeAttachment(soa.bodyIndexB[index], Type, oldBackIndex);
-				bodies.addAttachment(soa.bodyIndexB[index], Type, index);
-			}
+				bodies.removeAttachment(soa.bodyIndex[index], Type, index);
 
-			wasSoAChanged = true;
+				const uint32_t oldBackIndex = static_cast<uint32_t>(soa.swapRemove(index));
+				if (oldBackIndex != index)
+				{
+					bodies.removeAttachment(soa.bodyIndex[index], Type, oldBackIndex);
+					bodies.addAttachment(soa.bodyIndex[index], Type, index);
+				}
+
+				wasSoAChanged = true;
+				return;
+			}
+			else
+			{
+				// Unlink the constraint being removed from both of its bodies.
+				bodies.removeAttachment(soa.bodyIndexA[index], Type, index);
+				bodies.removeAttachment(soa.bodyIndexB[index], Type, index);
+
+				const uint32_t oldBackIndex = static_cast<uint32_t>(soa.swapRemove(index));
+
+				// If a constraint got swapped into 'index', relink it there.
+				if (oldBackIndex != index)
+				{
+					bodies.removeAttachment(soa.bodyIndexA[index], Type, oldBackIndex);
+					bodies.addAttachment(soa.bodyIndexA[index], Type, index);
+					bodies.removeAttachment(soa.bodyIndexB[index], Type, oldBackIndex);
+					bodies.addAttachment(soa.bodyIndexB[index], Type, index);
+				}
+
+				wasSoAChanged = true;
+			}
 		}
 
 		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) final
@@ -98,8 +124,15 @@ namespace PS_AGONY
 			{
 				return;
 			}
-			if (soa.bodyIndexA[index] == oldBodyIndex) soa.bodyIndexA[index] = newBodyIndex;
-			if (soa.bodyIndexB[index] == oldBodyIndex) soa.bodyIndexB[index] = newBodyIndex;
+			if constexpr (IsSingleBody)
+			{
+				if (soa.bodyIndex[index] == oldBodyIndex) soa.bodyIndex[index] = newBodyIndex;
+			}
+			else
+			{
+				if (soa.bodyIndexA[index] == oldBodyIndex) soa.bodyIndexA[index] = newBodyIndex;
+				if (soa.bodyIndexB[index] == oldBodyIndex) soa.bodyIndexB[index] = newBodyIndex;
+			}
 		}
 
 		void solve(Real deltaTime, BodySoA& bodies) final
@@ -257,5 +290,24 @@ namespace PS_AGONY
 		}
 
 		const char* getName() const noexcept override { return "SliderJoint"; }
+	};
+
+	class MotorConstraintSystem final :
+		public ConstraintSystemBase<ConstraintType::Motor, MotorSoA, MotorSolver, MotorSoAViewer>
+	{
+	public:
+		struct CreateParams
+		{
+			ObjectIndex bodyIndex;
+			Real targetSpeed;  // Target angular velocity.
+			Real maxTorque;    // Torque limit.
+		};
+
+		void create(const CreateParams& p, BodySoA& bodies)
+		{
+			createSingleImpl(p.bodyIndex, bodies, p.targetSpeed, p.maxTorque);
+		}
+
+		const char* getName() const noexcept override { return "Motor"; }
 	};
 }

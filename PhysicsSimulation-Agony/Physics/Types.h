@@ -46,6 +46,7 @@ namespace PS_AGONY
 		Rod,
 		Prismatic,
 		Slider,
+		Motor,
 		COUNT
 	};
 

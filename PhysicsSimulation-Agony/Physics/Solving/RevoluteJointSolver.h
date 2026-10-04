@@ -19,14 +19,13 @@ namespace PS_AGONY
 	// leaving rotation free. Same soft-constraint (gamma/beta) derivation as SpringSolver,
 	// just with a 2x2 effective mass matrix instead of a scalar since the constraint has
 	// two degrees of freedom instead of one.
-	class RevoluteJointSolver final : public ConstraintSolverBase<RevoluteJointSolver, JointSoAViewer, RevoluteJointConstraintData>
+	class RevoluteJointSolver final : public PairConstraintSolverBase<RevoluteJointSolver, JointSoAViewer, RevoluteJointConstraintData>
 	{
-		using Base = ConstraintSolverBase<RevoluteJointSolver, JointSoAViewer, RevoluteJointConstraintData>;
-		friend Base;
+		using Base = PairConstraintSolverBase<RevoluteJointSolver, JointSoAViewer, RevoluteJointConstraintData>;
 	public:
 		// Mirrors SpringSolver's threshold as-is; re-profile once joints are a bottleneck on their own (a joint's constraint data is heavier than a spring's).
 		RevoluteJointSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
-	private:
+
 		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);

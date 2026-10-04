@@ -1410,6 +1410,10 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
     const float axleStiffness = 3.0e6f * stiffScale;
     const float axleDamping = 1.0e3f * dampScale;
 
+    // Drive: angular motor on the sprocket. Forward is +x, which needs negative (clockwise) spin.
+    const float driveSpeed = 6.0f * std::sqrt(s);          // Track speed, m/s.
+    const float driveTorque = 3000.0f * s * s * s;         // Force ~ s^2, radius ~ s.
+
     // Idler (front wheel): spring-loaded tensioner sliding along hull X. The spring is pre-compressed,
     // so it always pushes the idler forward and takes up any track slack.
     const float tensionerLen = 0.4f * s;                  // Anchor-to-idler distance at spawn.
@@ -1474,6 +1478,11 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
                 .localAnchorB = { 0.0f, 0.0f },
                 .stiffness = axleStiffness,
                 .damping = axleDamping
+                });
+            simulation.createMotor({
+                .bodyIndex = *wheelOpt,
+                .targetSpeed = -driveSpeed / trackRadius,
+                .maxTorque = driveTorque
                 });
             continue;
         }

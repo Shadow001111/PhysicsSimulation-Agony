@@ -26,6 +26,7 @@ namespace PS_AGONY
         registerSystem(rodConstraintSystem);
         registerSystem(prismaticJointConstraintSystem);
         registerSystem(sliderJointConstraintSystem);
+        registerSystem(motorConstraintSystem);
 
         // Spawn a thread pool.
         auto& threadPool = Threading::getGlobalThreadPool();
