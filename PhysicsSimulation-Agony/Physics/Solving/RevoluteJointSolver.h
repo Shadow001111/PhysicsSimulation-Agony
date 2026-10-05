@@ -26,7 +26,7 @@ namespace PS_AGONY
 		// Mirrors SpringSolver's threshold as-is; re-profile once joints are a bottleneck on their own (a joint's constraint data is heavier than a spring's).
 		RevoluteJointSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
 
-		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices, size_t outOffset);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);
 	};

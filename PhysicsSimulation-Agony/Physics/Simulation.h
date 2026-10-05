@@ -1,6 +1,7 @@
 #pragma once
 #include "GlmTypes.h"
 #include "ConstraintSystem.h"
+#include "Solving/ConstraintScheduler.h"
 #include "Material.h"
 
 #include "Physics/CollisionDetection/BroadPhaseCollisionDetector.h"
@@ -83,6 +84,7 @@ namespace PS_AGONY
 		SliderJointConstraintSystem sliderJointConstraintSystem;
 		MotorConstraintSystem motorConstraintSystem;
 
+		ConstraintScheduler constraintScheduler;
 		ConstraintSystemArray constraintSystems{}; // Indexed by ConstraintType, which is also the solving order.
 
 		// Materials.

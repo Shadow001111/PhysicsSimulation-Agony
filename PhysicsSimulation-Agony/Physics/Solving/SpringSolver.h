@@ -21,7 +21,7 @@ namespace PS_AGONY
 		// Tuned for collisions; re-profile once springs are a bottleneck on their own.
 		SpringSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
 
-		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices, size_t outOffset);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);
 	};

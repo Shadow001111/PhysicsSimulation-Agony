@@ -32,7 +32,9 @@ namespace PS_AGONY
 		virtual void removeConstraint(uint32_t index, BodySoA& bodies) = 0;
 		virtual void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) = 0;
 
-		virtual void solve(Real deltaTime, BodySoA& bodies) = 0;
+		// Binds data views and (re)plans if this type changed. Solving is driven by ConstraintScheduler through getSolver().
+		virtual void prepare(BodySoA& bodies) = 0;
+		virtual IConstraintSolver& getSolver() noexcept = 0;
 
 		virtual size_t getCount() const noexcept = 0;
 		virtual size_t getMemoryUsage() const noexcept = 0;
@@ -124,6 +126,7 @@ namespace PS_AGONY
 			{
 				return;
 			}
+			wasSoAChanged = true; // Body refs changed -> the plan is stale.
 			if constexpr (IsSingleBody)
 			{
 				if (soa.bodyIndex[index] == oldBodyIndex) soa.bodyIndex[index] = newBodyIndex;
@@ -135,12 +138,14 @@ namespace PS_AGONY
 			}
 		}
 
-		void solve(Real deltaTime, BodySoA& bodies) final
+		void prepare(BodySoA& bodies) final
 		{
 			solver.setDataViewers(bodies, Viewer(soa));
-			solver.solve(deltaTime, iterations, wasSoAChanged);
+			solver.prepare(wasSoAChanged);
 			wasSoAChanged = false;
 		}
+
+		IConstraintSolver& getSolver() noexcept final { return solver; }
 
 		Viewer getViewer() const noexcept { return Viewer(soa); }
 

@@ -129,6 +129,12 @@
     <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\Solving\WaveRunner.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\Solving\ConstraintScheduler.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Physics\Simulation.h">
@@ -330,6 +336,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\WaveRunner.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\Solving\ConstraintScheduler.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

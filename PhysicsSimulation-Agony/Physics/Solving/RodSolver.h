@@ -21,7 +21,7 @@ namespace PS_AGONY
 		// Placeholder value; rod's per-constraint cost/count profile hasn't been measured yet.
 		RodSolver() : Base(ConstraintSolverTuning{ 7'000, 3 }) {}
 
-		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices, size_t outOffset);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);
 	};

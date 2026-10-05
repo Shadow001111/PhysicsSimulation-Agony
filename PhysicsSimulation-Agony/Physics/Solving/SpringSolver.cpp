@@ -5,7 +5,7 @@
 
 namespace PS_AGONY
 {
-	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices)
+	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices, size_t outOffset)
 	{
 		TRACY_SCOPE_NC("Compute spring constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -22,14 +22,13 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Real* ECSTASY_RESTRICT springRestLengthPtr = viewer.restLength;
 		const Real* ECSTASY_RESTRICT springStiffnessPtr = viewer.stiffness;
 		const Real* ECSTASY_RESTRICT springDampingPtr = viewer.damping;
 
-		// Resize container.
 		const size_t springCount = springIndices.size();
-		constraintContainer.resize(springCount);
 
 		const size_t* ECSTASY_RESTRICT springIndicesPtr = springIndices.data();
 
@@ -37,7 +36,7 @@ namespace PS_AGONY
 		for (size_t springIndex = 0; springIndex < springCount; springIndex++)
 		{
 			const size_t i = springIndicesPtr[springIndex];
-			SpringConstraintData& constraintData = constraintContainer[springIndex];
+			SpringConstraintData& constraintData = constraintContainer[outOffset + springIndex];
 
 			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
 			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
@@ -49,7 +48,7 @@ namespace PS_AGONY
 			const Real invMassB = invMassPtr[bodyIndexB];
 
 			// Both attachments are static anchors -> nothing to solve.
-			if (invMassA == Real(0) && invMassB == Real(0)) [[unlikely]]
+			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
 			{
 				constraintData.invEffectiveMass = Real(0);
 				continue;
@@ -134,6 +133,7 @@ namespace PS_AGONY
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t springCount = constraintDataSpan.size();
@@ -177,7 +177,7 @@ namespace PS_AGONY
 			const Vec2 impulse = dir * impulseMag;
 
 			// Apply impulse.
-			if (invMassA > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexA]) [[likely]]
 			{
 				linearVelocityA += impulse * invMassA;
 
@@ -189,7 +189,7 @@ namespace PS_AGONY
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (invMassB > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexB]) [[likely]]
 			{
 				linearVelocityB -= impulse * invMassB;
 

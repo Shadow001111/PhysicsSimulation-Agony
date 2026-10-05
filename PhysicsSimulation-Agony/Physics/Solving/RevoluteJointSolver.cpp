@@ -5,7 +5,7 @@
 
 namespace PS_AGONY
 {
-	void RevoluteJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices)
+	void RevoluteJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices, size_t outOffset)
 	{
 		TRACY_SCOPE_NC("Compute joint constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -22,13 +22,12 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Real* ECSTASY_RESTRICT jointStiffnessPtr = viewer.stiffness;
 		const Real* ECSTASY_RESTRICT jointDampingPtr = viewer.damping;
 
-		// Resize container.
 		const size_t jointCount = jointIndices.size();
-		constraintContainer.resize(jointCount);
 
 		const size_t* ECSTASY_RESTRICT jointIndicesPtr = jointIndices.data();
 
@@ -36,7 +35,7 @@ namespace PS_AGONY
 		for (size_t jointIndex = 0; jointIndex < jointCount; jointIndex++)
 		{
 			const size_t i = jointIndicesPtr[jointIndex];
-			RevoluteJointConstraintData& constraintData = constraintContainer[jointIndex];
+			RevoluteJointConstraintData& constraintData = constraintContainer[outOffset + jointIndex];
 
 			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
 			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
@@ -50,7 +49,7 @@ namespace PS_AGONY
 			const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
 			// Both attachments are static anchors -> nothing to solve.
-			if (invMassA == Real(0) && invMassB == Real(0)) [[unlikely]]
+			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
 			{
 				constraintData.invK11 = constraintData.invK12 = constraintData.invK22 = Real(0);
 				continue;
@@ -127,6 +126,7 @@ namespace PS_AGONY
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t jointCount = constraintDataSpan.size();
@@ -172,7 +172,7 @@ namespace PS_AGONY
 			};
 
 			// Apply impulse.
-			if (invMassA > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexA]) [[likely]]
 			{
 				linearVelocityA += impulse * invMassA;
 
@@ -184,7 +184,7 @@ namespace PS_AGONY
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (invMassB > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexB]) [[likely]]
 			{
 				linearVelocityB -= impulse * invMassB;
 

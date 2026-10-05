@@ -23,7 +23,10 @@ namespace PS_AGONY
 		// Very cheap constraint; re-profile.
 		MotorSolver() : Base(ConstraintSolverTuning{ 20'000, 3 }) {}
 
-		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices);
+		void computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices, size_t outOffset);
+
+		// Applies the accumulated impulse to the body. Runs through the solving plan before the first iteration.
+		void warmStart(SolvingPlan::Pass pass);
 
 		void solveVelocityConstraints(SolvingPlan::Pass pass);
 	};

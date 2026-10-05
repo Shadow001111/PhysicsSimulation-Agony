@@ -5,6 +5,7 @@
 #include "Ecstasy/Core/TracyProfiler.h"
 
 #include <numeric>
+#include <new>
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -517,7 +518,8 @@ namespace PS_AGONY
         size_t workerCount,
         size_t bodyStrideBytes,
         size_t cacheLineBytes,
-        SolvingPlan& outPlan)
+        SolvingPlan& outPlan,
+        const uint8_t* isStatic)
     {
         const size_t collisionCount = collisions.size();
 
@@ -532,6 +534,17 @@ namespace PS_AGONY
         const size_t bodiesPerCacheLine = std::max<size_t>(1, cacheLineBytes / bodyStrideBytes);
         const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
 
+        // Static bodies are never written, so they neither own nor conflict: a constraint maps to the
+        // group(s) of its dynamic bodies only, and constraints with no dynamic body are not scheduled.
+        const auto isStaticBody = [isStatic](ObjectIndex b) { return isStatic != nullptr && isStatic[b] != 0; };
+        const auto groupsOf = [&](const ObjectPair& c, size_t& ga, size_t& gb)
+            {
+                const ObjectIndex da = isStaticBody(c.a) ? c.b : c.a;
+                const ObjectIndex db = isStaticBody(c.b) ? c.a : c.b;
+                ga = da / bodiesPerCacheLine;
+                gb = db / bodiesPerCacheLine;
+            };
+
         // Build cache-line group adjacency graph.
         adjacency.resize(groupCount);
         for (auto& v : adjacency)
@@ -539,8 +552,9 @@ namespace PS_AGONY
 
         for (const auto& c : collisions)
         {
-            const size_t ga = c.a / bodiesPerCacheLine;
-            const size_t gb = c.b / bodiesPerCacheLine;
+            if (isStaticBody(c.a) && isStaticBody(c.b)) continue;
+            size_t ga, gb;
+            groupsOf(c, ga, gb);
             if (ga != gb)
             {
                 adjacency[ga].push_back(gb);
@@ -635,8 +649,13 @@ namespace PS_AGONY
         }
 
         // Multi-wave execution planner.
-        remainingIndices.resize(collisionCount);
-        std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
+        remainingIndices.clear();
+        for (size_t idx = 0; idx < collisionCount; idx++)
+        {
+            const ObjectPair& c = collisions[idx];
+            if (isStaticBody(c.a) && isStaticBody(c.b)) continue;
+            remainingIndices.push_back(idx);
+        }
 
         waveOwner.assign(groupCount, uint8_t(-1));
         waveAssignments.resize(workerCount);
@@ -661,8 +680,8 @@ namespace PS_AGONY
             for (size_t idx : remainingIndices)
             {
                 const ObjectPair& c = collisions[idx];
-                const size_t ga = c.a / bodiesPerCacheLine;
-                const size_t gb = c.b / bodiesPerCacheLine;
+                size_t ga, gb;
+                groupsOf(c, ga, gb);
 
                 auto& vec = groupOwner[ga] == groupOwner[gb] ? interiorIndices : boundaryIndices;
                 vec.push_back(idx);
@@ -672,8 +691,8 @@ namespace PS_AGONY
             for (size_t idx : interiorIndices)
             {
                 const ObjectPair& c = collisions[idx];
-                const size_t ga = c.a / bodiesPerCacheLine;
-                const size_t gb = c.b / bodiesPerCacheLine;
+                size_t ga, gb;
+                groupsOf(c, ga, gb);
                 const uint8_t chosen = groupOwner[ga];
 
                 waveAssignments[chosen].push_back(idx);
@@ -686,8 +705,8 @@ namespace PS_AGONY
             for (size_t idx : boundaryIndices)
             {
                 const ObjectPair& c = collisions[idx];
-                const size_t ga = c.a / bodiesPerCacheLine;
-                const size_t gb = c.b / bodiesPerCacheLine;
+                size_t ga, gb;
+                groupsOf(c, ga, gb);
 
                 const uint8_t ownerA = waveOwner[ga];
                 const uint8_t ownerB = waveOwner[gb];
@@ -719,8 +738,8 @@ namespace PS_AGONY
             for (size_t idx : delayedIndices)
             {
                 const ObjectPair& c = collisions[idx];
-                const size_t ga = c.a / bodiesPerCacheLine;
-                const size_t gb = c.b / bodiesPerCacheLine;
+                size_t ga, gb;
+                groupsOf(c, ga, gb);
 
                 const uint8_t ownerA = waveOwner[ga];
                 const uint8_t ownerB = waveOwner[gb];
@@ -758,9 +777,19 @@ namespace PS_AGONY
         }
     }
 
-    void SolvingPlanner::planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan)
+    void SolvingPlanner::planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic)
     {
-        // TODO: Implement.
+        // A single-body constraint is a pair (b, b): same ownership/conflict rules apply.
+        singlePairs.resize(objects.size());
+        for (size_t i = 0; i < objects.size(); i++)
+        {
+            singlePairs[i] = { objects[i], objects[i] };
+        }
+
+        planCacheSharingAwareExecution(
+            singlePairs, bodyCount, workerCount,
+            sizeof(Real), std::hardware_destructive_interference_size,
+            outPlan, isStatic);
     }
 
     void SolvingPlan::printExecutionPlan() const
@@ -886,6 +915,7 @@ namespace PS_AGONY
         total += getVectorMemoryUsage(waveOwner);
         total += getVectorMemoryUsage(interiorIndices);
         total += getVectorMemoryUsage(boundaryIndices);
+        total += getVectorMemoryUsage(singlePairs);
         // bfsQueue intentionally excluded: std::queue<size_t> exposes no way to
         // inspect its backing container's capacity.
 

@@ -5,12 +5,13 @@
 
 namespace PS_AGONY
 {
-	void MotorSolver::computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices)
+	void MotorSolver::computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices, size_t outOffset)
 	{
 		TRACY_SCOPE_NC("Compute motor constraint data", Ecstasy::Core::Color::Chocolate);
 
-		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
+		// Body data is read-only here; the warm start is applied separately in warmStart().
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = viewer.bodyIndex;
 		const Real* ECSTASY_RESTRICT targetSpeedPtr = viewer.targetSpeed;
@@ -18,14 +19,12 @@ namespace PS_AGONY
 		Real* ECSTASY_RESTRICT accumulatedImpulsePtr = const_cast<Real*>(viewer.accumulatedImpulse);
 
 		const size_t count = constraintIndices.size();
-		constraintContainer.resize(count);
-
 		const size_t* ECSTASY_RESTRICT indicesPtr = constraintIndices.data();
 
 		for (size_t n = 0; n < count; n++)
 		{
 			const size_t i = indicesPtr[n];
-			MotorConstraintData& data = constraintContainer[n];
+			MotorConstraintData& data = constraintContainer[outOffset + n];
 
 			const ObjectIndex bodyIndex = bodyIndexPtr[i];
 			const Real invInertia = invInertiaPtr[bodyIndex];
@@ -33,7 +32,7 @@ namespace PS_AGONY
 			data.bodyIndex = bodyIndex;
 			data.soaIndex = i;
 
-			if (invInertia <= Real(0)) [[unlikely]]
+			if (isStaticPtr[bodyIndex] || invInertia <= Real(0)) [[unlikely]]
 			{
 				data.invInertia = Real(0);
 				accumulatedImpulsePtr[i] = Real(0);
@@ -42,9 +41,8 @@ namespace PS_AGONY
 
 			const Real maxImpulse = maxTorquePtr[i] * deltaTime;
 
-			// Clamp to the (possibly changed) limit and warm-start.
+			// Clamp to the (possibly changed) limit.
 			const Real impulse = glm::clamp(accumulatedImpulsePtr[i], -maxImpulse, maxImpulse);
-			angularVelocityPtr[bodyIndex] += impulse * invInertia;
 
 			data.invInertia = invInertia;
 			data.inertia = Real(1) / invInertia;
@@ -52,6 +50,21 @@ namespace PS_AGONY
 			data.maxImpulse = maxImpulse;
 			data.impulse = impulse;
 			accumulatedImpulsePtr[i] = impulse;
+		}
+	}
+
+	void MotorSolver::warmStart(SolvingPlan::Pass pass)
+	{
+		TRACY_SCOPE_NC("Warm start motors", Ecstasy::Core::Color::Violet);
+
+		const MotorConstraintData* ECSTASY_RESTRICT dataPtr = constraintContainer.data() + pass.start;
+		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
+
+		for (size_t n = 0; n < pass.size; n++)
+		{
+			const MotorConstraintData& data = dataPtr[n];
+			if (data.invInertia == Real(0)) continue;
+			angularVelocityPtr[data.bodyIndex] += data.impulse * data.invInertia;
 		}
 	}
 

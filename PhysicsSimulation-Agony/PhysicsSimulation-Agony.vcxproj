@@ -244,6 +244,7 @@
     <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp" />
+    <ClCompile Include="Physics\Solving\ConstraintScheduler.cpp" />
     <ClCompile Include="Physics\Solving\MotorSolver.cpp" />
     <ClCompile Include="Physics\Solving\RevoluteJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\FixedClock.cpp" />
@@ -261,6 +262,7 @@
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\PolygonDecomposition.cpp" />
+    <ClCompile Include="Physics\Solving\WaveRunner.cpp" />
     <ClCompile Include="Render\SimulationRenderer.cpp" />
     <ClCompile Include="Physics\Threading.cpp" />
     <ClCompile Include="Physics\Solving\RodSolver.cpp" />
@@ -284,6 +286,7 @@
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h" />
     <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h" />
+    <ClInclude Include="Physics\Solving\ConstraintScheduler.h" />
     <ClInclude Include="Physics\Solving\ConstraintSolverBase.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhPairTraversal.h" />
@@ -331,6 +334,7 @@
     <ClInclude Include="Physics\SoA\Constraints\PrismaticJointSoA.h" />
     <ClInclude Include="Physics\Solving\PrismaticJointSolver.h" />
     <ClInclude Include="Physics\SimulationImpl\PolygonDecomposition.h" />
+    <ClInclude Include="Physics\Solving\WaveRunner.h" />
     <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Physics\Solving\RodSolver.h" />
     <ClInclude Include="Render\SimulationRenderer_Internal.h" />

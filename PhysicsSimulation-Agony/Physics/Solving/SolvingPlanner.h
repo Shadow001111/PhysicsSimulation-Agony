@@ -60,6 +60,7 @@ namespace PS_AGONY
         std::vector<uint8_t> waveOwner;
         std::vector<size_t> interiorIndices;
         std::vector<size_t> boundaryIndices;
+        std::vector<ObjectPair> singlePairs;
     public:
         SolvingPlanner() = default;
         ~SolvingPlanner() = default;
@@ -94,8 +95,9 @@ namespace PS_AGONY
             size_t workerCount,
             size_t bodyStrideBytes,
             size_t cacheLineBytes,
-            SolvingPlan& outPlan);
-        void planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan);
+            SolvingPlan& outPlan,
+            const uint8_t* isStatic = nullptr);
+        void planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic = nullptr);
 
         [[nodiscard]] size_t getMemoryUsage() const;
     };

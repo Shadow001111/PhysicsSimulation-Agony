@@ -5,7 +5,7 @@
 
 namespace PS_AGONY
 {
-	void RodSolver::computeConstraintData(Real deltaTime, std::span<const size_t> rodIndices)
+	void RodSolver::computeConstraintData(Real deltaTime, std::span<const size_t> rodIndices, size_t outOffset)
 	{
 		TRACY_SCOPE_NC("Compute rod constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -27,12 +27,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Real* ECSTASY_RESTRICT rodLengthPtr = viewer.length;
 
-		// Resize container.
 		const size_t rodCount = rodIndices.size();
-		constraintContainer.resize(rodCount);
 
 		const size_t* ECSTASY_RESTRICT rodIndicesPtr = rodIndices.data();
 
@@ -42,7 +41,7 @@ namespace PS_AGONY
 		for (size_t rodIndex = 0; rodIndex < rodCount; rodIndex++)
 		{
 			const size_t i = rodIndicesPtr[rodIndex];
-			RodConstraintData& constraintData = constraintContainer[rodIndex];
+			RodConstraintData& constraintData = constraintContainer[outOffset + rodIndex];
 
 			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
 			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
@@ -54,7 +53,7 @@ namespace PS_AGONY
 			const Real invMassB = invMassPtr[bodyIndexB];
 
 			// Both attachments are static anchors -> nothing to solve.
-			if (invMassA == Real(0) && invMassB == Real(0)) [[unlikely]]
+			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
 			{
 				constraintData.invEffectiveMass = Real(0);
 				continue;
@@ -124,6 +123,7 @@ namespace PS_AGONY
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t rodCount = constraintDataSpan.size();
@@ -167,7 +167,7 @@ namespace PS_AGONY
 			const Vec2 impulse = dir * impulseMag;
 
 			// Apply impulse.
-			if (invMassA > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexA]) [[likely]]
 			{
 				linearVelocityA += impulse * invMassA;
 
@@ -179,7 +179,7 @@ namespace PS_AGONY
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (invMassB > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexB]) [[likely]]
 			{
 				linearVelocityB -= impulse * invMassB;
 

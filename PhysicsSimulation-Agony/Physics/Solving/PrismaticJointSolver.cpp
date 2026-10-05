@@ -21,7 +21,7 @@ namespace PS_AGONY
 		}
 	}
 
-	void PrismaticJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices)
+	void PrismaticJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices, size_t outOffset)
 	{
 		TRACY_SCOPE_NC("Compute prismatic joint constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -43,6 +43,7 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT rotationPtr = bodies->rotation.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Vec2* ECSTASY_RESTRICT localAxisAPtr = viewer.localAxisA;
 		const Real* ECSTASY_RESTRICT referenceAnglePtr = viewer.referenceAngle;
@@ -52,9 +53,7 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT upperLimitPtr = viewer.upperLimit;
 		const uint8_t* ECSTASY_RESTRICT enableLimitPtr = viewer.enableLimit;
 
-		// Resize container.
 		const size_t jointCount = jointIndices.size();
-		constraintContainer.resize(jointCount);
 
 		const size_t* ECSTASY_RESTRICT jointIndicesPtr = jointIndices.data();
 
@@ -67,7 +66,7 @@ namespace PS_AGONY
 		for (size_t jointIndex = 0; jointIndex < jointCount; jointIndex++)
 		{
 			const size_t i = jointIndicesPtr[jointIndex];
-			PrismaticJointConstraintData& constraintData = constraintContainer[jointIndex];
+			PrismaticJointConstraintData& constraintData = constraintContainer[outOffset + jointIndex];
 
 			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
 			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
@@ -85,7 +84,7 @@ namespace PS_AGONY
 			const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
 			// Both bodies are entirely fixed -> nothing to solve.
-			if (invMassA == Real(0) && invMassB == Real(0) && invInertiaA == Real(0) && invInertiaB == Real(0)) [[unlikely]]
+			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
 			{
 				continue;
 			}
@@ -222,6 +221,7 @@ namespace PS_AGONY
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
+		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t jointCount = constraintDataSpan.size();
@@ -303,14 +303,14 @@ namespace PS_AGONY
 			}
 
 			// Apply impulse.
-			if (invMassA > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexA]) [[likely]]
 			{
 				velocityXPtr[bodyIndexA] = linearVelocityA.x;
 				velocityYPtr[bodyIndexA] = linearVelocityA.y;
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (invMassB > Real(0)) [[likely]]
+			if (!isStaticPtr[bodyIndexB]) [[likely]]
 			{
 				velocityXPtr[bodyIndexB] = linearVelocityB.x;
 				velocityYPtr[bodyIndexB] = linearVelocityB.y;

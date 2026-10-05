@@ -266,10 +266,7 @@ namespace PS_AGONY
         buildColliderAABBs();
 
         // Constraints (solving order is the ConstraintType order).
-        for (IConstraintSystem* constraintSystem : constraintSystems)
-        {
-            constraintSystem->solve(deltaTime, objectManager.bodies);
-        }
+        constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
@@ -805,6 +802,6 @@ namespace PS_AGONY
             data.constraintDataMemoryUsage[i] = constraintSystems[i]->getMemoryUsage();
         }
 
-        data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage();
+        data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
     }
 }
