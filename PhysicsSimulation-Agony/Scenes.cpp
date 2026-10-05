@@ -1444,8 +1444,8 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
     const float axleDamping = 1.0e3f * dampScale;
 
     // Drive: angular motor on the sprocket. Forward is +x, which needs negative (clockwise) spin.
-    const float driveSpeed = 6.0f * std::sqrt(s);          // Track speed, m/s.
-    const float driveTorque = 3000.0f * s * s * s;         // Force ~ s^2, radius ~ s.
+    const float driveSpeed = 12.0f * std::sqrt(s);          // Track speed, m/s.
+    const float driveTorque = 30000.0f * s * s * s;         // Force ~ s^2, radius ~ s.
 
     // Idler: spring-loaded tensioner sliding along hull X (keeps the upper run level while taking up
     // slack). The spring is pre-compressed, so it always pushes the idler forward.
@@ -1817,6 +1817,165 @@ void load_Tank(PS_AGONY::Simulation& simulation)
     load_ObjectCar(simulation, carX, kCarRestHeight * carScale, 0.0f, carScale);
 }
 
+// Constraint stress train: a long coupled train of carriers rolling on a static rail.
+//
+//   per carrier : 2 motors -> 2 wheels (above rail) -> 2 revolute axles -> big platform (below rail)
+//                 rod between wheels, revolute-pivoted heavy pendulum under the platform
+//   per link    : platform_i <-> platform_i+1 coupled by a prismatic (even) or slider (odd) joint + spring
+//
+// Pendulums start at different angles and lengths (desynchronized); the train couples them through
+// the platforms, so you can watch them drift into sync (Huygens-style).
+// The rail is solid and there are no collision layers, so wheels and platform are joined by joint
+// anchors that live outside their bodies (the joint "reaches around" the rail, nothing overlaps it).
+// Everything starts at zero velocity; the motors spin the train up.
+void load_ConstraintStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+{
+    using PS_AGONY::Vec2;
+    using PS_AGONY::ObjectIndex;
+
+    // === 1. CONFIGURATION ===
+    constexpr int carrierCount = 40;
+
+    // Geometry.
+    constexpr float platW = 10.0f, platH = 2.0f;
+    constexpr float platMass = 300.0f;
+    constexpr float pitch = 13.0f;                 // Platform center to center.
+    constexpr float couplerGap = pitch - platW;    // Free space between platforms.
+    constexpr float wheelRadius = 1.2f;
+    constexpr float wheelMass = 8.0f;
+    constexpr float wheelDX = 3.0f;                // Wheel offset from carrier center.
+    constexpr float railY = 0.0f, railThickness = 1.0f;
+    constexpr float clearanceBelowRail = 1.5f;
+
+    // Pendulum.
+    constexpr float pendBobRadius = 1.2f;
+    constexpr float pendBobMass = 250.0f;
+    constexpr float pendLength = 6.0f;
+    constexpr float pendLengthSpread = 0.06f;      // +/- relative length variation.
+    constexpr float pendMaxAngle = 0.7f;           // Initial angle range (radians).
+
+    // Drive. Negative angular speed rolls the train to +X.
+    constexpr float driveSpeed = -4.0f;
+    constexpr float driveTorque = 600.0f;
+
+    // Constraint tuning.
+    constexpr float axleK = 1.0e6f, axleD = 1.0e3f;
+    constexpr float pivotK = 1.0e6f, pivotD = 1.0e3f;
+    constexpr float couplerK = 1.0e6f, couplerD = 1.0e3f;
+    constexpr float couplerSpringK = 3000.0f, couplerSpringD = 100.0f;
+
+    // Derived layout.
+    constexpr float platY = railY - railThickness * 0.5f - clearanceBelowRail - platH * 0.5f;
+    constexpr float wheelY = railY + railThickness * 0.5f + wheelRadius + 0.02f;
+    constexpr float axleAnchorY = wheelY - platY;                   // Platform-local, above its body.
+    constexpr float railLength = carrierCount * pitch + 200.0f;
+    constexpr float railCenterX = 100.0f;                           // Extra room ahead of the train.
+
+    const PS_AGONY::MaterialIndex railMat = simulation.createMaterial(
+        { .elasticity = 0.0f, .staticFriction = 1.2f, .dynamicFriction = 1.0f });
+    const PS_AGONY::MaterialIndex wheelMat = simulation.createMaterial(
+        { .elasticity = 0.0f, .staticFriction = 1.2f, .dynamicFriction = 1.0f });
+    const PS_AGONY::MaterialIndex bodyMat = simulation.createMaterial(
+        { .elasticity = 0.1f, .staticFriction = 0.5f, .dynamicFriction = 0.4f });
+
+    bool ok = true;
+    auto circle = [&](Vec2 pos, float rot, float mass, float radius, PS_AGONY::MaterialIndex m) -> ObjectIndex
+        {
+            auto o = simulation.createCircle({
+                .base.position = pos, .base.velocity = { 0.0f, 0.0f },
+                .base.rotation = rot, .base.angularVelocity = 0.0f,
+                .base.mass = mass, .base.materialIndex = m, .radius = radius });
+            if (!o) { ok = false; return 0; }
+            return *o;
+        };
+    auto box = [&](Vec2 pos, float mass, Vec2 size, PS_AGONY::MaterialIndex m) -> ObjectIndex
+        {
+            auto o = simulation.createBox({
+                .base.position = pos, .base.velocity = { 0.0f, 0.0f },
+                .base.rotation = 0.0f, .base.angularVelocity = 0.0f,
+                .base.mass = mass, .base.materialIndex = m, .size = size });
+            if (!o) { ok = false; return 0; }
+            return *o;
+        };
+
+    // === 2. TRACK + SAFETY FLOOR ===
+    box({ railCenterX, railY }, 0.0f, { railLength, railThickness }, railMat);
+    box({ railCenterX, -60.0f }, 0.0f, { railLength, 2.0f }, bodyMat);
+    if (!ok) return;
+
+    // === 3. CARRIERS ===
+    std::vector<ObjectIndex> platforms;
+    platforms.reserve(carrierCount);
+
+    for (int i = 0; i < carrierCount; ++i)
+    {
+        const float x = (static_cast<float>(i) - 0.5f * static_cast<float>(carrierCount - 1)) * pitch;
+
+        const ObjectIndex platform = box({ x, platY }, platMass, { platW, platH }, bodyMat);
+        if (!ok) return;
+        platforms.push_back(platform);
+
+        // Wheels above the rail, each with a motor and a revolute axle reaching around the rail.
+        ObjectIndex wheels[2];
+        for (int w = 0; w < 2; ++w)
+        {
+            const float side = (w == 0) ? -1.0f : 1.0f;
+            wheels[w] = circle({ x + side * wheelDX, wheelY }, 0.0f, wheelMass, wheelRadius, wheelMat);
+            if (!ok) return;
+
+            simulation.createRevoluteJoint({ .bodyIndexA = platform, .bodyIndexB = wheels[w],
+                .localAnchorA = { side * wheelDX, axleAnchorY }, .localAnchorB = { 0.0f, 0.0f },
+                .stiffness = axleK, .damping = axleD });
+            simulation.createMotor({ .bodyIndex = wheels[w], .targetSpeed = driveSpeed, .maxTorque = driveTorque });
+        }
+
+        // Rod keeps the wheel spacing fixed.
+        simulation.createRod({ .bodyIndexA = wheels[0], .bodyIndexB = wheels[1],
+            .localAnchorA = { 0.0f, 0.0f }, .localAnchorB = { 0.0f, 0.0f }, .length = 2.0f * wheelDX });
+
+        // Pendulum: desynchronized start (random angle, slightly different length).
+        const float angle = rvg.real<float>(-pendMaxAngle, pendMaxAngle);
+        const float length = pendLength * (1.0f + rvg.real<float>(-pendLengthSpread, pendLengthSpread));
+        const Vec2 pivot = { x, platY - platH * 0.5f };
+        const ObjectIndex bob = circle(
+            { pivot.x + length * std::sin(angle), pivot.y - length * std::cos(angle) },
+            angle, pendBobMass, pendBobRadius, bodyMat);
+        if (!ok) return;
+
+        simulation.createRevoluteJoint({ .bodyIndexA = platform, .bodyIndexB = bob,
+            .localAnchorA = { 0.0f, -platH * 0.5f }, .localAnchorB = { 0.0f, length },
+            .stiffness = pivotK, .damping = pivotD });
+    }
+
+    // === 4. COUPLERS: prismatic on even links, slider on odd links, each with an axial spring ===
+    for (int i = 0; i + 1 < carrierCount; ++i)
+    {
+        const ObjectIndex a = platforms[i];
+        const ObjectIndex b = platforms[i + 1];
+        const Vec2 anchorA = { platW * 0.5f, 0.0f };
+        const Vec2 anchorB = { -platW * 0.5f, 0.0f };
+
+        if (i % 2 == 0)
+        {
+            simulation.createPrismaticJoint({ .bodyIndexA = a, .bodyIndexB = b,
+                .localAnchorA = anchorA, .localAnchorB = anchorB, .localAxisA = { 1.0f, 0.0f },
+                .stiffness = couplerK, .damping = couplerD,
+                .lowerLimit = couplerGap - 1.0f, .upperLimit = couplerGap + 1.0f, .enableLimit = true });
+        }
+        else
+        {
+            simulation.createSliderJoint({ .bodyIndexA = a, .bodyIndexB = b,
+                .localAnchorA = anchorA, .localAnchorB = anchorB, .localAxisA = { 1.0f, 0.0f },
+                .stiffness = couplerK, .damping = couplerD,
+                .lowerLimit = couplerGap - 1.0f, .upperLimit = couplerGap + 1.0f, .enableLimit = true });
+        }
+
+        simulation.createSpring({ .bodyIndexA = a, .bodyIndexB = b,
+            .localAnchorA = anchorA, .localAnchorB = anchorB,
+            .restLength = couplerGap, .stiffness = couplerSpringK, .damping = couplerSpringD });
+    }
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Core::Random::Generator rvg; // Random value generator.
@@ -1870,5 +2029,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 10)
     {
         load_Tank(simulation);
+    }
+    else if (scene == 11)
+    {
+        load_ConstraintStressTest(simulation, rvg);
     }
 }
