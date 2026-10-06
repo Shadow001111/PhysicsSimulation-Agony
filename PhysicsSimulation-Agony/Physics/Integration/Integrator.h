@@ -10,9 +10,13 @@ namespace PS_AGONY::Integrator
 		Real angularVelocityDamping = 1.0; // Per second.
 	};
 
-	void integrateVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
+	void integrateVelocities_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
+	void integrateKinematics_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
 
-	void integrateKinematics(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
+	void integratePhase1_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
+	void integratePhase2_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
+
+	void dampAngularVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
 
 	void wrapRotation(BodySoA& bodies);
 

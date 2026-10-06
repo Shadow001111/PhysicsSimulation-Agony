@@ -249,39 +249,40 @@ namespace PS_AGONY
         objectManager.deletedColliders.clear();
         objectManager.deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
-        // Main stuff.
+        // Semi-implicit integration + constraint solving + more computing.
         {
             // Integration first phase.
-            Integrator::integrateVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-
+            Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+        
             // Solve constraints.
             applyBodyHolderConstraint(deltaTime);
             constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-
+        
             // Integration second phase.
-            Integrator::integrateKinematics(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-
-            // Computing important data.
-            Integrator::wrapRotation(objectManager.bodies);
-            Integrator::computeRotationCosSin(objectManager.bodies);
+            Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
         }
 
-        // Velocity vertlet code for future.
+        // Velocity-verlet integration + constraint solving + more computing.
         //{
-        //    // Integration first phase.
-        //    Integrator::integrateVelocityVerlet_Phase1(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+        //    const Real halfDT = deltaTime * Real(0.5);
         //
-        //    // Computing important data.
-        //    Integrator::wrapRotation(objectManager.bodies);
-        //    Integrator::computeRotationCosSin(objectManager.bodies);
+        //    // Integration first phase.
+        //    Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+        //    Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
         //
         //    // Solve constraints.
         //    applyBodyHolderConstraint(deltaTime);
         //    constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
         //
         //    // Integration second phase.
-        //    Integrator::integrateVelocityVerlet_Phase2(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+        //    Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+        //    Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
         //}
+
+        // Computing important data.
+        Integrator::wrapRotation(objectManager.bodies);
+        Integrator::computeRotationCosSin(objectManager.bodies);
 
         // Compute.
         computeBodyWorldCenters();
