@@ -90,7 +90,7 @@
     <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\Integrator.cpp">
+    <ClCompile Include="Physics\Integration\Integrator.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp">
@@ -257,7 +257,7 @@
     <ClInclude Include="Physics\SimulationImpl\ObjectManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\Integrator.h">
+    <ClInclude Include="Physics\Integration\Integrator.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h">

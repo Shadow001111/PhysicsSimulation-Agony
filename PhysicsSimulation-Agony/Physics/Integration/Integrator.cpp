@@ -12,7 +12,7 @@ namespace PS_AGONY::Integrator
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
-	void integrateVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void integrateVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Integrate velocities", Ecstasy::Core::Color::Red);
 

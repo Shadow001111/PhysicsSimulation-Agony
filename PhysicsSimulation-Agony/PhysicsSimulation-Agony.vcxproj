@@ -249,7 +249,7 @@
     <ClCompile Include="Physics\Solving\RevoluteJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\FixedClock.cpp" />
     <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp" />
-    <ClCompile Include="Physics\SimulationImpl\Integrator.cpp" />
+    <ClCompile Include="Physics\Integration\Integrator.cpp" />
     <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp" />
     <ClCompile Include="Physics\SoA\BodySoA.cpp" />
     <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp" />
@@ -301,7 +301,7 @@
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNode.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\QueryShapes.h" />
     <ClInclude Include="Physics\SimulationImpl\ObjectManager.h" />
-    <ClInclude Include="Physics\SimulationImpl\Integrator.h" />
+    <ClInclude Include="Physics\Integration\Integrator.h" />
     <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h" />
     <ClInclude Include="Physics\Camera2D.h" />
     <ClInclude Include="Physics\ConstraintSystem.h" />

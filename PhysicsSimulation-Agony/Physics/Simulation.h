@@ -11,7 +11,8 @@
 
 #include "Interactivity/BodyHolder.h"
 
-#include "SimulationImpl/Integrator.h"
+#include "Integration/Integrator.h"
+
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
 #include "SimulationImpl/PolygonDecomposition.h"

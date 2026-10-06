@@ -250,23 +250,45 @@ namespace PS_AGONY
         objectManager.deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
         // Main stuff.
-        Integrator::integrateVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-        applyBodyHolderConstraint(deltaTime);
-        Integrator::integrateKinematics(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-        Integrator::wrapRotation(objectManager.bodies);
-        Integrator::computeRotationCosSin(objectManager.bodies);
+        {
+            // Integration first phase.
+            Integrator::integrateVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
 
-        // Compute true position for all bodies.
-        computeBodyWorldCenters();
+            // Solve constraints.
+            applyBodyHolderConstraint(deltaTime);
+            constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
 
+            // Integration second phase.
+            Integrator::integrateKinematics(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+
+            // Computing important data.
+            Integrator::wrapRotation(objectManager.bodies);
+            Integrator::computeRotationCosSin(objectManager.bodies);
+        }
+
+        // Velocity vertlet code for future.
+        //{
+        //    // Integration first phase.
+        //    Integrator::integrateVelocityVerlet_Phase1(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
         //
+        //    // Computing important data.
+        //    Integrator::wrapRotation(objectManager.bodies);
+        //    Integrator::computeRotationCosSin(objectManager.bodies);
+        //
+        //    // Solve constraints.
+        //    applyBodyHolderConstraint(deltaTime);
+        //    constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
+        //
+        //    // Integration second phase.
+        //    Integrator::integrateVelocityVerlet_Phase2(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+        //}
+
+        // Compute.
+        computeBodyWorldCenters();
         computeColliderWorldTransforms();
 
         // Rebuild AABBs.
         buildColliderAABBs();
-
-        // Constraints (solving order is the ConstraintType order).
-        constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
         // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
