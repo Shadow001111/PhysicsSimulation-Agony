@@ -1978,7 +1978,7 @@ void load_ConstraintStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
-    Ecstasy::Core::Random::Generator rvg; // Random value generator.
+    Ecstasy::Core::Random::Generator rvg{}; // Random value generator.
     rvg.setSeed(0);
 
     if (scene == 0)
