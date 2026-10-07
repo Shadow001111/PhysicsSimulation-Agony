@@ -18,6 +18,7 @@ namespace PS_AGONY
 	{
 		constexpr size_t THREADING_NODE_THRESHOLD = 400;
 		constexpr size_t CROSS_TASKS_PER_WORKER = 4;
+		constexpr size_t TASKS_PER_WORKER = 16; // Per task category; more tasks = better balance.
 
 		// Runs leaf tests for one thread and batches the resulting pairs.
 		struct LeafTester
@@ -152,6 +153,9 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(queryResources.crossLeafPairs);
 
 		total += getVectorMemoryUsage(queryPairsThreadedResources.workerData);
+		total += getVectorMemoryUsage(queryPairsThreadedResources.tasks);
+		total += getVectorMemoryUsage(queryPairsThreadedResources.taskOutputs);
+		total += getVectorMemoryUsage(queryPairsThreadedResources.crossScratch);
 		for (const auto& wData : queryPairsThreadedResources.workerData)
 		{
 			total += getVectorMemoryUsage(wData.nodePairsToTraverse);
@@ -210,7 +214,15 @@ namespace PS_AGONY
 		TRACY_SCOPE_N("Query pairs (Threaded)");
 
 		auto& threadPool = Threading::getGlobalThreadPool();
-		const size_t workerCount = threadPool.getThreadCount() - 1;
+		const size_t workerCount = threadPool.getThreadCount() > 0 ? threadPool.getThreadCount() - 1 : 0;
+		if (workerCount == 0)
+		{
+			queryPairs();
+			return;
+		}
+
+		using TK = QueryPairsThreadedResources::TaskKind;
+		auto& tr = queryPairsThreadedResources;
 
 		const BPI::BvhTreeView dyn = trees[0].view();
 		const BPI::BvhTreeView stat = trees[1].view();
@@ -223,7 +235,7 @@ namespace PS_AGONY
 		r.crossNodePairs.clear();
 		r.crossLeafPairs.clear();
 
-		// Initial frontiers: independent sub-traversals handed out to workers.
+		// Initial frontiers (same as single-threaded, so ordering is shared).
 		{
 			TRACY_SCOPE_N("Initial traverse");
 
@@ -231,15 +243,42 @@ namespace PS_AGONY
 
 			if (hasStatic)
 			{
-				BPI::expandCrossRootPairs(
+				BPI::expandCrossRootPairsOrdered(
 					dyn.nodes, stat.nodes, workerCount * CROSS_TASKS_PER_WORKER,
-					r.crossNodePairs, r.crossLeafPairs);
+					r.crossNodePairs, tr.crossScratch);
 			}
 		}
 
-		queryPairsThreadedResources.workerData.resize(workerCount);
+		// Ordered task list: selfLeaves, selfLeafPairs, selfNodePairs (reverse), cross.
+		tr.tasks.clear();
+		auto addRanges = [&](TK kind, size_t n, bool reverse)
+			{
+				if (n == 0) return;
+				const size_t divisor = workerCount * TASKS_PER_WORKER;
+				const size_t chunk = std::max<size_t>(1, (n + divisor - 1) / divisor);
+				const size_t first = tr.tasks.size();
+				for (size_t b = 0; b < n; b += chunk)
+				{
+					tr.tasks.push_back({ kind, static_cast<uint32_t>(b), static_cast<uint32_t>(std::min(b + chunk, n)) });
+				}
+				if (reverse) std::reverse(tr.tasks.begin() + first, tr.tasks.end());
+			};
+
+		addRanges(TK::SelfLeaves, r.selfLeaves.size(), false);
+		addRanges(TK::SelfLeafPairs, r.selfLeafPairs.size(), false);
+		addRanges(TK::SelfNodes, r.selfNodePairs.size(), true);
+		addRanges(TK::CrossNodes, r.crossNodePairs.size(), false);
+
+		const uint32_t taskCount = static_cast<uint32_t>(tr.tasks.size());
+		if (taskCount == 0) return;
+
+		tr.taskOutputs.resize(taskCount);
+
+		const size_t launchCount = std::min<size_t>(workerCount, taskCount);
+		if (tr.workerData.size() < launchCount) tr.workerData.resize(launchCount); // Never shrink: keeps buffers.
 
 		alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 0 };
+		alignas(64) std::atomic<uint32_t> nextTask{ 0 };
 		{
 			TRACY_SCOPE_N("Launch workers");
 
@@ -248,57 +287,65 @@ namespace PS_AGONY
 					TRACY_SCOPE_N("Query pairs worker thread");
 
 					const auto workerIndex = globalWorkerIndex.fetch_add(1, std::memory_order_relaxed);
-					auto& wData = queryPairsThreadedResources.workerData[workerIndex];
+					auto& wData = tr.workerData[workerIndex];
 
 					LeafTester tester(dyn, stat, colliderBodyIndex, wData.collisionData);
 
-					// Drain this worker's share of the frontiers down to leaf pairs.
+					for (;;)
 					{
-						TRACY_SCOPE_N("Traverse");
+						const uint32_t t = nextTask.fetch_add(1, std::memory_order_relaxed);
+						if (t >= taskCount) break;
 
-						for (size_t t = workerIndex; t < r.selfNodePairs.size(); t += workerCount)
+						const auto& task = tr.tasks[t];
+						const uint32_t outBegin = static_cast<uint32_t>(wData.collisionData.size());
+
+						switch (task.kind)
 						{
-							wData.nodePairsToTraverse.clear();
-							wData.nodePairsToTraverse.push_back(r.selfNodePairs[t]);
-							BPI::traverseNodePairStack(dyn.nodes, dyn.nodes, wData.nodePairsToTraverse, wData.selfLeafPairs);
+						case TK::SelfLeaves:
+							for (uint32_t i = task.begin; i < task.end; i++)
+								tester.self(r.selfLeaves[i]);
+							break;
+
+						case TK::SelfLeafPairs:
+							for (uint32_t i = task.begin; i < task.end; i++)
+								tester.selfPair(r.selfLeafPairs[i]);
+							break;
+
+						case TK::SelfNodes:
+							// Descending: matches the single-threaded stack pop order.
+							for (uint32_t i = task.end; i-- > task.begin; )
+							{
+								wData.nodePairsToTraverse.clear();
+								wData.selfLeafPairs.clear();
+								wData.nodePairsToTraverse.push_back(r.selfNodePairs[i]);
+								BPI::traverseNodePairStack(dyn.nodes, dyn.nodes, wData.nodePairsToTraverse, wData.selfLeafPairs);
+								for (const BvhNodePair& p : wData.selfLeafPairs) tester.selfPair(p);
+							}
+							break;
+
+						case TK::CrossNodes:
+							for (uint32_t i = task.begin; i < task.end; i++)
+							{
+								wData.nodePairsToTraverse.clear();
+								wData.crossLeafPairs.clear();
+								wData.nodePairsToTraverse.push_back(r.crossNodePairs[i]);
+								BPI::traverseNodePairStack(dyn.nodes, stat.nodes, wData.nodePairsToTraverse, wData.crossLeafPairs);
+								for (const BvhNodePair& p : wData.crossLeafPairs) tester.crossPair(p);
+							}
+							break;
 						}
 
-						for (size_t t = workerIndex; t < r.crossNodePairs.size(); t += workerCount)
-						{
-							wData.nodePairsToTraverse.clear();
-							wData.nodePairsToTraverse.push_back(r.crossNodePairs[t]);
-							BPI::traverseNodePairStack(dyn.nodes, stat.nodes, wData.nodePairsToTraverse, wData.crossLeafPairs);
-						}
+						tester.flush(); // Task output must be contiguous and complete in collisionData.
+						tr.taskOutputs[t] = { workerIndex, outBegin, static_cast<uint32_t>(wData.collisionData.size()) };
 					}
-
-					// Leaf tests: initial frontier share, then own traversal results.
-					{
-						TRACY_SCOPE_N("Test collisions");
-
-						for (size_t t = workerIndex; t < r.selfLeaves.size(); t += workerCount)
-							tester.self(r.selfLeaves[t]);
-
-						for (size_t t = workerIndex; t < r.selfLeafPairs.size(); t += workerCount)
-							tester.selfPair(r.selfLeafPairs[t]);
-
-						for (size_t t = workerIndex; t < r.crossLeafPairs.size(); t += workerCount)
-							tester.crossPair(r.crossLeafPairs[t]);
-
-						for (const BvhNodePair& p : wData.selfLeafPairs) tester.selfPair(p);
-						for (const BvhNodePair& p : wData.crossLeafPairs) tester.crossPair(p);
-
-						wData.selfLeafPairs.clear();
-						wData.crossLeafPairs.clear();
-					}
-
-					tester.flush();
 
 					wData.isDone.store(true, std::memory_order_release);
 					wData.isDone.notify_one();
 				};
 
-			for (auto& wData : queryPairsThreadedResources.workerData)
+			for (size_t i = 0; i < launchCount; i++)
 			{
+				auto& wData = tr.workerData[i];
 				wData.nodePairsToTraverse.clear();
 				wData.selfLeafPairs.clear();
 				wData.crossLeafPairs.clear();
@@ -306,30 +353,38 @@ namespace PS_AGONY
 				wData.isDone = false;
 			}
 
-			std::vector<Ecstasy::Core::Threading::Task> tasks;
-			tasks.reserve(workerCount);
+			std::vector<Ecstasy::Core::Threading::Task> workerTasks;
+			workerTasks.reserve(launchCount);
 
-			for (size_t i = 0; i < workerCount; i++)
+			for (size_t i = 0; i < launchCount; i++)
 			{
-				tasks.emplace_back(workerFunc);
+				workerTasks.emplace_back(workerFunc);
 			}
-			threadPool.enqueueBulk(tasks);
+			threadPool.enqueueBulk(workerTasks);
 		}
 
-		// Wait for workers and combine their pairs.
+		// Wait for all workers, then concatenate task outputs in canonical task order.
 		{
 			TRACY_SCOPE_N("Wait for workers to finish and combine data");
-			for (auto& wData : queryPairsThreadedResources.workerData)
+
+			for (size_t i = 0; i < launchCount; i++)
 			{
-				wData.isDone.wait(false, std::memory_order_acquire);
-				{
-					TRACY_SCOPE_N("Combine");
-					collisionData.insert(
-						collisionData.end(),
-						wData.collisionData.begin(),
-						wData.collisionData.end()
-					);
-				}
+				tr.workerData[i].isDone.wait(false, std::memory_order_acquire);
+			}
+
+		}
+		{
+			TRACY_SCOPE_N("Combine");
+
+			size_t total = 0;
+			for (const auto& o : tr.taskOutputs) total += o.end - o.begin;
+			collisionData.reserve(total);
+
+			for (const auto& o : tr.taskOutputs)
+			{
+				if (o.end == o.begin) continue;
+				const auto& src = tr.workerData[o.worker].collisionData;
+				collisionData.insert(collisionData.end(), src.begin() + o.begin, src.begin() + o.end);
 			}
 		}
 	}

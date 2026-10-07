@@ -83,7 +83,32 @@ namespace PS_AGONY
 				}
 			};
 
+			// Ordered work list. Concatenating task outputs in this order reproduces
+			// the single-threaded pair order exactly, for any worker count.
+			enum class TaskKind : uint8_t
+			{
+				SelfLeaves,    // Range of queryResources.selfLeaves, ascending.
+				SelfLeafPairs, // Range of queryResources.selfLeafPairs, ascending.
+				SelfNodes,     // Range of queryResources.selfNodePairs, processed DESCENDING (stack order).
+				CrossNodes     // Range of queryResources.crossNodePairs, ascending (already DFS-ordered).
+			};
+
+			struct Task
+			{
+				TaskKind kind;
+				uint32_t begin, end;
+			};
+
+			// Where a task's pairs live: workerData[worker].collisionData[begin, end).
+			struct TaskOutput
+			{
+				uint32_t worker, begin, end;
+			};
+
 			std::vector<WorkerData> workerData;
+			std::vector<Task> tasks;
+			std::vector<TaskOutput> taskOutputs;
+			std::vector<BvhNodePair> crossScratch;
 		};
 
 		AABBSoAViewer collidersAABB;

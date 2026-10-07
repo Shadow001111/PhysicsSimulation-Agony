@@ -5,6 +5,7 @@
 #include "Physics/ObjectSoA.h"
 #include "Ecstasy/Core/Portablity.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -155,36 +156,44 @@ namespace PS_AGONY::BroadPhaseInternal
 		}
 	}
 
-	// Cross-tree only. Expands (rootA, rootB) breadth-first until at least 'minTasks'
-	// independent node pairs are pending (or none can be split further).
-	// 'outNodePairs' must be empty on entry; leaf/leaf pairs found go to 'outLeafPairs'.
-	inline void expandCrossRootPairs(
+	// Cross-tree only. Expands (rootA, rootB) level by level until at least 'minTasks'
+	// pairs are pending (or none can be split further), PRESERVING the single-threaded
+	// DFS output order: 'outPairs' is ordered exactly as traverseNodePairStack would
+	// visit them (right child before left). Leaf/leaf pairs stay in the list as ordered
+	// entries; draining each entry in sequence reproduces the single-threaded leaf-pair order.
+	// 'outPairs' must be empty on entry; 'scratch' is a reusable buffer.
+	inline void expandCrossRootPairsOrdered(
 		const BvhNode* nodesA,
 		const BvhNode* nodesB,
 		size_t minTasks,
-		std::vector<BvhNodePair>& outNodePairs,
-		std::vector<BvhNodePair>& outLeafPairs)
+		std::vector<BvhNodePair>& outPairs,
+		std::vector<BvhNodePair>& scratch)
 	{
 		if (!overlaps(nodesA[0], nodesB[0])) return;
 
-		outNodePairs.push_back({ 0, 0 });
+		outPairs.push_back({ 0, 0 });
 
-		size_t head = 0;
-		while (head < outNodePairs.size() && outNodePairs.size() - head < minTasks)
+		while (outPairs.size() < minTasks)
 		{
-			const BvhNodePair pair = outNodePairs[head++];
-
-			const bool aLeaf = nodesA[pair.a].leftChildIndex == BvhNode::INVALID_INDEX;
-			const bool bLeaf = nodesB[pair.b].leftChildIndex == BvhNode::INVALID_INDEX;
-			if (aLeaf && bLeaf)
+			scratch.clear();
+			bool split = false;
+			for (const BvhNodePair pair : outPairs)
 			{
-				outLeafPairs.push_back(pair);
-				continue;
+				const bool aLeaf = nodesA[pair.a].leftChildIndex == BvhNode::INVALID_INDEX;
+				const bool bLeaf = nodesB[pair.b].leftChildIndex == BvhNode::INVALID_INDEX;
+				if (aLeaf && bLeaf)
+				{
+					scratch.push_back(pair);
+					continue;
+				}
+
+				const size_t before = scratch.size();
+				splitLargerNode(nodesA, nodesB, pair, scratch); // Appends [left, right] (stack order).
+				std::reverse(scratch.begin() + before, scratch.end()); // Output order: [right, left].
+				split = true;
 			}
-
-			splitLargerNode(nodesA, nodesB, pair, outNodePairs);
+			outPairs.swap(scratch);
+			if (!split) break;
 		}
-
-		outNodePairs.erase(outNodePairs.begin(), outNodePairs.begin() + head);
 	}
 }
