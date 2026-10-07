@@ -6,6 +6,8 @@
 #include "Ecstasy/Core/Portablity.h"
 
 #include <bit>
+#include <tuple>
+#include <algorithm>
 #include <iostream>
 
 namespace PS_AGONY
@@ -449,11 +451,29 @@ namespace PS_AGONY
 
         chunks.resize(1);
         ChunkData& cd = chunks[0];
-        cd.start = 0;
-        cd.end = colliderPairs.size();
-        cd.clear();
-        processPairs(colliderPairs, cd);
-        allCollisionData.swap(cd.results);
+
+        if constexpr (DETERMINISTIC)
+        {
+            // Same chunk partitioning as the multi-threaded path, processed in order.
+            // One chunk object is reused so its buffers stay cache-hot.
+            const size_t total = colliderPairs.size();
+            for (size_t start = 0; start < total; start += DETERMINISTIC_CHUNK_SIZE)
+            {
+                cd.start = start;
+                cd.end = std::min(start + DETERMINISTIC_CHUNK_SIZE, total);
+                cd.clear();
+                processPairs(colliderPairs, cd);
+                allCollisionData.insert(allCollisionData.end(), cd.results.begin(), cd.results.end());
+            }
+        }
+        else
+        {
+            cd.start = 0;
+            cd.end = colliderPairs.size();
+            cd.clear();
+            processPairs(colliderPairs, cd);
+            allCollisionData.swap(cd.results);
+        }
     }
 
     void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs, size_t workerCount)
@@ -465,8 +485,18 @@ namespace PS_AGONY
         auto& threadPool = Threading::getGlobalThreadPool();
         workerCount = std::min<size_t>(workerCount, threadPool.getThreadCount());
 
-        auto [chunkCount, chunkSize] = Ecstasy::Core::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
-            threadPool, colliderPairs.size(), LOAD_BALANCING_FACTOR);
+        size_t chunkCount, chunkSize;
+        if constexpr (DETERMINISTIC)
+        {
+            // Fixed chunk size: partitioning (and thus output order) is independent of thread count.
+            chunkSize = DETERMINISTIC_CHUNK_SIZE;
+            chunkCount = (colliderPairs.size() + chunkSize - 1) / chunkSize;
+        }
+        else
+        {
+            std::tie(chunkCount, chunkSize) = Ecstasy::Core::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
+                threadPool, colliderPairs.size(), LOAD_BALANCING_FACTOR);
+        }
 
         chunks.resize(chunkCount);
 

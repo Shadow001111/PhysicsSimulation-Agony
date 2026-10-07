@@ -152,6 +152,12 @@ namespace PS_AGONY
 	public:
 		static constexpr bool ENABLE_WARM_STARTING = true;
 
+		// When true, output order is identical for single/multi-threaded runs (and any thread count).
+		// Both paths use the same fixed-size chunking, merged in chunk order.
+		// Requires the input pair order to be deterministic as well.
+		static constexpr bool DETERMINISTIC = true;
+		static constexpr size_t DETERMINISTIC_CHUNK_SIZE = 2048;
+
 		NarrowPhaseCollisionDetector();
 		~NarrowPhaseCollisionDetector() = default;
 		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = delete;
