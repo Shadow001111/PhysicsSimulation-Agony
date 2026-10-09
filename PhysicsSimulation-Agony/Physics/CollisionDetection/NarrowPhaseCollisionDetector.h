@@ -202,7 +202,8 @@ namespace PS_AGONY
 		void findCollisionsSingleThreaded(const std::vector<ObjectPair>& colliderPairs);
 		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs, size_t workerCount);
 
-		void processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData);
+		// Appends results to 'out' and applies warm-starting to the appended range only.
+		void processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData, std::vector<BodyCollisionData>& out);
 
 		void collisionCircleCircle(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);

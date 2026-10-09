@@ -449,30 +449,19 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Single-threaded narrow phase");
 
-        chunks.resize(1);
+        if (chunks.empty()) chunks.resize(1);
         ChunkData& cd = chunks[0];
 
-        if constexpr (DETERMINISTIC)
+        // Same chunk partitioning as the multi-threaded path (when DETERMINISTIC), but results
+        // are appended directly to 'allCollisionData': no intermediate buffer, no merge copy.
+        const size_t total = colliderPairs.size();
+        const size_t step = DETERMINISTIC ? DETERMINISTIC_CHUNK_SIZE : total;
+        for (size_t start = 0; start < total; start += step)
         {
-            // Same chunk partitioning as the multi-threaded path, processed in order.
-            // One chunk object is reused so its buffers stay cache-hot.
-            const size_t total = colliderPairs.size();
-            for (size_t start = 0; start < total; start += DETERMINISTIC_CHUNK_SIZE)
-            {
-                cd.start = start;
-                cd.end = std::min(start + DETERMINISTIC_CHUNK_SIZE, total);
-                cd.clear();
-                processPairs(colliderPairs, cd);
-                allCollisionData.insert(allCollisionData.end(), cd.results.begin(), cd.results.end());
-            }
-        }
-        else
-        {
-            cd.start = 0;
-            cd.end = colliderPairs.size();
+            cd.start = start;
+            cd.end = std::min(start + step, total);
             cd.clear();
-            processPairs(colliderPairs, cd);
-            allCollisionData.swap(cd.results);
+            processPairs(colliderPairs, cd, allCollisionData);
         }
     }
 
@@ -498,13 +487,13 @@ namespace PS_AGONY
                 threadPool, colliderPairs.size(), LOAD_BALANCING_FACTOR);
         }
 
-        chunks.resize(chunkCount);
+        if (chunks.size() < chunkCount) chunks.resize(chunkCount); // Grow-only: keeps chunk buffers alive.
 
         for (size_t i = 0; i < chunkCount; i++)
         {
             ChunkData& cd = chunks[i];
             cd.start = i * chunkSize;
-            cd.end = std::min(chunks[i].start + chunkSize, colliderPairs.size());
+            cd.end = std::min(cd.start + chunkSize, colliderPairs.size());
             cd.finished = false;
         }
 
@@ -514,7 +503,23 @@ namespace PS_AGONY
         alignas(64) std::atomic<uint32_t> workerChunkIndex{ 0 };
         alignas(64) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
 
-        auto workerFunc = [&]()
+        // Only the calling thread merges, strictly in chunk order. It merges whatever is
+        // already finished between its own chunks, so most copying overlaps with the workers.
+        size_t nextToMerge = 0;
+        auto mergeReady = [&](bool blocking)
+            {
+                while (nextToMerge < chunkCount)
+                {
+                    const ChunkData& cd = chunks[nextToMerge];
+                    if (blocking) cd.finished.wait(false, std::memory_order_acquire);
+                    else if (!cd.finished.load(std::memory_order_acquire)) return;
+
+                    allCollisionData.insert(allCollisionData.end(), cd.results.begin(), cd.results.end());
+                    nextToMerge++;
+                }
+            };
+
+        auto workerFunc = [&](bool isMainThread)
             {
                 while (true)
                 {
@@ -523,43 +528,37 @@ namespace PS_AGONY
 
                     ChunkData& cd = chunks[chunkIndex];
                     cd.clear();
-                    processPairs(colliderPairs, cd);
+                    processPairs(colliderPairs, cd, cd.results);
 
                     cd.finished.store(true, std::memory_order_release);
-                    cd.finished.notify_one();
+                    if (isMainThread)
+                    {
+                        mergeReady(false);
+                    }
+                    else
+                    {
+                        cd.finished.notify_one();
+                    }
                 }
                 destroyedWorkerCount.fetch_add(1, std::memory_order_release);
                 destroyedWorkerCount.notify_one();
             };
 
-        // One less task submitted to the pool: the calling thread takes that slot itself
-        // below, instead of only submitting work and idling until it's done.
+        // One less task submitted to the pool: the calling thread takes that slot itself.
         for (size_t i = 0; i + 1 < workerCount; i++)
         {
-            tasks.emplace_back(workerFunc);
+            tasks.emplace_back([&workerFunc]() { workerFunc(false); });
         }
         threadPool.enqueueBulk(tasks);
 
         {
             TRACY_SCOPE_N("Participate in work");
-            workerFunc();
+            workerFunc(true);
         }
 
         {
             TRACY_SCOPE_N("Wait for workers to finish and combine data");
-            for (size_t i = 0; i < chunkCount; i++)
-            {
-                const auto& cd = chunks[i];
-                cd.finished.wait(false, std::memory_order_acquire);
-                {
-                    TRACY_SCOPE_N("Combine");
-                    allCollisionData.insert(
-                        allCollisionData.end(),
-                        cd.results.begin(),
-                        cd.results.end()
-                    );
-                }
-            }
+            mergeReady(true);
         }
         {
             TRACY_SCOPE_N("Wait for workers to get destroyed");
@@ -572,9 +571,11 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData)
+    void NarrowPhaseCollisionDetector::processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData, std::vector<BodyCollisionData>& out)
     {
         TRACY_SCOPE_N("Process pair range");
+
+        const size_t firstResult = out.size();
 
         const BodyType* ECSTASY_RESTRICT shapeTypePtr = colliders.shapeType;
         const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
@@ -625,7 +626,7 @@ namespace PS_AGONY
             if (!vec.empty())
             {
                 CollisionFunc func = collisionFuncsDA[i];
-                (this->*func)(vec, chunkData.results);
+                (this->*func)(vec, out);
             }
         }
 
@@ -633,8 +634,9 @@ namespace PS_AGONY
         if constexpr (ENABLE_WARM_STARTING)
         {
             TRACY_SCOPE_N("Move previous contact data");
-            for (BodyCollisionData& collData : chunkData.results)
+            for (size_t r = firstResult; r < out.size(); r++)
             {
+                BodyCollisionData& collData = out[r];
                 ColliderPairKey key{ collData.colliderA , collData.colliderB };
 
                 // Check if pair existed in previous frame.
@@ -1723,58 +1725,65 @@ namespace PS_AGONY
             uint32_t bestAxisIndex = 0;
             Real bestAxisFacing = std::numeric_limits<Real>::max();
 
-            auto sat = [&](Vec2 axisLocal, SATAxis axisType, uint32_t axisIndex) -> bool
+            // Face-separation SAT. For a face with outward unit normal n, the owning polygon's
+            // max extent along n is just dot(n, faceVertex), so only the OTHER polygon is projected
+            // (O(nA*nB) per direction instead of re-projecting both shapes on every axis).
+            // overlap = faceDist - min_other(dot(n, v)); negative => separating axis.
+            auto consider = [&](Real overlap, Vec2 axisLocal, SATAxis axisType, uint32_t axisIndex)
                 {
-                    // 'axisLocal' is normalized or zero.
-                    const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
-                    if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) return true;
-
-                    Real minA, maxA;
-                    projectVerticesOnAxis(localVertsAContainer.data(), localVertsAContainer.size(), axisLocal, minA, maxA);
-
-                    Real minB, maxB;
-                    projectVerticesOnAxis(vertsB_inA.data(), vertsB_inA.size(), axisLocal, minB, maxB);
-
-                    // Correct SAT penetration depth calculation
-                    const Real overlap = std::fmin(maxA - minB, maxB - minA);
-                    if (overlap < Real(0)) return false;
+                    if (overlap > depth) return;
 
                     const Real facingSign = Real(axisType == SATAxis::B_EDGE) * Real(2) - Real(1);
                     const Real axisFacing = facingSign * glm::dot(axisLocal, centerDeltaLocal);
 
-                    const bool strictlyBetter = overlap < depth;
-                    const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
-
-                    if (strictlyBetter || tiedButBetterFacing)
+                    if (overlap < depth || axisFacing < bestAxisFacing)
                     {
                         depth = overlap;
-                        // axisLocal is that shape's own outward edge normal (unambiguous from local
-                        // winding): A's points from A to B already; B's must be negated to match.
+                        // axisLocal is that shape's own outward edge normal: A's points from A to B
+                        // already; B's must be negated to match.
                         normalLocal = (axisType == SATAxis::A_EDGE) ? axisLocal : -axisLocal;
 
                         bestAxisType = axisType;
                         bestAxisIndex = axisIndex;
                         bestAxisFacing = axisFacing;
                     }
-
-                    return true;
                 };
 
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
                 const Vec2 axisLocal = edgeOutwardNormal(localVertsA, countA, i);
                 normalsA[i] = axisLocal;
-                if (!sat(axisLocal, SATAxis::A_EDGE, i))
-                    goto nextPair;
+                if (glm::dot(axisLocal, axisLocal) < ZERO_DIVISION_BOUNDARY_SQUARED) continue;
+
+                Real minB = std::numeric_limits<Real>::max();
+                for (size_t j = 0; j < countB; j++)
+                {
+                    const Real p = glm::dot(vertsB_inA[j], axisLocal);
+                    minB = p < minB ? p : minB;
+                }
+
+                const Real overlap = glm::dot(localVertsA[i], axisLocal) - minB;
+                if (overlap < Real(0)) goto nextPair;
+                consider(overlap, axisLocal, SATAxis::A_EDGE, i);
             }
 
             for (uint32_t i = 0; i < uint32_t(countB); i++)
             {
-                Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
+                const Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
                 const Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
                 normalsB_inA[i] = axisLocal;
-                if (!sat(axisLocal, SATAxis::B_EDGE, i))
-                    goto nextPair;
+                if (glm::dot(axisLocal, axisLocal) < ZERO_DIVISION_BOUNDARY_SQUARED) continue;
+
+                Real minA = std::numeric_limits<Real>::max();
+                for (size_t j = 0; j < countA; j++)
+                {
+                    const Real p = glm::dot(localVertsA[j], axisLocal);
+                    minA = p < minA ? p : minA;
+                }
+
+                const Real overlap = glm::dot(vertsB_inA[i], axisLocal) - minA;
+                if (overlap < Real(0)) goto nextPair;
+                consider(overlap, axisLocal, SATAxis::B_EDGE, i);
             }
 
             {
