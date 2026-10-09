@@ -591,13 +591,6 @@ namespace PS_AGONY
                 const ObjectIndex bodyIndexA = colliderOwnerPtr[colliderIndexA];
                 const ObjectIndex bodyIndexB = colliderOwnerPtr[colliderIndexB];
 
-                if (bodyIndexA == bodyIndexB)
-                {
-                    // Colliders on the same body never collide. Broad phase already
-                    // filters this; kept here as a cheap safety net.
-                    continue;
-                }
-
                 BodyType typeA = shapeTypePtr[colliderIndexA];
                 BodyType typeB = shapeTypePtr[colliderIndexB];
 
