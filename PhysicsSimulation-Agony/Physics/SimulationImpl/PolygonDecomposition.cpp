@@ -35,15 +35,6 @@ namespace PS_AGONY::PhysicsGeometry
             return area * Real(0.5);
         }
 
-        std::vector<Vec2> ensureCCW(std::vector<Vec2> polygon)
-        {
-            if (polygonArea(polygon) < Real(0))
-            {
-                std::reverse(polygon.begin(), polygon.end());
-            }
-            return polygon;
-        }
-
         bool isReflexVertex(const Vec2& prev, const Vec2& curr, const Vec2& next)
         {
             return crossZ(prev, curr, next) < -kConvexEpsilon;
@@ -84,6 +75,18 @@ namespace PS_AGONY::PhysicsGeometry
                 ((cp3 > kConvexEpsilon && cp4 < -kConvexEpsilon) || (cp3 < -kConvexEpsilon && cp4 > kConvexEpsilon));
         }
 
+        constexpr Real kTouchEpsSq = Real(1e-12); // (1e-6)^2
+
+        inline Real pointSegDistSq(const Vec2& p, const Vec2& a, const Vec2& b)
+        {
+            const Vec2 ab = b - a;
+            const Real len2 = glm::dot(ab, ab);
+            Real t = len2 > Real(0) ? glm::dot(p - a, ab) / len2 : Real(0);
+            t = std::clamp(t, Real(0), Real(1));
+            const Vec2 d = p - (a + ab * t);
+            return glm::dot(d, d);
+        }
+
         bool isValidDiagonal(std::span<const Vec2> polygon, size_t i, size_t j)
         {
             const size_t n = polygon.size();
@@ -95,6 +98,7 @@ namespace PS_AGONY::PhysicsGeometry
             for (size_t k = 0; k < n; ++k)
             {
                 size_t kNext = (k + 1) % n;
+                if (k != i && k != j && pointSegDistSq(polygon[k], pi, pj) <= kTouchEpsSq) return false; // Diagonal grazes a vertex.
                 if (k == i || k == j || kNext == i || kNext == j) continue;
                 if (segmentsIntersect(pi, pj, polygon[k], polygon[kNext])) return false;
             }
@@ -189,7 +193,7 @@ namespace PS_AGONY::PhysicsGeometry
             upper.pop_back();
             lower.insert(lower.end(), upper.begin(), upper.end());
 
-            return ensureCCW(std::move(lower));
+            return lower; // Monotone-chain output is already CCW.
         }
 
         std::optional<std::vector<Vec2>> tryMergeConvex(std::span<const Vec2> polyA, std::span<const Vec2> polyB)
@@ -254,7 +258,6 @@ namespace PS_AGONY::PhysicsGeometry
 
         std::optional<std::vector<std::vector<Vec2>>> tryBayazitRec(std::vector<Vec2> polygon)
         {
-            polygon = ensureCCW(std::move(polygon));
             const size_t n = polygon.size();
             if (n <= 3 || isConvexPolygon(polygon)) return std::vector<std::vector<Vec2>>{ polygon };
 
@@ -332,7 +335,6 @@ namespace PS_AGONY::PhysicsGeometry
 
         std::optional<std::vector<std::vector<Vec2>>> tryReflexBisectorRec(std::vector<Vec2> polygon)
         {
-            polygon = ensureCCW(std::move(polygon));
             const size_t n = polygon.size();
             if (n <= 3 || isConvexPolygon(polygon)) return std::vector<std::vector<Vec2>>{ polygon };
 
@@ -430,6 +432,13 @@ namespace PS_AGONY::PhysicsGeometry
                 targetIdx = splitIdx;
             }
 
+            // Degenerate hit (reflex vertex or its neighbor): the split would not shrink the polygon.
+            const int m = static_cast<int>(polygon.size());
+            if (targetIdx == reflexIdx || (targetIdx + 1) % m == reflexIdx || (reflexIdx + 1) % m == targetIdx)
+            {
+                return std::nullopt;
+            }
+
             int iIdx = std::min(reflexIdx, targetIdx);
             int jIdx = std::max(reflexIdx, targetIdx);
 
@@ -461,19 +470,6 @@ namespace PS_AGONY::PhysicsGeometry
         // ==============================================================================
         // 3. EAR CLIPPING
         // ==============================================================================
-
-        Real signedAreaIndexed(std::span<const int> poly, std::span<const Vec2> v)
-        {
-            Real area = Real(0);
-            const size_t n = poly.size();
-            for (size_t i = 0; i < n; ++i)
-            {
-                const Vec2& p0 = v[poly[i]];
-                const Vec2& p1 = v[poly[(i + 1) % n]];
-                area += p0.x * p1.y - p1.x * p0.y;
-            }
-            return area * Real(0.5);
-        }
 
         bool pointInTriangle(const Vec2& p, const Vec2& a, const Vec2& b, const Vec2& c)
         {
@@ -624,23 +620,51 @@ namespace PS_AGONY::PhysicsGeometry
         const size_t n = vertices.size();
         if (n < 4) return true;
 
-        Real area = Real(0);
-        for (size_t i = 0; i < n; ++i)
-        {
-            const Vec2& p0 = vertices[i];
-            const Vec2& p1 = vertices[(i + 1) % n];
-            area += p0.x * p1.y - p1.x * p0.y;
-        }
-        const Real sign = area < Real(0) ? Real(-1) : Real(1);
-
         for (size_t i = 0; i < n; ++i)
         {
             const Vec2& a = vertices[(i + n - 1) % n];
             const Vec2& b = vertices[i];
             const Vec2& c = vertices[(i + 1) % n];
-            if (sign * crossZ(a, b, c) < -kConvexEpsilon)
+            if (crossZ(a, b, c) < -kConvexEpsilon)
             {
                 return false;
+            }
+        }
+        return true;
+    }
+
+    bool isSimplePolygon(std::span<const Vec2> v)
+    {
+        const size_t n = v.size();
+        if (n < 3) return false;
+
+        // Spikes (180-degree reversals) overlap their own edge.
+        for (size_t i = 0; i < n; ++i)
+        {
+            const Vec2 e1 = v[i] - v[(i + n - 1) % n];
+            const Vec2 e2 = v[(i + 1) % n] - v[i];
+            if (glm::dot(e1, e2) < Real(0) &&
+                std::abs(cross2D(e1, e2)) <= Real(1e-6) * glm::length(e1) * glm::length(e2))
+            {
+                return false;
+            }
+        }
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            const Vec2& a = v[i];
+            const Vec2& b = v[(i + 1) % n];
+            for (size_t j = i + 1; j < n; ++j)
+            {
+                if (j == i + 1 || (i == 0 && j == n - 1)) continue; // Adjacent edges share a vertex.
+                const Vec2& c = v[j];
+                const Vec2& d = v[(j + 1) % n];
+                if (segmentsIntersect(a, b, c, d)) return false;
+                if (pointSegDistSq(a, c, d) <= kTouchEpsSq || pointSegDistSq(b, c, d) <= kTouchEpsSq ||
+                    pointSegDistSq(c, a, b) <= kTouchEpsSq || pointSegDistSq(d, a, b) <= kTouchEpsSq)
+                {
+                    return false; // Touching, T-junction, collinear overlap or coincident vertices.
+                }
             }
         }
         return true;
@@ -650,10 +674,6 @@ namespace PS_AGONY::PhysicsGeometry
     {
         std::vector<int> indices(vertices.size());
         for (size_t i = 0; i < indices.size(); ++i) indices[i] = static_cast<int>(i);
-        if (signedAreaIndexed(indices, vertices) < Real(0))
-        {
-            std::reverse(indices.begin(), indices.end());
-        }
 
         std::vector<std::vector<int>> pieces = triangulateEarClip(std::move(indices), vertices);
         mergeConvexPieces(pieces, vertices);
@@ -693,18 +713,7 @@ namespace PS_AGONY::PhysicsGeometry
 
         if (isConvexPolygon(vertices))
         {
-            std::vector<Vec2> single(vertices.begin(), vertices.end());
-            const size_t n = single.size();
-            Real area = Real(0);
-            for (size_t i = 0; i < n; ++i)
-            {
-                area += single[i].x * single[(i + 1) % n].y - single[(i + 1) % n].x * single[i].y;
-            }
-            if (area < Real(0))
-            {
-                std::reverse(single.begin(), single.end());
-            }
-            return { std::move(single) };
+            return { std::vector<Vec2>(vertices.begin(), vertices.end()) };
         }
 
         switch (method)

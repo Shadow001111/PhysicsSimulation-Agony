@@ -6,6 +6,10 @@
 #include "Physics/Camera2D.h"
 #include "Physics/ObjectSoA.h"
 
+#include "Physics/SimulationImpl/PolygonBuild.h"
+
+#include <optional>
+
 namespace PS_AGONY
 {
 	class Simulation;
@@ -62,6 +66,18 @@ namespace PS_AGONY_RENDER
 		std::vector<ShapeRenderer::FloatAABB> aabbInstanceData;
 		std::vector<ShapeRenderer::LineVertex> lineVertexData; // Reused scratch buffer for springs/joints/rods.
 
+		// Polygon creator preview: rebuilt only when the inputs change.
+		struct PolygonPreviewCache
+		{
+			bool valid = false;
+			std::vector<Vec2> sourceVertices;
+			std::optional<Vec2> centerOfMass;
+			PhysicsGeometry::DecompositionMethod method{};
+			PhysicsGeometry::PolygonBuildError error = PhysicsGeometry::PolygonBuildError::None;
+			std::vector<glm::vec2> vertices;                    // All pieces, original (creator) frame.
+			std::vector<DrawArraysIndirectCommand> commands;    // One per convex piece.
+		} polygonPreviewCache;
+
 		ShapeRenderer shapeRenderer;
 
 		// Camera.
@@ -92,7 +108,8 @@ namespace PS_AGONY_RENDER
 			GLuint idTextureID
 		);
 
-		void renderObjectPreview(const void* params, BodyType type);
+		// Returns nullptr if the preview is valid, otherwise an error message to show the user.
+		const char* renderObjectPreview(const void* params, BodyType type);
 
 		Camera2D& getCamera() noexcept { return camera; }
 

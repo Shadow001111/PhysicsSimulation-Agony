@@ -279,6 +279,7 @@
   <ItemGroup>
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h" />
+    <ClInclude Include="Physics\SimulationImpl\PolygonBuild.h" />
     <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h" />
     <ClInclude Include="Physics\Solving\ConstraintScheduler.h" />
     <ClInclude Include="Physics\Solving\ConstraintSolverBase.h" />

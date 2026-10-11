@@ -29,6 +29,10 @@ namespace PS_AGONY::PhysicsGeometry
 		std::optional<Vec2> centerOfMass = std::nullopt
 	);
 
+	// Creation-time sanitizer: dedupes neighbors, strips collinear vertices, auto-reverses CW to CCW.
+	// Returns nullopt if the result is degenerate (<3 vertices, ~zero area) or not simple (self-intersecting).
+	std::optional<std::vector<Vec2>> preparePolygonOutline(std::span<const Vec2> vertices);
+
 	// Filters out adjacent (neighboring) duplicate vertices using a distance epsilon check.
 	// Preserves non-adjacent identical vertices to maintain polygon topology.
 	std::vector<Vec2> filterDuplicateVertices(

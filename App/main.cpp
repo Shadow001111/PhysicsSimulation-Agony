@@ -792,7 +792,17 @@ static int gameFunc()
                     previewParams = &creatorState.polygonParams;
                 }
 
-                simulationRenderer.renderObjectPreview(previewParams, creatorState.bodyType);
+                if (const char* previewError = simulationRenderer.renderObjectPreview(previewParams, creatorState.bodyType))
+                {
+                    const ImVec2 mouse = ImGui::GetIO().MousePos;
+                    ImGui::SetNextWindowPos(ImVec2(mouse.x + 16.0f, mouse.y + 16.0f));
+                    ImGui::SetNextWindowBgAlpha(0.75f);
+                    ImGui::Begin("##PreviewError", nullptr,
+                        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Polygon: %s", previewError);
+                    ImGui::End();
+                }
             }
 
             // Blit scene color attachment.

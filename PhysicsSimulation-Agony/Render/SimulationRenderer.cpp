@@ -8,6 +8,7 @@
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace PS_AGONY_RENDER
@@ -100,9 +101,9 @@ namespace PS_AGONY_RENDER
         //renderBodyPositions(viewProjectionMatrix, cameraAABB); // Blue.
     }
 
-    void SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
+    const char* SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
     {
-        if (params == nullptr) return;
+        if (params == nullptr) return nullptr;
 
         // Get matrices.
         const Mat4 viewMatrix = camera.getViewMatrix();
@@ -150,39 +151,77 @@ namespace PS_AGONY_RENDER
         else if (type == BodyType::Polygon)
         {
             const auto* polyParams = static_cast<const PolygonCreateParams*>(params);
+            if (polyParams->localVertices == nullptr) return nullptr;
 
-            const size_t vertCount = polyParams->verticesCount;
-            if (vertCount < 3) return;
+            const std::span<const Vec2> src(polyParams->localVertices, polyParams->verticesCount);
+            PolygonPreviewCache& cache = polygonPreviewCache;
 
-            shapeRenderer.ensurePolygonBufferCapacity(vertCount, 1);
+            const bool same = cache.valid
+                && cache.method == polyParams->decompositionMethod
+                && cache.centerOfMass == polyParams->base.centerOfMass
+                && cache.sourceVertices.size() == src.size()
+                && std::equal(src.begin(), src.end(), cache.sourceVertices.begin());
 
-            polygonVertexData.resize(vertCount);
-            polygonInstanceData.resize(1);
-            polygonDrawCommands.resize(1);
-
-            glm::vec2* verts = polygonVertexData.data();
-            for (size_t i = 0; i < vertCount; i++)
+            if (!same)
             {
-                verts[i].x = static_cast<float>(polyParams->localVertices[i].x);
-                verts[i].y = static_cast<float>(polyParams->localVertices[i].y);
+                // Same pipeline as createPolygon, so preview == result (decomposition, checks, errors).
+                const PhysicsGeometry::PolygonBuild build = PhysicsGeometry::buildPolygon(
+                    src, polyParams->decompositionMethod, Real(1), polyParams->base.centerOfMass
+                );
+
+                cache.valid = true;
+                cache.sourceVertices.assign(src.begin(), src.end());
+                cache.centerOfMass = polyParams->base.centerOfMass;
+                cache.method = polyParams->decompositionMethod;
+                cache.error = build.error;
+                cache.vertices.clear();
+                cache.commands.clear();
+
+                if (build.ok())
+                {
+                    // Pieces are COM-centered; shift back so the preview is drawn in the creator's
+                    // frame and rotates about its origin, exactly like the created body.
+                    for (const std::vector<Vec2>& piece : build.pieces)
+                    {
+                        DrawArraysIndirectCommand cmd{};
+                        cmd.count = static_cast<uint32_t>(piece.size());
+                        cmd.instanceCount = 1;
+                        cmd.first = static_cast<uint32_t>(cache.vertices.size());
+                        cmd.baseInstance = static_cast<uint32_t>(cache.commands.size());
+                        cache.commands.push_back(cmd);
+
+                        for (const Vec2& v : piece)
+                        {
+                            const Vec2 o = v + build.trueCenterOfMass;
+                            cache.vertices.emplace_back(static_cast<float>(o.x), static_cast<float>(o.y));
+                        }
+                    }
+                }
             }
 
-            ShapeRenderer::PolygonInstanceData& inst = polygonInstanceData[0];
-            inst.positionX = static_cast<float>(polyParams->base.position.x);
-            inst.positionY = static_cast<float>(polyParams->base.position.y);
-            inst.localCOMX = 0.0f;
-            inst.localCOMY = 0.0f;
-            inst.rotation = static_cast<float>(polyParams->base.rotation);
-            inst.color = 0x00FF00;
+            if (cache.error != PhysicsGeometry::PolygonBuildError::None)
+            {
+                return PhysicsGeometry::polygonBuildErrorMessage(cache.error);
+            }
 
-            DrawArraysIndirectCommand& cmd = polygonDrawCommands[0];
-            cmd.count = static_cast<uint32_t>(vertCount);
-            cmd.instanceCount = 1;
-            cmd.first = 0;
-            cmd.baseInstance = 0;
+            const size_t pieceCount = cache.commands.size();
+            shapeRenderer.ensurePolygonBufferCapacity(cache.vertices.size(), pieceCount);
 
-            shapeRenderer.renderPolygonShapes(polygonVertexData, polygonInstanceData, polygonDrawCommands, viewProjectionMatrix);
+            polygonInstanceData.resize(pieceCount);
+            for (ShapeRenderer::PolygonInstanceData& inst : polygonInstanceData)
+            {
+                inst.positionX = static_cast<float>(polyParams->base.position.x);
+                inst.positionY = static_cast<float>(polyParams->base.position.y);
+                inst.localCOMX = 0.0f;
+                inst.localCOMY = 0.0f;
+                inst.rotation = static_cast<float>(polyParams->base.rotation);
+                inst.color = 0x00FF00;
+            }
+
+            shapeRenderer.renderPolygonShapes(cache.vertices, polygonInstanceData, cache.commands, viewProjectionMatrix);
         }
+
+        return nullptr;
     }
 
     void SimulationRenderer::queryCollidersForRender(const Simulation& simulation, const AABB& cameraAABB)

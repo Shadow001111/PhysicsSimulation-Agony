@@ -1,5 +1,7 @@
 #include "ObjectManager.h"
 #include "PhysicsGeometry.h"
+#include "PolygonBuild.h"
+#include <cmath>
 
 #include <iostream>
 
@@ -92,18 +94,25 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices({ params.localVertices, params.verticesCount });
-        if (uniqueVertices.size() < 3)
+        std::optional<std::vector<Vec2>> outline = PhysicsGeometry::preparePolygonOutline({ params.localVertices, params.verticesCount });
+        if (!outline)
         {
-            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: unique vertices count is less than three.\n";
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: outline is degenerate or self-intersecting.\n";
             return std::nullopt;
         }
+        std::vector<Vec2>& uniqueVertices = *outline; // Deduped, no collinear points, CCW, simple.
 
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
 
         // Concave outlines are split into multiple convex pieces here; an already-convex
         // outline comes back as a single (CCW-normalized) piece at no extra cost.
         std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices, params.decompositionMethod);
+
+        if (convexPieces.empty())
+        {
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: decomposition produced no pieces.\n";
+            return std::nullopt;
+        }
 
         const ColliderIndex firstCollider = createConvexPolygonColliderInternal(
             params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
@@ -186,40 +195,39 @@ namespace PS_AGONY
             return std::nullopt;
         }
 
-        std::vector<Vec2> uniqueVertices = PhysicsGeometry::filterDuplicateVertices({ params.localVertices, params.verticesCount });
-        if (uniqueVertices.size() < 3)
+        const Real mass = std::fmax(Real(0), params.base.mass);
+
+        // Decompose BEFORE touching storage so a failure leaves no orphan body.
+        PhysicsGeometry::PolygonBuild build = PhysicsGeometry::buildPolygon(
+            { params.localVertices, params.verticesCount },
+            params.decompositionMethod, mass, params.base.centerOfMass
+        );
+        if (!build.ok())
         {
-            std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Unique vertices count is less than three.\n";
+            std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: "
+                << PhysicsGeometry::polygonBuildErrorMessage(build.error) << "\n";
             return std::nullopt;
         }
 
-        const Real mass = std::fmax(Real(0), params.base.mass);
+        const Real inertia = build.inertia;
+        const Vec2 trueCenterOfMass = build.trueCenterOfMass;
+        const Vec2 neededCenterOfMass = build.neededCenterOfMass;
+        std::vector<std::vector<Vec2>>& convexPieces = build.pieces;
 
-        VerticesContainer vertices{ uniqueVertices.data(), uniqueVertices.size() };
-
-        // Mass/COM/inertia are computed from the full (possibly concave) outline: the
-        // shoelace-based formulas in calculatePolygonInertia are valid for any simple
-        // polygon, convex or not, so no decomposition is needed for this part.
-        auto iCOM = PhysicsGeometry::calculatePolygonInertia(mass, vertices, std::nullopt);
-        const Real inertia = iCOM.first;
-        Vec2 trueCenterOfMass = iCOM.second;
-        Vec2 neededCenterOfMass = params.base.centerOfMass.value_or(trueCenterOfMass);
-
-        // This makes: position == true position == world COM.
-        // NOTE: 'vertices' is an owning COPY (used only for inertia/COM above), so the shift
-        // must be applied to uniqueVertices, which feeds decomposeConvex() (it normalizes winding itself).
-        for (Vec2& v : uniqueVertices)
-        {
-            v -= trueCenterOfMass;
-        }
-        neededCenterOfMass -= trueCenterOfMass;
+        // Body origin == world COM == position + R(rotation) * trueCOM.
+        const Real cosR = std::cos(params.base.rotation);
+        const Real sinR = std::sin(params.base.rotation);
+        const Vec2 worldCOM = params.base.position + Vec2(
+            cosR * trueCenterOfMass.x - sinR * trueCenterOfMass.y,
+            sinR * trueCenterOfMass.x + cosR * trueCenterOfMass.y
+        );
 
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
         const ObjectIndex newBodyIndex = static_cast<ObjectIndex>(bodies.getCount());
         bodies.append(
-            params.base.position + trueCenterOfMass,
+            worldCOM,
             params.base.velocity,
             params.base.rotation,
             params.base.angularVelocity,
@@ -232,7 +240,6 @@ namespace PS_AGONY
 
         // Split the already de-duplicated/re-centered outline into convex colliders (one
         // piece if it was already convex) via the same helper createPolygonCollider() uses.
-        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices, params.decompositionMethod);
         for (std::vector<Vec2>& piece : convexPieces)
         {
             createConvexPolygonColliderInternal(
