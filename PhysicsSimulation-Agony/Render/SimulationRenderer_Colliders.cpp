@@ -56,7 +56,7 @@ namespace PS_AGONY_RENDER
 
             renderData.positionX = worldCenterOfMass.x;
             renderData.positionY = worldCenterOfMass.y;
-            renderData.radius = 0.03f;
+            renderData.radius = 0.1f;
             renderData.color = 0xFF0000;
             renderData.id = 0;
         }
