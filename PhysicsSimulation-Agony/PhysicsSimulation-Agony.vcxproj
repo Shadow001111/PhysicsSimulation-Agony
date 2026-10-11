@@ -55,21 +55,21 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>ClangCL</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <EnableASAN>false</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTracy|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -167,6 +167,10 @@
     <PreBuildEvent>
       <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
     </PreBuildEvent>
+    <Lib>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Libraries\lib;</AdditionalLibraryDirectories>
+      <AdditionalDependencies>EcstasyLibD.lib;freetype.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -178,7 +182,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public;$(SolutionDir)thirdparty\imgui;$(SolutionDir)thirdparty\imgui\backends</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libraries\include;$(ProjectDir);D:\tracy\public</AdditionalIncludeDirectories>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -200,6 +204,10 @@
     <PreBuildEvent>
       <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
     </PreBuildEvent>
+    <Lib>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Libraries\lib;</AdditionalLibraryDirectories>
+      <AdditionalDependencies>EcstasyLib.lib;freetype.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseTracy|x64'">
     <ClCompile>
@@ -233,16 +241,13 @@
     <PreBuildEvent>
       <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
     </PreBuildEvent>
+    <Lib>
+      <AdditionalLibraryDirectories>$(SolutionDir)\Libraries\lib;</AdditionalLibraryDirectories>
+      <AdditionalDependencies>EcstasyLib.lib;freetype.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_glfw.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\imgui.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\imgui_demo.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp" />
-    <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp" />
     <ClCompile Include="Physics\Solving\ConstraintScheduler.cpp" />
     <ClCompile Include="Physics\Solving\MotorSolver.cpp" />
@@ -258,7 +263,6 @@
     <ClCompile Include="Physics\FastCosSin.cpp" />
     <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.cpp" />
-    <ClCompile Include="main.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\PolygonDecomposition.cpp" />
@@ -268,21 +272,11 @@
     <ClCompile Include="Physics\Solving\RodSolver.cpp" />
     <ClCompile Include="Render\SimulationRenderer_Colliders.cpp" />
     <ClCompile Include="Render\SimulationRenderer_Constraints.cpp" />
-    <ClCompile Include="Scenes.cpp" />
     <ClCompile Include="Physics\Solving\SolverBase.cpp" />
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
     <ClCompile Include="Render\ShapeRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_glfw.h" />
-    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.h" />
-    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3_loader.h" />
-    <ClInclude Include="..\thirdparty\imgui\imconfig.h" />
-    <ClInclude Include="..\thirdparty\imgui\imgui.h" />
-    <ClInclude Include="..\thirdparty\imgui\imgui_internal.h" />
-    <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
-    <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
-    <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h" />
     <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h" />
@@ -338,7 +332,6 @@
     <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Physics\Solving\RodSolver.h" />
     <ClInclude Include="Render\SimulationRenderer_Internal.h" />
-    <ClInclude Include="Scenes.h" />
     <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />
     <ClInclude Include="Physics\Solving\SpringSolver.h" />

@@ -27,9 +27,6 @@
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="Physics\Simulation.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -40,9 +37,6 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="Scenes.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\Threading.cpp">
@@ -65,27 +59,6 @@
     </ClCompile>
     <ClCompile Include="Physics\SoA\BodySoA.cpp">
       <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\imgui.cpp">
-      <Filter>ImGui\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\imgui_demo.cpp">
-      <Filter>ImGui\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp">
-      <Filter>ImGui\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp">
-      <Filter>ImGui\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp">
-      <Filter>ImGui\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_glfw.cpp">
-      <Filter>ImGui\Backends</Filter>
-    </ClCompile>
-    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.cpp">
-      <Filter>ImGui\Backends</Filter>
     </ClCompile>
     <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp">
       <Filter>Исходные файлы</Filter>
@@ -170,9 +143,6 @@
     <ClInclude Include="Physics\Interactivity\BodyHolder.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Scenes.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\Constants.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -223,33 +193,6 @@
     </ClInclude>
     <ClInclude Include="Physics\ConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\imconfig.h">
-      <Filter>ImGui\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\imgui.h">
-      <Filter>ImGui\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\imgui_internal.h">
-      <Filter>ImGui\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h">
-      <Filter>ImGui\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h">
-      <Filter>ImGui\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h">
-      <Filter>ImGui\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_glfw.h">
-      <Filter>ImGui\Backends</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3.h">
-      <Filter>ImGui\Backends</Filter>
-    </ClInclude>
-    <ClInclude Include="..\thirdparty\imgui\backends\imgui_impl_opengl3_loader.h">
-      <Filter>ImGui\Backends</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
