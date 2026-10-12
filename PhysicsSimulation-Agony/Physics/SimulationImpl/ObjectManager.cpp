@@ -326,12 +326,12 @@ namespace PS_AGONY
     {
         const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(polygons.getCount());
 
-        VerticesContainer vertices{ convexVertices.data(), convexVertices.size() };
+        PolygonGeometry geometry{ convexVertices };
 
         const ColliderIndex newCollider = createColliderInternal(
             bodyIndex, localOffset, localRotation, materialIndex, BodyType::Polygon, newShapeIndex
         );
-        polygons.append(newCollider, std::move(vertices));
+        polygons.append(newCollider, std::move(geometry));
 
         return newCollider;
     }
@@ -375,11 +375,11 @@ namespace PS_AGONY
             if (shapeIdx != last)
             {
                 std::swap(polygons.colliderIndices[shapeIdx], polygons.colliderIndices[last]);
-                std::swap(polygons.localVertices[shapeIdx], polygons.localVertices[last]);
+                std::swap(polygons.geometry[shapeIdx], polygons.geometry[last]);
                 colliders.shapeIndex[polygons.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
             }
             polygons.colliderIndices.pop_back();
-            polygons.localVertices.pop_back();
+            polygons.geometry.pop_back();
         }
 
         // Remove from the persistent ID list (swap-remove, O(1)).

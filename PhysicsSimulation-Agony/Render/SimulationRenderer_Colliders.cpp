@@ -276,7 +276,7 @@ namespace PS_AGONY_RENDER
         const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
 
         // Polygon SoA pointers.
-        const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = polygons.localVertices;
+        const PolygonGeometry* ECSTASY_RESTRICT geometryPtr = polygons.geometry;
 
         // Count total vertices needed this frame.
         size_t totalVertices = 0;
@@ -284,7 +284,7 @@ namespace PS_AGONY_RENDER
         {
             const ColliderIndex colliderIndex = givenColliders[i];
             const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
-            totalVertices += localVertsPtr[shapeIndex].size();
+            totalVertices += geometryPtr[shapeIndex].size();
         }
 
         shapeRenderer.ensurePolygonBufferCapacity(totalVertices, count);
@@ -307,14 +307,14 @@ namespace PS_AGONY_RENDER
             const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
             const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
-            const VerticesContainer& vc = localVertsPtr[shapeIndex];
-            const uint32_t vertCount = static_cast<uint32_t>(vc.size());
-            const Vec2* src = vc.data();
+            const PolygonGeometry& geometry = geometryPtr[shapeIndex];
+            const Vec2* ECSTASY_RESTRICT localVertsPtr = geometry.vertices();
+            const uint32_t vertCount = geometry.size();
 
             for (uint32_t v = 0; v < vertCount; v++)
             {
-                verts[vertexOffset + v].x = src[v].x;
-                verts[vertexOffset + v].y = src[v].y;
+                verts[vertexOffset + v].x = localVertsPtr[v].x;
+                verts[vertexOffset + v].y = localVertsPtr[v].y;
             }
 
             const BodyTransformSample body = transformContext.sample(bodyIndex);

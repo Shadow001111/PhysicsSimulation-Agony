@@ -26,11 +26,11 @@ namespace PS_AGONY::PhysicsGeometry
 
     std::pair<Real, Vec2> calculatePolygonInertia(
         Real mass,
-        VerticesContainer& verticesContainer,
+        std::span<const Vec2> vertices,
         std::optional<Vec2> centerOfMass
     )
     {
-        const size_t verticesCount = verticesContainer.size();
+        const size_t verticesCount = vertices.size();
         if (verticesCount < 3)
         {
             return { Real(0), centerOfMass.value_or(Vec2(Real(0))) };
@@ -43,7 +43,7 @@ namespace PS_AGONY::PhysicsGeometry
         Real yy = Real(0);
 
         const bool computeCOM = !centerOfMass.has_value();
-        const Vec2* verticesPtr = verticesContainer.data();
+        const Vec2* verticesPtr = vertices.data();
 
         for (size_t i = 0; i < verticesCount; i++)
         {
@@ -216,8 +216,7 @@ namespace PS_AGONY::PhysicsGeometry
         result.outline = std::move(*outline); // Deduped, no collinear points, CCW, simple.
 
         // Shoelace formulas are valid for any simple polygon, so the full (possibly concave) outline is used.
-        VerticesContainer container{ result.outline.data(), result.outline.size() };
-        const auto [inertiaAboutTrueCOM, trueCOM] = calculatePolygonInertia(mass, container, std::nullopt);
+        const auto [inertiaAboutTrueCOM, trueCOM] = calculatePolygonInertia(mass, result.outline, std::nullopt);
 
         result.trueCenterOfMass = trueCOM;
         result.neededCenterOfMass = centerOfMass.value_or(trueCOM) - trueCOM;

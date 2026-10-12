@@ -25,7 +25,7 @@ namespace PS_AGONY::PhysicsGeometry
 
 	std::pair<Real, Vec2> calculatePolygonInertia(
 		Real mass,
-		VerticesContainer& verticesContainer,
+		std::span<const Vec2> vertices,
 		std::optional<Vec2> centerOfMass = std::nullopt
 	);
 

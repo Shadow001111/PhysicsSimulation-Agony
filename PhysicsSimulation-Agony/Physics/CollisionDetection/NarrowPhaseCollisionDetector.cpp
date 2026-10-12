@@ -135,24 +135,6 @@ namespace PS_AGONY
         }
     }
 
-    // Returns normalized or zero vector.
-    [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
-    {
-        const Vec2 p0 = vertsPtr[edgeIndex];
-        const size_t next = nextIndex(size_t(edgeIndex), verticesCount);
-        const Vec2 p1 = vertsPtr[next];
-        const Vec2 edge = p1 - p0;
-
-        Vec2 n = Vec2{ edge.y, -edge.x };
-        const Real lenSquared = glm::dot(n, n);
-        if (lenSquared >= ZERO_DIVISION_BOUNDARY_SQUARED) [[likely]]
-        {
-            n *= Real(1) / std::sqrt(lenSquared);
-            return n;
-        }
-        return Vec2(0, 0);
-    }
-
     [[nodiscard]] static Vec2 closestPointOnSegment(const Vec2& p, const Vec2& a, const Vec2& b)
     {
         const Vec2 ab = b - a;
@@ -166,6 +148,7 @@ namespace PS_AGONY
     // Returns false as soon as any edge separates the point by more than 'maxDistance': no contact possible.
     [[nodiscard]] static bool findSupportEdge(
         const Vec2* vertsPtr,
+        const Vec2* normalsPtr,
         size_t vertexCount,
         const Vec2& point,
         Real maxDistance,
@@ -177,8 +160,7 @@ namespace PS_AGONY
         uint32_t supportEdge = 0;
         for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
         {
-            const Vec2 normal = edgeOutwardNormal(vertsPtr, vertexCount, i);
-            const Real separation = glm::dot(normal, point - vertsPtr[i]);
+            const Real separation = glm::dot(normalsPtr[i], point - vertsPtr[i]);
             if (separation > maxDistance) return false;
             if (separation > maxSeparation)
             {
@@ -316,8 +298,9 @@ namespace PS_AGONY
             {
                 const Real cosB = colliders.worldRotationCos[colliderIndex];
                 const Real sinB = colliders.worldRotationSin[colliderIndex];
-                const VerticesContainer& localPolygonVertices = polygons.localVertices[shapeIdx];
-                const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
+                const PolygonGeometry& localPolygonVertices = polygons.geometry[shapeIdx];
+                const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.vertices();
+                const Vec2* ECSTASY_RESTRICT localNormals = localPolygonVertices.normals();
                 const size_t vertexCount = localPolygonVertices.size();
                 if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
@@ -332,7 +315,7 @@ namespace PS_AGONY
 
                 uint32_t supportEdge = 0;
                 Real maxSeparation = 0;
-                if (!findSupportEdge(localVerts, vertexCount, circleLocal, radius, supportEdge, maxSeparation)) continue;
+                if (!findSupportEdge(localVerts, localNormals, vertexCount, circleLocal, radius, supportEdge, maxSeparation)) continue;
 
                 if (maxSeparation >= ZERO_DIVISION_BOUNDARY)
                 {
@@ -1028,7 +1011,7 @@ namespace PS_AGONY
         const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
-        const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
+        const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1043,8 +1026,9 @@ namespace PS_AGONY
 
             const Real radiusA = radiusPtr[shapeA];
 
-            const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
-            const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
+            const PolygonGeometry& localPolygonVertices = polyGeometryPtr[shapeB];
+            const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.vertices();
+            const Vec2* ECSTASY_RESTRICT localNormals = localPolygonVertices.normals();
             const size_t vertexCount = localPolygonVertices.size();
             if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
@@ -1059,7 +1043,7 @@ namespace PS_AGONY
 
             uint32_t supportEdge = 0;
             Real maxSeparation = 0;
-            if (!findSupportEdge(localVerts, vertexCount, circleLocal, radiusA, supportEdge, maxSeparation)) continue;
+            if (!findSupportEdge(localVerts, localNormals, vertexCount, circleLocal, radiusA, supportEdge, maxSeparation)) continue;
 
             Vec2 normalLocal;
             Real separation;
@@ -1074,7 +1058,7 @@ namespace PS_AGONY
 
                 if (distSquared < ZERO_DIVISION_BOUNDARY_SQUARED)
                 {
-                    normalLocal = edgeOutwardNormal(localVerts, vertexCount, supportEdge);
+                    normalLocal = localNormals[supportEdge];
                     separation = 0;
                 }
                 else
@@ -1089,7 +1073,7 @@ namespace PS_AGONY
             else
             {
                 // Circle center is inside the polygon.
-                normalLocal = edgeOutwardNormal(localVerts, vertexCount, supportEdge);
+                normalLocal = localNormals[supportEdge];
                 separation = maxSeparation;
             }
 
@@ -1346,7 +1330,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
 
-        const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
+        const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1364,8 +1348,9 @@ namespace PS_AGONY
             const Real halfWidthA = halfWidthPtr[shapeA];
             const Real halfHeightA = halfHeightPtr[shapeA];
 
-            const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
-            const Vec2* localVertsB = localPolygonVertices.data();
+            const PolygonGeometry& localPolygonVertices = polyGeometryPtr[shapeB];
+            const Vec2* localVertsB = localPolygonVertices.vertices();
+            const Vec2* localNormalsB = localPolygonVertices.normals();
             const size_t vertexCount = localPolygonVertices.size();
             if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
@@ -1453,7 +1438,7 @@ namespace PS_AGONY
             const Vec2 polyCenterRelVec = polyCenterX * rightA_inB + polyCenterY * upA_inB;
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
-                const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
+                const Vec2 nB = localNormalsB[i];
                 Vec2 axisLocal = nB;
                 const Real axisLenSquared = glm::dot(axisLocal, axisLocal);
                 if (axisLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]] continue;
@@ -1548,7 +1533,7 @@ namespace PS_AGONY
                     {
                         // Already in Polygon B's local space, same frame as refNormalLocal:
                         // no per-edge rotation needed here (unlike the box-local-space version).
-                        const Vec2 nB = edgeOutwardNormal(localVertsB, vertexCount, i);
+                        const Vec2 nB = localNormalsB[i];
                         const Real d = glm::dot(refNormalLocal, nB);
                         if (d < minDot)
                         {
@@ -1656,10 +1641,9 @@ namespace PS_AGONY
         const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
         const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
-        const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
+        const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
 
         alignas(CACHE_LINE_ALIGNMENT) Vec2 vertsB_inA[MAX_POLYGON_VERTEX_COUNT];
-        alignas(CACHE_LINE_ALIGNMENT) Vec2 normalsA[MAX_POLYGON_VERTEX_COUNT];      // A edge normals, A-local.
         alignas(CACHE_LINE_ALIGNMENT) Vec2 normalsB_inA[MAX_POLYGON_VERTEX_COUNT];  // B edge normals rotated into A-local.
 
         for (auto [indexA, indexB] : pairs)
@@ -1675,8 +1659,8 @@ namespace PS_AGONY
             const ObjectIndex shapeA = shapeIndexPtr[indexA];
             const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
-            const VerticesContainer& localVertsAContainer = polyLocalVerticesPtr[shapeA];
-            const VerticesContainer& localVertsBContainer = polyLocalVerticesPtr[shapeB];
+            const PolygonGeometry& localVertsAContainer = polyGeometryPtr[shapeA];
+            const PolygonGeometry& localVertsBContainer = polyGeometryPtr[shapeB];
 
             const size_t countA = localVertsAContainer.size();
             const size_t countB = localVertsBContainer.size();
@@ -1694,8 +1678,10 @@ namespace PS_AGONY
             const Real relCos = cosA * cosB + sinA * sinB;
             const Real relSin = cosA * sinB - sinA * cosB;
 
-            const Vec2* localVertsA = localVertsAContainer.data();
-            const Vec2* localVertsB = localVertsBContainer.data();
+            const Vec2* localVertsA = localVertsAContainer.vertices();
+            const Vec2* normalsA = localVertsAContainer.normals();
+            const Vec2* localVertsB = localVertsBContainer.vertices();
+            const Vec2* normalsB = localVertsBContainer.normals();
 
             for (size_t i = 0; i < countB; i++)
             {
@@ -1741,8 +1727,7 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < uint32_t(countA); i++)
             {
-                const Vec2 axisLocal = edgeOutwardNormal(localVertsA, countA, i);
-                normalsA[i] = axisLocal;
+                const Vec2 axisLocal = normalsA[i];
                 if (glm::dot(axisLocal, axisLocal) < ZERO_DIVISION_BOUNDARY_SQUARED) continue;
 
                 Real minB = std::numeric_limits<Real>::max();
@@ -1759,7 +1744,7 @@ namespace PS_AGONY
 
             for (uint32_t i = 0; i < uint32_t(countB); i++)
             {
-                const Vec2 nB = edgeOutwardNormal(localVertsB, countB, i);
+                const Vec2 nB = normalsB[i];
                 const Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
                 normalsB_inA[i] = axisLocal;
                 if (glm::dot(axisLocal, axisLocal) < ZERO_DIVISION_BOUNDARY_SQUARED) continue;

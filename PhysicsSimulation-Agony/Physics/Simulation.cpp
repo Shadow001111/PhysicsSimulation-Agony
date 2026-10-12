@@ -450,7 +450,7 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT worldRotationSinPtr = objectManager.colliders.worldRotationSin.data();
 
         const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = objectManager.polygons.colliderIndices.data();
-        const VerticesContainer* ECSTASY_RESTRICT localVertsPtr = objectManager.polygons.localVertices.data();
+        const PolygonGeometry* ECSTASY_RESTRICT geometryPtr = objectManager.polygons.geometry.data();
 
         Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabb.minX.data();
         Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabb.minY.data();
@@ -466,8 +466,9 @@ namespace PS_AGONY
             const Real cos = worldRotationCosPtr[colliderIndex];
             const Real sin = worldRotationSinPtr[colliderIndex];
 
-            const Vec2* verticesPtr = localVertsPtr[i].data();
-            const size_t vertexCount = localVertsPtr[i].size();
+            const PolygonGeometry& geometry = geometryPtr[i];
+            const Vec2* verticesPtr = geometry.vertices();
+            const size_t vertexCount = geometry.size();
 
             Real minX = std::numeric_limits<Real>::max();
             Real minY = std::numeric_limits<Real>::max();
