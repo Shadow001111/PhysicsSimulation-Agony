@@ -670,7 +670,7 @@ namespace PS_AGONY::PhysicsGeometry
         return true;
     }
 
-    std::vector<std::vector<Vec2>> decomposeEarClipping(std::span<const Vec2> vertices)
+    std::vector<std::vector<Vec2>> decomposeConcaveEarClipping(std::span<const Vec2> vertices)
     {
         std::vector<int> indices(vertices.size());
         for (size_t i = 0; i < indices.size(); ++i) indices[i] = static_cast<int>(i);
@@ -690,20 +690,20 @@ namespace PS_AGONY::PhysicsGeometry
         return result;
     }
 
-    std::vector<std::vector<Vec2>> decomposeBayazit(std::span<const Vec2> vertices)
+    std::vector<std::vector<Vec2>> decomposeConcaveBayazit(std::span<const Vec2> vertices)
     {
-        return decomposeConvex(vertices, DecompositionMethod::Bayazit);
+        return decomposeConcave(vertices, ConcaveDecompositionMethod::Bayazit);
     }
 
-    std::vector<std::vector<Vec2>> decomposeReflexBisector(std::span<const Vec2> vertices)
+    std::vector<std::vector<Vec2>> decomposeConcaveReflexBisector(std::span<const Vec2> vertices)
     {
-        return decomposeConvex(vertices, DecompositionMethod::ReflexAngleBisector);
+        return decomposeConcave(vertices, ConcaveDecompositionMethod::ReflexAngleBisector);
     }
 
     // High-level pipeline dispatcher
-    std::vector<std::vector<Vec2>> decomposeConvex(
+    std::vector<std::vector<Vec2>> decomposeConcave(
         std::span<const Vec2> vertices,
-        DecompositionMethod method
+        ConcaveDecompositionMethod method
     )
     {
         if (vertices.size() < 3)
@@ -718,21 +718,115 @@ namespace PS_AGONY::PhysicsGeometry
 
         switch (method)
         {
-        case DecompositionMethod::ReflexAngleBisector:
+        case ConcaveDecompositionMethod::ReflexAngleBisector:
         {
             auto res = tryReflexBisector(vertices);
             if (res.has_value()) return std::move(*res);
             [[fallthrough]];
         }
-        case DecompositionMethod::Bayazit:
+        case ConcaveDecompositionMethod::Bayazit:
         {
             auto res = tryBayazit(vertices);
             if (res.has_value()) return std::move(*res);
             [[fallthrough]];
         }
-        case DecompositionMethod::EarClipping:
+        case ConcaveDecompositionMethod::EarClipping:
         default:
-            return decomposeEarClipping(vertices);
+            return decomposeConcaveEarClipping(vertices);
         }
+    }
+
+    namespace
+    {
+        void bisectConvexRec(std::span<const Vec2> v, size_t maxCount, std::vector<std::vector<Vec2>>& out)
+        {
+            const size_t n = v.size();
+            if (n <= maxCount)
+            {
+                out.emplace_back(v.begin(), v.end());
+                return;
+            }
+            const size_t j = n / 2; // Diagonal 0 -> j; both halves have >= 3 vertices for n >= 4.
+            bisectConvexRec(v.subspan(0, j + 1), maxCount, out);
+
+            std::vector<Vec2> second(v.begin() + j, v.end());
+            second.push_back(v[0]);
+            bisectConvexRec(second, maxCount, out);
+        }
+    }
+
+    std::vector<std::vector<Vec2>> decomposeConvexFan(std::span<const Vec2> vertices, size_t maxVertexCount)
+    {
+        const size_t n = vertices.size();
+        if (n < 3) return {};
+        maxVertexCount = std::max<size_t>(maxVertexCount, 3);
+        if (n <= maxVertexCount) return { std::vector<Vec2>(vertices.begin(), vertices.end()) };
+
+        std::vector<std::vector<Vec2>> result;
+        result.reserve((n - 2 + maxVertexCount - 3) / (maxVertexCount - 2));
+
+        size_t start = 1;
+        while (true)
+        {
+            const size_t end = std::min(start + maxVertexCount - 2, n - 1);
+            std::vector<Vec2> piece;
+            piece.reserve(end - start + 2);
+            piece.push_back(vertices[0]);
+            for (size_t k = start; k <= end; ++k) piece.push_back(vertices[k]);
+            result.push_back(std::move(piece));
+            if (end == n - 1) break;
+            start = end; // Shared fan edge.
+        }
+        return result;
+    }
+
+    std::vector<std::vector<Vec2>> decomposeConvexBisect(std::span<const Vec2> vertices, size_t maxVertexCount)
+    {
+        if (vertices.size() < 3) return {};
+        maxVertexCount = std::max<size_t>(maxVertexCount, 3);
+
+        std::vector<std::vector<Vec2>> result;
+        bisectConvexRec(vertices, maxVertexCount, result);
+        return result;
+    }
+
+    std::vector<std::vector<Vec2>> decomposeConvex(
+        std::span<const Vec2> vertices,
+        size_t maxVertexCount,
+        ConvexDecompositionMethod method
+    )
+    {
+        switch (method)
+        {
+        case ConvexDecompositionMethod::Bisect: return decomposeConvexBisect(vertices, maxVertexCount);
+        case ConvexDecompositionMethod::Fan:
+        default:                                return decomposeConvexFan(vertices, maxVertexCount);
+        }
+    }
+
+    void limitConvexPieceVertexCount(
+        std::vector<std::vector<Vec2>>& pieces,
+        size_t maxVertexCount,
+        ConvexDecompositionMethod method
+    )
+    {
+        maxVertexCount = std::max<size_t>(maxVertexCount, 3);
+        const bool anyOversized = std::any_of(pieces.begin(), pieces.end(),
+            [maxVertexCount](const std::vector<Vec2>& p) { return p.size() > maxVertexCount; });
+        if (!anyOversized) return;
+
+        std::vector<std::vector<Vec2>> out;
+        out.reserve(pieces.size() + 4);
+        for (std::vector<Vec2>& piece : pieces)
+        {
+            if (piece.size() <= maxVertexCount)
+            {
+                out.push_back(std::move(piece));
+                continue;
+            }
+            for (std::vector<Vec2>& sub : decomposeConvex(piece, maxVertexCount, method))
+                out.push_back(std::move(sub));
+        }
+        pieces = std::move(out);
     }
 }

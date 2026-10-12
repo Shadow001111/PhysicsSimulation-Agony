@@ -35,8 +35,9 @@ namespace PS_AGONY::PhysicsGeometry
 
     PolygonBuild buildPolygon(
         std::span<const Vec2> vertices,
-        DecompositionMethod method,
+        ConcaveDecompositionMethod concaveMethod,
         Real mass,
-        std::optional<Vec2> centerOfMass
+        std::optional<Vec2> centerOfMass,
+        ConvexDecompositionMethod convexMethod = ConvexDecompositionMethod::Fan
     );
 }

@@ -72,7 +72,8 @@ namespace PS_AGONY_RENDER
 			bool valid = false;
 			std::vector<Vec2> sourceVertices;
 			std::optional<Vec2> centerOfMass;
-			PhysicsGeometry::DecompositionMethod method{};
+			PhysicsGeometry::ConcaveDecompositionMethod concaveMethod{};
+			PhysicsGeometry::ConvexDecompositionMethod convexMethod{};
 			PhysicsGeometry::PolygonBuildError error = PhysicsGeometry::PolygonBuildError::None;
 			std::vector<glm::vec2> vertices;                    // All pieces, original (creator) frame.
 			std::vector<DrawArraysIndirectCommand> commands;    // One per convex piece.

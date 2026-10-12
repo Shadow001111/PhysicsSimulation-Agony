@@ -1037,7 +1037,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
         .localVertices = { leftVertices.data(), leftVertices.size() },
-        .decompositionMethod = PS_AGONY::PhysicsGeometry::DecompositionMethod::ReflexAngleBisector
+        .concaveDecompositionMethod = PS_AGONY::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
         });
 
     simulation.createPolygon({
@@ -1045,7 +1045,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
         .localVertices = {rightVertices.data(), rightVertices.size()},
-        .decompositionMethod = PS_AGONY::PhysicsGeometry::DecompositionMethod::ReflexAngleBisector
+        .concaveDecompositionMethod= PS_AGONY::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
         });
 
     // Create the central flat ground runout area centered at zero.

@@ -1,6 +1,9 @@
 #include "PhysicsGeometry.h"
 #include "PolygonBuild.h"
 
+#include <cstddef>
+#include "Physics/Limits.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -191,9 +194,10 @@ namespace PS_AGONY::PhysicsGeometry
 
     PolygonBuild buildPolygon(
         std::span<const Vec2> vertices,
-        DecompositionMethod method,
+        ConcaveDecompositionMethod concaveMethod,
         Real mass,
-        std::optional<Vec2> centerOfMass
+        std::optional<Vec2> centerOfMass,
+        ConvexDecompositionMethod convexMethod
     )
     {
         PolygonBuild result;
@@ -224,7 +228,8 @@ namespace PS_AGONY::PhysicsGeometry
         // Parallel-axis shift to the requested pivot.
         result.inertia = inertiaAboutTrueCOM + mass * glm::dot(result.neededCenterOfMass, result.neededCenterOfMass);
 
-        result.pieces = decomposeConvex(result.outline, method);
+        result.pieces = decomposeConcave(result.outline, concaveMethod);
+        limitConvexPieceVertexCount(result.pieces, MAX_CONVEX_POLYGON_VERTEX_COUNT, convexMethod);
         if (result.pieces.empty()) result.error = PolygonBuildError::DecompositionFailed;
         return result;
     }

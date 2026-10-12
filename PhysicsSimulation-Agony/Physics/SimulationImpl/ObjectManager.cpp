@@ -106,7 +106,10 @@ namespace PS_AGONY
 
         // Concave outlines are split into multiple convex pieces here; an already-convex
         // outline comes back as a single (CCW-normalized) piece at no extra cost.
-        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConvex(uniqueVertices, params.decompositionMethod);
+        std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConcave(uniqueVertices, params.concaveDecompositionMethod);
+        PhysicsGeometry::limitConvexPieceVertexCount(
+            convexPieces, MAX_CONVEX_POLYGON_VERTEX_COUNT, params.convexDecompositionMethod
+        );
 
         if (convexPieces.empty())
         {
@@ -200,7 +203,7 @@ namespace PS_AGONY
         // Decompose BEFORE touching storage so a failure leaves no orphan body.
         PhysicsGeometry::PolygonBuild build = PhysicsGeometry::buildPolygon(
             params.localVertices,
-            params.decompositionMethod, mass, params.base.centerOfMass
+            params.concaveDecompositionMethod, mass, params.base.centerOfMass, params.convexDecompositionMethod
         );
         if (!build.ok())
         {

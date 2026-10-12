@@ -157,7 +157,8 @@ namespace PS_AGONY_RENDER
             PolygonPreviewCache& cache = polygonPreviewCache;
 
             const bool same = cache.valid
-                && cache.method == polyParams->decompositionMethod
+                && cache.concaveMethod == polyParams->concaveDecompositionMethod
+                && cache.convexMethod == polyParams->convexDecompositionMethod
                 && cache.centerOfMass == polyParams->base.centerOfMass
                 && cache.sourceVertices.size() == src.size()
                 && std::equal(src.begin(), src.end(), cache.sourceVertices.begin());
@@ -166,13 +167,15 @@ namespace PS_AGONY_RENDER
             {
                 // Same pipeline as createPolygon, so preview == result (decomposition, checks, errors).
                 const PhysicsGeometry::PolygonBuild build = PhysicsGeometry::buildPolygon(
-                    src, polyParams->decompositionMethod, Real(1), polyParams->base.centerOfMass
+                    src, polyParams->concaveDecompositionMethod, Real(1), polyParams->base.centerOfMass,
+                    polyParams->convexDecompositionMethod
                 );
 
                 cache.valid = true;
                 cache.sourceVertices.assign(src.begin(), src.end());
                 cache.centerOfMass = polyParams->base.centerOfMass;
-                cache.method = polyParams->decompositionMethod;
+                cache.concaveMethod = polyParams->concaveDecompositionMethod;
+                cache.convexMethod = polyParams->convexDecompositionMethod;
                 cache.error = build.error;
                 cache.vertices.clear();
                 cache.commands.clear();

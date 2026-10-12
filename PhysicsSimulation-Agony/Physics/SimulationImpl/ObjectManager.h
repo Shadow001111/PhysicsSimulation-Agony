@@ -51,7 +51,8 @@ namespace PS_AGONY
 		MaterialIndex materialIndex{ 0 };
 		Vec2* localVertices = nullptr;
 		size_t verticesCount = 0;
-		PhysicsGeometry::DecompositionMethod decompositionMethod = PhysicsGeometry::DecompositionMethod::Bayazit;
+		PhysicsGeometry::ConcaveDecompositionMethod concaveDecompositionMethod = PhysicsGeometry::ConcaveDecompositionMethod::Bayazit;
+		PhysicsGeometry::ConvexDecompositionMethod convexDecompositionMethod = PhysicsGeometry::ConvexDecompositionMethod::Fan;
 	};
 
 	// Result of createPolygonCollider(). A concave input outline may be split into several
@@ -80,7 +81,8 @@ namespace PS_AGONY
 	{
 		BodyCreateParams base;
 		std::span<Vec2> localVertices;
-		PhysicsGeometry::DecompositionMethod decompositionMethod = PhysicsGeometry::DecompositionMethod::Bayazit;
+		PhysicsGeometry::ConcaveDecompositionMethod concaveDecompositionMethod = PhysicsGeometry::ConcaveDecompositionMethod::Bayazit;
+		PhysicsGeometry::ConvexDecompositionMethod convexDecompositionMethod = PhysicsGeometry::ConvexDecompositionMethod::Fan;
 	};
 
 	class ObjectManager
