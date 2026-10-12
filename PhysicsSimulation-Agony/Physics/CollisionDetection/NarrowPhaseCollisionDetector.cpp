@@ -47,12 +47,6 @@ namespace PS_AGONY
         constexpr uint32_t BOX_FACE_TOP = 4;
         constexpr uint32_t BOX_FACE_BOTTOM = 8;
 
-        // Circle-box contact ids: circle center inside the box (nearest face).
-        constexpr uint32_t BOX_INSIDE_FACE_RIGHT = 0;
-        constexpr uint32_t BOX_INSIDE_FACE_LEFT = 1;
-        constexpr uint32_t BOX_INSIDE_FACE_TOP = 2;
-        constexpr uint32_t BOX_INSIDE_FACE_BOTTOM = 3;
-
         // Box incident edge ids (box vertex ids), indexed by [useX][sign > 0].
         constexpr uint32_t BOX_INCIDENT_EDGE_IDS[2][2][2] = {
             { { 1, 2 }, { 0, 3 } },
@@ -163,7 +157,7 @@ namespace PS_AGONY
     {
         const Vec2 ab = b - a;
         const Real denom = glm::dot(ab, ab);
-        if (denom < ZERO_DIVISION_BOUNDARY) return a;
+        if (denom < ZERO_DIVISION_BOUNDARY_SQUARED) return a;
         const Real t = glm::dot(p - a, ab) / denom;
         return a + ab * std::fmin(std::fmax(t, Real(0)), Real(1));
     }
@@ -990,12 +984,12 @@ namespace PS_AGONY
             if (useX)
             {
                 normalLocal = Vec2(sx, Real(0));
-                contactId = sx > 0 ? BOX_INSIDE_FACE_RIGHT : BOX_INSIDE_FACE_LEFT;
+                contactId = sx > 0 ? BOX_FACE_RIGHT : BOX_FACE_LEFT;
             }
             else
             {
                 normalLocal = Vec2(Real(0), sy);
-                contactId = sy > 0 ? BOX_INSIDE_FACE_TOP : BOX_INSIDE_FACE_BOTTOM;
+                contactId = sy > 0 ? BOX_FACE_TOP : BOX_FACE_BOTTOM;
             }
 
             const Vec2 normal = -Vec2{
@@ -1416,7 +1410,7 @@ namespace PS_AGONY
                 if (overlap < Real(0)) continue;
 
                 const Real polyCenterX = HALF * (polyMinX + polyMaxX);
-                const Real axisFacing = polyCenterX;
+                const Real axisFacing = -std::fabs(polyCenterX);
                 depth = overlap;
                 normalLocal = rightA_inB;
                 flipSignIfNegative(normalLocal, polyCenterX);
@@ -1435,9 +1429,10 @@ namespace PS_AGONY
 
                 // SAT penetration depth calculation.
                 const Real overlap = std::fmin(halfHeightA - polyMinY, polyMaxY + halfHeightA);
+                if (overlap < Real(0)) continue;
 
                 const Real polyCenterY = HALF * (polyMinY + polyMaxY);
-                const Real axisFacing = polyCenterY;
+                const Real axisFacing = -std::fabs(polyCenterY);
                 const bool strictlyBetter = overlap < depth;
                 const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
                 if (strictlyBetter || tiedButBetterFacing)
@@ -1467,15 +1462,10 @@ namespace PS_AGONY
 
                 const Real boxRadius = halfWidthA * std::fabs(glm::dot(axisLocal, rightA_inB)) + halfHeightA * std::fabs(glm::dot(axisLocal, upA_inB));
 
-                Real polyMin, polyMax;
-                projectVerticesOnAxis(localVertsB, vertexCount, axisLocal, polyMin, polyMax);
-
+                // One-sided face separation: polygon max extent along its own outward
+                // normal is dot(n, v_i); box min extent is (center - radius).
                 const Real boxCenterProj = glm::dot(boxCenterInB, axisLocal);
-                const Real polyMinRel = polyMin - boxCenterProj;
-                const Real polyMaxRel = polyMax - boxCenterProj;
-
-                // SAT penetration depth calculation.
-                const Real overlap = std::fmin(boxRadius - polyMinRel, polyMaxRel + boxRadius);
+                const Real overlap = glm::dot(axisLocal, localVertsB[i]) - (boxCenterProj - boxRadius);
                 if (overlap < Real(0)) goto nextPair;
 
                 const Real axisFacing = glm::dot(axisLocal, polyCenterRelVec);
