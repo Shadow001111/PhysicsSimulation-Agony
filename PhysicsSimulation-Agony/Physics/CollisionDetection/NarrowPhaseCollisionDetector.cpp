@@ -1530,10 +1530,10 @@ namespace PS_AGONY
                     refFaceCenterLocal = (refEdgeStartLocal + refEdgeEndLocal) * HALF;
 
                     const Vec2 edge = refEdgeEndLocal - refEdgeStartLocal;
-                    const Real edgeLen = std::sqrt(glm::dot(edge, edge));
-                    if (edgeLen < ZERO_DIVISION_BOUNDARY) continue;
+                    const Real edgeLenSquared = glm::dot(edge, edge);
+                    if (edgeLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) continue;
 
-                    sideDirLocal = edge / -edgeLen;
+                    sideDirLocal = edge / -std::sqrt(edgeLenSquared);
                 }
 
                 Vec2 incEdgeStartLocal, incEdgeEndLocal;
@@ -1797,10 +1797,10 @@ namespace PS_AGONY
                     refFaceCenter = (refEdgeStart + refEdgeEnd) * HALF;
 
                     const Vec2 edge = refEdgeEnd - refEdgeStart;
-                    const Real edgeLen = std::sqrt(glm::dot(edge, edge));
-                    if (edgeLen < ZERO_DIVISION_BOUNDARY) goto nextPair;
+                    const Real edgeLenSquared = glm::dot(edge, edge);
+                    if (edgeLenSquared < ZERO_DIVISION_BOUNDARY_SQUARED) goto nextPair;
 
-                    sideDir = edge / edgeLen;
+                    sideDir = edge / std::sqrt(edgeLenSquared);
                 }
 
                 uint32_t incidentEdgeIndex = 0;
