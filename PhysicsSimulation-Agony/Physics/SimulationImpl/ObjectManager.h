@@ -4,6 +4,7 @@
 #include "Physics/ObjectSoA.h"
 #include "Physics/GlmTypes.h"
 #include "Physics/ConstraintSystem.h"
+#include "Physics/Limits.h"
 
 #include <optional>
 #include <span>
@@ -78,10 +79,8 @@ namespace PS_AGONY
 	struct PolygonCreateParams
 	{
 		BodyCreateParams base;
-		Vec2* localVertices = nullptr;
-		size_t verticesCount = 0;
+		std::span<Vec2> localVertices;
 		PhysicsGeometry::DecompositionMethod decompositionMethod = PhysicsGeometry::DecompositionMethod::Bayazit;
-		// TODO: Make it use std::span.
 	};
 
 	class ObjectManager

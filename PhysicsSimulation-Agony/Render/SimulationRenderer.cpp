@@ -151,9 +151,9 @@ namespace PS_AGONY_RENDER
         else if (type == BodyType::Polygon)
         {
             const auto* polyParams = static_cast<const PolygonCreateParams*>(params);
-            if (polyParams->localVertices == nullptr) return nullptr;
+            if (polyParams->localVertices.data() == nullptr) return nullptr;
 
-            const std::span<const Vec2> src(polyParams->localVertices, polyParams->verticesCount);
+            const std::span<const Vec2> src = polyParams->localVertices;
             PolygonPreviewCache& cache = polygonPreviewCache;
 
             const bool same = cache.valid

@@ -404,8 +404,7 @@ void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
                 .base.rotation = 0,
                 .base.mass = 1,
                 .base.materialIndex = material0Index,
-                .localVertices = localVertices.data(),
-                .verticesCount = verticesCount
+                .localVertices = { localVertices.data(), verticesCount }
                 });
         }
 
@@ -494,8 +493,7 @@ void load_LargeWorld(
             .base.position = { posX + sceneOrientation.offsetX, posY + sceneOrientation.offsetY },
             .base.mass = 0,
             .base.materialIndex = materialIdx,
-            .localVertices = localVertices,
-            .verticesCount = 4
+            .localVertices = { localVertices, 4 }
             });
     }
 
@@ -565,8 +563,7 @@ void load_LargeWorld(
             .base.rotation = rotation,
             .base.mass = mass,
             .base.materialIndex = materialIdx,
-            .localVertices = localVertices.data(),
-            .verticesCount = verticesCount
+            .localVertices = { localVertices.data(), verticesCount },
             });
     }
 }
@@ -1039,8 +1036,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.position = { 0.0f, 0.0f },
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
-        .localVertices = leftVertices.data(),
-        .verticesCount = static_cast<uint32_t>(leftVertices.size()),
+        .localVertices = { leftVertices.data(), leftVertices.size() },
         .decompositionMethod = PS_AGONY::PhysicsGeometry::DecompositionMethod::ReflexAngleBisector
         });
 
@@ -1048,8 +1044,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.position = { 0.0f, 0.0f },
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
-        .localVertices = rightVertices.data(),
-        .verticesCount = static_cast<uint32_t>(rightVertices.size()),
+        .localVertices = {rightVertices.data(), rightVertices.size()},
         .decompositionMethod = PS_AGONY::PhysicsGeometry::DecompositionMethod::ReflexAngleBisector
         });
 
@@ -1121,8 +1116,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
                     .base.rotation = 0.0f,
                     .base.mass = 2.5f,
                     .base.materialIndex = envMatIdx,
-                    .localVertices = boxPolyVertices,
-                    .verticesCount = 4
+                    .localVertices = {boxPolyVertices, 4},
                     });
             }
         }

@@ -513,16 +513,14 @@ ObjectCreatorState renderObjectCreatorUI(
         {
             PS_AGONY::PolygonCreateParams params;
             params.base = buildBaseParams();
-            params.localVertices = polyVertices.data();
-            params.verticesCount = polyVertices.size();
+            params.localVertices = polyVertices;
             simulation.createPolygon(params);
         }
         ImGui::EndDisabled();
 
         state.bodyType = PS_AGONY::BodyType::Polygon;
         state.polygonParams.base = buildBaseParams();
-        state.polygonParams.localVertices = polyVertices.data();
-        state.polygonParams.verticesCount = polyVertices.size();
+        state.polygonParams.localVertices = polyVertices;
     }
 
     ImGui::End();

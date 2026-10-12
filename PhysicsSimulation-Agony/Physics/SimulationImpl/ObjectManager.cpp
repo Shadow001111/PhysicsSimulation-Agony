@@ -184,12 +184,12 @@ namespace PS_AGONY
 
     std::optional<ObjectIndex> ObjectManager::createPolygon(const PolygonCreateParams& params)
     {
-        if (params.localVertices == nullptr)
+        if (params.localVertices.data() == nullptr)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices container is nullptr.\n";
             return std::nullopt;
         }
-        if (params.verticesCount < 3)
+        if (params.localVertices.size() < 3)
         {
             std::cerr << "[AGONY][Simulation::createPolygon]: Failed to create a polygon: Vertices count is less than three.\n";
             return std::nullopt;
@@ -199,7 +199,7 @@ namespace PS_AGONY
 
         // Decompose BEFORE touching storage so a failure leaves no orphan body.
         PhysicsGeometry::PolygonBuild build = PhysicsGeometry::buildPolygon(
-            { params.localVertices, params.verticesCount },
+            params.localVertices,
             params.decompositionMethod, mass, params.base.centerOfMass
         );
         if (!build.ok())

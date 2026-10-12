@@ -290,5 +290,8 @@
     <ClInclude Include="Physics\SimulationImpl\PolygonBuild.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\Limits.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
