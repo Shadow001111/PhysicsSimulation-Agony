@@ -108,7 +108,7 @@ namespace PS_AGONY
         // outline comes back as a single (CCW-normalized) piece at no extra cost.
         std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConcave(uniqueVertices, params.concaveDecompositionMethod);
         PhysicsGeometry::limitConvexPieceVertexCount(
-            convexPieces, MAX_CONVEX_POLYGON_VERTEX_COUNT, params.convexDecompositionMethod
+            convexPieces, MAX_POLYGON_VERTEX_COUNT, params.convexDecompositionMethod
         );
 
         if (convexPieces.empty())

@@ -229,7 +229,7 @@ namespace PS_AGONY::PhysicsGeometry
         result.inertia = inertiaAboutTrueCOM + mass * glm::dot(result.neededCenterOfMass, result.neededCenterOfMass);
 
         result.pieces = decomposeConcave(result.outline, concaveMethod);
-        limitConvexPieceVertexCount(result.pieces, MAX_CONVEX_POLYGON_VERTEX_COUNT, convexMethod);
+        limitConvexPieceVertexCount(result.pieces, MAX_POLYGON_VERTEX_COUNT, convexMethod);
         if (result.pieces.empty()) result.error = PolygonBuildError::DecompositionFailed;
         return result;
     }

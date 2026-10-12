@@ -15,6 +15,51 @@ namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 
+    namespace
+    {
+        // Numeric tolerances.
+        constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
+        constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = 1e-8; // ZERO_DIVISION_BOUNDARY* ZERO_DIVISION_BOUNDARY;
+        constexpr Real SAT_EPSILON = 1e-4;
+        constexpr Real HALF = Real(0.5);
+
+        // Fallback normal for coincident circle centers.
+        constexpr Real DEFAULT_NORMAL_X = 1;
+        constexpr Real DEFAULT_NORMAL_Y = 0;
+
+        // Threading.
+        constexpr size_t MULTITHREAD_PAIR_THRESHOLD = 6000;
+        constexpr size_t PAIRS_PER_WORKER = 3000;
+        constexpr size_t LOAD_BALANCING_FACTOR = 4;
+
+        // Memory layout.
+        constexpr size_t CACHE_LINE_ALIGNMENT = std::hardware_destructive_interference_size;
+
+        // Manifolds and contact ids.
+        constexpr size_t MAX_CONTACTS_PER_MANIFOLD = 2;
+        constexpr uint32_t REFERENCE_BODY_TAG = 0x80000000u;
+        constexpr uint32_t INVALID_CONTACT_ID = std::numeric_limits<uint32_t>::max();
+        constexpr ColliderIndex INVALID_COLLIDER_INDEX = std::numeric_limits<ColliderIndex>::max();
+
+        // Circle-box contact ids: circle center outside the box (region flags).
+        constexpr uint32_t BOX_FACE_RIGHT = 1;
+        constexpr uint32_t BOX_FACE_LEFT = 2;
+        constexpr uint32_t BOX_FACE_TOP = 4;
+        constexpr uint32_t BOX_FACE_BOTTOM = 8;
+
+        // Circle-box contact ids: circle center inside the box (nearest face).
+        constexpr uint32_t BOX_INSIDE_FACE_RIGHT = 0;
+        constexpr uint32_t BOX_INSIDE_FACE_LEFT = 1;
+        constexpr uint32_t BOX_INSIDE_FACE_TOP = 2;
+        constexpr uint32_t BOX_INSIDE_FACE_BOTTOM = 3;
+
+        // Box incident edge ids (box vertex ids), indexed by [useX][sign > 0].
+        constexpr uint32_t BOX_INCIDENT_EDGE_IDS[2][2][2] = {
+            { { 1, 2 }, { 0, 3 } },
+            { { 3, 2 }, { 0, 1 } }
+        };
+    }
+
 
     template <typename Map>
     size_t robinHoodMapMemoryUsage(const Map& map)
@@ -42,27 +87,21 @@ namespace PS_AGONY
 
     /* HELPER METHODS */
 
-    constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
-    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = ZERO_DIVISION_BOUNDARY * ZERO_DIVISION_BOUNDARY;
-    constexpr Real SAT_EPSILON = 1e-4;
+    // Next index with wrap-around; replaces a runtime integer modulo.
+    template <typename Index>
+    [[nodiscard]] static __forceinline Index nextIndex(Index index, Index count)
+    {
+        return index + 1 == count ? Index(0) : Index(index + 1);
+    }
 
     static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
     {
         using Int = std::conditional_t<sizeof(Real) == 8, uint64_t, uint32_t>;
         constexpr Int signBit = Int(1) << (sizeof(Real) * 8 - 1);
 
-        const Int signMask = reinterpret_cast<const Int&>(sign) & signBit;
-        reinterpret_cast<Int&>(v.x) ^= signMask;
-        reinterpret_cast<Int&>(v.y) ^= signMask;
-
-        //const Int signMask = std::bit_cast<Int>(sign) & signBit;
-        //v.x = std::bit_cast<Real>(std::bit_cast<Int>(v.x) ^ signMask);
-        //v.y = std::bit_cast<Real>(std::bit_cast<Int>(v.y) ^ signMask);
-
-        //if (sign < Real(0))
-        //{
-        //    v = -v;
-        //}
+        const Int signMask = std::bit_cast<Int>(sign) & signBit;
+        v.x = std::bit_cast<Real>(std::bit_cast<Int>(v.x) ^ signMask);
+        v.y = std::bit_cast<Real>(std::bit_cast<Int>(v.y) ^ signMask);
     }
 
     [[nodiscard]] static bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
@@ -81,7 +120,7 @@ namespace PS_AGONY
         else         p1 = intersect;
 
         return false;
-    };
+    }
 
     static void projectVerticesOnAxis(
         const Vec2* ECSTASY_RESTRICT verticesPtr,
@@ -100,13 +139,13 @@ namespace PS_AGONY
             minOut = std::fmin(minOut, proj);
             maxOut = std::fmax(maxOut, proj);
         }
-    };
+    }
 
     // Returns normalized or zero vector.
     [[nodiscard]] static Vec2 edgeOutwardNormal(const Vec2* vertsPtr, size_t verticesCount, uint32_t edgeIndex)
     {
         const Vec2 p0 = vertsPtr[edgeIndex];
-        const size_t next = (size_t(edgeIndex) + 1 == verticesCount) ? 0 : size_t(edgeIndex) + 1;
+        const size_t next = nextIndex(size_t(edgeIndex), verticesCount);
         const Vec2 p1 = vertsPtr[next];
         const Vec2 edge = p1 - p0;
 
@@ -118,7 +157,45 @@ namespace PS_AGONY
             return n;
         }
         return Vec2(0, 0);
-    };
+    }
+
+    [[nodiscard]] static Vec2 closestPointOnSegment(const Vec2& p, const Vec2& a, const Vec2& b)
+    {
+        const Vec2 ab = b - a;
+        const Real denom = glm::dot(ab, ab);
+        if (denom < ZERO_DIVISION_BOUNDARY) return a;
+        const Real t = glm::dot(p - a, ab) / denom;
+        return a + ab * std::fmin(std::fmax(t, Real(0)), Real(1));
+    }
+
+    // Finds the polygon edge with the greatest signed separation from 'point' (polygon-local space).
+    // Returns false as soon as any edge separates the point by more than 'maxDistance': no contact possible.
+    [[nodiscard]] static bool findSupportEdge(
+        const Vec2* vertsPtr,
+        size_t vertexCount,
+        const Vec2& point,
+        Real maxDistance,
+        uint32_t& supportEdgeOut,
+        Real& maxSeparationOut
+    )
+    {
+        Real maxSeparation = -std::numeric_limits<Real>::max();
+        uint32_t supportEdge = 0;
+        for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
+        {
+            const Vec2 normal = edgeOutwardNormal(vertsPtr, vertexCount, i);
+            const Real separation = glm::dot(normal, point - vertsPtr[i]);
+            if (separation > maxDistance) return false;
+            if (separation > maxSeparation)
+            {
+                maxSeparation = separation;
+                supportEdge = i;
+            }
+        }
+        supportEdgeOut = supportEdge;
+        maxSeparationOut = maxSeparation;
+        return true;
+    }
 
     /*               */
     NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
@@ -168,13 +245,13 @@ namespace PS_AGONY
         }
         else
         {
-            useThreading = colliderPairs.size() > 6000;
+            useThreading = colliderPairs.size() > MULTITHREAD_PAIR_THRESHOLD;
         }
 
         // Find collisions.
         if (useThreading)
         {
-            findCollisionsMultiThreaded(colliderPairs, colliderPairs.size() / 3000);
+            findCollisionsMultiThreaded(colliderPairs, colliderPairs.size() / PAIRS_PER_WORKER);
         }
         else
         {
@@ -190,16 +267,6 @@ namespace PS_AGONY
         std::vector<std::pair<ObjectIndex, Real>>& outColliding
     ) const
     {
-        // Lambda to find the closest point on an edge segment
-        auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
-            {
-                const Vec2 ab = b - a;
-                const Real denom = glm::dot(ab, ab);
-                if (denom < ZERO_DIVISION_BOUNDARY) return a;
-                const Real t = glm::dot(p - a, ab) / denom;
-                return a + ab * glm::clamp(t, Real(0), Real(1));
-            };
-
         for (ObjectIndex colliderIndex : collidersToCheck)
         {
             const BodyType type = colliders.shapeType[colliderIndex];
@@ -212,8 +279,13 @@ namespace PS_AGONY
             {
                 const Real otherRadius = circles.radius[shapeIdx];
                 const Vec2 delta = colliderPos - pos;
-                const Real dist = std::sqrt(glm::dot(delta, delta));
-                sdf = dist - otherRadius;
+                const Real distSquared = glm::dot(delta, delta);
+
+                // Colliding iff dist < otherRadius + radius: decide on squared values, sqrt only on a hit.
+                const Real radiusSum = otherRadius + radius;
+                if (radiusSum <= Real(0) || distSquared >= radiusSum * radiusSum) continue;
+
+                sdf = std::sqrt(distSquared) - otherRadius;
             }
             else if (type == BodyType::Box)
             {
@@ -235,10 +307,14 @@ namespace PS_AGONY
                 const Real dx = std::fabs(circleLocalPosition.x) - halfWidthB;
                 const Real dy = std::fabs(circleLocalPosition.y) - halfHeightB;
 
-                const Real extX = std::max(Real(0), dx);
-                const Real extY = std::max(Real(0), dy);
+                // Outside along one axis by at least 'radius': the distance cannot be smaller. Skips the sqrt.
+                const Real maxD = std::fmax(dx, dy);
+                if (maxD > Real(0) && maxD >= radius) continue;
+
+                const Real extX = std::fmax(Real(0), dx);
+                const Real extY = std::fmax(Real(0), dy);
                 const Real distOutside = std::sqrt(extX * extX + extY * extY);
-                const Real distInside = std::min(Real(0), std::max(dx, dy));
+                const Real distInside = std::fmin(Real(0), maxD);
 
                 sdf = distInside + distOutside;
             }
@@ -249,33 +325,25 @@ namespace PS_AGONY
                 const VerticesContainer& localPolygonVertices = polygons.localVertices[shapeIdx];
                 const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
                 const size_t vertexCount = localPolygonVertices.size();
-                if (vertexCount < 3) [[unlikely]] continue;
+                if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
                 const Vec2 rightB = { cosB,  sinB };
                 const Vec2 upB = { -sinB, cosB };
 
+                const Vec2 d = pos - colliderPos;
                 const Vec2 circleLocal = {
-                    glm::dot(pos - colliderPos, rightB),
-                    glm::dot(pos - colliderPos, upB)
+                    glm::dot(d, rightB),
+                    glm::dot(d, upB)
                 };
 
-                Real maxSeparation = -std::numeric_limits<Real>::max();
                 uint32_t supportEdge = 0;
-                for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
-                {
-                    const Vec2 normal = edgeOutwardNormal(localVerts, vertexCount, i);
-                    const Real separation = glm::dot(normal, circleLocal - localVerts[i]);
-                    if (separation > maxSeparation)
-                    {
-                        maxSeparation = separation;
-                        supportEdge = i;
-                    }
-                }
+                Real maxSeparation = 0;
+                if (!findSupportEdge(localVerts, vertexCount, circleLocal, radius, supportEdge, maxSeparation)) continue;
 
                 if (maxSeparation >= ZERO_DIVISION_BOUNDARY)
                 {
                     const Vec2 a = localVerts[supportEdge];
-                    const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
+                    const Vec2 b = localVerts[nextIndex(supportEdge, uint32_t(vertexCount))];
                     const Vec2 q = closestPointOnSegment(circleLocal, a, b);
                     sdf = glm::length(circleLocal - q);
                 }
@@ -332,11 +400,9 @@ namespace PS_AGONY
 
         TRACY_SCOPE_N("Remap persistent contact data");
 
-        constexpr ColliderIndex INVALID_INDEX = std::numeric_limits<ColliderIndex>::max();
-
         // Compose the whole deletion log once, tracking only touched indices.
         // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot,
-        // or INVALID_INDEX if the slot holds a collider created after the cache was built
+        // or INVALID_COLLIDER_INDEX if the slot holds a collider created after the cache was built
         // (or was vacated). Slots never touched are identity.
         robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> slotToEntity;
         robin_hood::unordered_flat_set<ColliderIndex> dead;
@@ -355,27 +421,27 @@ namespace PS_AGONY
             const ColliderIndex s = deletion.swappedFromIndex;
 
             const ColliderIndex victim = entityAt(d);
-            if (victim != INVALID_INDEX) dead.insert(victim);
+            if (victim != INVALID_COLLIDER_INDEX) dead.insert(victim);
 
-            if (s != INVALID_INDEX && s != d)
+            if (s != INVALID_COLLIDER_INDEX && s != d)
             {
                 const ColliderIndex moved = entityAt(s);
                 slotToEntity[d] = moved;
-                slotToEntity[s] = INVALID_INDEX; // Vacated; a later create may reuse it.
+                slotToEntity[s] = INVALID_COLLIDER_INDEX; // Vacated; a later create may reuse it.
             }
             else
             {
-                slotToEntity[d] = INVALID_INDEX;
+                slotToEntity[d] = INVALID_COLLIDER_INDEX;
             }
         }
 
-        // original index -> final index (INVALID_INDEX if deleted). Untouched indices are absent.
+        // original index -> final index (INVALID_COLLIDER_INDEX if deleted). Untouched indices are absent.
         robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> remap;
         remap.reserve(dead.size() + slotToEntity.size());
-        for (const ColliderIndex e : dead) remap[e] = INVALID_INDEX;
+        for (const ColliderIndex e : dead) remap[e] = INVALID_COLLIDER_INDEX;
         for (const auto& [slot, entity] : slotToEntity)
         {
-            if (entity != INVALID_INDEX && entity != slot) remap[entity] = slot;
+            if (entity != INVALID_COLLIDER_INDEX && entity != slot) remap[entity] = slot;
         }
 
         // Update in place: only affected entries are extracted and re-inserted.
@@ -397,7 +463,7 @@ namespace PS_AGONY
             if (ra != remap.end()) a = ra->second;
             if (rb != remap.end()) b = rb->second;
 
-            if (a != INVALID_INDEX && b != INVALID_INDEX)
+            if (a != INVALID_COLLIDER_INDEX && b != INVALID_COLLIDER_INDEX)
             {
                 // Re-sort the indices to preserve narrow-phase invariants.
                 const BodyType typeA = colliders.shapeType[a];
@@ -470,10 +536,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
-        constexpr size_t LOAD_BALANCING_FACTOR = 4;
-
         auto& threadPool = Threading::getGlobalThreadPool();
-        workerCount = std::min<size_t>(workerCount, threadPool.getThreadCount());
+        workerCount = std::max<size_t>(std::min<size_t>(workerCount, threadPool.getThreadCount()), 1); // At least the calling thread.
 
         size_t chunkCount, chunkSize;
         if constexpr (DETERMINISTIC)
@@ -501,8 +565,8 @@ namespace PS_AGONY
         std::vector<Ecstasy::Core::Threading::Task> tasks;
         tasks.reserve(workerCount);
 
-        alignas(64) std::atomic<uint32_t> workerChunkIndex{ 0 };
-        alignas(64) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
+        alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> workerChunkIndex{ 0 };
+        alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
 
         // Only the calling thread merges, strictly in chunk order. It merges whatever is
         // already finished between its own chunks, so most copying overlaps with the workers.
@@ -642,11 +706,11 @@ namespace PS_AGONY
                 // Match current contacts with previous frame contacts using contactIds
                 for (uint32_t i = 0; i < collData.contactCount; i++)
                 {
-                    if (data.contactIds[0] != uint32_t(-1) && collData.contactIds[i] == data.contactIds[0])
+                    if (data.contactIds[0] != INVALID_CONTACT_ID && collData.contactIds[i] == data.contactIds[0])
                     {
                         collData.persistentContactData[i] = data.contactData[0];
                     }
-                    else if (data.contactIds[1] != uint32_t(-1) && collData.contactIds[i] == data.contactIds[1])
+                    else if (data.contactIds[1] != INVALID_CONTACT_ID && collData.contactIds[i] == data.contactIds[1])
                     {
                         collData.persistentContactData[i] = data.contactData[1];
                     }
@@ -691,8 +755,8 @@ namespace PS_AGONY
 
             alignas(RealSimd::bytes) Real depthBatch[RealSimd::lanes];
 
-            const RealSimd normalBX(1);
-            const RealSimd normalBY(0);
+            const RealSimd normalBX(DEFAULT_NORMAL_X);
+            const RealSimd normalBY(DEFAULT_NORMAL_Y);
 
             for (; i + RealSimd::lanes <= pairCount; i += RealSimd::lanes)
             {
@@ -734,6 +798,9 @@ namespace PS_AGONY
 
                 const RealSimd isCollidingMask = squaredDistance < radiusSumSquared;
 
+                unsigned int collisionMask = isCollidingMask.movemask();
+                if (collisionMask == 0) continue;
+
                 const RealSimd distance = RealSimd::sqrt(squaredDistance);
                 const RealSimd depth = radiusSum - distance;
 
@@ -752,7 +819,6 @@ namespace PS_AGONY
                 depth.store(depthBatch);
 
                 {
-                    unsigned int collisionMask = isCollidingMask.movemask();
                     while (collisionMask != 0)
                     {
                         const int lane = std::countr_zero(collisionMask);
@@ -804,7 +870,7 @@ namespace PS_AGONY
             Vec2 normal;
             if (distance < ZERO_DIVISION_BOUNDARY) [[unlikely]]
             {
-                normal = { 1.0, 0.0 };
+                normal = { DEFAULT_NORMAL_X, DEFAULT_NORMAL_Y };
             }
             else
             {
@@ -868,8 +934,8 @@ namespace PS_AGONY
             };
 
             const Vec2 closestLocal = {
-                glm::clamp(circleLocalPosition.x, -halfWidthB,  halfWidthB),
-                glm::clamp(circleLocalPosition.y, -halfHeightB, halfHeightB)
+                std::fmin(std::fmax(circleLocalPosition.x, -halfWidthB),  halfWidthB),
+                std::fmin(std::fmax(circleLocalPosition.y, -halfHeightB), halfHeightB)
             };
 
             const Vec2 deltaLocal = closestLocal - circleLocalPosition;
@@ -891,10 +957,10 @@ namespace PS_AGONY
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
                 uint32_t contactId = 0;
-                if (circleLocalPosition.x > halfWidthB)  contactId |= 1;
-                else if (circleLocalPosition.x < -halfWidthB)  contactId |= 2;
-                if (circleLocalPosition.y > halfHeightB) contactId |= 4;
-                else if (circleLocalPosition.y < -halfHeightB) contactId |= 8;
+                if (circleLocalPosition.x > halfWidthB)  contactId |= BOX_FACE_RIGHT;
+                else if (circleLocalPosition.x < -halfWidthB)  contactId |= BOX_FACE_LEFT;
+                if (circleLocalPosition.y > halfHeightB) contactId |= BOX_FACE_TOP;
+                else if (circleLocalPosition.y < -halfHeightB) contactId |= BOX_FACE_BOTTOM;
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
@@ -924,12 +990,12 @@ namespace PS_AGONY
             if (useX)
             {
                 normalLocal = Vec2(sx, Real(0));
-                contactId = sx > 0 ? 0 : 1;
+                contactId = sx > 0 ? BOX_INSIDE_FACE_RIGHT : BOX_INSIDE_FACE_LEFT;
             }
             else
             {
                 normalLocal = Vec2(Real(0), sy);
-                contactId = sy > 0 ? 2 : 3;
+                contactId = sy > 0 ? BOX_INSIDE_FACE_TOP : BOX_INSIDE_FACE_BOTTOM;
             }
 
             const Vec2 normal = -Vec2{
@@ -970,15 +1036,6 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        auto closestPointOnSegment = [](const Vec2& p, const Vec2& a, const Vec2& b) -> Vec2
-            {
-                const Vec2 ab = b - a;
-                const Real denom = glm::dot(ab, ab);
-                if (denom < ZERO_DIVISION_BOUNDARY) return a;
-                const Real t = glm::dot(p - a, ab) / denom;
-                return a + ab * glm::clamp(t, Real(0), Real(1));
-            };
-
         for (auto [indexA, indexB] : pairs)
         {
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
@@ -995,7 +1052,7 @@ namespace PS_AGONY
             const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
             const Vec2* ECSTASY_RESTRICT localVerts = localPolygonVertices.data();
             const size_t vertexCount = localPolygonVertices.size();
-            if (vertexCount < 3) [[unlikely]] continue;
+            if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
             const Vec2 rightB = { cosB,  sinB };
             const Vec2 upB = { -sinB, cosB };
@@ -1006,20 +1063,9 @@ namespace PS_AGONY
                 glm::dot(abPosDelta, upB)
             };
 
-            Real maxSeparation = -std::numeric_limits<Real>::max();
             uint32_t supportEdge = 0;
-            for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
-            {
-                const Vec2 normal = edgeOutwardNormal(localVerts, vertexCount, i);
-                const Real separation = glm::dot(normal, circleLocal - localVerts[i]);
-                if (separation > maxSeparation)
-                {
-                    maxSeparation = separation;
-                    supportEdge = i;
-                }
-            }
-
-            if (maxSeparation > radiusA) continue;
+            Real maxSeparation = 0;
+            if (!findSupportEdge(localVerts, vertexCount, circleLocal, radiusA, supportEdge, maxSeparation)) continue;
 
             Vec2 normalLocal;
             Real separation;
@@ -1027,7 +1073,7 @@ namespace PS_AGONY
             {
                 // Center is outside the polygon but within radiusA of it.
                 const Vec2 a = localVerts[supportEdge];
-                const Vec2 b = localVerts[(supportEdge + 1) % uint32_t(vertexCount)];
+                const Vec2 b = localVerts[nextIndex(supportEdge, uint32_t(vertexCount))];
                 const Vec2 q = closestPointOnSegment(circleLocal, a, b);
                 const Vec2 d = circleLocal - q;
                 const Real distSquared = glm::dot(d, d);
@@ -1201,10 +1247,9 @@ namespace PS_AGONY
 
             Vec2 refEdgeStart, refEdgeEnd, refFaceCenter, sideDir;
             {
-                const Real dotX = glm::dot(refNormal, rightRef);
-                const Real dotY = glm::dot(refNormal, upRef);
-                const bool useX = std::fabs(dotX) > std::fabs(dotY);
-                const Real sign = std::copysign(Real(1), useX ? dotX : dotY);
+                // The reference face axis is the SAT axis with the minimum overlap.
+                const bool useX = bestAxis == SATAxis::A_RIGHT || bestAxis == SATAxis::B_RIGHT;
+                const Real sign = std::copysign(Real(1), glm::dot(refNormal, useX ? rightRef : upRef));
 
                 if (useX)
                 {
@@ -1243,16 +1288,16 @@ namespace PS_AGONY
                 incEdgeEnd = faceCenter - edgeOffset;
             }
 
-            Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
+            Vec2 clipped[MAX_CONTACTS_PER_MANIFOLD] = { incEdgeStart, incEdgeEnd };
             if (clipSegment(clipped[0], clipped[1], refEdgeStart, -sideDir)) continue;
             if (clipSegment(clipped[0], clipped[1], refEdgeEnd, sideDir)) continue;
 
-            Vec2 contactPoints[2];
-            uint32_t contactIds[2];
+            Vec2 contactPoints[MAX_CONTACTS_PER_MANIFOLD];
+            uint32_t contactIds[MAX_CONTACTS_PER_MANIFOLD];
             uint32_t contactCount = 0;
             const Real refPlaneDist = glm::dot(refFaceCenter, refNormal);
             const uint32_t contactIdBase = (uint32_t)bestAxis << 1;
-            for (uint32_t i = 0; i < 2; i++)
+            for (uint32_t i = 0; i < MAX_CONTACTS_PER_MANIFOLD; i++)
             {
                 if (glm::dot(clipped[i], refNormal) <= refPlaneDist + SAT_EPSILON)
                 {
@@ -1328,7 +1373,7 @@ namespace PS_AGONY
             const VerticesContainer& localPolygonVertices = polyLocalVerticesPtr[shapeB];
             const Vec2* localVertsB = localPolygonVertices.data();
             const size_t vertexCount = localPolygonVertices.size();
-            if (vertexCount < 3) [[unlikely]] continue;
+            if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
             const Vec2 rightB = { cosB, sinB };
             const Vec2 upB = { -sinB, cosB };
@@ -1370,7 +1415,7 @@ namespace PS_AGONY
                 const Real overlap = std::fmin(halfWidthA - polyMinX, polyMaxX + halfWidthA);
                 if (overlap < Real(0)) continue;
 
-                const Real polyCenterX = Real(0.5) * (polyMinX + polyMaxX);
+                const Real polyCenterX = HALF * (polyMinX + polyMaxX);
                 const Real axisFacing = polyCenterX;
                 depth = overlap;
                 normalLocal = rightA_inB;
@@ -1391,7 +1436,7 @@ namespace PS_AGONY
                 // SAT penetration depth calculation.
                 const Real overlap = std::fmin(halfHeightA - polyMinY, polyMaxY + halfHeightA);
 
-                const Real polyCenterY = Real(0.5) * (polyMinY + polyMaxY);
+                const Real polyCenterY = HALF * (polyMinY + polyMaxY);
                 const Real axisFacing = polyCenterY;
                 const bool strictlyBetter = overlap < depth;
                 const bool tiedButBetterFacing = (overlap <= depth) && axisFacing < bestAxisFacing;
@@ -1408,8 +1453,8 @@ namespace PS_AGONY
             // Test Polygon edge outward normals. These are already expressed in
             // Polygon B's own local space, so no per-edge rotation is needed here
             // (unlike the box-local-space version of this routine).
-            const Real polyCenterX = Real(0.5) * (polyMinX + polyMaxX);
-            const Real polyCenterY = Real(0.5) * (polyMinY + polyMaxY);
+            const Real polyCenterX = HALF * (polyMinX + polyMaxX);
+            const Real polyCenterY = HALF * (polyMinY + polyMaxY);
             const Vec2 polyCenterRelVec = polyCenterX * rightA_inB + polyCenterY * upA_inB;
             for (uint32_t i = 0; i < uint32_t(vertexCount); i++)
             {
@@ -1488,11 +1533,11 @@ namespace PS_AGONY
                     refNormalLocal = -normalLocal;
 
                     const uint32_t i0 = bestAxisIndex;
-                    const uint32_t i1 = (i0 + 1) % uint32_t(vertexCount);
+                    const uint32_t i1 = nextIndex(i0, uint32_t(vertexCount));
 
                     refEdgeStartLocal = localVertsB[i0];
                     refEdgeEndLocal = localVertsB[i1];
-                    refFaceCenterLocal = (refEdgeStartLocal + refEdgeEndLocal) * Real(0.5);
+                    refFaceCenterLocal = (refEdgeStartLocal + refEdgeEndLocal) * HALF;
 
                     const Vec2 edge = refEdgeEndLocal - refEdgeStartLocal;
                     const Real edgeLen = std::sqrt(glm::dot(edge, edge));
@@ -1522,7 +1567,7 @@ namespace PS_AGONY
                         }
                     }
 
-                    incidentEdge2 = (incidentEdge + 1) % uint32_t(vertexCount);
+                    incidentEdge2 = nextIndex(incidentEdge, uint32_t(vertexCount));
                     incEdgeStartLocal = localVertsB[incidentEdge];
                     incEdgeEndLocal = localVertsB[incidentEdge2];
                 }
@@ -1537,46 +1582,42 @@ namespace PS_AGONY
                     const bool useX = std::fabs(dotX) > std::fabs(dotY);
                     const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
 
-                    const int signBool = sign > 0;
+                    const uint32_t* const incidentEdgeIds = BOX_INCIDENT_EDGE_IDS[useX][sign > 0];
+                    incidentEdge = incidentEdgeIds[0];
+                    incidentEdge2 = incidentEdgeIds[1];
 
                     Vec2 faceCenter, edgeOffset;
                     if (useX)
                     {
                         faceCenter = boxCenterInB + rightA_inB * (sign * halfWidthA);
                         edgeOffset = upA_inB * halfHeightA;
-
-                        incidentEdge = (1 - signBool) * 3;
-                        incidentEdge2 = 2 - signBool;
                     }
                     else
                     {
                         faceCenter = boxCenterInB + upA_inB * (sign * halfHeightA);
                         edgeOffset = rightA_inB * halfWidthA;
-
-                        incidentEdge = 1 - signBool;
-                        incidentEdge2 = 2 + signBool;
                     }
 
                     incEdgeStartLocal = faceCenter + edgeOffset;
                     incEdgeEndLocal = faceCenter - edgeOffset;
                 }
 
-                Vec2 clipped[2] = { incEdgeStartLocal, incEdgeEndLocal };
+                Vec2 clipped[MAX_CONTACTS_PER_MANIFOLD] = { incEdgeStartLocal, incEdgeEndLocal };
                 if (clipSegment(clipped[0], clipped[1], refEdgeStartLocal, -sideDirLocal)) continue;
                 if (clipSegment(clipped[0], clipped[1], refEdgeEndLocal, sideDirLocal)) continue;
 
-                const uint32_t bodyTag = refIsBox ? 0x80000000u : 0u;
+                const uint32_t bodyTag = refIsBox ? REFERENCE_BODY_TAG : 0u;
                 uint32_t id1 = bodyTag | incidentEdge;
                 uint32_t id2 = bodyTag | incidentEdge2;
 
-                Vec2 contactPoints[2];
-                uint32_t contactIds[2];
+                Vec2 contactPoints[MAX_CONTACTS_PER_MANIFOLD];
+                uint32_t contactIds[MAX_CONTACTS_PER_MANIFOLD];
                 uint32_t contactCount = 0;
                 const Real refPlaneDist = glm::dot(refFaceCenterLocal, refNormalLocal);
 
                 const Vec2 normalWorld = rightB * normalLocal.x + upB * normalLocal.y;
 
-                for (uint32_t i = 0; i < 2; i++)
+                for (uint32_t i = 0; i < MAX_CONTACTS_PER_MANIFOLD; i++)
                 {
                     if (glm::dot(clipped[i], refNormalLocal) <= refPlaneDist + SAT_EPSILON)
                     {
@@ -1627,9 +1668,9 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        alignas(64) Vec2 vertsB_inA[MAX_CONVEX_POLYGON_VERTEX_COUNT];
-        alignas(64) Vec2 normalsA[MAX_CONVEX_POLYGON_VERTEX_COUNT];      // A edge normals, A-local.
-        alignas(64) Vec2 normalsB_inA[MAX_CONVEX_POLYGON_VERTEX_COUNT];  // B edge normals rotated into A-local.
+        alignas(CACHE_LINE_ALIGNMENT) Vec2 vertsB_inA[MAX_POLYGON_VERTEX_COUNT];
+        alignas(CACHE_LINE_ALIGNMENT) Vec2 normalsA[MAX_POLYGON_VERTEX_COUNT];      // A edge normals, A-local.
+        alignas(CACHE_LINE_ALIGNMENT) Vec2 normalsB_inA[MAX_POLYGON_VERTEX_COUNT];  // B edge normals rotated into A-local.
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1649,7 +1690,7 @@ namespace PS_AGONY
 
             const size_t countA = localVertsAContainer.size();
             const size_t countB = localVertsBContainer.size();
-            if (countA < 3 || countB < 3) [[unlikely]] continue;
+            if (countA < MIN_POLYGON_VERTEX_COUNT || countB < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
 
             const Vec2 rightA = { cosA, sinA };
             const Vec2 upA = { -sinA, cosA };
@@ -1666,49 +1707,17 @@ namespace PS_AGONY
             const Vec2* localVertsA = localVertsAContainer.data();
             const Vec2* localVertsB = localVertsBContainer.data();
 
-            Real polyMinX_B = std::numeric_limits<Real>::max();
-            Real polyMaxX_B = -std::numeric_limits<Real>::max();
-            Real polyMinY_B = std::numeric_limits<Real>::max();
-            Real polyMaxY_B = -std::numeric_limits<Real>::max();
-
             for (size_t i = 0; i < countB; i++)
             {
                 const Vec2 v = localVertsB[i];
-                const Vec2 vInA = {
+                vertsB_inA[i] = {
                     bodyDeltaLocal.x + relCos * v.x - relSin * v.y,
                     bodyDeltaLocal.y + relSin * v.x + relCos * v.y
                 };
-                vertsB_inA[i] = vInA;
-
-                polyMinX_B = std::fmin(polyMinX_B, vInA.x);
-                polyMaxX_B = std::fmax(polyMaxX_B, vInA.x);
-                polyMinY_B = std::fmin(polyMinY_B, vInA.y);
-                polyMaxY_B = std::fmax(polyMaxY_B, vInA.y);
             }
 
-            Real polyMinX_A = localVertsA[0].x;
-            Real polyMaxX_A = polyMinX_A;
-            Real polyMinY_A = localVertsA[0].y;
-            Real polyMaxY_A = polyMinY_A;
-
-            for (size_t i = 1; i < countA; i++)
-            {
-                polyMinX_A = std::fmin(polyMinX_A, localVertsA[i].x);
-                polyMaxX_A = std::fmax(polyMaxX_A, localVertsA[i].x);
-                polyMinY_A = std::fmin(polyMinY_A, localVertsA[i].y);
-                polyMaxY_A = std::fmax(polyMaxY_A, localVertsA[i].y);
-            }
-
-            const Vec2 polyCenterA_inA = {
-                Real(0.5) * (polyMinX_A + polyMaxX_A),
-                Real(0.5) * (polyMinY_A + polyMaxY_A)
-            };
-            const Vec2 polyCenterB_inA = {
-                Real(0.5) * (polyMinX_B + polyMaxX_B),
-                Real(0.5) * (polyMinY_B + polyMaxY_B)
-            };
-
-            const Vec2 centerDeltaLocal = polyCenterB_inA - polyCenterA_inA;
+            // Facing direction for SAT axis tie-breaking: A origin to B origin, in A-local space.
+            const Vec2 centerDeltaLocal = bodyDeltaLocal;
 
             Vec2 normalLocal;
             Real depth = std::numeric_limits<Real>::max();
@@ -1750,7 +1759,7 @@ namespace PS_AGONY
                 for (size_t j = 0; j < countB; j++)
                 {
                     const Real p = glm::dot(vertsB_inA[j], axisLocal);
-                    minB = p < minB ? p : minB;
+                    minB = std::fmin(minB, p);
                 }
 
                 const Real overlap = glm::dot(localVertsA[i], axisLocal) - minB;
@@ -1769,7 +1778,7 @@ namespace PS_AGONY
                 for (size_t j = 0; j < countA; j++)
                 {
                     const Real p = glm::dot(localVertsA[j], axisLocal);
-                    minA = p < minA ? p : minA;
+                    minA = std::fmin(minA, p);
                 }
 
                 const Real overlap = glm::dot(vertsB_inA[i], axisLocal) - minA;
@@ -1791,24 +1800,17 @@ namespace PS_AGONY
 
                 {
                     const uint32_t i0 = bestAxisIndex;
-                    const uint32_t i1 = (i0 + 1) % uint32_t(refCount);
+                    const uint32_t i1 = nextIndex(i0, uint32_t(refCount));
 
                     refEdgeStart = refVertsPtr[i0];
                     refEdgeEnd = refVertsPtr[i1];
-                    refFaceCenter = (refEdgeStart + refEdgeEnd) * Real(0.5);
+                    refFaceCenter = (refEdgeStart + refEdgeEnd) * HALF;
 
                     const Vec2 edge = refEdgeEnd - refEdgeStart;
                     const Real edgeLen = std::sqrt(glm::dot(edge, edge));
                     if (edgeLen < ZERO_DIVISION_BOUNDARY) goto nextPair;
 
                     sideDir = edge / edgeLen;
-
-                    const Vec2 expectedOutward = Vec2{ edge.y, -edge.x };
-                    if (glm::dot(expectedOutward, refNormalLocal) < Real(0))
-                    {
-                        std::swap(refEdgeStart, refEdgeEnd);
-                        sideDir = -sideDir;
-                    }
                 }
 
                 uint32_t incidentEdgeIndex = 0;
@@ -1827,25 +1829,25 @@ namespace PS_AGONY
                 }
 
                 Vec2 incEdgeStart = incVertsPtr[incidentEdgeIndex];
-                Vec2 incEdgeEnd = incVertsPtr[(incidentEdgeIndex + 1) % uint32_t(incCount)];
+                Vec2 incEdgeEnd = incVertsPtr[nextIndex(incidentEdgeIndex, uint32_t(incCount))];
 
-                Vec2 clipped[2] = { incEdgeStart, incEdgeEnd };
+                Vec2 clipped[MAX_CONTACTS_PER_MANIFOLD] = { incEdgeStart, incEdgeEnd };
                 if (clipSegment(clipped[0], clipped[1], refEdgeStart, sideDir)) goto nextPair;
                 if (clipSegment(clipped[0], clipped[1], refEdgeEnd, -sideDir)) goto nextPair;
 
                 const Real refPlaneDist = glm::dot(refFaceCenter, refNormalLocal);
 
-                const uint32_t bodyTag = refIsA ? 0x80000000u : 0u;
+                const uint32_t bodyTag = refIsA ? REFERENCE_BODY_TAG : 0u;
                 const uint32_t id1 = bodyTag | incidentEdgeIndex;
-                const uint32_t id2 = bodyTag | ((incidentEdgeIndex + 1) % uint32_t(incCount));
+                const uint32_t id2 = bodyTag | nextIndex(incidentEdgeIndex, uint32_t(incCount));
 
-                Vec2 contactPoints[2];
-                uint32_t contactIds[2];
+                Vec2 contactPoints[MAX_CONTACTS_PER_MANIFOLD];
+                uint32_t contactIds[MAX_CONTACTS_PER_MANIFOLD];
                 uint32_t contactCount = 0;
 
                 const Vec2 normalWorld = rightA * normalLocal.x + upA * normalLocal.y;
 
-                for (uint32_t i = 0; i < 2; i++)
+                for (uint32_t i = 0; i < MAX_CONTACTS_PER_MANIFOLD; i++)
                 {
                     if (glm::dot(clipped[i], refNormalLocal) <= refPlaneDist + SAT_EPSILON)
                     {
