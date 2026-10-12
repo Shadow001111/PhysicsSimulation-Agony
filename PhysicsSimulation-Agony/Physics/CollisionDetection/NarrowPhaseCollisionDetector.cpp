@@ -1,6 +1,7 @@
 ﻿#include "NarrowPhaseCollisionDetector.h"
 
 #include "Physics/Threading.h"
+#include "Physics/Limits.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
@@ -1626,9 +1627,9 @@ namespace PS_AGONY
 
         const VerticesContainer* ECSTASY_RESTRICT polyLocalVerticesPtr = polygons.localVertices;
 
-        static thread_local std::vector<Vec2> vertsB_inA;
-        static thread_local std::vector<Vec2> normalsA;      // A edge normals, A-local.
-        static thread_local std::vector<Vec2> normalsB_inA;  // B edge normals rotated into A-local.
+        alignas(64) Vec2 vertsB_inA[MAX_CONVEX_POLYGON_VERTEX_COUNT];
+        alignas(64) Vec2 normalsA[MAX_CONVEX_POLYGON_VERTEX_COUNT];      // A edge normals, A-local.
+        alignas(64) Vec2 normalsB_inA[MAX_CONVEX_POLYGON_VERTEX_COUNT];  // B edge normals rotated into A-local.
 
         for (auto [indexA, indexB] : pairs)
         {
@@ -1665,9 +1666,6 @@ namespace PS_AGONY
             const Vec2* localVertsA = localVertsAContainer.data();
             const Vec2* localVertsB = localVertsBContainer.data();
 
-            vertsB_inA.resize(countB);
-            normalsA.resize(countA);
-            normalsB_inA.resize(countB);
             Real polyMinX_B = std::numeric_limits<Real>::max();
             Real polyMaxX_B = -std::numeric_limits<Real>::max();
             Real polyMinY_B = std::numeric_limits<Real>::max();
@@ -1782,10 +1780,10 @@ namespace PS_AGONY
             {
                 const bool refIsA = bestAxisType == SATAxis::A_EDGE;
 
-                const Vec2* refVertsPtr = refIsA ? localVertsA : vertsB_inA.data();
+                const Vec2* refVertsPtr = refIsA ? localVertsA : vertsB_inA;
                 const size_t refCount = refIsA ? countA : countB;
 
-                const Vec2* incVertsPtr = refIsA ? vertsB_inA.data() : localVertsA;
+                const Vec2* incVertsPtr = refIsA ? vertsB_inA : localVertsA;
                 const size_t incCount = refIsA ? countB : countA;
 
                 Vec2 refNormalLocal = refIsA ? normalLocal : -normalLocal;
