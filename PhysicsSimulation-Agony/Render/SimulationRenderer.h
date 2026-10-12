@@ -90,6 +90,7 @@ namespace PS_AGONY_RENDER
 
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
+		CapsuleSoAViewer capsules;
 		PolygonSoAViewer polygons;
 	public:
 		SimulationRenderer() = default;
@@ -129,6 +130,7 @@ namespace PS_AGONY_RENDER
 
 		void renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 		void renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderCapsuleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 
 		void renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix);

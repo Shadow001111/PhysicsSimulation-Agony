@@ -234,7 +234,8 @@ namespace PS_AGONY
             ColliderSoAViewer(objectManager.colliders),
             CircleSoAViewer(objectManager.circles),
             BoxSoAViewer(objectManager.boxes),
-            PolygonSoAViewer(objectManager.polygons)
+            PolygonSoAViewer(objectManager.polygons),
+            CapsuleSoAViewer(objectManager.capsules)
         );
 
         bodyCollisionSolver.setDataViewers(
@@ -357,6 +358,7 @@ namespace PS_AGONY
         buildCircleAABBs();
         buildBoxAABBs();
         buildPolygonAABBs();
+        buildCapsuleAABBs();
     }
 
     void Simulation::buildCircleAABBs()
@@ -490,6 +492,46 @@ namespace PS_AGONY
             aabbMinYPtr[colliderIndex] = y + minY;
             aabbMaxXPtr[colliderIndex] = x + maxX;
             aabbMaxYPtr[colliderIndex] = y + maxY;
+        }
+    }
+
+    void Simulation::buildCapsuleAABBs()
+    {
+        const size_t count = objectManager.capsules.getCount();
+        if (count == 0) return;
+
+        TRACY_SCOPE_NC("Build capsule AABBs", Ecstasy::Core::Color::DarkGreen);
+
+        const Real* ECSTASY_RESTRICT worldPosXPtr = objectManager.colliders.worldPosX.data();
+        const Real* ECSTASY_RESTRICT worldPosYPtr = objectManager.colliders.worldPosY.data();
+        const Real* ECSTASY_RESTRICT worldRotationCosPtr = objectManager.colliders.worldRotationCos.data();
+        const Real* ECSTASY_RESTRICT worldRotationSinPtr = objectManager.colliders.worldRotationSin.data();
+
+        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = objectManager.capsules.colliderIndices.data();
+        const Real* ECSTASY_RESTRICT halfLengthPtr = objectManager.capsules.halfLength.data();
+        const Real* ECSTASY_RESTRICT radiusPtr = objectManager.capsules.radius.data();
+
+        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabb.minX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabb.minY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabb.maxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabb.maxY.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const ColliderIndex colliderIndex = colliderIndexPtr[i];
+            const Real halfLength = halfLengthPtr[i];
+            const Real radius = radiusPtr[i];
+
+            const Real x = worldPosXPtr[colliderIndex];
+            const Real y = worldPosYPtr[colliderIndex];
+
+            const Real ex = std::fabs(worldRotationCosPtr[colliderIndex]) * halfLength + radius;
+            const Real ey = std::fabs(worldRotationSinPtr[colliderIndex]) * halfLength + radius;
+
+            aabbMinXPtr[colliderIndex] = x - ex;
+            aabbMinYPtr[colliderIndex] = y - ey;
+            aabbMaxXPtr[colliderIndex] = x + ex;
+            aabbMaxYPtr[colliderIndex] = y + ey;
         }
     }
 
@@ -810,10 +852,12 @@ namespace PS_AGONY
     void Simulation::collectMemoryUsage(DebugData& data) const
     {
         data.bodyDataMemoryUsage = objectManager.bodies.getMemoryUsage();
+
         data.colliderDataMemoryUsage = objectManager.colliders.getMemoryUsage();
         data.circleDataMemoryUsage = objectManager.circles.getMemoryUsage();
         data.boxDataMemoryUsage = objectManager.boxes.getMemoryUsage();
         data.polygonDataMemoryUsage = objectManager.polygons.getMemoryUsage();
+        data.capsuleDataMemoryUsage = objectManager.capsules.getMemoryUsage();
 
         data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();

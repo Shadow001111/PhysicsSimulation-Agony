@@ -293,5 +293,8 @@
     <ClInclude Include="Physics\Limits.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\SoA\Shapes\CapsuleSoA.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

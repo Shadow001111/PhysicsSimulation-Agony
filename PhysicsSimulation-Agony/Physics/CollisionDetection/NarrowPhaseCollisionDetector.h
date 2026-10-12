@@ -149,6 +149,7 @@ namespace PS_AGONY
 		CircleSoAViewer circles;
 		BoxSoAViewer boxes;
 		PolygonSoAViewer polygons;
+		CapsuleSoAViewer capsules;
 	public:
 		static constexpr bool ENABLE_WARM_STARTING = true;
 
@@ -170,7 +171,8 @@ namespace PS_AGONY
 			const ColliderSoAViewer& colliders,
 			const CircleSoAViewer& circles,
 			const BoxSoAViewer& boxes,
-			const PolygonSoAViewer& polygons
+			const PolygonSoAViewer& polygons,
+			const CapsuleSoAViewer& capsules
 		);
 
 		// 'colliderPairs' are COLLIDER index pairs (as produced by BroadPhaseCollisionDetector).
@@ -208,8 +210,12 @@ namespace PS_AGONY
 		void collisionCircleCircle(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionCirclePolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCircleCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionBoxBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionBoxPolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionBoxCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 		void collisionPolygonPolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionPolygonCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCapsuleCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
 	};
 }

@@ -30,6 +30,7 @@ namespace PS_AGONY
 		Circle,
 		Box,
 		Polygon,
+		Capsule,
 		COUNT
 	};
 

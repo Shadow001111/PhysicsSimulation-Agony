@@ -52,6 +52,20 @@ namespace PS_AGONY
             { { 1, 2 }, { 0, 3 } },
             { { 3, 2 }, { 0, 1 } }
         };
+
+        // Capsules.
+        constexpr uint32_t CAPSULE_VERTEX_CONTACT_TAG = 0x40000000u; // Polygon vertex vs capsule core contact ids.
+        constexpr Real CAPSULE_PARALLEL_SIN_SQUARED = Real(1e-3);    // Below this, capsule axes count as parallel (2 contacts).
+
+        // Result of a capsule vs convex polygon test, in the polygon-local space.
+        struct CapsuleManifold
+        {
+            Vec2 normal;   // From the polygon towards the capsule.
+            Real depth;
+            uint32_t contactCount;
+            Vec2 points[MAX_CONTACTS_PER_MANIFOLD]; // On the capsule surface.
+            uint32_t ids[MAX_CONTACTS_PER_MANIFOLD];
+        };
     }
 
 
@@ -71,11 +85,16 @@ namespace PS_AGONY
         mat((size_t)BodyType::Circle, (size_t)BodyType::Circle) = &NarrowPhaseCollisionDetector::collisionCircleCircle;
         mat((size_t)BodyType::Circle, (size_t)BodyType::Box) = &NarrowPhaseCollisionDetector::collisionCircleBox;
         mat((size_t)BodyType::Circle, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionCirclePolygon;
+        mat((size_t)BodyType::Circle, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionCircleCapsule;
 
         mat((size_t)BodyType::Box, (size_t)BodyType::Box) = &NarrowPhaseCollisionDetector::collisionBoxBox;
         mat((size_t)BodyType::Box, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionBoxPolygon;
+        mat((size_t)BodyType::Box, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionBoxCapsule;
 
         mat((size_t)BodyType::Polygon, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionPolygonPolygon;
+        mat((size_t)BodyType::Polygon, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionPolygonCapsule;
+
+        mat((size_t)BodyType::Capsule, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionCapsuleCapsule;
         return mat;
         }();
 
@@ -173,6 +192,180 @@ namespace PS_AGONY
         return true;
     }
 
+    [[nodiscard]] static __forceinline Real clampValue(Real value, Real lo, Real hi)
+    {
+        return std::fmin(std::fmax(value, lo), hi);
+    }
+
+    // Capsule vs convex polygon, everything in the polygon-local space.
+    // The capsule core is the segment s0 -> s0 + axis * length ('axis' is a unit vector).
+    // Face separation projects only the 2 segment endpoints (O(n)) and the capsule side axis is
+    // folded into the same pass. Disjoint cores resolve the exact closest feature, so rounded
+    // corners are exact. Produces 2 contacts whenever the capsule lies along a polygon face.
+    [[nodiscard]] static bool collideCapsuleConvex(
+        const Vec2* ECSTASY_RESTRICT vertsPtr,
+        const Vec2* ECSTASY_RESTRICT normalsPtr,
+        uint32_t vertexCount,
+        const Vec2& s0,
+        const Vec2& axis,
+        Real length,
+        Real radius,
+        CapsuleManifold& out
+    )
+    {
+        const Vec2 s1 = s0 + axis * length;
+        const Vec2 sideAxis = { -axis.y, axis.x };
+        const Real sideOffset = glm::dot(sideAxis, s0);
+
+        // Best polygon face and polygon extent along the capsule side axis, in one pass.
+        Real faceSeparation = -std::numeric_limits<Real>::max();
+        uint32_t faceIndex = 0;
+        Real minSide = std::numeric_limits<Real>::max();
+        Real maxSide = -std::numeric_limits<Real>::max();
+        uint32_t minSideVertex = 0;
+        uint32_t maxSideVertex = 0;
+
+        for (uint32_t i = 0; i < vertexCount; i++)
+        {
+            const Vec2 v = vertsPtr[i];
+            const Vec2 n = normalsPtr[i];
+
+            const Real separation = std::fmin(glm::dot(n, s0 - v), glm::dot(n, s1 - v));
+            if (separation >= radius) return false;
+            if (separation > faceSeparation && glm::dot(n, n) >= ZERO_DIVISION_BOUNDARY_SQUARED)
+            {
+                faceSeparation = separation;
+                faceIndex = i;
+            }
+
+            const Real side = glm::dot(v, sideAxis);
+            if (side < minSide) { minSide = side; minSideVertex = i; }
+            if (side > maxSide) { maxSide = side; maxSideVertex = i; }
+        }
+        if (faceSeparation == -std::numeric_limits<Real>::max()) [[unlikely]] return false;
+
+        const Real sidePlus = sideOffset - maxSide;   // Capsule on the +side of the polygon.
+        const Real sideMinus = minSide - sideOffset;  // Capsule on the -side of the polygon.
+        const bool onPlusSide = sidePlus >= sideMinus;
+        const Real sideSeparation = onPlusSide ? sidePlus : sideMinus;
+        if (sideSeparation >= radius) return false;
+
+        out.points[1] = Vec2();
+        out.ids[1] = 0;
+
+        auto coreDistSquared = [&](const Vec2& w) -> Real
+            {
+                const Real t = clampValue(glm::dot(w - s0, axis), Real(0), length);
+                const Vec2 d = s0 + axis * t - w;
+                return glm::dot(d, d);
+            };
+
+        // Single contact between a polygon vertex and the capsule core.
+        // 'separation' > 0 means the cores are disjoint: the exact vertex distance decides.
+        auto vertexContact = [&](const Vec2& w, uint32_t vertexId, const Vec2& axisNormal, Real separation) -> bool
+            {
+                const Real t = clampValue(glm::dot(w - s0, axis), Real(0), length);
+                const Vec2 q = s0 + axis * t;
+
+                Vec2 normal = axisNormal;
+                Real depth = radius - separation;
+                if (separation > Real(0))
+                {
+                    const Vec2 d = q - w;
+                    const Real distSquared = glm::dot(d, d);
+                    if (distSquared >= radius * radius) return false;
+                    if (distSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
+                    {
+                        const Real distance = std::sqrt(distSquared);
+                        normal = d / distance;
+                        depth = radius - distance;
+                    }
+                }
+
+                out.normal = normal;
+                out.depth = depth;
+                out.contactCount = 1;
+                out.points[0] = q - normal * radius;
+                out.ids[0] = CAPSULE_VERTEX_CONTACT_TAG | vertexId;
+                return true;
+            };
+
+        // Capsule side axis separates best (with a bias towards faces for stable ids): a vertex pokes the capsule side.
+        if (sideSeparation > faceSeparation + SAT_EPSILON)
+        {
+            const Vec2 normal = onPlusSide ? sideAxis : -sideAxis;
+            const uint32_t vertex = onPlusSide ? maxSideVertex : minSideVertex;
+            return vertexContact(vertsPtr[vertex], vertex, normal, sideSeparation);
+        }
+
+        // Face contact: the polygon face is the reference, the capsule core the incident segment.
+        const uint32_t i0 = faceIndex;
+        const uint32_t i1 = nextIndex(i0, vertexCount);
+        const Vec2 a = vertsPtr[i0];
+        const Vec2 b = vertsPtr[i1];
+        const Vec2 n = normalsPtr[i0];
+        const Vec2 tangent = { -n.y, n.x };
+
+        Vec2 c0 = s0;
+        Vec2 c1 = s1;
+        Real e0 = glm::dot(s0 - a, n);
+        Real e1 = glm::dot(s1 - a, n);
+
+        if (faceSeparation > Real(0))
+        {
+            // Disjoint cores: only the part of the segment above the edge sees the face;
+            // an overhanging part may be closer to an end vertex of the edge.
+            const Real edgeLength = glm::dot(b - a, tangent);
+            const Real t0 = glm::dot(s0 - a, tangent);
+            const Real t1 = glm::dot(s1 - a, tangent);
+
+            const bool beyondStart = t0 < Real(0) || t1 < Real(0);
+            const bool beyondEnd = t0 > edgeLength || t1 > edgeLength;
+            if (beyondStart || beyondEnd)
+            {
+                if (clipSegment(c0, c1, a, tangent)) return vertexContact(a, i0, n, faceSeparation);
+                if (clipSegment(c0, c1, b, -tangent)) return vertexContact(b, i1, n, faceSeparation);
+
+                e0 = glm::dot(c0 - a, n);
+                e1 = glm::dot(c1 - a, n);
+
+                const Real minE = std::fmin(e0, e1);
+                const Real faceDistSquared = minE * minE;
+
+                if (beyondStart && coreDistSquared(a) + SAT_EPSILON < faceDistSquared)
+                    return vertexContact(a, i0, n, faceSeparation);
+                if (beyondEnd && coreDistSquared(b) + SAT_EPSILON < faceDistSquared)
+                    return vertexContact(b, i1, n, faceSeparation);
+            }
+        }
+
+        const Real minSeparation = faceSeparation > Real(0) ? std::fmin(e0, e1) : faceSeparation;
+        const Vec2 span = c1 - c0;
+        const bool hasSecond = glm::dot(span, span) >= ZERO_DIVISION_BOUNDARY_SQUARED;
+        const Real contactLimit = radius + SAT_EPSILON;
+        const uint32_t idBase = REFERENCE_BODY_TAG | (i0 << 1);
+
+        uint32_t contactCount = 0;
+        if (e0 <= contactLimit)
+        {
+            out.points[contactCount] = c0 - n * radius;
+            out.ids[contactCount] = idBase;
+            contactCount++;
+        }
+        if (hasSecond && e1 <= contactLimit)
+        {
+            out.points[contactCount] = c1 - n * radius;
+            out.ids[contactCount] = idBase | 1u;
+            contactCount++;
+        }
+        if (contactCount == 0) [[unlikely]] return false;
+
+        out.normal = n;
+        out.depth = radius - minSeparation;
+        out.contactCount = contactCount;
+        return true;
+    }
+
     /*               */
     NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
     {
@@ -183,7 +376,8 @@ namespace PS_AGONY
         const ColliderSoAViewer& colliders,
         const CircleSoAViewer& circles,
         const BoxSoAViewer& boxes,
-        const PolygonSoAViewer& polygons
+        const PolygonSoAViewer& polygons,
+        const CapsuleSoAViewer& capsules
     )
     {
         this->bodies = bodies;
@@ -191,6 +385,7 @@ namespace PS_AGONY
         this->circles = circles;
         this->boxes = boxes;
         this->polygons = polygons;
+        this->capsules = capsules;
     }
 
     const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(
@@ -329,6 +524,24 @@ namespace PS_AGONY
                     // Point is inside the polygon; maxSeparation represents negative depth
                     sdf = maxSeparation;
                 }
+            }
+            else if (type == BodyType::Capsule)
+            {
+                const Real halfLengthB = capsules.halfLength[shapeIdx];
+                const Real capsuleRadius = capsules.radius[shapeIdx];
+                const Vec2 axis = { colliders.worldRotationCos[colliderIndex], colliders.worldRotationSin[colliderIndex] };
+
+                // Closest point of the capsule core to the query center.
+                const Vec2 d = pos - colliderPos;
+                const Real t = clampValue(glm::dot(d, axis), -halfLengthB, halfLengthB);
+                const Vec2 delta = d - axis * t;
+                const Real distSquared = glm::dot(delta, delta);
+
+                // Colliding iff dist < capsuleRadius + radius: decide on squared values, sqrt only on a hit.
+                const Real radiusSum = capsuleRadius + radius;
+                if (radiusSum <= Real(0) || distSquared >= radiusSum * radiusSum) continue;
+
+                sdf = std::sqrt(distSquared) - capsuleRadius;
             }
 
             // Check if the collider collides with the query circle
@@ -661,7 +874,10 @@ namespace PS_AGONY
             if (!vec.empty())
             {
                 CollisionFunc func = collisionFuncsDA[i];
-                (this->*func)(vec, out);
+                if (func) [[likely]]
+                {
+                    (this->*func)(vec, out);
+                }
             }
         }
 
@@ -1094,6 +1310,78 @@ namespace PS_AGONY
                 contactOnCircle,
                 Vec2(),
                 supportEdge,
+                0
+            );
+        }
+    }
+
+    void NarrowPhaseCollisionDetector::collisionCircleCapsule(
+        const std::vector<ObjectPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
+    {
+        TRACY_SCOPE_N("Circle-capsule collision");
+
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+
+        const Real* ECSTASY_RESTRICT circleRadiusPtr = circles.radius;
+        const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength;
+        const Real* ECSTASY_RESTRICT capsuleRadiusPtr = capsules.radius;
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+
+            const Real radiusA = circleRadiusPtr[shapeA];
+            const Real halfLengthB = halfLengthPtr[shapeB];
+            const Real radiusB = capsuleRadiusPtr[shapeB];
+
+            const Vec2 axisB = { cosB, sinB };
+            const Vec2 d = positionA - positionB;
+
+            // Circle center -> closest point of the capsule core.
+            const Real t = clampValue(glm::dot(d, axisB), -halfLengthB, halfLengthB);
+            const Vec2 delta = axisB * t - d;
+
+            const Real radiusSum = radiusA + radiusB;
+            const Real squaredDistance = glm::dot(delta, delta);
+            if (squaredDistance >= radiusSum * radiusSum) continue;
+
+            const Real distance = std::sqrt(squaredDistance);
+            const Real depth = radiusSum - distance;
+
+            Vec2 normal;
+            if (distance < ZERO_DIVISION_BOUNDARY) [[unlikely]]
+            {
+                // Circle center on the core: push out along the capsule side, away from the circle's side.
+                normal = { sinB, -cosB };
+                flipSignIfNegative(normal, glm::dot(d, Vec2(-sinB, cosB)));
+            }
+            else
+            {
+                normal = delta * (Real(1) / distance);
+            }
+
+            outCollisionData.emplace_back(
+                indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
+                normal,
+                depth,
+                1,
+                positionA + normal * radiusA,
+                Vec2(),
+                0,
                 0
             );
         }
@@ -1622,6 +1910,93 @@ namespace PS_AGONY
         }
     }
 
+    void NarrowPhaseCollisionDetector::collisionBoxCapsule(
+        const std::vector<ObjectPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
+    {
+        TRACY_SCOPE_N("Box-capsule collision");
+
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+
+        const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
+        const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;
+        const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength;
+        const Real* ECSTASY_RESTRICT capsuleRadiusPtr = capsules.radius;
+
+        // Box as a convex polygon: counter-clockwise, normal i belongs to edge i -> i + 1.
+        const Vec2 boxNormals[4] = {
+            Vec2(Real(0), Real(-1)),
+            Vec2(Real(1), Real(0)),
+            Vec2(Real(0), Real(1)),
+            Vec2(Real(-1), Real(0))
+        };
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const Real cosA = rotationCosPtr[indexA];
+            const Real sinA = rotationSinPtr[indexA];
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+
+            const Real halfWidthA = halfWidthPtr[shapeA];
+            const Real halfHeightA = halfHeightPtr[shapeA];
+            const Real halfLengthB = halfLengthPtr[shapeB];
+            const Real radiusB = capsuleRadiusPtr[shapeB];
+
+            const Vec2 boxVerts[4] = {
+                Vec2(-halfWidthA, -halfHeightA),
+                Vec2(halfWidthA, -halfHeightA),
+                Vec2(halfWidthA, halfHeightA),
+                Vec2(-halfWidthA, halfHeightA)
+            };
+
+            const Vec2 rightA = { cosA, sinA };
+            const Vec2 upA = { -sinA, cosA };
+
+            // Capsule pose in box-local space.
+            const Vec2 centerDelta = positionB - positionA;
+            const Vec2 centerLocal = {
+                glm::dot(centerDelta, rightA),
+                glm::dot(centerDelta, upA)
+            };
+            const Vec2 axisLocal = {
+                cosA * cosB + sinA * sinB,
+                cosA * sinB - sinA * cosB
+            };
+            const Vec2 coreStart = centerLocal - axisLocal * halfLengthB;
+
+            CapsuleManifold manifold;
+            if (!collideCapsuleConvex(boxVerts, boxNormals, 4, coreStart, axisLocal, halfLengthB * Real(2), radiusB, manifold)) continue;
+
+            const Vec2 normalWorld = rightA * manifold.normal.x + upA * manifold.normal.y;
+            const Vec2 point0 = positionA + rightA * manifold.points[0].x + upA * manifold.points[0].y;
+            const Vec2 point1 = positionA + rightA * manifold.points[1].x + upA * manifold.points[1].y;
+
+            outCollisionData.emplace_back(
+                indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
+                normalWorld,
+                manifold.depth,
+                manifold.contactCount,
+                point0,
+                point1,
+                manifold.ids[0],
+                manifold.ids[1]
+            );
+        }
+    }
+
     void NarrowPhaseCollisionDetector::collisionPolygonPolygon(
         const std::vector<ObjectPair>& pairs,
         std::vector<BodyCollisionData>& outCollisionData)
@@ -1848,6 +2223,235 @@ namespace PS_AGONY
             }
         nextPair:
             continue;
+        }
+    }
+
+    void NarrowPhaseCollisionDetector::collisionPolygonCapsule(
+        const std::vector<ObjectPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
+    {
+        TRACY_SCOPE_N("Polygon-capsule collision");
+
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+
+        const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
+        const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength;
+        const Real* ECSTASY_RESTRICT capsuleRadiusPtr = capsules.radius;
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const Real cosA = rotationCosPtr[indexA];
+            const Real sinA = rotationSinPtr[indexA];
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
+
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+
+            const PolygonGeometry& localPolygonVertices = polyGeometryPtr[shapeA];
+            const size_t vertexCount = localPolygonVertices.size();
+            if (vertexCount < MIN_POLYGON_VERTEX_COUNT) [[unlikely]] continue;
+
+            const Real halfLengthB = halfLengthPtr[shapeB];
+            const Real radiusB = capsuleRadiusPtr[shapeB];
+
+            const Vec2 rightA = { cosA, sinA };
+            const Vec2 upA = { -sinA, cosA };
+
+            // Capsule pose in polygon-local space.
+            const Vec2 centerDelta = positionB - positionA;
+            const Vec2 centerLocal = {
+                glm::dot(centerDelta, rightA),
+                glm::dot(centerDelta, upA)
+            };
+            const Vec2 axisLocal = {
+                cosA * cosB + sinA * sinB,
+                cosA * sinB - sinA * cosB
+            };
+            const Vec2 coreStart = centerLocal - axisLocal * halfLengthB;
+
+            CapsuleManifold manifold;
+            if (!collideCapsuleConvex(
+                localPolygonVertices.vertices(), localPolygonVertices.normals(), uint32_t(vertexCount),
+                coreStart, axisLocal, halfLengthB * Real(2), radiusB, manifold)) continue;
+
+            const Vec2 normalWorld = rightA * manifold.normal.x + upA * manifold.normal.y;
+            const Vec2 point0 = positionA + rightA * manifold.points[0].x + upA * manifold.points[0].y;
+            const Vec2 point1 = positionA + rightA * manifold.points[1].x + upA * manifold.points[1].y;
+
+            outCollisionData.emplace_back(
+                indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
+                normalWorld,
+                manifold.depth,
+                manifold.contactCount,
+                point0,
+                point1,
+                manifold.ids[0],
+                manifold.ids[1]
+            );
+        }
+    }
+
+    void NarrowPhaseCollisionDetector::collisionCapsuleCapsule(
+        const std::vector<ObjectPair>& pairs,
+        std::vector<BodyCollisionData>& outCollisionData)
+    {
+        TRACY_SCOPE_N("Capsule-capsule collision");
+
+        const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
+        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+
+        const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength;
+        const Real* ECSTASY_RESTRICT capsuleRadiusPtr = capsules.radius;
+
+        for (auto [indexA, indexB] : pairs)
+        {
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+
+            const ObjectIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+
+            const Real halfLengthA = halfLengthPtr[shapeA];
+            const Real halfLengthB = halfLengthPtr[shapeB];
+            const Real radiusA = capsuleRadiusPtr[shapeA];
+            const Real radiusB = capsuleRadiusPtr[shapeB];
+
+            const Vec2 centerDelta = positionB - positionA;
+            const Real radiusSum = radiusA + radiusB;
+
+            // Bounding circle rejection (skips the AABB corner cases from the broad phase).
+            const Real reach = halfLengthA + halfLengthB + radiusSum;
+            if (glm::dot(centerDelta, centerDelta) >= reach * reach) continue;
+
+            const Vec2 axisA = { rotationCosPtr[indexA], rotationSinPtr[indexA] };
+            const Vec2 axisB = { rotationCosPtr[indexB], rotationSinPtr[indexB] };
+
+            // Closest points of the two core segments, parametrized from their centers.
+            const Real b = glm::dot(axisA, axisB);
+            const Real centerAlongA = glm::dot(centerDelta, axisA);
+            const Real c = -centerAlongA;
+            const Real f = -glm::dot(axisB, centerDelta);
+            const Real sinSquared = Real(1) - b * b;
+            const bool parallel = sinSquared < CAPSULE_PARALLEL_SIN_SQUARED;
+
+            // Overlap of the segments along axisA (meaningful only when parallel).
+            const Real extentB = std::fabs(b) * halfLengthB;
+            const Real overlapLo = std::fmax(-halfLengthA, centerAlongA - extentB);
+            const Real overlapHi = std::fmin(halfLengthA, centerAlongA + extentB);
+            const bool hasOverlap = parallel && overlapHi - overlapLo >= ZERO_DIVISION_BOUNDARY;
+
+            Real s, t;
+            if (hasOverlap)
+            {
+                s = HALF * (overlapLo + overlapHi);
+                t = clampValue(b * s + f, -halfLengthB, halfLengthB);
+            }
+            else
+            {
+                s = parallel ? Real(0) : clampValue((b * f - c) / sinSquared, -halfLengthA, halfLengthA);
+                t = b * s + f;
+                if (t < -halfLengthB || t > halfLengthB)
+                {
+                    t = clampValue(t, -halfLengthB, halfLengthB);
+                    s = clampValue(b * t - c, -halfLengthA, halfLengthA);
+                }
+            }
+
+            const Vec2 pointA = positionA + axisA * s;
+            const Vec2 pointB = positionB + axisB * t;
+            const Vec2 delta = pointB - pointA;
+            const Real squaredDistance = glm::dot(delta, delta);
+            if (squaredDistance >= radiusSum * radiusSum) continue;
+
+            Vec2 normal;
+            Real depth;
+            if (squaredDistance >= ZERO_DIVISION_BOUNDARY_SQUARED)
+            {
+                const Real distance = std::sqrt(squaredDistance);
+                normal = delta * (Real(1) / distance);
+                depth = radiusSum - distance;
+            }
+            else [[unlikely]]
+            {
+                // Core segments intersect: separate along the cheaper of the two side axes.
+                const Vec2 sideA = { -axisA.y, axisA.x };
+                const Vec2 sideB = { -axisB.y, axisB.x };
+                const Real offsetA = glm::dot(centerDelta, sideA);
+                const Real offsetB = glm::dot(centerDelta, sideB);
+                const Real depthA = radiusSum + std::fabs(glm::dot(axisB, sideA)) * halfLengthB - std::fabs(offsetA);
+                const Real depthB = radiusSum + std::fabs(glm::dot(axisA, sideB)) * halfLengthA - std::fabs(offsetB);
+
+                if (depthA <= depthB)
+                {
+                    normal = sideA;
+                    flipSignIfNegative(normal, offsetA);
+                    depth = depthA;
+                }
+                else
+                {
+                    normal = sideB;
+                    flipSignIfNegative(normal, offsetB);
+                    depth = depthB;
+                }
+            }
+
+            Vec2 contactPoints[MAX_CONTACTS_PER_MANIFOLD] = { Vec2(), Vec2() };
+            uint32_t contactIds[MAX_CONTACTS_PER_MANIFOLD] = { 0, 0 };
+            uint32_t contactCount = 0;
+
+            if (hasOverlap)
+            {
+                // Side by side: one contact at each end of the overlap, if actually within reach.
+                const Vec2 sideB = { -axisB.y, axisB.x };
+                const Real ends[2] = { overlapLo, overlapHi };
+                Real minGap = std::numeric_limits<Real>::max();
+
+                for (uint32_t k = 0; k < MAX_CONTACTS_PER_MANIFOLD; k++)
+                {
+                    const Vec2 p = positionA + axisA * ends[k];
+                    const Real gap = std::fabs(glm::dot(p - positionB, sideB));
+                    if (gap >= radiusSum) continue;
+
+                    contactPoints[contactCount] = p + normal * radiusA;
+                    contactIds[contactCount] = k;
+                    contactCount++;
+                    minGap = std::fmin(minGap, gap);
+                }
+                if (contactCount != 0) depth = radiusSum - minGap;
+            }
+
+            if (contactCount == 0)
+            {
+                contactPoints[0] = pointA + normal * radiusA;
+                contactIds[0] = 2;
+                contactCount = 1;
+            }
+
+            outCollisionData.emplace_back(
+                indexA, indexB,
+                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
+                normal,
+                depth,
+                contactCount,
+                contactPoints[0],
+                contactPoints[1],
+                contactIds[0],
+                contactIds[1]
+            );
         }
     }
 }

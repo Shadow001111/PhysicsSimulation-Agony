@@ -282,6 +282,7 @@
     <ClInclude Include="Physics\Limits.h" />
     <ClInclude Include="Physics\SimulationImpl\PolygonBuild.h" />
     <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h" />
+    <ClInclude Include="Physics\SoA\Shapes\CapsuleSoA.h" />
     <ClInclude Include="Physics\Solving\ConstraintScheduler.h" />
     <ClInclude Include="Physics\Solving\ConstraintSolverBase.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h" />

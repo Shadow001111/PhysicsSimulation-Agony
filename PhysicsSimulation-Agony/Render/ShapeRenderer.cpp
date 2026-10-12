@@ -45,6 +45,16 @@ namespace PS_AGONY_RENDER
             boxResources.shader.create(sources);
         }
 
+        // Capsule (box vertex stage, SDF discard in fragment).
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/box.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/capsule.frag" }
+            };
+
+            capsuleResources.shader.create(sources);
+        }
+
         // Polygon.
         {
             std::vector<Shader::ShaderSource> sources = {
@@ -147,6 +157,28 @@ namespace PS_AGONY_RENDER
 
             // Initial instance VBO capacity
             ensureBoxInstanceVboCapacity(64);
+        }
+
+        // Capsule.
+        {
+            const float vertices[] =
+            {
+                0.0f, 0.0f,
+                1.0f, 0.0f,
+                1.0f, 1.0f,
+                0.0f, 1.0f
+            };
+
+            capsuleResources.vbo.create();
+            capsuleResources.vbo.allocateStorage(sizeof(vertices), 0, vertices);
+
+            capsuleResources.vao.create();
+            capsuleResources.vao.bindVertexBuffer(0, capsuleResources.vbo.getID(), 0, sizeof(float) * 2);
+
+            capsuleResources.vao.enableAttribute(0);
+            capsuleResources.vao.setFloatAttribute(0, 2, 0, 0);
+
+            ensureCapsuleInstanceVboCapacity(64);
         }
 
         // Polygon - VAO only; buffers are grown on first use.
@@ -255,6 +287,25 @@ namespace PS_AGONY_RENDER
         boxResources.vao.bind();
 
         // Draw.
+        glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, count);
+    }
+
+    void ShapeRenderer::renderCapsuleShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix)
+    {
+        TRACY_SCOPE_N("Render capsule shapes");
+
+        const size_t count = instances.size();
+        if (count == 0) return;
+
+        ensureCapsuleInstanceVboCapacity(count);
+
+        capsuleResources.instanceVbo.write(instances.data(), count * sizeof(BoxInstanceData));
+
+        capsuleResources.shader.use();
+        capsuleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        capsuleResources.vao.bind();
+
         glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, count);
     }
 
@@ -399,12 +450,13 @@ namespace PS_AGONY_RENDER
         vao.setAttributeDivisor(4, 1);
     }
 
-    void ShapeRenderer::ensureBoxInstanceVboCapacity(size_t count)
+    template<class Resources>
+    void ShapeRenderer::ensureBoxLikeInstanceVboCapacity(Resources& resources, size_t count)
     {
         constexpr size_t SIZEOF_INSTANCE = sizeof(BoxInstanceData);
 
-        auto& vao = boxResources.vao;
-        auto& instanceVbo = boxResources.instanceVbo;
+        auto& vao = resources.vao;
+        auto& instanceVbo = resources.instanceVbo;
 
         const size_t neededCapacity = count * SIZEOF_INSTANCE;
         const size_t currentCapacity = instanceVbo.getCapacity();
@@ -441,6 +493,16 @@ namespace PS_AGONY_RENDER
         vao.enableAttribute(6);
         vao.setIntAttribute(6, 1, sizeof(float) * 8, 1);
         vao.setAttributeDivisor(6, 1);
+    }
+
+    void ShapeRenderer::ensureBoxInstanceVboCapacity(size_t count)
+    {
+        ensureBoxLikeInstanceVboCapacity(boxResources, count);
+    }
+
+    void ShapeRenderer::ensureCapsuleInstanceVboCapacity(size_t count)
+    {
+        ensureBoxLikeInstanceVboCapacity(capsuleResources, count);
     }
 
     void ShapeRenderer::ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount)

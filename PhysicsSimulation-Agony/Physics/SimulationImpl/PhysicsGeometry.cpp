@@ -1,10 +1,11 @@
 #include "PhysicsGeometry.h"
 #include "PolygonBuild.h"
 
-#include <cstddef>
 #include "Physics/Limits.h"
+#include "Physics/Constants.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 #include <limits>
 
@@ -104,6 +105,34 @@ namespace PS_AGONY::PhysicsGeometry
         }
 
         return { inertia, finalCOM };
+    }
+
+    Real calculateCapsuleInertia(Real mass, Real length, Real radius, Vec2 centerOfMass)
+    {
+        // Split the mass between the rectangle and the two semicircular caps by area.
+        const Real rectArea = length * Real(2) * radius;
+        const Real circleArea = Constants::PI * radius * radius; // two semicircles = one full circle.
+        const Real totalArea = rectArea + circleArea;
+
+        const Real rectMass = mass * rectArea / totalArea;
+        const Real capMass = mass * circleArea / totalArea; // both caps combined
+
+        // Rectangle (length * 2r) about its own center.
+        const Real diameter = Real(2) * radius;
+        const Real rectInertia = rectMass * (length * length + diameter * diameter) / Real(12);
+
+        // Each semicircle has inertia 0.5 * m_s * r^2 about its circle center (on the flat edge).
+        // Shift to the semicircle's centroid (distance d from the flat edge), then to the
+        // capsule center (centroid is at length/2 + d from it). This simplifies to:
+        //   I = 0.5 * m_s * r^2 + m_s * (length^2 / 4 + length * d)
+        const Real d = Real(4) * radius / (Real(3) * Constants::PI);
+        const Real capInertia = capMass * (Real(0.5) * radius * radius
+            + Real(0.25) * length * length
+            + length * d);
+
+        // Inertia about the capsule's geometric center, then parallel axis to the given point.
+        const Real deltaSquared = glm::dot(centerOfMass, centerOfMass);
+        return rectInertia + capInertia + mass * deltaSquared;
     }
 
     std::optional<std::vector<Vec2>> preparePolygonOutline(std::span<const Vec2> vertices)

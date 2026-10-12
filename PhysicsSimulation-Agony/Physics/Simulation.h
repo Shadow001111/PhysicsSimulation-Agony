@@ -34,10 +34,12 @@ namespace PS_AGONY
 
 			// Memory.
 			size_t bodyDataMemoryUsage = 0;
+
 			size_t colliderDataMemoryUsage = 0;
 			size_t circleDataMemoryUsage = 0;
 			size_t boxDataMemoryUsage = 0;
 			size_t polygonDataMemoryUsage = 0;
+			size_t capsuleDataMemoryUsage = 0;
 
 			size_t materialDataMemoryUsage = 0;
 
@@ -144,6 +146,11 @@ namespace PS_AGONY
 			return objectManager.createPolygonCollider(params);
 		}
 
+		__forceinline std::optional<ColliderIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params)
+		{
+			return objectManager.createCapsuleCollider(params);
+		}
+
 		__forceinline std::optional<ObjectIndex> createCircle(const CircleCreateParams& params)
 		{
 			return objectManager.createCircle(params);
@@ -157,6 +164,11 @@ namespace PS_AGONY
 		__forceinline std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params)
 		{
 			return objectManager.createPolygon(params);
+		}
+
+		__forceinline std::optional<ObjectIndex> createCapsule(const CapsuleCreateParams& params)
+		{
+			return objectManager.createCapsule(params);
 		}
 
 		void destroyBody(ObjectIndex bodyIndex)
@@ -215,6 +227,7 @@ namespace PS_AGONY
 		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(objectManager.circles); }
 		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(objectManager.boxes); }
 		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(objectManager.polygons); }
+		CapsuleSoAViewer getCapsules() const noexcept { return CapsuleSoAViewer(objectManager.capsules); }
 
 		SpringSoAViewer getSprings() const noexcept { return springConstraintSystem.getViewer(); }
 		JointSoAViewer getJoints() const noexcept { return jointConstraintSystem.getViewer(); }
@@ -240,6 +253,7 @@ namespace PS_AGONY
 		void buildCircleAABBs();
 		void buildBoxAABBs();
 		void buildPolygonAABBs();
+		void buildCapsuleAABBs();
 
 		void computeBodyWorldCenters();
 

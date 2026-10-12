@@ -202,7 +202,8 @@ static void renderGUI(
         const size_t shapeTotal =
             simulationData.circleDataMemoryUsage +
             simulationData.boxDataMemoryUsage +
-            simulationData.polygonDataMemoryUsage;
+            simulationData.polygonDataMemoryUsage +
+            simulationData.capsuleDataMemoryUsage;
 
         const size_t colliderTotal = simulationData.colliderDataMemoryUsage;
 
@@ -267,6 +268,7 @@ static void renderGUI(
             addMemoryRow("Circles", simulationData.circleDataMemoryUsage, true);
             addMemoryRow("Boxes", simulationData.boxDataMemoryUsage, true);
             addMemoryRow("Polygons", simulationData.polygonDataMemoryUsage, true);
+            addMemoryRow("Capsules", simulationData.capsuleDataMemoryUsage, true);
 
             {
                 addMemoryRow("Constraints", constraintsTotal);
@@ -611,7 +613,7 @@ static int gameFunc()
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 6);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;

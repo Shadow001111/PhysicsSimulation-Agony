@@ -14,6 +14,7 @@ namespace PS_AGONY_RENDER
 
         renderCircleColliders(foundColliderShapes[(size_t)BodyType::Circle], viewProjectionMatrix, transformContext);
         renderBoxColliders(foundColliderShapes[(size_t)BodyType::Box], viewProjectionMatrix, transformContext);
+        renderCapsuleColliders(foundColliderShapes[(size_t)BodyType::Capsule], viewProjectionMatrix, transformContext);
         renderPolygonColliders(foundColliderShapes[(size_t)BodyType::Polygon], viewProjectionMatrix, transformContext);
     }
 
@@ -255,6 +256,63 @@ namespace PS_AGONY_RENDER
 
         // Render.
         shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
+    }
+
+    void SimulationRenderer::renderCapsuleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    {
+        const size_t count = givenColliders.size();
+        if (count == 0) return;
+
+        TRACY_SCOPE_N("Render capsule colliders");
+
+        // Reserve space.
+        boxInstanceData.resize(count);
+
+        // Prepare instance data.
+        const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
+
+        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
+        const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
+
+        const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength;
+        const Real* ECSTASY_RESTRICT radiusPtr = capsules.radius;
+
+        ShapeRenderer::BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxInstanceData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const ColliderIndex colliderIndex = givenColliders[i];
+
+            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+
+            const BodyTransformSample body = transformContext.sample(bodyIndex);
+
+            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+
+            const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
+            const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
+
+            renderDataPtr[i].positionX = body.x + worldOffX;
+            renderDataPtr[i].positionY = body.y + worldOffY;
+            renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
+            renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
+            renderDataPtr[i].rotation = body.rotation + localRot;
+            const float r = static_cast<float>(radiusPtr[shapeIndex]);
+            renderDataPtr[i].halfWidth = static_cast<float>(halfLengthPtr[shapeIndex]) + r;
+            renderDataPtr[i].halfHeight = r;
+            renderDataPtr[i].color = 0xFFFFFF;
+            renderDataPtr[i].id = colliderIndex + 1;
+        }
+
+        // Render.
+        shapeRenderer.renderCapsuleShapes(boxInstanceData, viewProjectionMatrix);
     }
 
     void SimulationRenderer::renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)

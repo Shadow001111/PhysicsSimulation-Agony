@@ -29,6 +29,12 @@ namespace PS_AGONY::PhysicsGeometry
 		std::optional<Vec2> centerOfMass = std::nullopt
 	);
 
+	Real calculateCapsuleInertia(
+		Real mass,
+		Real length, Real radius,
+		Vec2 centerOfMass
+	);
+
 	// Creation-time sanitizer: dedupes neighbors, strips collinear vertices, auto-reverses CW to CCW.
 	// Returns nullopt if the result is degenerate (<3 vertices, ~zero area) or not simple (self-intersecting).
 	std::optional<std::vector<Vec2>> preparePolygonOutline(std::span<const Vec2> vertices);

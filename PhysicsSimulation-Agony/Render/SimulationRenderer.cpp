@@ -35,6 +35,7 @@ namespace PS_AGONY_RENDER
         colliders = simulation.getColliders();
         circles = simulation.getCircles();
         boxes = simulation.getBoxes();
+        capsules = simulation.getCapsules();
         polygons = simulation.getPolygons();
 
         // Camera.
@@ -292,6 +293,9 @@ namespace PS_AGONY_RENDER
 
         total += shapeRenderer.boxResources.vbo.getCapacity();
         total += shapeRenderer.boxResources.instanceVbo.getCapacity();
+
+        total += shapeRenderer.capsuleResources.vbo.getCapacity();
+        total += shapeRenderer.capsuleResources.instanceVbo.getCapacity();
 
         total += shapeRenderer.polygonResources.vertexVbo.getCapacity();
         total += shapeRenderer.polygonResources.instanceVbo.getCapacity();

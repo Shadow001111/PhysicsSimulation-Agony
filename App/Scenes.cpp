@@ -566,6 +566,28 @@ void load_LargeWorld(
             .localVertices = { localVertices.data(), verticesCount },
             });
     }
+
+    // Spawn Capsules
+    for (int i = 0; i < bodyCountPerType; ++i) {
+        float x = rvg.real<float>(-spawnBufferX, spawnBufferX);
+        float y = rvg.real<float>(spawnMinY, spawnMaxY);
+        float vx = rvg.real<float>(-1.5f, 1.5f);
+        float vy = rvg.real<float>(-1.0f, 0.0f);
+        float rotation = rvg.real<float>(0.0f, 6.28f);
+        float length = rvg.real<float>(0.3f, 0.8f);
+        float radius = rvg.real<float>(0.3f, 0.8f);
+        float mass = (length * 2.0f + float(PS_AGONY::Constants::PI) * radius) * radius;
+
+        simulation.createCapsule({
+            .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
+            .base.velocity = { vx, vy },
+            .base.rotation = rotation,
+            .base.mass = mass,
+            .base.materialIndex = materialIdx,
+            .length = length,
+            .radius = radius
+            });
+    }
 }
 
 void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
@@ -1070,7 +1092,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
 
     // Build the destructible target wall on the flat ground.
     constexpr int wallRows = 12;
-    constexpr int wallCols = 3;
+    constexpr int wallCols = 4;
     constexpr float boxSize = 2.0f;
     const float targetStartX = 50.0f;
     const float targetStartY = flatGroundY + (boxSize * 0.5f);
@@ -1118,6 +1140,18 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
                     .base.materialIndex = envMatIdx,
                     .localVertices = {boxPolyVertices, 4},
                     });
+            }
+            else if (c == 3 && (r & 1) == 0)
+            {
+                simulation.createCapsule({
+                    .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) + (boxSize * 0.5f) },
+                    .base.velocity = { 0.0f, 0.0f },
+                    .base.rotation = 90.0f,
+                    .base.mass = 2.5f,
+                    .base.materialIndex = envMatIdx,
+                    .radius = boxSize * 0.5f,
+                    .length = boxSize
+                });
             }
         }
     }
@@ -2060,7 +2094,7 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     }
     else if (scene == 2)
     {
-        load_LargeWorld(simulation, rvg, {}, 2000);
+        load_LargeWorld(simulation, rvg, {}, 1500);
 
         //load_LargeWorld(simulation, rvg, { -70.0f, -50.0f }, 2500 / 4);
         //load_LargeWorld(simulation, rvg, {  70.0f, -50.0f }, 2500 / 4);

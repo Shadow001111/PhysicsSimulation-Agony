@@ -94,6 +94,16 @@ namespace PS_AGONY_RENDER
 			Shader shader;
 		};
 
+		// Capsule reuses BoxInstanceData (halfWidth = halfLength + radius, halfHeight = radius)
+		// and box.vert; capsule.frag carves the rounded ends via discard.
+		struct CapsuleRenderResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vbo;
+			ImmutableBuffer instanceVbo;
+			Shader shader;
+		};
+
 		struct PolygonRenderResources
 		{
 			VertexArray vao;
@@ -129,6 +139,7 @@ namespace PS_AGONY_RENDER
 		CircleRenderResources circleResources;
 		SimplePointCircleRenderResources simplePointCircleResources;
 		BoxRenderResources boxResources;
+		CapsuleRenderResources capsuleResources;
 		PolygonRenderResources polygonResources;
 		LineRenderResources lineResources;
 		AABBResources aabbResources;
@@ -141,6 +152,7 @@ namespace PS_AGONY_RENDER
 		void renderCircleShapes(std::span<const CircleInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderSimplePointCircles(std::span<const SimplePointInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderBoxShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix);
+		void renderCapsuleShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderPolygonShapes(
 			std::span<const glm::vec2> vertices,
 			std::span<const PolygonInstanceData> instances,
@@ -155,8 +167,12 @@ namespace PS_AGONY_RENDER
 		void ensureCircleInstanceVboCapacity(size_t count);
 		void ensureSimplePointInstanceVboCapacity(size_t count);
 		void ensureBoxInstanceVboCapacity(size_t count);
+		void ensureCapsuleInstanceVboCapacity(size_t count);
 		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);
 		void ensureAABBInstanceVboCapacity(size_t count);
 		void ensureLineBufferCapacity(size_t vertexCount);
+	private:
+		template<class Resources>
+		static void ensureBoxLikeInstanceVboCapacity(Resources& resources, size_t count);
 	};
 }

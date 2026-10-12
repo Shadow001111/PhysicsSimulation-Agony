@@ -5,6 +5,7 @@
 #include "SoA/Shapes/CircleSoA.h"
 #include "SoA/Shapes/BoxSoA.h"
 #include "SoA/Shapes/PolygonSoA.h"
+#include "SoA/Shapes/CapsuleSoA.h"
 
 #include "SoA/Constraints/SpringSoA.h"
 #include "SoA/Constraints/RevoluteJointSoA.h"

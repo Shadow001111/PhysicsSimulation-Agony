@@ -55,6 +55,19 @@ namespace PS_AGONY
 		PhysicsGeometry::ConvexDecompositionMethod convexDecompositionMethod = PhysicsGeometry::ConvexDecompositionMethod::Fan;
 	};
 
+	// If 'localStart' and 'localEnd' are set, they dominate.
+	struct CapsuleColliderCreateParams
+	{
+		ObjectIndex bodyIndex;
+		Vec2 localOffset{ 0 };
+		Real localRotation{ 0 };
+		MaterialIndex materialIndex{ 0 };
+		Real length{ 0 };
+		Real radius{ 0 };
+		std::optional<Vec2> localStart{};
+		std::optional<Vec2> localEnd{};
+	};
+
 	// Result of createPolygonCollider(). A concave input outline may be split into several
 	// convex colliders on the same body; they are appended back-to-back in colliders/polygons
 	// SoA storage during that single call, so every valid collider index is contiguous:
@@ -85,6 +98,16 @@ namespace PS_AGONY
 		PhysicsGeometry::ConvexDecompositionMethod convexDecompositionMethod = PhysicsGeometry::ConvexDecompositionMethod::Fan;
 	};
 
+	// If 'start' and 'end' are set, they dominate.
+	struct CapsuleCreateParams
+	{
+		BodyCreateParams base;
+		Real length{ 0 };
+		Real radius{ 0 };
+		std::optional<Vec2> start{};
+		std::optional<Vec2> end{};
+	};
+
 	class ObjectManager
 	{
 	public:
@@ -93,6 +116,7 @@ namespace PS_AGONY
 		CircleSoA circles;
 		BoxSoA boxes;
 		PolygonSoA polygons;
+		CapsuleSoA capsules;
 
 		std::vector<ObjectDeletion> deletedBodies;
 		std::vector<ObjectDeletion> deletedColliders;
@@ -118,24 +142,23 @@ namespace PS_AGONY
 		std::optional<ObjectIndex> createBody(const BodyCreateParams& params);
 
 		// Attaches a new collider of the given shape to an EXISTING body immediately.
-		// Returns std::nullopt if bodyIndex is invalid. Colliders are never standalone.
+		// Returns std::nullopt if bodyIndex is invalid.
 		std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params);
 		std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params);
-
-		// If localVertices describe a concave outline, it is split into multiple convex
-		// colliders attached to the same body (see PolygonColliderCreateResult).
 		std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params);
+		std::optional<ColliderIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params);
 
 		std::optional<ObjectIndex> createCircle(const CircleCreateParams& params);
 		std::optional<ObjectIndex> createBox(const BoxCreateParams& params);
 		std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params);
+		std::optional<ObjectIndex> createCapsule(const CapsuleCreateParams& params);
 
 		// Destroys a body and cascade-deletes every collider/spring attached to it.
 		void destroyBody(ObjectIndex bodyIndex, ConstraintSystemArray& constraintSystems);
 
 		// Destroys a single collider without touching its owning body.
 		void destroyCollider(ColliderIndex colliderIndex, ConstraintSystemArray& constraintSystems);
-
+	private:
 		//
 		ColliderIndex createColliderInternal(
 			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,

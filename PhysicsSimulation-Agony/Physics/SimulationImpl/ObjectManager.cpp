@@ -130,6 +130,38 @@ namespace PS_AGONY
         return PolygonColliderCreateResult{ firstCollider, convexPieces.size() };
     }
 
+    std::optional<ColliderIndex> ObjectManager::createCapsuleCollider(const CapsuleColliderCreateParams& params)
+    {
+        if (params.bodyIndex >= bodies.getCount())
+        {
+            std::cerr << "[AGONY][Simulation::createCapsuleCollider]: Failed: bodyIndex is invalid.\n";
+            return std::nullopt;
+        }
+
+        Real length = std::fmax(Real(0), params.length);
+        Vec2 localOffset = params.localOffset;
+        Real localRotation = params.localRotation;
+        if (params.localStart && params.localEnd)
+        {
+            // Endpoints dominate length/localOffset/localRotation. Axis is local +X at rotation 0.
+            const Vec2 d = *params.localEnd - *params.localStart;
+            length = std::sqrt(d.x * d.x + d.y * d.y);
+            localOffset = (*params.localStart + *params.localEnd) * Real(0.5);
+            localRotation = std::atan2(d.y, d.x); // 0 when degenerate.
+        }
+
+        const Real radius = std::fmax(Real(0), params.radius);
+        const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
+        const ObjectIndex newShapeIndex = static_cast<ObjectIndex>(capsules.getCount());
+
+        const ColliderIndex newCollider = createColliderInternal(
+            params.bodyIndex, localOffset, localRotation, materialIndex, BodyType::Capsule, newShapeIndex
+        );
+        capsules.append(newCollider, length * Real(0.5), radius);
+
+        return newCollider;
+    }
+
     std::optional<ObjectIndex> ObjectManager::createCircle(const CircleCreateParams& params)
     {
         const Real mass = std::fmax(Real(0), params.base.mass);
@@ -249,6 +281,46 @@ namespace PS_AGONY
                 newBodyIndex, Vec2(0), Real(0), materialIndex, std::move(piece)
             );
         }
+
+        return newBodyIndex;
+    }
+
+    std::optional<ObjectIndex> ObjectManager::createCapsule(const CapsuleCreateParams& params)
+    {
+        Vec2 position = params.base.position;
+        Real rotation = params.base.rotation;
+        Real length = std::fmax(Real(0), params.length);
+        if (params.start && params.end)
+        {
+            // World-space endpoints dominate length/position/rotation. Axis is local +X at rotation 0.
+            const Vec2 d = *params.end - *params.start;
+            length = std::sqrt(d.x * d.x + d.y * d.y);
+            position = (*params.start + *params.end) * Real(0.5);
+            rotation = std::atan2(d.y, d.x); // 0 when degenerate.
+        }
+
+        const Real mass = std::fmax(Real(0), params.base.mass);
+        const Real radius = std::fmax(Real(0), params.radius);
+        const Vec2 centerOfMass = params.base.centerOfMass.value_or(Vec2(0));
+
+        const Real inertia = PhysicsGeometry::calculateCapsuleInertia(mass, length, radius, centerOfMass);
+        const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
+        const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
+
+        const ObjectIndex newBodyIndex = static_cast<ObjectIndex>(bodies.getCount());
+        bodies.append(
+            position, params.base.velocity, rotation, params.base.angularVelocity,
+            mass, invMass, inertia, invInertia, centerOfMass
+        );
+
+        createCapsuleCollider({
+            .bodyIndex = newBodyIndex,
+            .localOffset = Vec2(0),
+            .localRotation = Real(0),
+            .materialIndex = params.base.materialIndex,
+            .length = length,
+            .radius = radius,
+            });
 
         return newBodyIndex;
     }
