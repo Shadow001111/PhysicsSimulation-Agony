@@ -1045,7 +1045,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
         .localVertices = {rightVertices.data(), rightVertices.size()},
-        .concaveDecompositionMethod= PS_AGONY::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
+        .concaveDecompositionMethod = PS_AGONY::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
         });
 
     // Create the central flat ground runout area centered at zero.
@@ -1970,6 +1970,81 @@ void load_ConstraintStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::
     }
 }
 
+static void load_ConvexDecompositionTest(PS_AGONY::Simulation& simulation)
+{
+    using namespace PS_AGONY;
+
+    const MaterialIndex mat = simulation.createMaterial({
+        .elasticity = 0.0,
+        .staticFriction = 2.0,
+        .dynamicFriction = 2.0
+        });
+
+    // Large convex polygon: 64 vertices (> 16 limit), CCW.
+    constexpr size_t vertexCount = 64;
+    constexpr float radius = 8.0f;
+    constexpr float twoPi = 6.28318530717958647692f;
+    std::vector<Vec2> ngon;
+    ngon.reserve(vertexCount);
+    for (size_t i = 0; i < vertexCount; ++i)
+    {
+        const float a = twoPi * static_cast<float>(i) / static_cast<float>(vertexCount);
+        ngon.push_back({ radius * std::cos(a), radius * std::sin(a) });
+    }
+
+    // Box-like polygon for the dynamic probe.
+    std::vector<Vec2> boxLike = { { -0.75f, -0.75f }, { 0.75f, -0.75f }, { 0.75f, 0.75f }, { -0.75f, 0.75f } };
+
+    auto build = [&](float cx, PhysicsGeometry::ConvexDecompositionMethod method)
+        {
+            simulation.createPolygon({
+                .base.position = { cx, 0.0f },
+                .base.mass = 0,
+                .base.materialIndex = mat,
+                .localVertices = { ngon.data(), ngon.size() },
+                .convexDecompositionMethod = method
+                });
+
+            constexpr float spawnY = 11.0f;
+            simulation.createCircle({
+                .base.position = { cx - 4.0f, spawnY },
+                .base.mass = 1,
+                .base.materialIndex = mat,
+                .radius = 0.75f
+                });
+            simulation.createBox({
+                .base.position = { cx, spawnY },
+                .base.mass = 1,
+                .base.materialIndex = mat,
+                .size = { 1.5f, 1.5f }
+                });
+            simulation.createPolygon({
+                .base.position = { cx + 4.0f, spawnY },
+                .base.mass = 1,
+                .base.materialIndex = mat,
+                .localVertices = { boxLike.data(), boxLike.size() }
+                });
+        };
+
+    build(-10.0f, PhysicsGeometry::ConvexDecompositionMethod::Fan);
+    build(10.0f, PhysicsGeometry::ConvexDecompositionMethod::Bisect);
+
+    // Closed level: interior x in [-20, 20], y in [-14, 14].
+    auto wall = [&](float x, float y, float w, float h)
+        {
+            simulation.createBox({
+                .base.position = { x, y },
+                .base.mass = 0,
+                .base.materialIndex = mat,
+                .size = { w, h }
+                });
+        };
+    wall(0.0f, -15.0f, 44.0f, 2.0f);  // floor
+    wall(0.0f, 15.0f, 44.0f, 2.0f);  // ceiling
+    wall(-21.0f, 0.0f, 2.0f, 32.0f);  // left
+    wall(21.0f, 0.0f, 2.0f, 32.0f);  // right
+}
+
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
 {
     Ecstasy::Core::Random::Generator rvg{}; // Random value generator.
@@ -2027,5 +2102,9 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
     else if (scene == 11)
     {
         load_ConstraintStressTest(simulation, rvg);
+    }
+    else if (scene == 12)
+    {
+        load_ConvexDecompositionTest(simulation);
     }
 }
