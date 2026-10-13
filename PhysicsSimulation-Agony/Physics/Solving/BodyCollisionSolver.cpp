@@ -129,26 +129,9 @@ namespace PS_AGONY
 
 		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
-		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
-		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		const Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
 		const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-
-		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
-			{
-				return {
-					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
-					positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
-				};
-			};
-
-		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
-			{
-				return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
-			};
 
 		Real totalApproachSpeed = Real(0);
 		Real totalPenetration = Real(0);
@@ -159,20 +142,19 @@ namespace PS_AGONY
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
-			// Compute centers of mass.
-			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
-			const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+			// Compute world anchors.
+			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
+			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
-			// Position error.
 			const PositionConstraintData& positionConstraintData = positionConstraintContainer[c];
-			const Vec2 worldAnchorA = centerOfMassA + rotate(positionConstraintData.localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-			const Vec2 worldAnchorB = centerOfMassB + rotate(positionConstraintData.localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+			const Vec2 worldAnchorA = positionA + positionConstraintData.transformedAnchorA;
+			const Vec2 worldAnchorB = positionB + positionConstraintData.transformedAnchorB;
 
 			// Compute drift.
 			const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
 			const Real currentPenetration = data.penetration - drift;
 
-			totalPenetration += currentPenetration * (currentPenetration > Real(0));
+			totalPenetration += std::fmax(currentPenetration, Real(0));
 
 			// Velocity error: sum of remaining closing speed along the normal at each active contact point.
 			const VelocityConstraintData& velocityConstraintData = velocityConstraintContainer[c];
@@ -253,25 +235,10 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
 		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
-		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
-		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 		const MaterialIndex* ECSTASY_RESTRICT colliderMaterialIndexPtr = colliders.materialIndex;
 		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
-
-		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
-			{
-				return {
-					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
-					positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
-				};
-			};
-
-		auto invRotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
-			{
-				return { v.x * cos + v.y * sin, -v.x * sin + v.y * cos };
-			};
 
 		// Resize containers.
 		const size_t collisionCount = collisionDataContainer.size();
@@ -285,13 +252,20 @@ namespace PS_AGONY
 		for (size_t c = 0; c < collisionCount; c++)
 		{
 			const auto& data = collisionDataPtr[c];
-			const Vec2 centerOfMassA = getCenterOfMass(data.bodyA);
-			const Vec2 centerOfMassB = getCenterOfMass(data.bodyB);
+
+			const Vec2 positionA = { positionXPtr[data.bodyA], positionYPtr[data.bodyA] };
+			const Vec2 positionB = { positionXPtr[data.bodyB], positionYPtr[data.bodyB] };
+
+			const Vec2 localCOMA = { localCenterOfMassXPtr[data.bodyA], localCenterOfMassYPtr[data.bodyA] };
+			const Vec2 localCOMB = { localCenterOfMassXPtr[data.bodyB], localCenterOfMassYPtr[data.bodyB] };
+
+			const Vec2 centerOfMassA = positionA + localCOMA;
+			const Vec2 centerOfMassB = positionB + localCOMB;
 			{
 				const Vec2 contactPoint = data.contactPoints[0]; // Only the first point is used.
 
-				positionConstraintContainer[c].localAnchorA = invRotate(contactPoint - centerOfMassA, rotationCosPtr[data.bodyA], rotationSinPtr[data.bodyA]);
-				positionConstraintContainer[c].localAnchorB = invRotate(contactPoint - centerOfMassB, rotationCosPtr[data.bodyB], rotationSinPtr[data.bodyB]);
+				positionConstraintContainer[c].transformedAnchorA = contactPoint - positionA;
+				positionConstraintContainer[c].transformedAnchorB = contactPoint - positionB;
 			}
 			{
 				auto& velocityConstraint = velocityConstraintContainer[c];
@@ -315,10 +289,7 @@ namespace PS_AGONY
 				const Vec2 normal = data.normal;
 				const Vec2 tangent{ -normal.y, normal.x };
 
-				velocityConstraint.points[0].rAPerp = Vec2();
-				velocityConstraint.points[0].rBPerp = Vec2();
-				velocityConstraint.points[1].rAPerp = Vec2();
-				velocityConstraint.points[1].rBPerp = Vec2();
+				// No need to zero-initialize point data. Active points will have their data overwritten.
 
 				for (uint32_t i = 0; i < data.contactCount; i++)
 				{
@@ -657,30 +628,11 @@ namespace PS_AGONY
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
-		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
-		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
-
-		auto getCenterOfMass = [&](ObjectIndex bodyIndex) -> Vec2
-			{
-				return {
-					positionXPtr[bodyIndex] + localCenterOfMassXPtr[bodyIndex],
-					positionYPtr[bodyIndex] + localCenterOfMassYPtr[bodyIndex]
-				};
-			};
-
-		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
-			{
-				return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
-			};
 
 		const size_t collisionCount = collisionDataSpan.size();
 
 		// Note: I tried to use Simd, it was slower, probably because of the gather-scatter, or just memory intensive.
-		//       plus it was invalid because same body index could appear multiple times in simd batch (on same worker).
-		//       remaking solving planner to account for that would be hell!
 
 		for (size_t c = 0; c < collisionCount; c++)
 		{
@@ -693,12 +645,12 @@ namespace PS_AGONY
 			const Real effectiveMass = invMassA + invMassB;
 
 			// Re-derive the world anchors from the current (possibly already corrected) transforms.
-			const Vec2 centerOfMassA = getCenterOfMass(bodyIndexA);
-			const Vec2 centerOfMassB = getCenterOfMass(bodyIndexB);
+			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
+			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
 			const PositionConstraintData& positionConstraintData = constraintDataSpan[c];
-			const Vec2 worldAnchorA = centerOfMassA + rotate(positionConstraintData.localAnchorA, rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
-			const Vec2 worldAnchorB = centerOfMassB + rotate(positionConstraintData.localAnchorB, rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);
+			const Vec2 worldAnchorA = positionA + positionConstraintData.transformedAnchorA;
+			const Vec2 worldAnchorB = positionB + positionConstraintData.transformedAnchorB;
 
 			// The anchors coincided (drift = 0) when depth was measured, so drift is exactly
 			// how much penetration has already been resolved since then.

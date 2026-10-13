@@ -36,8 +36,8 @@ namespace PS_AGONY
 
 		struct PositionConstraintData
 		{
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
+			Vec2 transformedAnchorA;
+			Vec2 transformedAnchorB;
 		};
 
 		struct SimulationSettings
