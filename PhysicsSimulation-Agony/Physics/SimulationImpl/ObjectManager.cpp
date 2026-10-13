@@ -382,6 +382,7 @@ namespace PS_AGONY
             bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
         );
         bodies.addCollider(bodyIndex, newCollider);
+        spatialDirty = true;
 
         std::vector<ObjectIndex>& list = bodies.isStatic[bodyIndex] ? staticColliderIDs : dynamicColliderIDs;
         colliderSlot.resize(colliders.getCount());
@@ -410,6 +411,8 @@ namespace PS_AGONY
 
     void ObjectManager::destroyColliderInternal(ObjectIndex bodyIndex, ColliderIndex colliderIdx)
     {
+        spatialDirty = true;
+
         const BodyType shapeType = colliders.shapeType[colliderIdx];
         const ObjectIndex shapeIdx = colliders.shapeIndex[colliderIdx];
 
@@ -453,6 +456,20 @@ namespace PS_AGONY
             polygons.colliderIndices.pop_back();
             polygons.geometry.pop_back();
         }
+        else if (shapeType == BodyType::Capsule)
+        {
+            const size_t last = capsules.getCount() - 1;
+            if (shapeIdx != last)
+            {
+                std::swap(capsules.colliderIndices[shapeIdx], capsules.colliderIndices[last]);
+                std::swap(capsules.halfLength[shapeIdx], capsules.halfLength[last]);
+                std::swap(capsules.radius[shapeIdx], capsules.radius[last]);
+                colliders.shapeIndex[capsules.colliderIndices[shapeIdx]] = static_cast<ObjectIndex>(shapeIdx);
+            }
+            capsules.colliderIndices.pop_back();
+            capsules.halfLength.pop_back();
+            capsules.radius.pop_back();
+        }
 
         // Remove from the persistent ID list (swap-remove, O(1)).
         {
@@ -488,6 +505,8 @@ namespace PS_AGONY
                 boxes.colliderIndices[movedShapeIdx] = colliderIdx;
             else if (movedShapeType == BodyType::Polygon)
                 polygons.colliderIndices[movedShapeIdx] = colliderIdx;
+            else if (movedShapeType == BodyType::Capsule)
+                capsules.colliderIndices[movedShapeIdx] = colliderIdx;
 
             deletedColliders.emplace_back(
                 static_cast<ObjectIndex>(colliderIdx), static_cast<ObjectIndex>(oldBackCollider)

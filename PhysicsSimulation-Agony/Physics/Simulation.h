@@ -114,6 +114,9 @@ namespace PS_AGONY
 		// Interactivity.
 		Interactivity::BodyHolder mainBodyHolder;
 
+		// Pause.
+		bool paused = false;
+
 		// Render.
 		Real renderAlpha = 0;
 	public:
@@ -125,6 +128,9 @@ namespace PS_AGONY
 		Simulation& operator=(Simulation&&) = delete;
 
 		void update(Real deltaTime);
+
+		void setPause(bool pause) noexcept { paused = pause; }
+		bool isPaused() const noexcept { return paused; }
 
 		__forceinline std::optional<ObjectIndex> createBody(const BodyCreateParams& params)
 		{
@@ -248,6 +254,10 @@ namespace PS_AGONY
 		void preUpdate();
 
 		void postUpdate();
+
+		// Rebuilds BVH trees for collider changes made outside physics steps (paused, or no step this frame).
+		void refreshSpatialData();
+		void rebuildSpatialData();
 
 		void buildColliderAABBs();
 		void buildCircleAABBs();

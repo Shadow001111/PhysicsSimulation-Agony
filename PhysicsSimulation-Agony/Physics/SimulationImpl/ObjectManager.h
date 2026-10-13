@@ -123,6 +123,9 @@ namespace PS_AGONY
 
 		const std::vector<Material>& materials;
 
+		// Set when a collider is created/destroyed. Cleared by Simulation once the BVH trees are rebuilt.
+		bool spatialDirty = false;
+
 	private:
 		// Persistent collider ID lists (maintained in O(1) on create/destroy; never rebuilt per frame).
 		// A collider lives in exactly one list, chosen by its body's isStatic flag (fixed at creation).

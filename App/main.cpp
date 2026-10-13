@@ -79,8 +79,7 @@ static void renderGUI(
     PS_AGONY::Simulation& simulation,
     PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
     PS_AGONY_RENDER::RenderOptions& renderOptions,
-    const DebugData& debugData,
-    bool& pauseSimulation
+    const DebugData& debugData
 )
 {
     ImGui::Begin("Simulation Diagnostics");
@@ -105,7 +104,9 @@ static void renderGUI(
             upsPercent * 100.0f);
 
         ImGui::Separator();
-        ImGui::Checkbox("Pause Simulation (P)", &pauseSimulation);
+        bool paused = simulation.isPaused();
+        if (ImGui::Checkbox("Pause Simulation (P)", &paused))
+            simulation.setPause(paused);
     }
 
     // Simulation settings.
@@ -609,7 +610,6 @@ static int gameFunc()
     PS_AGONY::Simulation simulation{};
     //simulation.getSimulationSettings().clockSettings.updateInterval = 1.0 / 40.0;
 
-    bool pauseSimulation = false;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 
@@ -674,7 +674,8 @@ static int gameFunc()
             if (windowInputManager.isKeyPressed(GLFW_KEY_E))
                 camera.setViewRangeH(camera.viewRange / (1.0 + zoomSpeed), wnd.getAspectRatio());
 
-            pauseSimulation ^= windowInputManager.isKeyJustPressed(GLFW_KEY_P);
+            if (windowInputManager.isKeyJustPressed(GLFW_KEY_P))
+                simulation.setPause(!simulation.isPaused());
         }
         const bool isHoldingBody = mainBodyHolder.heldBody.has_value();
         if (!io.WantCaptureMouse || isHoldingBody)
@@ -718,11 +719,9 @@ static int gameFunc()
         }
 
         // Simulation.
-        if (!pauseSimulation)
-        {
-            simulation.update(deltaTime);
+        simulation.update(deltaTime);
+        if (!simulation.isPaused())
             debugData.simulationDebugData = simulation.getDebugData();
-        }
 
         // Smooth debug data.
         {
@@ -768,7 +767,7 @@ static int gameFunc()
             }
 
             // Build GUI window commands.
-            renderGUI(simulation, simulationRenderer, renderOptions, debugData, pauseSimulation);
+            renderGUI(simulation, simulationRenderer, renderOptions, debugData);
             ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
 
             // Render simulation to FBO.

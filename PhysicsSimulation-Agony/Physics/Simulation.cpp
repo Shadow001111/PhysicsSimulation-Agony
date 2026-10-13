@@ -40,6 +40,13 @@ namespace PS_AGONY
         // Delta time check.
         if (deltaTime <= 0) return;
 
+        // Paused: only keep the spatial structures valid for newly created/destroyed colliders.
+        if (paused)
+        {
+            refreshSpatialData();
+            return;
+        }
+
         // Physics steps.
         clock.setSettings(simulationSettings.clockSettings);
         const uint32_t stepCount = clock.advance(deltaTime);
@@ -53,6 +60,10 @@ namespace PS_AGONY
                 physicsStep(fixedDeltaTime);
             }
             postUpdate();
+        }
+        else
+        {
+            refreshSpatialData();
         }
 
         renderAlpha = clock.getRenderAlpha();
@@ -255,11 +266,11 @@ namespace PS_AGONY
             // Integration first phase.
             Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
             Integrator::dampAngularVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-        
+
             // Solve constraints.
             applyBodyHolderConstraint(deltaTime);
             constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-        
+
             // Integration second phase.
             Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
         }
@@ -285,19 +296,8 @@ namespace PS_AGONY
         Integrator::wrapRotation(objectManager.bodies);
         Integrator::computeRotationCosSin(objectManager.bodies);
 
-        // Compute.
-        computeBodyWorldCenters();
-        computeColliderWorldTransforms();
-
-        // Rebuild AABBs.
-        buildColliderAABBs();
-
-        // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
-        // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
-        broadPhaseCollisionDetector.buildTrees(
-            objectManager.getDynamicColliderIDs(),
-            objectManager.getStaticColliderIDs(),
-            StaticTreeUpdate::Refit);
+        // Compute transforms, AABBs and (re)build trees.
+        rebuildSpatialData();
 
         if (objectManager.colliders.getCount() > 1)
         {
@@ -328,6 +328,42 @@ namespace PS_AGONY
             // Updating persistent contact data.
             narrowPhaseCollisionDetector.updatePersistentContactData();
         }
+    }
+
+    void Simulation::rebuildSpatialData()
+    {
+        computeBodyWorldCenters();
+        computeColliderWorldTransforms();
+        buildColliderAABBs();
+
+        // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
+        // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
+        broadPhaseCollisionDetector.buildTrees(
+            objectManager.getDynamicColliderIDs(),
+            objectManager.getStaticColliderIDs(),
+            StaticTreeUpdate::Refit);
+
+        objectManager.spatialDirty = false;
+    }
+
+    void Simulation::refreshSpatialData()
+    {
+        if (!objectManager.spatialDirty) return;
+
+        if (objectManager.bodies.getCount() == 0)
+        {
+            broadPhaseCollisionDetector.clearData();
+            objectManager.spatialDirty = false;
+            return;
+        }
+
+        broadPhaseCollisionDetector.setDataViewers(
+            AABBSoAViewer(objectManager.colliders.aabb),
+            objectManager.colliders.bodyIndex.data()
+        );
+
+        Integrator::computeRotationCosSin(objectManager.bodies);
+        rebuildSpatialData();
     }
 
     void Simulation::preUpdate()
