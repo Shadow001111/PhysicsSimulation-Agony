@@ -249,6 +249,7 @@ namespace PS_AGONY
 		const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
 
 		// Compute constant data.
+		// No need to zero-initialize point data. Active points will have their data overwritten.
 		for (size_t c = 0; c < collisionCount; c++)
 		{
 			const auto& data = collisionDataPtr[c];
@@ -289,7 +290,10 @@ namespace PS_AGONY
 				const Vec2 normal = data.normal;
 				const Vec2 tangent{ -normal.y, normal.x };
 
-				// No need to zero-initialize point data. Active points will have their data overwritten.
+				const Vec2 linearVelocityA = { velocityXPtr[data.bodyA], velocityYPtr[data.bodyA] };
+				const Vec2 linearVelocityB = { velocityXPtr[data.bodyB], velocityYPtr[data.bodyB] };
+				const Real angularVelocityA = angularVelocityPtr[data.bodyA];
+				const Real angularVelocityB = angularVelocityPtr[data.bodyB];
 
 				for (uint32_t i = 0; i < data.contactCount; i++)
 				{
@@ -315,10 +319,6 @@ namespace PS_AGONY
 						+ rBPerpDotT * rBPerpDotT * invInertiaB;
 					point.tangentMass = tangentDenom > Real(0) ? Real(1) / tangentDenom : Real(0);
 
-					const Vec2 linearVelocityA = { velocityXPtr[data.bodyA], velocityYPtr[data.bodyA] };
-					const Vec2 linearVelocityB = { velocityXPtr[data.bodyB], velocityYPtr[data.bodyB] };
-					const Real angularVelocityA = angularVelocityPtr[data.bodyA];
-					const Real angularVelocityB = angularVelocityPtr[data.bodyB];
 					const Vec2 relativeVelocity =
 						(linearVelocityB + point.rBPerp * angularVelocityB) -
 						(linearVelocityA + point.rAPerp * angularVelocityA);
