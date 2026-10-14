@@ -151,8 +151,6 @@ namespace PS_AGONY
 		PolygonSoAViewer polygons;
 		CapsuleSoAViewer capsules;
 	public:
-		static constexpr bool ENABLE_WARM_STARTING = true;
-
 		// When true, output order is identical for single/multi-threaded runs (and any thread count).
 		// Both paths use the same fixed-size chunking, merged in chunk order.
 		// Requires the input pair order to be deterministic as well.

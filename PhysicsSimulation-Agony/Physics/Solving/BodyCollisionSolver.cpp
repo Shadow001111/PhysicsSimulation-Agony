@@ -101,7 +101,6 @@ namespace PS_AGONY
 		}
 
 		// Scatter persistent contact data back to the detector's original container.
-		if (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
 		{
 			TRACY_SCOPE_N("Scatter persistent contact data back");
 			const auto& flatIndices = solvingPlan.getFlatIndices();
@@ -387,6 +386,8 @@ namespace PS_AGONY
 				linearVelocityA -= impulseSum * invMassA;
 				linearVelocityB += impulseSum * invMassB;
 
+				// Even if points will have incorrent values when contact count is 1, impulse from array at index 1 will be zero.
+
 				const Real dotSumA =
 					glm::dot(velocityConstraintData.points[0].rAPerp, impulseArray[0]) +
 					glm::dot(velocityConstraintData.points[1].rAPerp, impulseArray[1]);
@@ -421,7 +422,7 @@ namespace PS_AGONY
 
 		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
 		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
-		std::span<const FrictionData> frictionDataSpan(this->frictionDataContainer.data() + pass.start, pass.size);
+		std::span<const FrictionData> frictionDataSpan(frictionDataContainer.data() + pass.start, pass.size);
 
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
@@ -538,9 +539,13 @@ namespace PS_AGONY
 					if (x0 >= Real(0) && (K10 * x0 - bPrime1) >= Real(0)) goto solved;
 				}
 				{
+					// 'x1' is already set to zero in previous scope.
+					// Jumping is unnecessary.
+					// All of this is already optimized away by compiler. I just wanna do it myself.
+
 					x0 = Real(0);
-					x1 = Real(0);
-					if (bPrime0 <= Real(0) && bPrime1 <= Real(0)) goto solved;
+					//x1 = Real(0);
+					//if (bPrime0 <= Real(0) && bPrime1 <= Real(0)) goto solved;
 				}
 			solved:
 				const Real deltaJn0 = x0 - a0;
@@ -694,19 +699,16 @@ namespace PS_AGONY
 		const uint32_t positionSolvingStartTick = static_cast<uint32_t>(waveCount) * velocityIterations;
 		const uint32_t totalTicks = positionSolvingStartTick + static_cast<uint32_t>(waveCount) * positionIterations;
 
-		if constexpr (NarrowPhaseCollisionDetector::ENABLE_WARM_STARTING)
-		{
-			runThreadedWaves(workerCount, waveCount, static_cast<uint32_t>(waveCount),
-				[&](size_t waveIndex, size_t workerIndex, uint32_t passTicket)
-				{
-					const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
-					const auto& passOffset = passOffsetsPtr[passGlobalIndex];
-					if (passOffset.size == 0) return;
+		runThreadedWaves(workerCount, waveCount, static_cast<uint32_t>(waveCount),
+			[&](size_t waveIndex, size_t workerIndex, uint32_t passTicket)
+			{
+				const size_t passGlobalIndex = waveIndex * workerCount + workerIndex;
+				const auto& passOffset = passOffsetsPtr[passGlobalIndex];
+				if (passOffset.size == 0) return;
 
-					applyWarmStarting(passOffset);
-				}
-			);
-		}
+				applyWarmStarting(passOffset);
+			}
+		);
 
 		runThreadedWaves(workerCount, waveCount, totalTicks,
 			[&](size_t waveIndex, size_t workerIndex, uint32_t passTicket)
