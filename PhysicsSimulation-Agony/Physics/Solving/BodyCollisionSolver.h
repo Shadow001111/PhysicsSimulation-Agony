@@ -42,7 +42,15 @@ namespace PS_AGONY
 
 		struct SimulationSettings
 		{
+			enum class FrictionSolverType
+			{
+				Iterative,
+				Block
+			};
+
 			static constexpr Real RESTITUTION_VELOCITY_THRESHOLD = 0.0;
+			static constexpr Real MAX_CONDITION_NUMBER = 1000.0f;
+			static constexpr FrictionSolverType FRICTION_SOLVER_TYPE = FrictionSolverType::Iterative;
 
 			// Baumgarte stabilization.
 			const Real positionCorrectionPercent = 0.5;

@@ -453,7 +453,9 @@ namespace PS_AGONY
 			const uint32_t contactCount = collisionData.contactCount;
 			const Vec2 tangent = { -normal.y, normal.x };
 
-			std::array<Real, 2> jnArray{};
+			const FrictionData& frictionData = frictionDataSpan[c];
+			const Real staticFriction = frictionData.staticFriction;
+			const Real dynamicFriction = frictionData.dynamicFriction;
 
 			if (contactCount == 1)
 			{
@@ -461,22 +463,61 @@ namespace PS_AGONY
 				const Vec2 rAPerp = contactData.rAPerp;
 				const Vec2 rBPerp = contactData.rBPerp;
 
-				const Vec2 relativeVelocity =
-					(linearVelocityB + rBPerp * angularVelocityB) -
-					(linearVelocityA + rAPerp * angularVelocityA);
-				const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
-
-				Real& accumulatedJn = collisionData.persistentContactData[0].normalImpulseAccumulator;
-				if (!(velocityAlongNormal > Real(0) && accumulatedJn == Real(0)))
+				// Normal.
+				Real jnSingle = 0;
 				{
-					const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
-					const Real oldJn = accumulatedJn;
-					accumulatedJn = std::fmax(Real(0), oldJn + jn);
-					const Real deltaJn = accumulatedJn - oldJn;
+					const Vec2 relativeVelocity =
+						(linearVelocityB + rBPerp * angularVelocityB) -
+						(linearVelocityA + rAPerp * angularVelocityA);
 
-					jnArray[0] = accumulatedJn;
+					const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 
-					const Vec2 impulse = deltaJn * normal;
+					Real& accumulatedJn = collisionData.persistentContactData[0].normalImpulseAccumulator;
+					if (!(velocityAlongNormal > 0 && accumulatedJn == 0))
+					{
+						const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
+						const Real oldJn = accumulatedJn;
+						accumulatedJn = std::fmax(Real(0), oldJn + jn);
+						const Real deltaJn = accumulatedJn - oldJn;
+
+						jnSingle = accumulatedJn;
+
+						const Vec2 impulse = deltaJn * normal;
+						linearVelocityA -= impulse * invMassA;
+						angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
+						linearVelocityB += impulse * invMassB;
+						angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
+					}
+				}
+
+				// Friction.
+				{
+					const Vec2 relativeVelocity =
+						(linearVelocityB + rBPerp * angularVelocityB) -
+						(linearVelocityA + rAPerp * angularVelocityA);
+
+					const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
+
+					const Real jt = -currentSlipVel * contactData.tangentMass;
+
+					Real& accumulatedJt = collisionData.persistentContactData[0].tangentImpulseAccumulator;
+					const Real oldJt = accumulatedJt;
+					Real targetJt = oldJt + jt;
+					const Real jn = jnSingle;
+
+					if (std::fabs(targetJt) <= jn * staticFriction)
+					{
+						accumulatedJt = targetJt;
+					}
+					else
+					{
+						const Real maxDynamic = jn * dynamicFriction;
+						accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic);
+					}
+
+					const Real deltaJt = accumulatedJt - oldJt;
+					const Vec2 impulse = deltaJt * tangent;
+
 					linearVelocityA -= impulse * invMassA;
 					angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
 					linearVelocityB += impulse * invMassB;
@@ -485,137 +526,239 @@ namespace PS_AGONY
 			}
 			else
 			{
-				const auto& contactData0 = velocityConstraintData.points[0];
-				const auto& contactData1 = velocityConstraintData.points[1];
-
-				const Vec2 relativeVelocity0 =
-					(linearVelocityB + contactData0.rBPerp * angularVelocityB) -
-					(linearVelocityA + contactData0.rAPerp * angularVelocityA);
-				const Vec2 relativeVelocity1 =
-					(linearVelocityB + contactData1.rBPerp * angularVelocityB) -
-					(linearVelocityA + contactData1.rAPerp * angularVelocityA);
-
-				const Real velocityAlongNormal0 = glm::dot(relativeVelocity0, normal);
-				const Real velocityAlongNormal1 = glm::dot(relativeVelocity1, normal);
-
-				Real& a0 = collisionData.persistentContactData[0].normalImpulseAccumulator;
-				Real& a1 = collisionData.persistentContactData[1].normalImpulseAccumulator;
-
 				const Real effectiveMass = invMassA + invMassB;
-				const Real rnA0 = glm::dot(contactData0.rAPerp, normal);
-				const Real rnB0 = glm::dot(contactData0.rBPerp, normal);
-				const Real rnA1 = glm::dot(contactData1.rAPerp, normal);
-				const Real rnB1 = glm::dot(contactData1.rBPerp, normal);
 
-				const Real K00 = effectiveMass + rnA0 * rnA0 * invInertiaA + rnB0 * rnB0 * invInertiaB;
-				const Real K11 = effectiveMass + rnA1 * rnA1 * invInertiaA + rnB1 * rnB1 * invInertiaB;
-				const Real K01 = effectiveMass + rnA0 * rnA1 * invInertiaA + rnB0 * rnB1 * invInertiaB;
-				const Real K10 = K01;
-
-				const Real b0 = contactData0.velocityBias - velocityAlongNormal0;
-				const Real b1 = contactData1.velocityBias - velocityAlongNormal1;
-
-				const Real bPrime0 = b0 + K00 * a0 + K01 * a1;
-				const Real bPrime1 = b1 + K10 * a0 + K11 * a1;
-
-				Real x0 = Real(0), x1 = Real(0);
-
-				const Real det = K00 * K11 - K01 * K10;
-				if (std::fabs(det) > Real(1e-6))
+				// Normal.
+				std::array<Real, 2> jnArray{};
 				{
-					const Real invDet = Real(1.0) / det;
-					x0 = (K11 * bPrime0 - K01 * bPrime1) * invDet;
-					x1 = (K00 * bPrime1 - K10 * bPrime0) * invDet;
-					if (x0 >= Real(0) && x1 >= Real(0)) goto solved;
+					const auto& contactData0 = velocityConstraintData.points[0];
+					const auto& contactData1 = velocityConstraintData.points[1];
+
+					const Vec2 relativeVelocity0 =
+						(linearVelocityB + contactData0.rBPerp * angularVelocityB) -
+						(linearVelocityA + contactData0.rAPerp * angularVelocityA);
+					const Vec2 relativeVelocity1 =
+						(linearVelocityB + contactData1.rBPerp * angularVelocityB) -
+						(linearVelocityA + contactData1.rAPerp * angularVelocityA);
+
+					const Real velocityAlongNormal0 = glm::dot(relativeVelocity0, normal);
+					const Real velocityAlongNormal1 = glm::dot(relativeVelocity1, normal);
+
+					Real& accumulatedImpulse0 = collisionData.persistentContactData[0].normalImpulseAccumulator;
+					Real& accumulatedImpulse1 = collisionData.persistentContactData[1].normalImpulseAccumulator;
+
+					const Real rnA0 = glm::dot(contactData0.rAPerp, normal);
+					const Real rnB0 = glm::dot(contactData0.rBPerp, normal);
+					const Real rnA1 = glm::dot(contactData1.rAPerp, normal);
+					const Real rnB1 = glm::dot(contactData1.rBPerp, normal);
+
+					const Real K00 = effectiveMass + rnA0 * rnA0 * invInertiaA + rnB0 * rnB0 * invInertiaB;
+					const Real K11 = effectiveMass + rnA1 * rnA1 * invInertiaA + rnB1 * rnB1 * invInertiaB;
+					const Real K01 = effectiveMass + rnA0 * rnA1 * invInertiaA + rnB0 * rnB1 * invInertiaB;
+					//const Real K10 = K01;
+
+					const Real bPrime0 = contactData0.velocityBias - velocityAlongNormal0 + K00 * accumulatedImpulse0 + K01 * accumulatedImpulse1;
+					const Real bPrime1 = contactData1.velocityBias - velocityAlongNormal1 + K01 * accumulatedImpulse0 + K11 * accumulatedImpulse1;
+
+					Real x0 = 0, x1 = 0;
+
+					auto solveNormalBlock = [&]()
+					{
+						const Real det = K00 * K11 - K01 * K01;
+						if (std::fabs(det) > Real(1e-6))
+						{
+							const Real invDet = Real(1) / det;
+							x0 = (K11 * bPrime0 - K01 * bPrime1) * invDet;
+							x1 = (K00 * bPrime1 - K01 * bPrime0) * invDet;
+							if (x0 >= 0 && x1 >= 0) return;
+						}
+						{
+							x0 = 0;
+							x1 = K11 > 0 ? bPrime1 / K11 : 0;
+							if (x1 >= 0 && (K01 * x1 - bPrime0) >= 0) return;
+						}
+						{
+							x0 = K00 > 0 ? bPrime0 / K00 : 0;
+							x1 = 0;
+							if (x0 >= 0 && (K01 * x0 - bPrime1) >= 0) return;
+						}
+						// 'x1' is already set to zero in previous scope.
+						x0 = 0;
+						//x1 = 0;
+					};
+
+					solveNormalBlock();
+
+					const Real deltaJn0 = x0 - accumulatedImpulse0;
+					const Real deltaJn1 = x1 - accumulatedImpulse1;
+
+					accumulatedImpulse0 = x0;
+					accumulatedImpulse1 = x1;
+
+					jnArray[0] = x0;
+					jnArray[1] = x1;
+
+					const Vec2 impulse0 = deltaJn0 * normal;
+					const Vec2 impulse1 = deltaJn1 * normal;
+					const Vec2 impulseSum = impulse0 + impulse1;
+
+					linearVelocityA -= impulseSum * invMassA;
+					linearVelocityB += impulseSum * invMassB;
+
+					angularVelocityA -= (glm::dot(contactData0.rAPerp, impulse0) + glm::dot(contactData1.rAPerp, impulse1)) * invInertiaA;
+					angularVelocityB += (glm::dot(contactData0.rBPerp, impulse0) + glm::dot(contactData1.rBPerp, impulse1)) * invInertiaB;
 				}
+
+				// Friction.
+				if (SimulationSettings::FRICTION_SOLVER_TYPE == SimulationSettings::FrictionSolverType::Block)
 				{
-					x0 = Real(0);
-					x1 = K11 > Real(0) ? bPrime1 / K11 : Real(0);
-					if (x1 >= Real(0) && (K01 * x1 - bPrime0) >= Real(0)) goto solved;
-				}
-				{
-					x0 = K00 > Real(0) ? bPrime0 / K00 : Real(0);
-					x1 = Real(0);
-					if (x0 >= Real(0) && (K10 * x0 - bPrime1) >= Real(0)) goto solved;
-				}
-				{
-					// 'x1' is already set to zero in previous scope.
-					// Jumping is unnecessary.
-					// All of this is already optimized away by compiler. I just wanna do it myself.
+					const auto& contactData0 = velocityConstraintData.points[0];
+					const auto& contactData1 = velocityConstraintData.points[1];
 
-					x0 = Real(0);
-					//x1 = Real(0);
-					//if (bPrime0 <= Real(0) && bPrime1 <= Real(0)) goto solved;
-				}
-			solved:
-				const Real deltaJn0 = x0 - a0;
-				const Real deltaJn1 = x1 - a1;
+					const Vec2 relativeVelocity0 =
+						(linearVelocityB + contactData0.rBPerp * angularVelocityB) -
+						(linearVelocityA + contactData0.rAPerp * angularVelocityA);
+					const Vec2 relativeVelocity1 =
+						(linearVelocityB + contactData1.rBPerp * angularVelocityB) -
+						(linearVelocityA + contactData1.rAPerp * angularVelocityA);
 
-				a0 = x0;
-				a1 = x1;
+					const Real velocityAlongTangent0 = glm::dot(relativeVelocity0, tangent);
+					const Real velocityAlongTangent1 = glm::dot(relativeVelocity1, tangent);
 
-				jnArray[0] = x0;
-				jnArray[1] = x1;
+					Real& accumulatedImpulse0 = collisionData.persistentContactData[0].tangentImpulseAccumulator;
+					Real& accumulatedImpulse1 = collisionData.persistentContactData[1].tangentImpulseAccumulator;
 
-				const Vec2 impulse0 = deltaJn0 * normal;
-				const Vec2 impulse1 = deltaJn1 * normal;
-				const Vec2 impulseSum = impulse0 + impulse1;
+					const Real rtA0 = glm::dot(contactData0.rAPerp, tangent);
+					const Real rtB0 = glm::dot(contactData0.rBPerp, tangent);
+					const Real rtA1 = glm::dot(contactData1.rAPerp, tangent);
+					const Real rtB1 = glm::dot(contactData1.rBPerp, tangent);
 
-				linearVelocityA -= impulseSum * invMassA;
-				linearVelocityB += impulseSum * invMassB;
+					const Real K00 = effectiveMass + rtA0 * rtA0 * invInertiaA + rtB0 * rtB0 * invInertiaB;
+					const Real K11 = effectiveMass + rtA1 * rtA1 * invInertiaA + rtB1 * rtB1 * invInertiaB;
+					const Real K01 = effectiveMass + rtA0 * rtA1 * invInertiaA + rtB0 * rtB1 * invInertiaB;
 
-				angularVelocityA -= (glm::dot(contactData0.rAPerp, impulse0) + glm::dot(contactData1.rAPerp, impulse1)) * invInertiaA;
-				angularVelocityB += (glm::dot(contactData0.rBPerp, impulse0) + glm::dot(contactData1.rBPerp, impulse1)) * invInertiaB;
-			}
+					const Real bPrime0 = -velocityAlongTangent0 + K00 * accumulatedImpulse0 + K01 * accumulatedImpulse1;
+					const Real bPrime1 = -velocityAlongTangent1 + K01 * accumulatedImpulse0 + K11 * accumulatedImpulse1;
 
-			const FrictionData& frictionData = frictionDataSpan[c];
-			const Real staticFriction = frictionData.staticFriction;
-			const Real dynamicFriction = frictionData.dynamicFriction;
+					const Real jn0 = jnArray[0];
+					const Real jn1 = jnArray[1];
+					const Real limit0 = jn0 * staticFriction;  // Free (sticking) acceptance.
+					const Real limit1 = jn1 * staticFriction;
+					const Real max0 = jn0 * dynamicFriction;   // Saturation value.
+					const Real max1 = jn1 * dynamicFriction;
 
-			for (uint32_t i = 0; i < contactCount; i++)
-			{
-				const auto& contactData = velocityConstraintData.points[i];
-				const Vec2 rAPerp = contactData.rAPerp;
-				const Vec2 rBPerp = contactData.rBPerp;
+					Real x0 = 0, x1 = 0;
 
-				const Vec2 relativeVelocity =
-					(linearVelocityB + rBPerp * angularVelocityB) -
-					(linearVelocityA + rAPerp * angularVelocityA);
+					auto solveTangentBlock = [&]()
+					{
+						constexpr Real ones[2] = { 1, -1 };
 
-				const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
-				const Real jt = -currentSlipVel * contactData.tangentMass;
+						const Real det = K00 * K11 - K01 * K01;
+						const Real maxK = std::fmax(K00, K11);
+						if (maxK * maxK < SimulationSettings::MAX_CONDITION_NUMBER * det)
+						{
+							const Real invDet = Real(1) / det;
+							x0 = (K11 * bPrime0 - K01 * bPrime1) * invDet;
+							x1 = (K00 * bPrime1 - K01 * bPrime0) * invDet;
+							if (std::fabs(x0) <= limit0 && std::fabs(x1) <= limit1) return;
+						}
+						for (Real s : ones)
+						{
+							x0 = s * max0;
+							x1 = (bPrime1 - K01 * x0) / K11;
+							const Real w0 = K00 * x0 + K01 * x1 - bPrime0;
+							if (std::fabs(x1) <= limit1 && s * w0 <= 0) return;
+						}
+						for (Real s : ones)
+						{
+							x1 = s * max1;
+							x0 = (bPrime0 - K01 * x1) / K00;
+							const Real w1 = K01 * x0 + K11 * x1 - bPrime1;
+							if (std::fabs(x0) <= limit0 && s * w1 <= 0) return;
+						}
+						for (Real s0 : ones)
+						{
+							for (Real s1 : ones)
+							{
+								x0 = s0 * max0;
+								x1 = s1 * max1;
+								const Real w0 = K00 * x0 + K01 * x1 - bPrime0;
+								const Real w1 = K01 * x0 + K11 * x1 - bPrime1;
+								if (s0 * w0 <= 0 && s1 * w1 <= 0) return;
+							}
+						}
+						// Unreachable for a valid LCP; keep zero.
+						x0 = 0;
+						x1 = 0;
+					};
 
-				Real& accumulatedJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
-				const Real oldJt = accumulatedJt;
-				Real targetJt = oldJt + jt;
-				const Real jn = jnArray[i];
+					solveTangentBlock();
 
-				if (std::fabs(targetJt) <= jn * staticFriction)
-				{
-					accumulatedJt = targetJt;
+					const Real deltaJt0 = x0 - accumulatedImpulse0;
+					const Real deltaJt1 = x1 - accumulatedImpulse1;
+
+					accumulatedImpulse0 = x0;
+					accumulatedImpulse1 = x1;
+
+					const Vec2 impulse0 = deltaJt0 * tangent;
+					const Vec2 impulse1 = deltaJt1 * tangent;
+					const Vec2 impulseSum = impulse0 + impulse1;
+
+					linearVelocityA -= impulseSum * invMassA;
+					linearVelocityB += impulseSum * invMassB;
+
+					angularVelocityA -= (glm::dot(contactData0.rAPerp, impulse0) + glm::dot(contactData1.rAPerp, impulse1)) * invInertiaA;
+					angularVelocityB += (glm::dot(contactData0.rBPerp, impulse0) + glm::dot(contactData1.rBPerp, impulse1)) * invInertiaB;
 				}
 				else
 				{
-					const Real maxDynamic = jn * dynamicFriction;
-					accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic);
+					for (uint32_t i = 0; i < 2; i++)
+					{
+						const auto& contactData = velocityConstraintData.points[i];
+						const Vec2 rAPerp = contactData.rAPerp;
+						const Vec2 rBPerp = contactData.rBPerp;
+
+						const Vec2 relativeVelocity =
+							(linearVelocityB + rBPerp * angularVelocityB) -
+							(linearVelocityA + rAPerp * angularVelocityA);
+
+						const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
+						const Real jt = -currentSlipVel * contactData.tangentMass;
+
+						Real& accumulatedJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+						const Real oldJt = accumulatedJt;
+						Real targetJt = oldJt + jt;
+						const Real jn = jnArray[i];
+
+						if (std::fabs(targetJt) <= jn * staticFriction)
+						{
+							accumulatedJt = targetJt;
+						}
+						else
+						{
+							const Real maxDynamic = jn * dynamicFriction;
+							accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic);
+						}
+
+						const Real deltaJt = accumulatedJt - oldJt;
+						const Vec2 impulse = deltaJt * tangent;
+
+						linearVelocityA -= impulse * invMassA;
+						angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
+						linearVelocityB += impulse * invMassB;
+						angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
+					}
 				}
-
-				const Real deltaJt = accumulatedJt - oldJt;
-				const Vec2 impulse = deltaJt * tangent;
-
-				linearVelocityA -= impulse * invMassA;
-				angularVelocityA -= glm::dot(rAPerp, impulse) * invInertiaA;
-				linearVelocityB += impulse * invMassB;
-				angularVelocityB += glm::dot(rBPerp, impulse) * invInertiaB;
 			}
 
-			if (invMassA > Real(0)) [[likely]]
+			// Store results.
+			if (invMassA > 0) [[likely]]
 			{
 				velocityXPtr[bodyIndexA] = linearVelocityA.x;
 				velocityYPtr[bodyIndexA] = linearVelocityA.y;
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (invMassB > Real(0)) [[likely]]
+			if (invMassB > 0) [[likely]]
 			{
 				velocityXPtr[bodyIndexB] = linearVelocityB.x;
 				velocityYPtr[bodyIndexB] = linearVelocityB.y;
