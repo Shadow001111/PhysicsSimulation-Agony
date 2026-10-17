@@ -1,37 +1,49 @@
 #pragma once
-#include "AABBSoA.h"
+#include "Physics/ContainerUtilities.h"
+#include "Physics/Types.h"
+#include <cstdint>
+#include <vector>
+
+// Define all scalar SoA fields.
+#define PS_AGONY_BODY_SOA_SCALAR_FIELDS(F) \
+    F(renderOldOffsetX, Real) \
+    F(renderOldOffsetY, Real) \
+    F(renderOldRotation, Real) \
+    F(renderRotationWrapCount, Real) \
+    F(offsetX, Real) \
+    F(offsetY, Real) \
+    F(localCenterOfMassX, Real) \
+    F(localCenterOfMassY, Real) \
+    F(worldCenterX, Real) \
+    F(worldCenterY, Real) \
+    F(velocityX, Real) \
+    F(velocityY, Real) \
+    F(rotation, Real) \
+    F(angularVelocity, Real) \
+    F(mass, Real) \
+    F(invMass, Real) \
+    F(inertia, Real) \
+    F(invInertia, Real) \
+    F(rotationCos, Real) \
+    F(rotationSin, Real) \
+    F(isStatic, uint8_t)
+
+// Define complex vector-of-vector fields.
+#define PS_AGONY_BODY_SOA_VECTOR_FIELDS(F) \
+    F(attachments, BodyAttachment) \
+    F(colliderIndices, ColliderIndex)
 
 namespace PS_AGONY
 {
     struct BodySoA
     {
-        CacheLineAlignedVector<Real> renderOldOffsetX;
-        CacheLineAlignedVector<Real> renderOldOffsetY;
-        CacheLineAlignedVector<Real> renderOldRotation;
-        CacheLineAlignedVector<Real> renderRotationWrapCount;
+        #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
+        PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
+        #undef DECLARE_FIELD
 
-        CacheLineAlignedVector<Real> offsetX;
-        CacheLineAlignedVector<Real> offsetY;
-        CacheLineAlignedVector<Real> localCenterOfMassX;
-        CacheLineAlignedVector<Real> localCenterOfMassY;
-        CacheLineAlignedVector<Real> worldCenterX;
-        CacheLineAlignedVector<Real> worldCenterY;
-
-        CacheLineAlignedVector<Real> velocityX;
-        CacheLineAlignedVector<Real> velocityY;
-        CacheLineAlignedVector<Real> rotation;
-        CacheLineAlignedVector<Real> angularVelocity;
-        CacheLineAlignedVector<Real> mass;
-        CacheLineAlignedVector<Real> invMass;
-        CacheLineAlignedVector<Real> inertia;
-        CacheLineAlignedVector<Real> invInertia;
-        CacheLineAlignedVector<Real> rotationCos;
-        CacheLineAlignedVector<Real> rotationSin;
-
-        CacheLineAlignedVector<uint8_t> isStatic;
-
-        CacheLineAlignedVector<std::vector<BodyAttachment>> attachments;      // Springs, etc.
-        CacheLineAlignedVector<std::vector<ColliderIndex>> colliderIndices;   // Owned colliders.
+        #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
+        #undef DECLARE_VECTOR_FIELD
 
         void append(
             Vec2 pos, Vec2 vel, Real rot, Real anglVel,
@@ -56,60 +68,16 @@ namespace PS_AGONY
     {
         size_t count = 0;
     public:
-        const Real* renderOldOffsetX = nullptr;
-        const Real* renderOldOffsetY = nullptr;
-        const Real* renderOldRotation = nullptr;
-        const Real* renderRotationWrapCount = nullptr;
+        #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
+        PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
+        #undef DECLARE_VIEWER_FIELD
 
-        const Real* offsetX = nullptr;
-        const Real* offsetY = nullptr;
-        const Real* localCenterOfMassX = nullptr;
-        const Real* localCenterOfMassY = nullptr;
-        const Real* worldCenterX = nullptr;
-        const Real* worldCenterY = nullptr;
-        const Real* velocityX = nullptr;
-        const Real* velocityY = nullptr;
-        const Real* rotation = nullptr;
-        const Real* angularVelocity = nullptr;
-        const Real* mass = nullptr;
-        const Real* invMass = nullptr;
-        const Real* inertia = nullptr;
-        const Real* invInertia = nullptr;
-        const Real* rotationCos = nullptr;
-        const Real* rotationSin = nullptr;
+        #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
+        #undef DECLARE_VIEWER_VECTOR_FIELD
 
-        const uint8_t* isStatic = nullptr;
-
-        const std::vector<BodyAttachment>* attachments = nullptr;
-    public:
         BodySoAViewer() = default;
-
-        explicit BodySoAViewer(const BodySoA& data) noexcept :
-            count(data.getCount()),
-            renderOldOffsetX(data.renderOldOffsetX.data()),
-            renderOldOffsetY(data.renderOldOffsetY.data()),
-            renderOldRotation(data.renderOldRotation.data()),
-            renderRotationWrapCount(data.renderRotationWrapCount.data()),
-
-            offsetX(data.offsetX.data()),
-            offsetY(data.offsetY.data()),
-            localCenterOfMassX(data.localCenterOfMassX.data()),
-            localCenterOfMassY(data.localCenterOfMassY.data()),
-            worldCenterX(data.worldCenterX.data()),
-            worldCenterY(data.worldCenterY.data()),
-            velocityX(data.velocityX.data()),
-            velocityY(data.velocityY.data()),
-            rotation(data.rotation.data()),
-            angularVelocity(data.angularVelocity.data()),
-            mass(data.mass.data()),
-            invMass(data.invMass.data()),
-            inertia(data.inertia.data()),
-            invInertia(data.invInertia.data()),
-            rotationCos(data.rotationCos.data()),
-            rotationSin(data.rotationSin.data()),
-            isStatic(data.isStatic.data()),
-            attachments(data.attachments.data())
-        {}
+        explicit BodySoAViewer(const BodySoA& data) noexcept;
 
         size_t getCount() const noexcept { return count; }
     };

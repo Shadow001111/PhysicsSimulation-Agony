@@ -5,6 +5,7 @@
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
+#include "Ecstasy/Core/Simd.h"
 
 #include <bit>
 #include <tuple>

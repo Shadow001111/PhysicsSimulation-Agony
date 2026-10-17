@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/GlmTypes.h"
+#include "Physics/Types.h"
 #include "Physics/SoA/BodySoA.h"
 
 namespace PS_AGONY::Integrator

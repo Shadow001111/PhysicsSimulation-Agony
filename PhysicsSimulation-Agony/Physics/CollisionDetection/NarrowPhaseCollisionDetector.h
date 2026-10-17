@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/GlmTypes.h"
+#include "Physics/Types.h"
 #include "Physics/ObjectSoA.h"
 #include "Physics/SoA/ColliderSoA.h"
 #include "Physics/SymmetricMatrix.h"

@@ -1,5 +1,5 @@
 #pragma once
-#include "../GlmTypes.h"
+#include "../Types.h"
 #include "../ContainerUtilities.h"
 
 namespace PS_AGONY

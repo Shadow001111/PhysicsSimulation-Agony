@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Physics/GlmTypes.h"
+#include "Physics/Types.h"
 #include "Physics/SoA/Shapes/PolygonSoA.h"
 #include "PolygonDecomposition.h"
 

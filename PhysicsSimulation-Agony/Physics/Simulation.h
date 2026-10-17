@@ -1,12 +1,13 @@
 #pragma once
-#include "GlmTypes.h"
+#include "Types.h"
 #include "ConstraintSystem.h"
-#include "Solving/ConstraintScheduler.h"
 #include "Material.h"
+#include "Constants.h"
 
-#include "Physics/CollisionDetection/BroadPhaseCollisionDetector.h"
-#include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
+#include "CollisionDetection/BroadPhaseCollisionDetector.h"
+#include "CollisionDetection/NarrowPhaseCollisionDetector.h"
 
+#include "Solving/ConstraintScheduler.h"
 #include "Solving/BodyCollisionSolver.h"
 
 #include "Interactivity/BodyHolder.h"
@@ -15,7 +16,6 @@
 
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
-#include "SimulationImpl/PolygonDecomposition.h"
 
 #include <vector>
 #include <optional>
@@ -236,7 +236,7 @@ namespace PS_AGONY
 		CapsuleSoAViewer getCapsules() const noexcept { return CapsuleSoAViewer(objectManager.capsules); }
 
 		SpringSoAViewer getSprings() const noexcept { return springConstraintSystem.getViewer(); }
-		JointSoAViewer getJoints() const noexcept { return jointConstraintSystem.getViewer(); }
+		RevoluteJointSoAViewer getJoints() const noexcept { return jointConstraintSystem.getViewer(); }
 		RodSoAViewer getRods() const noexcept { return rodConstraintSystem.getViewer(); }
 		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return prismaticJointConstraintSystem.getViewer(); }
 		SliderJointSoAViewer getSliderJoints() const noexcept { return sliderJointConstraintSystem.getViewer(); }

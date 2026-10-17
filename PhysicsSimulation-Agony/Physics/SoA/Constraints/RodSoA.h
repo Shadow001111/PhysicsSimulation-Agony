@@ -1,89 +1,41 @@
 #pragma once
-#include "Physics/GlmTypes.h"
 #include "Physics/ContainerUtilities.h"
+#include "Physics/Types.h"
 
-#include <algorithm>
+// Define all scalar SoA fields.
+#define PS_AGONY_ROD_SOA_SCALAR_FIELDS(F) \
+    F(bodyIndexA, ObjectIndex) \
+    F(bodyIndexB, ObjectIndex) \
+    F(localAnchorA, Vec2) \
+    F(localAnchorB, Vec2) \
+    F(length, Real)
 
 namespace PS_AGONY
 {
-	struct RodSoA
-	{
-		std::vector<ObjectIndex> bodyIndexA;
-		std::vector<ObjectIndex> bodyIndexB;
-		std::vector<Vec2> localAnchorA;
-		std::vector<Vec2> localAnchorB;
-		std::vector<Real> length;
+    struct RodSoA
+    {
+        #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
+        PS_AGONY_ROD_SOA_SCALAR_FIELDS(DECLARE_FIELD)
+        #undef DECLARE_FIELD
 
-		ObjectIndex append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real length)
-		{
-			const ObjectIndex newIndex = this->bodyIndexA.size();
+        ObjectIndex append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real length);
+        size_t swapRemove(size_t index);
 
-			this->bodyIndexA.push_back(indexA);
-			this->bodyIndexB.push_back(indexB);
-			this->localAnchorA.push_back(anchorA);
-			this->localAnchorB.push_back(anchorB);
-			this->length.push_back(length);
+        size_t getCount() const noexcept { return bodyIndexA.size(); }
+        size_t getMemoryUsage() const noexcept;
+    };
 
-			return newIndex;
-		}
+    class RodSoAViewer
+    {
+        size_t count = 0;
+    public:
+        #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
+        PS_AGONY_ROD_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
+        #undef DECLARE_VIEWER_FIELD
 
-		size_t getCount() const noexcept { return bodyIndexA.size(); }
+        RodSoAViewer() = default;
+        explicit RodSoAViewer(const RodSoA& data) noexcept;
 
-		size_t getMemoryUsage() const noexcept
-		{
-			return
-				PS_AGONY::getVectorMemoryUsage(bodyIndexA) +
-				PS_AGONY::getVectorMemoryUsage(bodyIndexB) +
-				PS_AGONY::getVectorMemoryUsage(localAnchorA) +
-				PS_AGONY::getVectorMemoryUsage(localAnchorB) +
-				PS_AGONY::getVectorMemoryUsage(length);
-		}
-
-		size_t swapRemove(size_t index)
-		{
-			const size_t lastIndex = bodyIndexA.size() - 1;
-
-			if (index != lastIndex)
-			{
-				std::swap(bodyIndexA[index], bodyIndexA[lastIndex]);
-				std::swap(bodyIndexB[index], bodyIndexB[lastIndex]);
-				std::swap(localAnchorA[index], localAnchorA[lastIndex]);
-				std::swap(localAnchorB[index], localAnchorB[lastIndex]);
-				std::swap(length[index], length[lastIndex]);
-			}
-
-			bodyIndexA.pop_back();
-			bodyIndexB.pop_back();
-			localAnchorA.pop_back();
-			localAnchorB.pop_back();
-			length.pop_back();
-
-			return lastIndex;
-		}
-	};
-
-	class RodSoAViewer
-	{
-		size_t count = 0;
-	public:
-		const ObjectIndex* bodyIndexA = nullptr;
-		const ObjectIndex* bodyIndexB = nullptr;
-		const Vec2* localAnchorA = nullptr;
-		const Vec2* localAnchorB = nullptr;
-		const Real* length = nullptr;
-
-		RodSoAViewer() = default;
-
-		explicit RodSoAViewer(const RodSoA& data) noexcept :
-			count(data.getCount()),
-			bodyIndexA(data.bodyIndexA.data()),
-			bodyIndexB(data.bodyIndexB.data()),
-			localAnchorA(data.localAnchorA.data()),
-			localAnchorB(data.localAnchorB.data()),
-			length(data.length.data())
-		{
-		}
-
-		size_t getCount() const noexcept { return count; }
-	};
+        size_t getCount() const noexcept { return count; }
+    };
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include <array>
-#include <cstddef>
 #include <utility>
 
 template <class T, size_t N>

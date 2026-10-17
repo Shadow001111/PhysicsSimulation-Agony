@@ -1,11 +1,8 @@
 #pragma once
-#include "../../GlmTypes.h"
-#include "../../ContainerUtilities.h"
-
-#include <cmath>
+#include "Physics/ContainerUtilities.h"
+#include "Physics/Types.h"
 #include <memory>
 #include <vector>
-#include <algorithm>
 
 namespace PS_AGONY
 {
@@ -20,53 +17,14 @@ namespace PS_AGONY
 		std::unique_ptr<Vec2[]> dataPtr;
 		size_t verticesCount = 0;
 
-		void allocate(size_t count)
-		{
-			verticesCount = count;
-			dataPtr.reset(new Vec2[count * 2]);
-		}
-
-		void computeNormals() noexcept
-		{
-			const Vec2* v = dataPtr.get();
-			Vec2* n = dataPtr.get() + verticesCount;
-			for (size_t i = 0; i < verticesCount; i++)
-			{
-				const size_t next = (i + 1 == verticesCount) ? 0 : i + 1;
-				const Vec2 edge = v[next] - v[i];
-				Vec2 normal = { edge.y, -edge.x };
-				const Real lenSquared = normal.x * normal.x + normal.y * normal.y;
-				if (lenSquared >= DEGENERATE_EDGE_LENGTH_SQUARED) [[likely]]
-					normal *= Real(1) / std::sqrt(lenSquared);
-				else
-					normal = Vec2(0, 0);
-				n[i] = normal;
-			}
-		}
+		void allocate(size_t count);
+		void computeNormals() noexcept;
 
 	public:
 		PolygonGeometry() = default;
-
-		explicit PolygonGeometry(const std::vector<Vec2>& vec)
-		{
-			allocate(vec.size());
-			std::copy(vec.begin(), vec.end(), dataPtr.get());
-			computeNormals();
-		}
-
-		explicit PolygonGeometry(std::vector<Vec2>&& vec)
-		{
-			allocate(vec.size());
-			std::move(vec.begin(), vec.end(), dataPtr.get());
-			computeNormals();
-		}
-
-		explicit PolygonGeometry(const Vec2* verticesPtr, size_t count)
-		{
-			allocate(count);
-			std::copy(verticesPtr, verticesPtr + count, dataPtr.get());
-			computeNormals();
-		}
+		explicit PolygonGeometry(const std::vector<Vec2>& vec);
+		explicit PolygonGeometry(std::vector<Vec2>&& vec);
+		explicit PolygonGeometry(const Vec2* verticesPtr, size_t count);
 
 		PolygonGeometry(const PolygonGeometry&) = delete;
 		PolygonGeometry& operator=(const PolygonGeometry&) = delete;
@@ -81,51 +39,42 @@ namespace PS_AGONY
 		const Vec2* begin() const noexcept { return vertices(); }
 		const Vec2* end() const noexcept { return vertices() + verticesCount; }
 
-		size_t getMemoryUsage() const noexcept { return verticesCount * 2 * sizeof(Vec2); }
+		size_t getMemoryUsage() const noexcept;
 	};
+
+	// Define all scalar SoA fields.
+	#define PS_AGONY_POLYGON_SOA_SCALAR_FIELDS(F) \
+		F(colliderIndices, ColliderIndex) \
+		F(geometry, PolygonGeometry)
 
 	struct PolygonSoA
 	{
-		SimdAlignedVector<ColliderIndex> colliderIndices;
-		std::vector<PolygonGeometry> geometry;
+		#define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
+		PS_AGONY_POLYGON_SOA_SCALAR_FIELDS(DECLARE_FIELD)
+		#undef DECLARE_FIELD
 
 		void append(
 			ColliderIndex colliderIndex,
 			PolygonGeometry&& polygonGeometry
-		)
-		{
-			this->colliderIndices.push_back(colliderIndex);
-			this->geometry.emplace_back(std::move(polygonGeometry));
-		}
+		);
+
+		void swapWithBack(size_t index);
+		void popBack();
 
 		size_t getCount() const noexcept { return colliderIndices.size(); }
-
-		size_t getMemoryUsage() const noexcept
-		{
-			size_t total =
-				PS_AGONY::getVectorMemoryUsage(colliderIndices) +
-				PS_AGONY::getVectorMemoryUsage(geometry);
-			for (const auto& g : geometry)
-				total += g.getMemoryUsage();
-			return total;
-		}
+		size_t getMemoryUsage() const noexcept;
 	};
 
 	class PolygonSoAViewer
 	{
 		size_t count = 0;
 	public:
-		const ColliderIndex* colliderIndices = nullptr;
-		const PolygonGeometry* geometry = nullptr;
+		#define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
+		PS_AGONY_POLYGON_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
+		#undef DECLARE_VIEWER_FIELD
 
 		PolygonSoAViewer() = default;
-
-		explicit PolygonSoAViewer(const PolygonSoA& data) :
-			count(data.getCount()),
-			colliderIndices(data.colliderIndices.data()),
-			geometry(data.geometry.data())
-		{
-		}
+		explicit PolygonSoAViewer(const PolygonSoA& data) noexcept;
 
 		size_t getCount() const noexcept { return count; }
 	};

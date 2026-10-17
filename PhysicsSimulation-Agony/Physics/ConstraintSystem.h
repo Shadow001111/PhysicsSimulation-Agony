@@ -16,7 +16,6 @@
 
 #include <array>
 #include <cmath>
-#include <utility>
 
 namespace PS_AGONY
 {
@@ -180,7 +179,7 @@ namespace PS_AGONY
 	};
 
 	class RevoluteJointConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::Joint, RevoluteJointSoA, RevoluteJointSolver, JointSoAViewer>
+		public ConstraintSystemBase<ConstraintType::Joint, RevoluteJointSoA, RevoluteJointSolver, RevoluteJointSoAViewer>
 	{
 	public:
 		struct CreateParams

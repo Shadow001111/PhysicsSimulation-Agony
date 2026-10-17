@@ -1,55 +1,44 @@
 #pragma once
-#include "../../GlmTypes.h"
-#include "../../ContainerUtilities.h"
+#include "Physics/ContainerUtilities.h"
+#include "Physics/Types.h"
+
+// Define all scalar SoA fields.
+#define PS_AGONY_CAPSULE_SOA_SCALAR_FIELDS(F) \
+	F(colliderIndices, ColliderIndex) \
+	F(halfLength, Real) \
+	F(radius, Real)
 
 namespace PS_AGONY
 {
 	struct CapsuleSoA
 	{
-		SimdAlignedVector<ColliderIndex> colliderIndices;
-
-		SimdAlignedVector<Real> halfLength;
-		SimdAlignedVector<Real> radius;
+		#define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
+		PS_AGONY_CAPSULE_SOA_SCALAR_FIELDS(DECLARE_FIELD)
+		#undef DECLARE_FIELD
 
 		void append(
-			ColliderIndex colliderIndex,
-			Real halfLength,
-			Real radius
-		)
-		{
-			this->colliderIndices.push_back(colliderIndex);
-			this->halfLength.push_back(halfLength);
-			this->radius.push_back(radius);
-		}
+		ColliderIndex colliderIndex,
+		Real halfLength,
+		Real radius
+		);
+
+		void swapWithBack(size_t index);
+		void popBack();
 
 		size_t getCount() const noexcept { return colliderIndices.size(); }
-
-		size_t getMemoryUsage() const noexcept
-		{
-			return
-				PS_AGONY::getVectorMemoryUsage(colliderIndices) +
-				PS_AGONY::getVectorMemoryUsage(halfLength) +
-				PS_AGONY::getVectorMemoryUsage(radius);
-		}
+		size_t getMemoryUsage() const noexcept;
 	};
 
 	class CapsuleSoAViewer
 	{
 		size_t count = 0;
 	public:
-		const ColliderIndex* colliderIndices = nullptr;
-		const Real* halfLength = nullptr;
-		const Real* radius = nullptr;
+		#define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
+		PS_AGONY_CAPSULE_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
+		#undef DECLARE_VIEWER_FIELD
 
 		CapsuleSoAViewer() = default;
-
-		explicit CapsuleSoAViewer(const CapsuleSoA& data) :
-			count(data.getCount()),
-			colliderIndices(data.colliderIndices.data()),
-			halfLength(data.halfLength.data()),
-			radius(data.radius.data())
-		{
-		}
+		explicit CapsuleSoAViewer(const CapsuleSoA& data) noexcept;
 
 		size_t getCount() const noexcept { return count; }
 	};

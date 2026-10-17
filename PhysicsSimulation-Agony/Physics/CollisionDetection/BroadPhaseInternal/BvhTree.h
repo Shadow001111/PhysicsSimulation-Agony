@@ -76,10 +76,10 @@ namespace PS_AGONY::BroadPhaseInternal
 
 		struct LeafAABBSoA
 		{
-			RealSimdAlignedVector<LeafData> minX;
-			RealSimdAlignedVector<LeafData> maxX;
-			RealSimdAlignedVector<LeafData> minY;
-			RealSimdAlignedVector<LeafData> maxY;
+			CacheLineAlignedVector<LeafData> minX;
+			CacheLineAlignedVector<LeafData> maxX;
+			CacheLineAlignedVector<LeafData> minY;
+			CacheLineAlignedVector<LeafData> maxY;
 		};
 
 		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
@@ -96,11 +96,11 @@ namespace PS_AGONY::BroadPhaseInternal
 		LeafAABBSoA leafAABBs;
 
 		// Build scratch.
-		SimdAlignedVector<Real> centroidX;
-		SimdAlignedVector<Real> centroidY;
-		SimdAlignedVector<uint32_t> mortonCodes;
-		std::vector<PackedIndex> packedA;
-		std::vector<PackedIndex> packedB;
+		CacheLineAlignedVector<Real> centroidX;
+		CacheLineAlignedVector<Real> centroidY;
+		CacheLineAlignedVector<uint32_t> mortonCodes;
+		CacheLineAlignedVector<PackedIndex> packedA;
+		CacheLineAlignedVector<PackedIndex> packedB;
 	};
 
 	template <typename ShapeQuery>

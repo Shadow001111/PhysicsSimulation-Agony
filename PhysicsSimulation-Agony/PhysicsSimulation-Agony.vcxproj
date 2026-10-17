@@ -252,6 +252,17 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
     <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp" />
+    <ClCompile Include="Physics\SoA\ColliderSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Constraints\MotorSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Constraints\PrismaticJointSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Constraints\RevoluteJointSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Constraints\RodSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Constraints\SliderJointSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Constraints\SpringSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Shapes\BoxSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Shapes\CapsuleSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Shapes\CircleSoA.cpp" />
+    <ClCompile Include="Physics\SoA\Shapes\PolygonSoA.cpp" />
     <ClCompile Include="Physics\Solving\ConstraintScheduler.cpp" />
     <ClCompile Include="Physics\Solving\MotorSolver.cpp" />
     <ClCompile Include="Physics\Solving\RevoluteJointSolver.cpp" />
@@ -319,9 +330,7 @@
     <ClInclude Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\ObjectSoA.h" />
-    <ClInclude Include="Physics\GlmTypes.h" />
     <ClInclude Include="Physics\Material.h" />
-    <ClInclude Include="Physics\PrintUtilities.h" />
     <ClInclude Include="Physics\Simulation.h" />
     <ClInclude Include="Physics\SymmetricMatrix.h" />
     <ClInclude Include="Physics\Threading.h" />

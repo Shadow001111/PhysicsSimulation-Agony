@@ -1,4 +1,7 @@
 #include "BodySoA.h"
+#include <cmath>
+#include <utility>
+
 
 namespace PS_AGONY
 {
@@ -43,30 +46,13 @@ namespace PS_AGONY
 			return;
 		}
 
-		PS_AGONY_SWAP_WITH_BACK(renderOldOffsetX, index);
-		PS_AGONY_SWAP_WITH_BACK(renderOldOffsetY, index);
-		PS_AGONY_SWAP_WITH_BACK(renderOldRotation, index);
-		PS_AGONY_SWAP_WITH_BACK(renderRotationWrapCount, index);
+		#define SWAP_FIELD(name, type) PS_AGONY_SWAP_WITH_BACK(name, index);
+		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
+		#undef SWAP_FIELD
 
-		PS_AGONY_SWAP_WITH_BACK(offsetX, index);
-		PS_AGONY_SWAP_WITH_BACK(offsetY, index);
-		PS_AGONY_SWAP_WITH_BACK(localCenterOfMassX, index);
-		PS_AGONY_SWAP_WITH_BACK(localCenterOfMassY, index);
-		PS_AGONY_SWAP_WITH_BACK(worldCenterX, index);
-		PS_AGONY_SWAP_WITH_BACK(worldCenterY, index);
-		PS_AGONY_SWAP_WITH_BACK(velocityX, index);
-		PS_AGONY_SWAP_WITH_BACK(velocityY, index);
-		PS_AGONY_SWAP_WITH_BACK(rotation, index);
-		PS_AGONY_SWAP_WITH_BACK(angularVelocity, index);
-		PS_AGONY_SWAP_WITH_BACK(mass, index);
-		PS_AGONY_SWAP_WITH_BACK(invMass, index);
-		PS_AGONY_SWAP_WITH_BACK(inertia, index);
-		PS_AGONY_SWAP_WITH_BACK(invInertia, index);
-		PS_AGONY_SWAP_WITH_BACK(rotationCos, index);
-		PS_AGONY_SWAP_WITH_BACK(rotationSin, index);
-		PS_AGONY_SWAP_WITH_BACK(isStatic, index);
-		PS_AGONY_SWAP_WITH_BACK(attachments, index);
-		PS_AGONY_SWAP_WITH_BACK(colliderIndices, index);
+		#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+		#undef SWAP_VECTOR_FIELD
 	}
 
 	void BodySoA::popBack()
@@ -76,30 +62,13 @@ namespace PS_AGONY
 			return;
 		}
 
-		renderOldOffsetX.pop_back();
-		renderOldOffsetY.pop_back();
-		renderOldRotation.pop_back();
-		renderRotationWrapCount.pop_back();
+		#define POP_FIELD(name, type) name.pop_back();
+		PS_AGONY_BODY_SOA_SCALAR_FIELDS(POP_FIELD)
+		#undef POP_FIELD
 
-		offsetX.pop_back();
-		offsetY.pop_back();
-		localCenterOfMassX.pop_back();
-		localCenterOfMassY.pop_back();
-		worldCenterX.pop_back();
-		worldCenterY.pop_back();
-		velocityX.pop_back();
-		velocityY.pop_back();
-		rotation.pop_back();
-		angularVelocity.pop_back();
-		mass.pop_back();
-		invMass.pop_back();
-		inertia.pop_back();
-		invInertia.pop_back();
-		rotationCos.pop_back();
-		rotationSin.pop_back();
-		isStatic.pop_back();
-		attachments.pop_back();
-		colliderIndices.pop_back();
+		#define POP_VECTOR_FIELD(name, innerType) name.pop_back();
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(POP_VECTOR_FIELD)
+		#undef POP_VECTOR_FIELD
 	}
 
 	void BodySoA::addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
@@ -152,42 +121,28 @@ namespace PS_AGONY
 
 	size_t BodySoA::getMemoryUsage() const noexcept
 	{
-		size_t total =
-			getVectorMemoryUsage(renderOldOffsetX) +
-			getVectorMemoryUsage(renderOldOffsetY) +
-			getVectorMemoryUsage(renderOldRotation) +
-			getVectorMemoryUsage(renderRotationWrapCount) +
+		size_t total = 0;
 
-			getVectorMemoryUsage(offsetX) +
-			getVectorMemoryUsage(offsetY) +
-			getVectorMemoryUsage(localCenterOfMassX) +
-			getVectorMemoryUsage(localCenterOfMassY) +
-			getVectorMemoryUsage(worldCenterX) +
-			getVectorMemoryUsage(worldCenterY) +
-			getVectorMemoryUsage(velocityX) +
-			getVectorMemoryUsage(velocityY) +
-			getVectorMemoryUsage(rotation) +
-			getVectorMemoryUsage(angularVelocity) +
-			getVectorMemoryUsage(mass) +
-			getVectorMemoryUsage(invMass) +
-			getVectorMemoryUsage(inertia) +
-			getVectorMemoryUsage(invInertia) +
-			getVectorMemoryUsage(rotationCos) +
-			getVectorMemoryUsage(rotationSin) +
-			getVectorMemoryUsage(isStatic);
+		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
+		PS_AGONY_BODY_SOA_SCALAR_FIELDS(MEM_FIELD)
+		#undef MEM_FIELD
 
-		total += getVectorMemoryUsage(attachments);
-		for (const auto& bodyAttachments : attachments)
-		{
-			total += getVectorMemoryUsage(bodyAttachments);
-		}
+		#define MEM_VECTOR_FIELD(name, innerType) \
+		total += getVectorMemoryUsage(name); \
+		for (const auto& innerVec : name) { total += getVectorMemoryUsage(innerVec); }
 
-		total += getVectorMemoryUsage(colliderIndices);
-		for (const auto& bodyColliders : colliderIndices)
-		{
-			total += getVectorMemoryUsage(bodyColliders);
-		}
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(MEM_VECTOR_FIELD)
+		#undef MEM_VECTOR_FIELD
 
 		return total;
+	}
+
+	BodySoAViewer::BodySoAViewer(const BodySoA& data) noexcept :
+		count(data.getCount())
+	{
+		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
+		PS_AGONY_BODY_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(INIT_VIEWER_FIELD)
+		#undef INIT_VIEWER_FIELD
 	}
 }

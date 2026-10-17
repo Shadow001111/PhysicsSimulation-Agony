@@ -1,98 +1,44 @@
 #pragma once
-#include "Physics/GlmTypes.h"
 #include "Physics/ContainerUtilities.h"
+#include "Physics/Types.h"
 
-#include <algorithm>
+// Define all scalar SoA fields.
+#define PS_AGONY_REVOLUTE_JOINT_SOA_SCALAR_FIELDS(F) \
+    F(bodyIndexA, ObjectIndex) \
+    F(bodyIndexB, ObjectIndex) \
+    F(localAnchorA, Vec2) \
+    F(localAnchorB, Vec2) \
+    F(stiffness, Real) \
+    F(damping, Real)
 
 namespace PS_AGONY
 {
-	// Revolute joint: pins localAnchorA (on bodyA) to localAnchorB (on bodyB) together,
-	// leaving rotation free.
-	struct RevoluteJointSoA
-	{
-		std::vector<ObjectIndex> bodyIndexA;
-		std::vector<ObjectIndex> bodyIndexB;
-		std::vector<Vec2> localAnchorA;
-		std::vector<Vec2> localAnchorB;
-		std::vector<Real> stiffness;
-		std::vector<Real> damping;
+    // Revolute joint: pins localAnchorA (on bodyA) to localAnchorB (on bodyB) together,
+    // leaving rotation free.
+    struct RevoluteJointSoA
+    {
+        #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
+        PS_AGONY_REVOLUTE_JOINT_SOA_SCALAR_FIELDS(DECLARE_FIELD)
+        #undef DECLARE_FIELD
 
-		ObjectIndex append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping)
-		{
-			const ObjectIndex newIndex = this->bodyIndexA.size();
+        ObjectIndex append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping);
+        size_t swapRemove(size_t index);
 
-			this->bodyIndexA.push_back(indexA);
-			this->bodyIndexB.push_back(indexB);
-			this->localAnchorA.push_back(anchorA);
-			this->localAnchorB.push_back(anchorB);
-			this->stiffness.push_back(stiffness);
-			this->damping.push_back(damping);
+        size_t getCount() const noexcept { return bodyIndexA.size(); }
+        size_t getMemoryUsage() const noexcept;
+    };
 
-			return newIndex;
-		}
+    class RevoluteJointSoAViewer
+    {
+        size_t count = 0;
+    public:
+        #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
+        PS_AGONY_REVOLUTE_JOINT_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
+        #undef DECLARE_VIEWER_FIELD
 
-		size_t getCount() const noexcept { return bodyIndexA.size(); }
+        RevoluteJointSoAViewer() = default;
+        explicit RevoluteJointSoAViewer(const RevoluteJointSoA& data) noexcept;
 
-		size_t getMemoryUsage() const noexcept
-		{
-			return
-				PS_AGONY::getVectorMemoryUsage(bodyIndexA) +
-				PS_AGONY::getVectorMemoryUsage(bodyIndexB) +
-				PS_AGONY::getVectorMemoryUsage(localAnchorA) +
-				PS_AGONY::getVectorMemoryUsage(localAnchorB) +
-				PS_AGONY::getVectorMemoryUsage(stiffness) +
-				PS_AGONY::getVectorMemoryUsage(damping);
-		}
-
-		size_t swapRemove(size_t index)
-		{
-			const size_t lastIndex = bodyIndexA.size() - 1;
-
-			if (index != lastIndex)
-			{
-				std::swap(bodyIndexA[index], bodyIndexA[lastIndex]);
-				std::swap(bodyIndexB[index], bodyIndexB[lastIndex]);
-				std::swap(localAnchorA[index], localAnchorA[lastIndex]);
-				std::swap(localAnchorB[index], localAnchorB[lastIndex]);
-				std::swap(stiffness[index], stiffness[lastIndex]);
-				std::swap(damping[index], damping[lastIndex]);
-			}
-
-			bodyIndexA.pop_back();
-			bodyIndexB.pop_back();
-			localAnchorA.pop_back();
-			localAnchorB.pop_back();
-			stiffness.pop_back();
-			damping.pop_back();
-
-			return lastIndex;
-		}
-	};
-
-	class JointSoAViewer
-	{
-		size_t count = 0;
-	public:
-		const ObjectIndex* bodyIndexA = nullptr;
-		const ObjectIndex* bodyIndexB = nullptr;
-		const Vec2* localAnchorA = nullptr;
-		const Vec2* localAnchorB = nullptr;
-		const Real* stiffness = nullptr;
-		const Real* damping = nullptr;
-
-		JointSoAViewer() = default;
-
-		explicit JointSoAViewer(const RevoluteJointSoA& data) noexcept :
-			count(data.getCount()),
-			bodyIndexA(data.bodyIndexA.data()),
-			bodyIndexB(data.bodyIndexB.data()),
-			localAnchorA(data.localAnchorA.data()),
-			localAnchorB(data.localAnchorB.data()),
-			stiffness(data.stiffness.data()),
-			damping(data.damping.data())
-		{
-		}
-
-		size_t getCount() const noexcept { return count; }
-	};
+        size_t getCount() const noexcept { return count; }
+    };
 }

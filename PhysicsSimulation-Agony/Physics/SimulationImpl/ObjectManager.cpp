@@ -1,8 +1,10 @@
 #include "ObjectManager.h"
 #include "PhysicsGeometry.h"
 #include "PolygonBuild.h"
-#include <cmath>
 
+#include "Physics/Limits.h"
+
+#include <cmath>
 #include <iostream>
 
 namespace PS_AGONY

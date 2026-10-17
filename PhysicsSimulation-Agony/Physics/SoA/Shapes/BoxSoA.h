@@ -1,54 +1,44 @@
 #pragma once
-#include "../../GlmTypes.h"
-#include "../../ContainerUtilities.h"
+#include "Physics/ContainerUtilities.h"
+#include "Physics/Types.h"
+
+// Define all scalar SoA fields.
+#define PS_AGONY_BOX_SOA_SCALAR_FIELDS(F) \
+	F(colliderIndices, ColliderIndex) \
+	F(halfWidth, Real) \
+	F(halfHeight, Real)
 
 namespace PS_AGONY
 {
 	struct BoxSoA
 	{
-		SimdAlignedVector<ColliderIndex> colliderIndices;
-
-		std::vector<Real> halfWidth;
-		std::vector<Real> halfHeight;
+		#define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
+		PS_AGONY_BOX_SOA_SCALAR_FIELDS(DECLARE_FIELD)
+		#undef DECLARE_FIELD
 
 		void append(
-			ColliderIndex colliderIndex,
-			Real halfWidth,
-			Real halfHeight
-		)
-		{
-			this->colliderIndices.push_back(colliderIndex);
-			this->halfWidth.push_back(halfWidth);
-			this->halfHeight.push_back(halfHeight);
-		}
+		ColliderIndex colliderIndex,
+		Real halfWidth,
+		Real halfHeight
+		);
+
+		void swapWithBack(size_t index);
+		void popBack();
 
 		size_t getCount() const noexcept { return colliderIndices.size(); }
-
-		size_t getMemoryUsage() const noexcept
-		{
-			return
-				PS_AGONY::getVectorMemoryUsage(colliderIndices) +
-				PS_AGONY::getVectorMemoryUsage(halfWidth) +
-				PS_AGONY::getVectorMemoryUsage(halfHeight);
-		}
+		size_t getMemoryUsage() const noexcept;
 	};
 
 	class BoxSoAViewer
 	{
 		size_t count = 0;
 	public:
-		const ColliderIndex* colliderIndices = nullptr;
-		const Real* halfWidth = nullptr;
-		const Real* halfHeight = nullptr;
+		#define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
+		PS_AGONY_BOX_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
+		#undef DECLARE_VIEWER_FIELD
 
 		BoxSoAViewer() = default;
-
-		explicit BoxSoAViewer(const BoxSoA& data) :
-			count(data.getCount()),
-			colliderIndices(data.colliderIndices.data()),
-			halfWidth(data.halfWidth.data()),
-			halfHeight(data.halfHeight.data())
-		{}
+		explicit BoxSoAViewer(const BoxSoA& data) noexcept;
 
 		size_t getCount() const noexcept { return count; }
 	};

@@ -1,6 +1,6 @@
 #pragma once
 #include "Ecstasy/Core/Simd.h"
-#include "Physics/GlmTypes.h"
+#include "Physics/Types.h"
 
 namespace PS_AGONY::BroadPhaseInternal
 {

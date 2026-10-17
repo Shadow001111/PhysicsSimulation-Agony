@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/GlmTypes.h"
+#include "Physics/Types.h"
 
 #include <optional>
 

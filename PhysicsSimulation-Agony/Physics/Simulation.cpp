@@ -236,7 +236,7 @@ namespace PS_AGONY
 
         // Set data viewers.
         broadPhaseCollisionDetector.setDataViewers(
-            AABBSoAViewer(objectManager.colliders.aabb),
+            AABBSoAViewer(objectManager.colliders),
             objectManager.colliders.bodyIndex.data()
         );
 
@@ -358,7 +358,7 @@ namespace PS_AGONY
         }
 
         broadPhaseCollisionDetector.setDataViewers(
-            AABBSoAViewer(objectManager.colliders.aabb),
+            AABBSoAViewer(objectManager.colliders),
             objectManager.colliders.bodyIndex.data()
         );
 
@@ -410,10 +410,10 @@ namespace PS_AGONY
         const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = objectManager.circles.colliderIndices.data();
         const Real* ECSTASY_RESTRICT radiusPtr = objectManager.circles.radius.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabbMinX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabbMinY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabbMaxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabbMaxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -446,10 +446,10 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfWidthPtr = objectManager.boxes.halfWidth.data();
         const Real* ECSTASY_RESTRICT halfHeightPtr = objectManager.boxes.halfHeight.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabbMinX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabbMinY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabbMaxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabbMaxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -490,10 +490,10 @@ namespace PS_AGONY
         const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = objectManager.polygons.colliderIndices.data();
         const PolygonGeometry* ECSTASY_RESTRICT geometryPtr = objectManager.polygons.geometry.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabbMinX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabbMinY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabbMaxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabbMaxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
@@ -547,10 +547,10 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT halfLengthPtr = objectManager.capsules.halfLength.data();
         const Real* ECSTASY_RESTRICT radiusPtr = objectManager.capsules.radius.data();
 
-        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabb.minX.data();
-        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabb.minY.data();
-        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabb.maxX.data();
-        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabb.maxY.data();
+        Real* ECSTASY_RESTRICT aabbMinXPtr = objectManager.colliders.aabbMinX.data();
+        Real* ECSTASY_RESTRICT aabbMinYPtr = objectManager.colliders.aabbMinY.data();
+        Real* ECSTASY_RESTRICT aabbMaxXPtr = objectManager.colliders.aabbMaxX.data();
+        Real* ECSTASY_RESTRICT aabbMaxYPtr = objectManager.colliders.aabbMaxY.data();
 
         for (size_t i = 0; i < count; i++)
         {
