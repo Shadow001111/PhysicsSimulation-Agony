@@ -162,7 +162,8 @@
       <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;EcstasyLibD.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
@@ -199,7 +200,8 @@
       <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;EcstasyLib.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
@@ -236,7 +238,8 @@
       <AdditionalDependencies>glfw3.lib;opengl32.lib;freetype.lib;EcstasyLib.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)res" "$(TargetDir)res" /E /I /Y</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>taskkill /f /fi "imagename eq $(TargetFileName)"</Command>
@@ -267,14 +270,10 @@
     <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\PolygonDecomposition.cpp" />
     <ClCompile Include="Physics\Solving\WaveRunner.cpp" />
-    <ClCompile Include="Render\SimulationRenderer.cpp" />
     <ClCompile Include="Physics\Threading.cpp" />
     <ClCompile Include="Physics\Solving\RodSolver.cpp" />
-    <ClCompile Include="Render\SimulationRenderer_Colliders.cpp" />
-    <ClCompile Include="Render\SimulationRenderer_Constraints.cpp" />
     <ClCompile Include="Physics\Solving\SolverBase.cpp" />
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
-    <ClCompile Include="Render\ShapeRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h" />
@@ -324,7 +323,6 @@
     <ClInclude Include="Physics\Material.h" />
     <ClInclude Include="Physics\PrintUtilities.h" />
     <ClInclude Include="Physics\Simulation.h" />
-    <ClInclude Include="Physics\SharedScratchBuffers.h" />
     <ClInclude Include="Physics\SymmetricMatrix.h" />
     <ClInclude Include="Physics\Threading.h" />
     <ClInclude Include="Physics\Types.h" />
@@ -332,13 +330,9 @@
     <ClInclude Include="Physics\Solving\PrismaticJointSolver.h" />
     <ClInclude Include="Physics\SimulationImpl\PolygonDecomposition.h" />
     <ClInclude Include="Physics\Solving\WaveRunner.h" />
-    <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Physics\Solving\RodSolver.h" />
-    <ClInclude Include="Render\SimulationRenderer_Internal.h" />
-    <ClInclude Include="Physics\ScratchBuffer.h" />
     <ClInclude Include="Physics\Solving\SolverBase.h" />
     <ClInclude Include="Physics\Solving\SpringSolver.h" />
-    <ClInclude Include="Render\ShapeRenderer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
