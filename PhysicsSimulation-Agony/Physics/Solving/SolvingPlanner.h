@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <queue>
 #include <vector>
+#include <span>
 
 namespace PS_AGONY
 {
@@ -26,7 +27,7 @@ namespace PS_AGONY
         void printExecutionPlan() const;
 
         [[nodiscard]] double computeEfficiency() const;
-        [[nodiscard]] bool validateNoCrossing(const std::vector<ObjectPair>& collisions, size_t bodyCount) const;
+        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount) const;
         [[nodiscard]] size_t getMemoryUsage() const;
         [[nodiscard]] size_t getWorkerCount() const noexcept { return workerCount; };
         [[nodiscard]] const auto& getFlatIndices() const noexcept { return flatIndices; }
@@ -80,17 +81,17 @@ namespace PS_AGONY
             return instance;
         }
 
-        void planStandardExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan);
-        void planSimdAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t workerCount, size_t chunkSize, SolvingPlan& outPlan);
+        void planStandardExecution(std::span<const ObjectPair> collisions, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan);
+        void planSimdAwareExecution(std::span<const ObjectPair> collisions, size_t bodyCount, size_t workerCount, size_t chunkSize, SolvingPlan& outPlan);
         void planCacheLineAwareExecution(
-            const std::vector<ObjectPair>& collisions,
+            std::span<const ObjectPair> collisions,
             size_t bodyCount,
             size_t workerCount,
             size_t bodyStrideBytes,
             size_t cacheLineBytes,
             SolvingPlan& outPlan);
         void planCacheSharingAwareExecution(
-            const std::vector<ObjectPair>& collisions,
+            std::span<const ObjectPair> collisions,
             size_t bodyCount,
             size_t workerCount,
             size_t bodyStrideBytes,

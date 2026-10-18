@@ -224,15 +224,11 @@ namespace PS_AGONY::Integrator
         TRACY_SCOPE_NC("Damp angular velocities", Ecstasy::Core::Color::Red);
 
         // Get pointers.
-        Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
-        Real* ECSTASY_RESTRICT velocityYPtr = bodies.velocityY.data();
-        const Real* ECSTASY_RESTRICT invMassPtr = bodies.invMass.data();
+        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
+        Real* ECSTASY_RESTRICT invInertiaPtr = bodies.invInertia.data();
 
         // Precompute.
         const RealSimd zeros = RealSimd(Real(0));
-
-        Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
-        Real* ECSTASY_RESTRICT invInertiaPtr = bodies.invInertia.data();
 
         const Real damping = std::pow(settings.angularVelocityDamping, deltaTime);
         const RealSimd dampingV(damping);

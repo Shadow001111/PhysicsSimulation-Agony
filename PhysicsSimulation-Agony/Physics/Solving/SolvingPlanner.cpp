@@ -27,8 +27,14 @@ namespace PS_AGONY
         return static_cast<size_t>(key);
     }
 
-    void SolvingPlanner::planStandardExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan)
+    void SolvingPlanner::planStandardExecution(
+        std::span<const ObjectPair> collisions,
+        size_t bodyCount,
+        size_t workerCount,
+        SolvingPlan& outPlan
+    )
     {
+        const ObjectPair* collisionsPtr = collisions.data();
         const size_t collisionCount = collisions.size();
 
         outPlan.workerCount = workerCount;
@@ -71,7 +77,7 @@ namespace PS_AGONY
                 TRACY_SCOPE_NC("Pass1", Ecstasy::Core::Color::Cyan);
                 for (size_t idx : remainingIndices)
                 {
-                    const ObjectPair& c = collisions[idx];
+                    const ObjectPair& c = collisionsPtr[idx];
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
@@ -118,7 +124,7 @@ namespace PS_AGONY
                 TRACY_SCOPE_NC("Pass2", Ecstasy::Core::Color::Yellow);
                 for (size_t idx : delayedIndices)
                 {
-                    const ObjectPair& c = collisions[idx];
+                    const ObjectPair& c = collisionsPtr[idx];
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
@@ -157,8 +163,15 @@ namespace PS_AGONY
         }
     }
 
-    void SolvingPlanner::planSimdAwareExecution(const std::vector<ObjectPair>& collisions, size_t bodyCount, size_t workerCount, size_t chunkSize, SolvingPlan& outPlan)
+    void SolvingPlanner::planSimdAwareExecution(
+        std::span<const ObjectPair> collisions,
+        size_t bodyCount,
+        size_t workerCount,
+        size_t chunkSize,
+        SolvingPlan& outPlan
+    )
     {
+        const ObjectPair* collisionsPtr = collisions.data();
         const size_t collisionCount = collisions.size();
 
         outPlan.workerCount = workerCount;
@@ -212,7 +225,7 @@ namespace PS_AGONY
                     TRACY_SCOPE_NC("Pass1", Ecstasy::Core::Color::Cyan);
                     for (size_t idx : wavePool)
                     {
-                        const ObjectPair& c = collisions[idx];
+                        const ObjectPair& c = collisionsPtr[idx];
                         const uint8_t ownerA = usedBodies[c.a];
                         const uint8_t ownerB = usedBodies[c.b];
 
@@ -258,7 +271,7 @@ namespace PS_AGONY
                             for (size_t i = currSize - chunkRem; i < currSize; ++i)
                             {
                                 const size_t prevIdx = waveAssignments[chosenWorker][i];
-                                const ObjectPair& pc = collisions[prevIdx];
+                                const ObjectPair& pc = collisionsPtr[prevIdx];
                                 if (c.a == pc.a || c.a == pc.b || c.b == pc.a || c.b == pc.b)
                                 {
                                     simdConflict = true;
@@ -288,7 +301,7 @@ namespace PS_AGONY
                     TRACY_SCOPE_NC("Pass2", Ecstasy::Core::Color::Yellow);
                     for (size_t idx : delayedIndices)
                     {
-                        const ObjectPair& c = collisions[idx];
+                        const ObjectPair& c = collisionsPtr[idx];
                         const uint8_t ownerA = usedBodies[c.a];
                         const uint8_t ownerB = usedBodies[c.b];
 
@@ -310,7 +323,7 @@ namespace PS_AGONY
                             for (size_t i = currSize - chunkRem; i < currSize; ++i)
                             {
                                 const size_t prevIdx = waveAssignments[chosenWorker][i];
-                                const ObjectPair& pc = collisions[prevIdx];
+                                const ObjectPair& pc = collisionsPtr[prevIdx];
                                 if (c.a == pc.a || c.a == pc.b || c.b == pc.a || c.b == pc.b)
                                 {
                                     simdConflict = true;
@@ -368,13 +381,14 @@ namespace PS_AGONY
     }
 
     void SolvingPlanner::planCacheLineAwareExecution(
-        const std::vector<ObjectPair>& collisions,
+        std::span<const ObjectPair> collisions,
         size_t bodyCount,
         size_t workerCount,
         size_t bodyStrideBytes,
         size_t cacheLineBytes,
         SolvingPlan& outPlan)
     {
+        const ObjectPair* collisionsPtr = collisions.data();
         const size_t collisionCount = collisions.size();
 
         outPlan.workerCount = workerCount;
@@ -423,7 +437,7 @@ namespace PS_AGONY
                 TRACY_SCOPE_NC("Pass1", Ecstasy::Core::Color::Cyan);
                 for (size_t idx : remainingIndices)
                 {
-                    const ObjectPair& c = collisions[idx];
+                    const ObjectPair& c = collisionsPtr[idx];
                     const size_t groupA = c.a / bodiesPerCacheLine;
                     const size_t groupB = c.b / bodiesPerCacheLine;
 
@@ -473,7 +487,7 @@ namespace PS_AGONY
                 TRACY_SCOPE_NC("Pass2", Ecstasy::Core::Color::Yellow);
                 for (size_t idx : delayedIndices)
                 {
-                    const ObjectPair& c = collisions[idx];
+                    const ObjectPair& c = collisionsPtr[idx];
                     const uint8_t ownerA = usedBodies[c.a];
                     const uint8_t ownerB = usedBodies[c.b];
 
@@ -513,7 +527,7 @@ namespace PS_AGONY
     }
 
     void SolvingPlanner::planCacheSharingAwareExecution(
-        const std::vector<ObjectPair>& collisions,
+        std::span<const ObjectPair> collisions,
         size_t bodyCount,
         size_t workerCount,
         size_t bodyStrideBytes,
@@ -521,6 +535,7 @@ namespace PS_AGONY
         SolvingPlan& outPlan,
         const uint8_t* isStatic)
     {
+        const ObjectPair* collisionsPtr = collisions.data();
         const size_t collisionCount = collisions.size();
 
         outPlan.workerCount = workerCount;
@@ -652,7 +667,7 @@ namespace PS_AGONY
         remainingIndices.clear();
         for (size_t idx = 0; idx < collisionCount; idx++)
         {
-            const ObjectPair& c = collisions[idx];
+            const ObjectPair& c = collisionsPtr[idx];
             if (isStaticBody(c.a) && isStaticBody(c.b)) continue;
             remainingIndices.push_back(idx);
         }
@@ -679,7 +694,7 @@ namespace PS_AGONY
 
             for (size_t idx : remainingIndices)
             {
-                const ObjectPair& c = collisions[idx];
+                const ObjectPair& c = collisionsPtr[idx];
                 size_t ga, gb;
                 groupsOf(c, ga, gb);
 
@@ -690,7 +705,7 @@ namespace PS_AGONY
             // Phase 1: Interior collisions assigned to persistent owners.
             for (size_t idx : interiorIndices)
             {
-                const ObjectPair& c = collisions[idx];
+                const ObjectPair& c = collisionsPtr[idx];
                 size_t ga, gb;
                 groupsOf(c, ga, gb);
                 const uint8_t chosen = groupOwner[ga];
@@ -704,7 +719,7 @@ namespace PS_AGONY
             delayedIndices.clear();
             for (size_t idx : boundaryIndices)
             {
-                const ObjectPair& c = collisions[idx];
+                const ObjectPair& c = collisionsPtr[idx];
                 size_t ga, gb;
                 groupsOf(c, ga, gb);
 
@@ -737,7 +752,7 @@ namespace PS_AGONY
             // Phase 2 (Pass B): Boundary collisions (partially claimed groups inherit active worker).
             for (size_t idx : delayedIndices)
             {
-                const ObjectPair& c = collisions[idx];
+                const ObjectPair& c = collisionsPtr[idx];
                 size_t ga, gb;
                 groupsOf(c, ga, gb);
 
@@ -841,12 +856,14 @@ namespace PS_AGONY
         return static_cast<double>(scheduled) / (static_cast<double>(workerCount) * maxLoad) * 100.0;
     }
 
-    bool SolvingPlan::validateNoCrossing(const std::vector<ObjectPair>& collisions, size_t bodyCount) const
+    bool SolvingPlan::validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount) const
     {
         if (workerCount == 0) return passOffsets.empty();
 
         const size_t numWaves = passOffsets.size() / workerCount;
         std::vector<int32_t> bodyOwner(bodyCount, -1);
+
+        const ObjectPair* collisionsPtr = collisions.data();
 
         for (size_t wave = 0; wave < numWaves; ++wave)
         {
@@ -860,7 +877,7 @@ namespace PS_AGONY
                 for (size_t i = 0; i < static_cast<size_t>(pass.size); ++i)
                 {
                     size_t collisionIdx = flatIndices[static_cast<size_t>(pass.start) + i];
-                    const ObjectPair& c = collisions[collisionIdx];
+                    const ObjectPair& c = collisionsPtr[collisionIdx];
 
                     const int32_t workerId = static_cast<int32_t>(worker);
                     if (bodyOwner[c.a] != -1 && bodyOwner[c.a] != workerId)
@@ -873,7 +890,6 @@ namespace PS_AGONY
                 }
             }
         }
-
         return true;
     }
 

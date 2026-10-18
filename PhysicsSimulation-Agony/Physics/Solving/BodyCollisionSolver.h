@@ -76,13 +76,13 @@ namespace PS_AGONY
 		const std::vector<Material>* materials = nullptr;
 		ColliderSoAViewer colliders;
 
-		std::vector<ObjectPair> collidingBodyPairs;
+		CacheLineAlignedVector<ObjectPair> collidingBodyPairs;
 
 		// All containers below are indexed in solving order.
-		std::vector<VelocityHotData> velocityHotContainer;
-		std::vector<PositionHotData> positionHotContainer;
-		std::vector<VelocityConstraintData> velocityConstraintContainer;
-		std::vector<FrictionData> frictionDataContainer;
+		CacheLineAlignedVector<VelocityHotData> velocityHotContainer;
+		CacheLineAlignedVector<PositionHotData> positionHotContainer;
+		CacheLineAlignedVector<VelocityConstraintData> velocityConstraintContainer;
+		CacheLineAlignedVector<FrictionData> frictionDataContainer;
 
 		size_t activeCollisionCount = 0;
 

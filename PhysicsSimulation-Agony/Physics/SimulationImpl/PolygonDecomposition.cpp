@@ -274,7 +274,7 @@ namespace PS_AGONY::PhysicsGeometry
             if (reflexIdx == -1) return std::vector<std::vector<Vec2>>{ polygon };
 
             int bestJ = -1;
-            Real minDist = std::numeric_limits<Real>::infinity();
+            Real minDist = std::numeric_limits<Real>::max();
 
             for (size_t j = 0; j < n; ++j)
             {
@@ -373,7 +373,7 @@ namespace PS_AGONY::PhysicsGeometry
                 bisector /= normB;
             }
 
-            Real bestT = std::numeric_limits<Real>::infinity();
+            Real bestT = std::numeric_limits<Real>::max();
             Vec2 bestHit(0);
             int bestEdgeK = -1;
 
