@@ -36,8 +36,8 @@ namespace PS_AGONY
 
 		struct PositionConstraintData
 		{
-			Vec2 transformedAnchorA;
-			Vec2 transformedAnchorB;
+			// penetration + dot(posB0 - posA0, normal). Current penetration = this - dot(posB - posA, normal).
+			Real penetrationBase;
 		};
 
 		struct SimulationSettings

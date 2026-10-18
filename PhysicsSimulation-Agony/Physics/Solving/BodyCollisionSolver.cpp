@@ -141,17 +141,10 @@ namespace PS_AGONY
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
-			// Compute world anchors.
 			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
-			const PositionConstraintData& positionConstraintData = positionConstraintContainer[c];
-			const Vec2 worldAnchorA = positionA + positionConstraintData.transformedAnchorA;
-			const Vec2 worldAnchorB = positionB + positionConstraintData.transformedAnchorB;
-
-			// Compute drift.
-			const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
-			const Real currentPenetration = data.penetration - drift;
+			const Real currentPenetration = positionConstraintContainer[c].penetrationBase - glm::dot(positionB - positionA, data.normal);
 
 			totalPenetration += std::fmax(currentPenetration, Real(0));
 
@@ -261,12 +254,9 @@ namespace PS_AGONY
 
 			const Vec2 centerOfMassA = positionA + localCOMA;
 			const Vec2 centerOfMassB = positionB + localCOMB;
-			{
-				const Vec2 contactPoint = data.contactPoints[0]; // Only the first point is used.
 
-				positionConstraintContainer[c].transformedAnchorA = contactPoint - positionA;
-				positionConstraintContainer[c].transformedAnchorB = contactPoint - positionB;
-			}
+			// Anchors cancel out (translation-only drift), so only the initial relative position along the normal matters.
+			positionConstraintContainer[c].penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal);
 			{
 				auto& velocityConstraint = velocityConstraintContainer[c];
 				auto& frictionData = frictionDataContainer[c];
@@ -579,6 +569,8 @@ namespace PS_AGONY
 						Real& accumulatedImpulse0 = collisionData.persistentContactData[0].normalImpulseAccumulator;
 						Real& accumulatedImpulse1 = collisionData.persistentContactData[1].normalImpulseAccumulator;
 
+						// TODO: K00/K01/K11 (and det/invDet) are constant per manifold; precompute in computeConstraintData.
+						// Tried once, no significant gain, so left as is.
 						const Real rnA0 = glm::dot(contactData0.rAPerp, normal);
 						const Real rnB0 = glm::dot(contactData0.rBPerp, normal);
 						const Real rnA1 = glm::dot(contactData1.rAPerp, normal);
@@ -737,6 +729,8 @@ namespace PS_AGONY
 						Real& accumulatedImpulse0 = collisionData.persistentContactData[0].tangentImpulseAccumulator;
 						Real& accumulatedImpulse1 = collisionData.persistentContactData[1].tangentImpulseAccumulator;
 
+						// TODO: K00/K01/K11 (and det/invDet) are constant per manifold; precompute in computeConstraintData.
+						// Tried once, no significant gain, so left as is.
 						const Real rtA0 = glm::dot(contactData0.rAPerp, tangent);
 						const Real rtB0 = glm::dot(contactData0.rBPerp, tangent);
 						const Real rtA1 = glm::dot(contactData1.rAPerp, tangent);
@@ -925,18 +919,11 @@ namespace PS_AGONY
 			const Real invMassB = invMassPtr[bodyIndexB];
 			const Real effectiveMass = invMassA + invMassB;
 
-			// Re-derive the world anchors from the current (possibly already corrected) transforms.
 			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
-			const PositionConstraintData& positionConstraintData = constraintDataSpan[c];
-			const Vec2 worldAnchorA = positionA + positionConstraintData.transformedAnchorA;
-			const Vec2 worldAnchorB = positionB + positionConstraintData.transformedAnchorB;
-
-			// The anchors coincided (drift = 0) when depth was measured, so drift is exactly
-			// how much penetration has already been resolved since then.
-			const Real drift = glm::dot(worldAnchorB - worldAnchorA, data.normal);
-			const Real currentPenetration = data.penetration - drift;
+			// Penetration already resolved since measurement is the change of relative position along the normal.
+			const Real currentPenetration = constraintDataSpan[c].penetrationBase - glm::dot(positionB - positionA, data.normal);
 
 			const Real correctionDepth = currentPenetration - simulationSettings.positionCorrectionSlop;
 			if (correctionDepth <= Real(0)) continue;
