@@ -26,18 +26,19 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve collisions", Ecstasy::Core::Color::OliveDrab);
 
-		const size_t workerCount = planWorkerCount(narrowPhaseCollisions.size());
+		const size_t collisionCount = narrowPhaseCollisions.size();
+		const size_t workerCount = planWorkerCount(collisionCount);
 
 		// Single-threaded path.
 		if (workerCount <= 1)
 		{
-			activeCollisionData = narrowPhaseCollisions;
-			computeConstraintData(narrowPhaseCollisions);
+			activeCollisionCount = collisionCount;
+			computeConstraintData(narrowPhaseCollisions, nullptr, collisionCount);
 
 			{
 				TRACY_SCOPE_N("Solve collision constraints (Single-threaded)");
 
-				const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(narrowPhaseCollisions.size()) };
+				const SolvingPlan::Pass fullPass{ 0, static_cast<uint32_t>(collisionCount) };
 
 				applyWarmStarting(fullPass);
 
@@ -50,14 +51,14 @@ namespace PS_AGONY
 					solvePositionConstraints(fullPass);
 				}
 			}
+
+			scatterImpulses(narrowPhaseCollisions, nullptr, collisionCount);
 			return;
 		}
 
 		// Multi-threading path.
 		{
 			TRACY_SCOPE_NC("Collect body pairs from collision data", Ecstasy::Core::Color::Red);
-
-			const size_t collisionCount = narrowPhaseCollisions.size();
 
 			collidingBodyPairs.resize(collisionCount);
 			for (size_t i = 0; i < collisionCount; i++)
@@ -78,52 +79,33 @@ namespace PS_AGONY
 			//	solvingPlan
 			//);
 		}
-		{
-			TRACY_SCOPE_N("Reorder collision data");
 
-			const auto& flatIndices = solvingPlan.getFlatIndices();
-			const size_t mappedCount = flatIndices.size();
-			const size_t* ECSTASY_RESTRICT flatIndicesPtr = flatIndices.data();
+		// Constraint data is gathered straight through the plan's indices, so no separate reorder copy of the full data is needed.
+		const auto& flatIndices = solvingPlan.getFlatIndices();
+		const size_t mappedCount = flatIndices.size();
+		const size_t* flatIndicesPtr = flatIndices.data();
 
-			orderedCollisionData.resize(mappedCount);
-			for (size_t i = 0; i < mappedCount; i++)
-			{
-				const size_t originalIndex = flatIndicesPtr[i];
-				orderedCollisionData[i] = narrowPhaseCollisions[originalIndex];
-			}
-		}
-		activeCollisionData = orderedCollisionData;
-		computeConstraintData(orderedCollisionData);
+		activeCollisionCount = mappedCount;
+		computeConstraintData(narrowPhaseCollisions, flatIndicesPtr, mappedCount);
 
 		{
 			TRACY_SCOPE_N("Solve collision constraints (Multi-threaded)");
-			solveConstraintsThreaded(orderedCollisionData, velocityIterations, positionIterations);
+			solveConstraintsThreaded(velocityIterations, positionIterations);
 		}
 
-		// Scatter persistent contact data back to the detector's original container.
-		{
-			TRACY_SCOPE_N("Scatter persistent contact data back");
-			const auto& flatIndices = solvingPlan.getFlatIndices();
-			const size_t mappedCount = flatIndices.size();
-			for (size_t i = 0; i < mappedCount; i++)
-			{
-				const size_t originalIndex = flatIndices[i];
-				// narrowPhaseCollisions is const&, but persistentContactData is mutable -> legal write.
-				narrowPhaseCollisions[originalIndex].persistentContactData = orderedCollisionData[i].persistentContactData;
-			}
-		}
+		scatterImpulses(narrowPhaseCollisions, flatIndicesPtr, mappedCount);
 	}
 
 	void BodyCollisionSolver::reportNoCollisions()
 	{
-		activeCollisionData = {};
+		activeCollisionCount = 0;
 	}
 
 	Vec2 BodyCollisionSolver::computeConstraintErrors() const
 	{
 		TRACY_SCOPE_NC("Compute (body collision) constraint errors", Ecstasy::Core::Color::Gray);
 
-		const size_t collisionCount = activeCollisionData.size();
+		const size_t collisionCount = activeCollisionCount;
 		if (collisionCount == 0) return { Real(0), Real(0) };
 
 		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
@@ -137,14 +119,14 @@ namespace PS_AGONY
 
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const auto& data = activeCollisionData[c];
+			const VelocityHotData& data = velocityHotContainer[c];
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
 			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
-			const Real currentPenetration = positionConstraintContainer[c].penetrationBase - glm::dot(positionB - positionA, data.normal);
+			const Real currentPenetration = positionHotContainer[c].penetrationBase - glm::dot(positionB - positionA, data.normal);
 
 			totalPenetration += std::fmax(currentPenetration, Real(0));
 
@@ -177,12 +159,12 @@ namespace PS_AGONY
 	{
 		size_t total = sizeof(BodyCollisionSolver);
 
-		total += getVectorMemoryUsage(positionConstraintContainer);
+		total += getVectorMemoryUsage(velocityHotContainer);
+		total += getVectorMemoryUsage(positionHotContainer);
 		total += getVectorMemoryUsage(velocityConstraintContainer);
 		total += getVectorMemoryUsage(frictionDataContainer);
 
 		total += getVectorMemoryUsage(collidingBodyPairs);
-		total += getVectorMemoryUsage(orderedCollisionData);
 
 		total += solvingPlan.getMemoryUsage();
 
@@ -216,7 +198,7 @@ namespace PS_AGONY
 		return std::min(availableWorkerCount, neededWorkerCount);
 	}
 
-	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer)
+	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& source, const size_t* order, size_t collisionCount)
 	{
 		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -233,18 +215,18 @@ namespace PS_AGONY
 		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
 
 		// Resize containers.
-		const size_t collisionCount = collisionDataContainer.size();
-		positionConstraintContainer.resize(collisionCount);
+		velocityHotContainer.resize(collisionCount);
+		positionHotContainer.resize(collisionCount);
 		velocityConstraintContainer.resize(collisionCount);
 		frictionDataContainer.resize(collisionCount);
 
-		const BodyCollisionData* ECSTASY_RESTRICT collisionDataPtr = collisionDataContainer.data();
+		const BodyCollisionData* ECSTASY_RESTRICT sourcePtr = source.data();
 
 		// Compute constant data.
 		// No need to zero-initialize point data. Active points will have their data overwritten.
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const auto& data = collisionDataPtr[c];
+			const auto& data = sourcePtr[order ? order[c] : c];
 
 			const Vec2 positionA = { positionXPtr[data.bodyA], positionYPtr[data.bodyA] };
 			const Vec2 positionB = { positionXPtr[data.bodyB], positionYPtr[data.bodyB] };
@@ -256,7 +238,21 @@ namespace PS_AGONY
 			const Vec2 centerOfMassB = positionB + localCOMB;
 
 			// Anchors cancel out (translation-only drift), so only the initial relative position along the normal matters.
-			positionConstraintContainer[c].penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal);
+			{
+				VelocityHotData& velocityHot = velocityHotContainer[c];
+				velocityHot.bodyA = data.bodyA;
+				velocityHot.bodyB = data.bodyB;
+				velocityHot.normal = data.normal;
+				velocityHot.contactCount = data.contactCount;
+				velocityHot.impulses = data.persistentContactData;
+			}
+			{
+				PositionHotData& positionHot = positionHotContainer[c];
+				positionHot.bodyA = data.bodyA;
+				positionHot.bodyB = data.bodyB;
+				positionHot.normal = data.normal;
+				positionHot.penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal);
+			}
 			{
 				auto& velocityConstraint = velocityConstraintContainer[c];
 				auto& frictionData = frictionDataContainer[c];
@@ -320,11 +316,25 @@ namespace PS_AGONY
 		}
 	}
 
+	void BodyCollisionSolver::scatterImpulses(const std::vector<BodyCollisionData>& target, const size_t* order, size_t collisionCount) const
+	{
+		TRACY_SCOPE_N("Scatter persistent contact data back");
+
+		const VelocityHotData* ECSTASY_RESTRICT hotPtr = velocityHotContainer.data();
+		const BodyCollisionData* targetPtr = target.data();
+
+		// target is const&, but persistentContactData is mutable -> legal write.
+		for (size_t i = 0; i < collisionCount; i++)
+		{
+			targetPtr[order ? order[i] : i].persistentContactData = hotPtr[i].impulses;
+		}
+	}
+
 	void BodyCollisionSolver::applyWarmStarting(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Apply warm starting (body collisions)", Ecstasy::Core::Color::Violet);
 
-		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
+		std::span<const VelocityHotData> collisionDataSpan(velocityHotContainer.data() + pass.start, pass.size);
 		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
 
 		// Get pointers.
@@ -338,7 +348,7 @@ namespace PS_AGONY
 		const size_t collisionCount = collisionDataSpan.size();
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const BodyCollisionData& collisionData = collisionDataSpan[c];
+			const VelocityHotData& collisionData = collisionDataSpan[c];
 			const VelocityConstraintData& velocityConstraintData = constraintDataSpan[c];
 
 			// Get body indices.
@@ -365,8 +375,8 @@ namespace PS_AGONY
 			std::array<Vec2, 2> impulseArray{};
 			for (uint32_t i = 0; i < contactCount; i++)
 			{
-				Real oldJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
-				Real oldJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+				Real oldJn = collisionData.impulses[i].normalImpulseAccumulator;
+				Real oldJt = collisionData.impulses[i].tangentImpulseAccumulator;
 
 				impulseArray[i] = (oldJn * normal) + (oldJt * tangent);
 			}
@@ -410,7 +420,7 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve collision velocity constraints", Ecstasy::Core::Color::Violet);
 
-		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
+		std::span<VelocityHotData> collisionDataSpan(velocityHotContainer.data() + pass.start, pass.size);
 		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
 		std::span<const FrictionData> frictionDataSpan(frictionDataContainer.data() + pass.start, pass.size);
 
@@ -423,7 +433,7 @@ namespace PS_AGONY
 		const size_t collisionCount = collisionDataSpan.size();
 		for (size_t c = 0; c < collisionCount; c++)
 		{
-			const BodyCollisionData& collisionData = collisionDataSpan[c];
+			VelocityHotData& collisionData = collisionDataSpan[c];
 			const VelocityConstraintData& velocityConstraintData = constraintDataSpan[c];
 
 			const ObjectIndex bodyIndexA = collisionData.bodyA;
@@ -462,7 +472,7 @@ namespace PS_AGONY
 
 					const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 
-					Real& accumulatedJn = collisionData.persistentContactData[0].normalImpulseAccumulator;
+					Real& accumulatedJn = collisionData.impulses[0].normalImpulseAccumulator;
 					if (!(velocityAlongNormal > 0 && accumulatedJn == 0))
 					{
 						const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
@@ -490,7 +500,7 @@ namespace PS_AGONY
 
 					const Real jt = -currentSlipVel * contactData.tangentMass;
 
-					Real& accumulatedJt = collisionData.persistentContactData[0].tangentImpulseAccumulator;
+					Real& accumulatedJt = collisionData.impulses[0].tangentImpulseAccumulator;
 					const Real oldJt = accumulatedJt;
 					Real targetJt = oldJt + jt;
 					const Real jn = jnSingle;
@@ -535,7 +545,7 @@ namespace PS_AGONY
 							const Real velocityAlongNormal = glm::dot(relativeVelocity, normal);
 							const Real jn = (contactData.velocityBias - velocityAlongNormal) * contactData.normalMass;
 
-							Real& accumulatedJn = collisionData.persistentContactData[i].normalImpulseAccumulator;
+							Real& accumulatedJn = collisionData.impulses[i].normalImpulseAccumulator;
 							const Real oldJn = accumulatedJn;
 							accumulatedJn = std::fmax(Real(0), oldJn + jn);
 							const Real deltaJn = accumulatedJn - oldJn;
@@ -566,8 +576,8 @@ namespace PS_AGONY
 						const Real velocityAlongNormal0 = glm::dot(relativeVelocity0, normal);
 						const Real velocityAlongNormal1 = glm::dot(relativeVelocity1, normal);
 
-						Real& accumulatedImpulse0 = collisionData.persistentContactData[0].normalImpulseAccumulator;
-						Real& accumulatedImpulse1 = collisionData.persistentContactData[1].normalImpulseAccumulator;
+						Real& accumulatedImpulse0 = collisionData.impulses[0].normalImpulseAccumulator;
+						Real& accumulatedImpulse1 = collisionData.impulses[1].normalImpulseAccumulator;
 
 						// TODO: K00/K01/K11 (and det/invDet) are constant per manifold; precompute in computeConstraintData.
 						// Tried once, no significant gain, so left as is.
@@ -686,7 +696,7 @@ namespace PS_AGONY
 							const Real currentSlipVel = glm::dot(relativeVelocity, tangent);
 							const Real jt = -currentSlipVel * contactData.tangentMass;
 
-							Real& accumulatedJt = collisionData.persistentContactData[i].tangentImpulseAccumulator;
+							Real& accumulatedJt = collisionData.impulses[i].tangentImpulseAccumulator;
 							const Real oldJt = accumulatedJt;
 							Real targetJt = oldJt + jt;
 							const Real jn = jnArray[i];
@@ -726,8 +736,8 @@ namespace PS_AGONY
 						const Real velocityAlongTangent0 = glm::dot(relativeVelocity0, tangent);
 						const Real velocityAlongTangent1 = glm::dot(relativeVelocity1, tangent);
 
-						Real& accumulatedImpulse0 = collisionData.persistentContactData[0].tangentImpulseAccumulator;
-						Real& accumulatedImpulse1 = collisionData.persistentContactData[1].tangentImpulseAccumulator;
+						Real& accumulatedImpulse0 = collisionData.impulses[0].tangentImpulseAccumulator;
+						Real& accumulatedImpulse1 = collisionData.impulses[1].tangentImpulseAccumulator;
 
 						// TODO: K00/K01/K11 (and det/invDet) are constant per manifold; precompute in computeConstraintData.
 						// Tried once, no significant gain, so left as is.
@@ -898,8 +908,7 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_NC("Solve collision position constraints", Ecstasy::Core::Color::Indigo);
 
-		std::span<const BodyCollisionData> collisionDataSpan = activeCollisionData.subspan(pass.start, pass.size);
-		std::span<const PositionConstraintData> constraintDataSpan(positionConstraintContainer.data() + pass.start, pass.size);
+		std::span<const PositionHotData> collisionDataSpan(positionHotContainer.data() + pass.start, pass.size);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -923,7 +932,7 @@ namespace PS_AGONY
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
 			// Penetration already resolved since measurement is the change of relative position along the normal.
-			const Real currentPenetration = constraintDataSpan[c].penetrationBase - glm::dot(positionB - positionA, data.normal);
+			const Real currentPenetration = data.penetrationBase - glm::dot(positionB - positionA, data.normal);
 
 			const Real correctionDepth = currentPenetration - simulationSettings.positionCorrectionSlop;
 			if (correctionDepth <= Real(0)) continue;
@@ -943,7 +952,6 @@ namespace PS_AGONY
 	}
 
 	void BodyCollisionSolver::solveConstraintsThreaded(
-		const std::vector<BodyCollisionData>& collisionDataContainer,
 		uint32_t velocityIterations,
 		uint32_t positionIterations
 	)

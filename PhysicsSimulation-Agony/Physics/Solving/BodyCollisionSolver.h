@@ -34,8 +34,21 @@ namespace PS_AGONY
 			Real dynamicFriction;
 		};
 
-		struct PositionConstraintData
+		// Lean per-constraint streams: the solver loops never touch the full BodyCollisionData
+		// (colliders, contact points, ids, penetration). Built once in computeConstraintData.
+		// TODO: also cache invMassA/B and invInertiaA/B here to avoid per-iteration body gathers (not measured yet).
+		struct VelocityHotData
 		{
+			ObjectIndex bodyA, bodyB;
+			Vec2 normal;
+			uint32_t contactCount;
+			std::array<PersistentContactData, 2> impulses; // Working copy; scattered back to the detector's data at the end.
+		};
+
+		struct PositionHotData
+		{
+			ObjectIndex bodyA, bodyB;
+			Vec2 normal;
 			// penetration + dot(posB0 - posA0, normal). Current penetration = this - dot(posB - posA, normal).
 			Real penetrationBase;
 		};
@@ -64,13 +77,14 @@ namespace PS_AGONY
 		ColliderSoAViewer colliders;
 
 		std::vector<ObjectPair> collidingBodyPairs;
-		std::vector<BodyCollisionData> orderedCollisionData;
 
-		std::vector<PositionConstraintData> positionConstraintContainer;
+		// All containers below are indexed in solving order.
+		std::vector<VelocityHotData> velocityHotContainer;
+		std::vector<PositionHotData> positionHotContainer;
 		std::vector<VelocityConstraintData> velocityConstraintContainer;
 		std::vector<FrictionData> frictionDataContainer;
 
-		std::span<const BodyCollisionData> activeCollisionData;
+		size_t activeCollisionCount = 0;
 
 		SimulationSettings simulationSettings;
 	public:
@@ -104,7 +118,11 @@ namespace PS_AGONY
 
 		size_t planWorkerCount(size_t collisionCount) const;
 
-		void computeConstraintData(const std::vector<BodyCollisionData>& collisionDataContainer);
+		// Builds all constraint streams. If 'order' is not null, constraint c is built from source[order[c]].
+		void computeConstraintData(const std::vector<BodyCollisionData>& source, const size_t* order, size_t collisionCount);
+
+		// Writes the solved impulses back to the detector's (mutable) persistent contact data.
+		void scatterImpulses(const std::vector<BodyCollisionData>& target, const size_t* order, size_t collisionCount) const;
 
 		void applyWarmStarting(SolvingPlan::Pass pass);
 
@@ -113,7 +131,6 @@ namespace PS_AGONY
 		void solvePositionConstraints(SolvingPlan::Pass pass);
 
 		void solveConstraintsThreaded(
-			const std::vector<BodyCollisionData>& collisionDataContainer,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
