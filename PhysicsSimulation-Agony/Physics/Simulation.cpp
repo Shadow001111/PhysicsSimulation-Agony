@@ -15,11 +15,8 @@ namespace PS_AGONY
 
 
     Simulation::Simulation() :
-        objectManager(materials)
+        objectManager(materialManager.getMaterials())
     {
-        materials.reserve(16);
-        materials.emplace_back(); // Default material.
-
         const auto registerSystem = [this](IConstraintSystem& system) { constraintSystems[size_t(system.getType())] = &system; };
         registerSystem(springConstraintSystem);
         registerSystem(jointConstraintSystem);
@@ -108,9 +105,22 @@ namespace PS_AGONY
 
     MaterialIndex Simulation::createMaterial(const Material& material)
     {
-        const MaterialIndex materialIndex = materials.size();
-        materials.push_back(material);
-        return materialIndex;
+        return materialManager.create(material);
+    }
+
+    bool Simulation::destroyMaterial(MaterialIndex materialIndex)
+    {
+        if (!materialManager.destroy(materialIndex))
+            return false;
+
+        MaterialIndex* const colliderMaterials = objectManager.colliders.materialIndex.data();
+        const size_t colliderCount = objectManager.colliders.getCount();
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            if (colliderMaterials[i] == materialIndex)
+                colliderMaterials[i] = 0;
+        }
+        return true;
     }
 
     void Simulation::mainBodyHolderGrabAt(Vec2 grabPosition)
@@ -223,13 +233,6 @@ namespace PS_AGONY
             return;
         }
 
-        // Check if any material exist.
-        if (materials.empty()) [[unlikely]]
-        {
-            std::cerr << "[AGONY][Simulation]: Material count is zero, which should be impossible.\n";
-            materials.emplace_back(); // Default material.
-        }
-
         // Set data viewers.
         broadPhaseCollisionDetector.setDataViewers(
             AABBSoAViewer(objectManager.colliders),
@@ -248,7 +251,7 @@ namespace PS_AGONY
         bodyCollisionSolver.setDataViewers(
             objectManager.bodies,
             ColliderSoAViewer(objectManager.colliders),
-            materials
+            materialManager.getMaterials()
         );
 
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
@@ -891,7 +894,7 @@ namespace PS_AGONY
         data.polygonDataMemoryUsage = objectManager.polygons.getMemoryUsage();
         data.capsuleDataMemoryUsage = objectManager.capsules.getMemoryUsage();
 
-        data.materialDataMemoryUsage = materials.capacity() * sizeof(materials[0]);
+        data.materialDataMemoryUsage = materialManager.getMemoryUsage();
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
 

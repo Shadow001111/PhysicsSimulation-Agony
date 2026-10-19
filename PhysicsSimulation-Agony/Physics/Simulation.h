@@ -14,6 +14,7 @@
 
 #include "Integration/Integrator.h"
 
+#include "SimulationImpl/MaterialManager.h"
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
 
@@ -75,6 +76,9 @@ namespace PS_AGONY
 			bool trackBodyKineticEnergySum = false;
 		};
 	private:
+		// Materials. Declared before objectManager, which references its storage.
+		MaterialManager materialManager;
+
 		// Internal helpers.
 		ObjectManager objectManager;
 		FixedClock clock;
@@ -89,9 +93,6 @@ namespace PS_AGONY
 
 		ConstraintScheduler constraintScheduler;
 		ConstraintSystemArray constraintSystems{}; // Indexed by ConstraintType, which is also the solving order.
-
-		// Materials.
-		std::vector<Material> materials;
 
 		// Settings.
 		SimulationSettings simulationSettings;
@@ -215,6 +216,9 @@ namespace PS_AGONY
 		void destroySliderMotor(uint32_t index) { motorConstraintSystem.removeConstraint(index, objectManager.bodies); }
 
 		MaterialIndex createMaterial(const Material& material);
+
+		// Colliders using this material fall back to the default material (0). Returns false if not destroyable.
+		bool destroyMaterial(MaterialIndex materialIndex);
 
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();

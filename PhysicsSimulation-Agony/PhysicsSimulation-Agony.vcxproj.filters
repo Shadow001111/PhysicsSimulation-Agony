@@ -299,5 +299,8 @@
     <ClInclude Include="Physics\EcstasyThreadingBackend.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="Physics\SimulationImpl\MaterialManager.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

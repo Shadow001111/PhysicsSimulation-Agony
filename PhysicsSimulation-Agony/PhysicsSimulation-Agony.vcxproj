@@ -291,6 +291,7 @@
     <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h" />
     <ClInclude Include="Physics\EcstasyThreadingBackend.h" />
     <ClInclude Include="Physics\Limits.h" />
+    <ClInclude Include="Physics\SimulationImpl\MaterialManager.h" />
     <ClInclude Include="Physics\SimulationImpl\PolygonBuild.h" />
     <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h" />
     <ClInclude Include="Physics\SoA\Shapes\CapsuleSoA.h" />
