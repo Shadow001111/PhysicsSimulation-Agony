@@ -49,7 +49,6 @@ namespace PS_AGONY
 		{
 			ObjectIndex bodyA, bodyB;
 			Vec2 normal;
-			// penetration + dot(posB0 - posA0, normal). Current penetration = this - dot(posB - posA, normal).
 			Real penetrationBase;
 		};
 

@@ -251,7 +251,7 @@ namespace PS_AGONY
 				positionHot.bodyA = data.bodyA;
 				positionHot.bodyB = data.bodyB;
 				positionHot.normal = data.normal;
-				positionHot.penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal);
+				positionHot.penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal) - simulationSettings.positionCorrectionSlop;
 			}
 			{
 				auto& velocityConstraint = velocityConstraintContainer[c];
@@ -924,20 +924,18 @@ namespace PS_AGONY
 			const ObjectIndex bodyIndexA = data.bodyA;
 			const ObjectIndex bodyIndexB = data.bodyB;
 
-			const Real invMassA = invMassPtr[bodyIndexA];
-			const Real invMassB = invMassPtr[bodyIndexB];
-			const Real effectiveMass = invMassA + invMassB;
-
 			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
 
 			// Penetration already resolved since measurement is the change of relative position along the normal.
 			const Real currentPenetration = data.penetrationBase - glm::dot(positionB - positionA, data.normal);
 
-			const Real correctionDepth = currentPenetration - simulationSettings.positionCorrectionSlop;
-			if (correctionDepth <= Real(0)) continue;
+			if (currentPenetration <= Real(0)) continue;
 
-			const Real totalCorrection = correctionDepth / effectiveMass * simulationSettings.positionCorrectionPercent;
+			const Real invMassA = invMassPtr[bodyIndexA];
+			const Real invMassB = invMassPtr[bodyIndexB];
+
+			const Real totalCorrection = currentPenetration / (invMassA + invMassB) * simulationSettings.positionCorrectionPercent;
 			const Real correctionA = invMassA * totalCorrection;
 			const Real correctionB = invMassB * totalCorrection;
 
