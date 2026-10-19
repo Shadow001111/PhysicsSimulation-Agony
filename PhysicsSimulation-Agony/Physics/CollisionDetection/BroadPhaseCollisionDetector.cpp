@@ -213,8 +213,8 @@ namespace PS_AGONY
 	{
 		TRACY_SCOPE_N("Query pairs (Threaded)");
 
-		auto& threadPool = Threading::getGlobalThreadPool();
-		const size_t workerCount = threadPool.getThreadCount() > 0 ? threadPool.getThreadCount() - 1 : 0;
+		auto& threadingBackend = Threading::getThreadingBackend();
+		const size_t workerCount = threadingBackend.getThreadCount() > 0 ? threadingBackend.getThreadCount() - 1 : 0;
 		if (workerCount == 0)
 		{
 			queryPairs();
@@ -353,14 +353,11 @@ namespace PS_AGONY
 				wData.isDone = false;
 			}
 
-			std::vector<Ecstasy::Core::Threading::Task> workerTasks;
-			workerTasks.reserve(launchCount);
-
-			for (size_t i = 0; i < launchCount; i++)
-			{
-				workerTasks.emplace_back(workerFunc);
-			}
-			threadPool.enqueueBulk(workerTasks);
+			threadingBackend.launch(
+				launchCount,
+				[](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(); },
+				&workerFunc
+			);
 		}
 
 		// Wait for all workers, then concatenate task outputs in canonical task order.

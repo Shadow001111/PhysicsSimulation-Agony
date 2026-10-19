@@ -14,7 +14,7 @@ namespace PS_AGONY
 			return;
 		}
 
-		auto& threadPool = Threading::getGlobalThreadPool();
+		auto& threadingBackend = Threading::getThreadingBackend();
 
 		workerData.resize(workerCount);
 		for (auto& w : workerData)
@@ -63,10 +63,11 @@ namespace PS_AGONY
 				workerData[workerIndex].isDestroyed.notify_one();
 			};
 
-		for (size_t i = 1; i < workerCount; i++)
-		{
-			threadPool.enqueue(workerFunc, i);
-		}
+		threadingBackend.launch(
+			workerCount,
+			[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i); },
+			&workerFunc
+		);
 		workerFunc(0);
 
 		{

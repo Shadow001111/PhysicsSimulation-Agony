@@ -27,10 +27,6 @@ namespace PS_AGONY
         registerSystem(prismaticJointConstraintSystem);
         registerSystem(sliderJointConstraintSystem);
         registerSystem(motorConstraintSystem);
-
-        // Spawn a thread pool.
-        auto& threadPool = Threading::getGlobalThreadPool();
-        (void)threadPool;
     }
 
     void Simulation::update(Real deltaTime)

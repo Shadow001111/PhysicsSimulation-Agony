@@ -858,8 +858,8 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
-        auto& threadPool = Threading::getGlobalThreadPool();
-        workerCount = std::max<size_t>(std::min<size_t>(workerCount, threadPool.getThreadCount()), 1); // At least the calling thread.
+        auto& threadingBackend = Threading::getThreadingBackend();
+        workerCount = std::max<size_t>(std::min<size_t>(workerCount, threadingBackend.getThreadCount()), 1); // At least the calling thread.
 
         size_t chunkCount, chunkSize;
         if constexpr (DETERMINISTIC)
@@ -870,8 +870,8 @@ namespace PS_AGONY
         }
         else
         {
-            std::tie(chunkCount, chunkSize) = Ecstasy::Core::Threading::ParallelForRangeExecutor::getChunkCountAndSize(
-                threadPool, colliderPairs.size(), LOAD_BALANCING_FACTOR);
+            std::tie(chunkCount, chunkSize) = Threading::getChunkCountAndSize(
+                threadingBackend.getThreadCount(), colliderPairs.size(), LOAD_BALANCING_FACTOR);
         }
 
         if (chunks.size() < chunkCount) chunks.resize(chunkCount); // Grow-only: keeps chunk buffers alive.
@@ -883,9 +883,6 @@ namespace PS_AGONY
             cd.end = std::min(cd.start + chunkSize, colliderPairs.size());
             cd.finished = false;
         }
-
-        std::vector<Ecstasy::Core::Threading::Task> tasks;
-        tasks.reserve(workerCount);
 
         alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> workerChunkIndex{ 0 };
         alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
@@ -932,11 +929,11 @@ namespace PS_AGONY
             };
 
         // One less task submitted to the pool: the calling thread takes that slot itself.
-        for (size_t i = 0; i + 1 < workerCount; i++)
-        {
-            tasks.emplace_back([&workerFunc]() { workerFunc(false); });
-        }
-        threadPool.enqueueBulk(tasks);
+        threadingBackend.launch(
+            workerCount - 1,
+            [](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(false); },
+            &workerFunc
+        );
 
         {
             TRACY_SCOPE_N("Participate in work");

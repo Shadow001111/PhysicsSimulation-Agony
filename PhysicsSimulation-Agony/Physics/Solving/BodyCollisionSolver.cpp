@@ -190,9 +190,9 @@ namespace PS_AGONY
 		}
 
 		// Multi-threading path.
-		auto& threadPool = Threading::getGlobalThreadPool();
+		auto& threadingBackend = Threading::getThreadingBackend();
 
-		const size_t availableWorkerCount = threadPool.getThreadCount();
+		const size_t availableWorkerCount = threadingBackend.getThreadCount();
 		const size_t neededWorkerCount = collisionCount / COLLISION_COUNT_PER_WORKER;
 
 		return std::min(availableWorkerCount, neededWorkerCount);

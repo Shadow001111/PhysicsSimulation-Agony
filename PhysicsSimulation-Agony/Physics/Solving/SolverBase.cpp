@@ -24,7 +24,7 @@ namespace PS_AGONY
 			return;
 		}
 
-		auto& threadPool = Threading::getGlobalThreadPool();
+		auto& backend = Threading::getThreadingBackend();
 
 		// Worker data.
 		workerResources.workerData.resize(workerCount);
@@ -47,7 +47,7 @@ namespace PS_AGONY
 					if (localTicket >= totalTicks) break;
 
 					const size_t waveIndex = localTicket % waveCount;
-					
+
 					taskFunc(waveIndex, workerIndex, localTicket);
 
 					// Decrease atomic counter; last one to finish advances the wave and wakes everyone.
@@ -84,10 +84,11 @@ namespace PS_AGONY
 				wData.isDestroyed.notify_one();
 			};
 
-		for (size_t i = 1; i < workerCount; i++)
-		{
-			threadPool.enqueue(workerFunc, i);
-		}
+		backend.launch(
+			workerCount - 1, // The calling thread is worker 0.
+			[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i + 1); },
+			&workerFunc
+		);
 		workerFunc(0);
 
 		// Wait for all workers to finish every iteration and terminate.

@@ -1,12 +1,12 @@
 #include "Scenes.h"
 
 #include "Physics/Simulation.h"
+#include "Physics/EcstasyThreadingBackend.h"
 
 #include "Render/SimulationRenderer.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Graphics/WindowManager.h"
-#include "Ecstasy/Graphics/TextRenderer.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -606,10 +606,18 @@ static int gameFunc()
     //Ecstasy::Graphics::TextRenderer::setCurrentFont("RusEngMinecraft");
     //Ecstasy::Graphics::TextRenderer::setGlyphInstanceBatchSize(1024);
 
+    // Setup threading backend.
+    static Ecstasy::Core::Threading::ThreadPool pool(
+        std::thread::hardware_concurrency(),
+        Ecstasy::Core::Threading::ThreadPool::CoreMode::AnyCores
+    );
+    static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
+
+    PS_AGONY::Threading::setThreadingBackend(&backend);
+
     // Simulation.
     PS_AGONY::Simulation simulation{};
     //simulation.getSimulationSettings().clockSettings.updateInterval = 1.0 / 40.0;
-
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
 

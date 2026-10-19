@@ -198,9 +198,9 @@ namespace PS_AGONY
 				return 0;
 			}
 
-			auto& threadPool = Threading::getGlobalThreadPool();
+			auto& backend = Threading::getThreadingBackend();
 
-			const size_t availableWorkerCount = threadPool.getThreadCount();
+			const size_t availableWorkerCount = backend.getThreadCount();
 			const size_t neededWorkerCount = count / tuning.constraintsPerWorker;
 
 			return std::min(availableWorkerCount, neededWorkerCount);
