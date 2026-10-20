@@ -136,44 +136,33 @@ namespace PS_AGONY
         const Real* ECSTASY_RESTRICT massPtr = objectManager.bodies.mass.data();
 
         // Broad-phase.
-        std::vector<ColliderIndex> broadPhaseColliders; // TODO: Get rid of allocation.
+        broadPhaseColliders.clear();
         broadPhaseColliders.reserve(128);
         broadPhaseCollisionDetector.queryCollidersInShape(
             BroadPhaseInternal::CircleQuery(grabPosition, MAX_GRAB_DISTANCE),
-            BroadPhaseInternal::BvhTreeTypeFlag::All,
+            BroadPhaseInternal::BvhTreeTypeFlag::Dynamic,
             broadPhaseColliders);
         if (broadPhaseColliders.empty()) return;
 
         // Narrow phase.
-        std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders; // TODO: Get rid of allocation.
+        narrowPhaseColliders.clear();
         narrowPhaseColliders.reserve(broadPhaseColliders.size());
         narrowPhaseCollisionDetector.findCollisionsInCircle(broadPhaseColliders, grabPosition, MAX_GRAB_DISTANCE, narrowPhaseColliders);
         if (narrowPhaseColliders.empty()) return;
 
-        // Sort bodies by distance to the surface.
-        std::sort(
-            narrowPhaseColliders.begin(),
-            narrowPhaseColliders.end(),
-            [](const auto& a, const auto& b) -> bool
-            {
-                return a.second < b.second;
-            }
-        );
-
-        // Get closest body.
+        // Find closest body.
+        ObjectIndex closestCollider;
         ObjectIndex closestBody;
-        bool foundAnyBody = false;
+        Real minDistance = std::numeric_limits<Real>::max();
         for (const auto [colliderIndex, distance] : narrowPhaseColliders)
         {
-            ObjectIndex bodyIndex = objectManager.colliders.bodyIndex[colliderIndex];
-            if (massPtr[bodyIndex] > 0) // Fix for body!
+            if (distance < minDistance)
             {
-                closestBody = bodyIndex;
-                foundAnyBody = true;
-                break;
+                minDistance = distance;
+                closestCollider = colliderIndex;
             }
         }
-        if (!foundAnyBody) return;
+        closestBody = objectManager.colliders.bodyIndex[closestCollider];
 
         // Grab.
         mainBodyHolder.heldBody = closestBody;
@@ -187,7 +176,7 @@ namespace PS_AGONY
 
         // Inverse rotation.
         mainBodyHolder.localBodyOffset = Vec2(
-            worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
+             worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
             -worldGrabVec.x * sinRot + worldGrabVec.y * cosRot
         );
     }

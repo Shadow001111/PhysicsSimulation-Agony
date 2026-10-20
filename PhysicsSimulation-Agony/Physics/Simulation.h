@@ -120,6 +120,10 @@ namespace PS_AGONY
 
 		// Render.
 		Real renderAlpha = 0;
+
+		// Other.
+		std::vector<ColliderIndex> broadPhaseColliders;
+		std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders;
 	public:
 		Simulation();
 		~Simulation() = default;
