@@ -895,5 +895,9 @@ namespace PS_AGONY
         }
 
         data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
+    
+        // TODO: Add:
+        // std::vector<ColliderIndex> broadPhaseColliders;
+        // std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders;
     }
 }
