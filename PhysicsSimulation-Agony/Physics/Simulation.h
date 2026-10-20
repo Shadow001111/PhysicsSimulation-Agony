@@ -15,6 +15,7 @@
 #include "Integration/Integrator.h"
 
 #include "SimulationImpl/MaterialManager.h"
+#include "SimulationImpl/CollisionCallbackManager.h"
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
 
@@ -43,6 +44,7 @@ namespace PS_AGONY
 			size_t capsuleDataMemoryUsage = 0;
 
 			size_t materialDataMemoryUsage = 0;
+			size_t collisionCallbackMemoryUsage = 0;
 
 			size_t broadPhaseDetectorMemoryUsage = 0;
 			size_t narrowPhaseDetectorMemoryUsage = 0;
@@ -68,6 +70,9 @@ namespace PS_AGONY
 			uint32_t collisionVelocitySolvingIterations = 6;
 			uint32_t collisionPositionSolvingIterations = 3;
 
+			// Collision events. Also requires at least one registered collision callback.
+			bool collisionEventsEnabled = true;
+
 			// Integration.
 			Integrator::IntegrationSettings integratorSettings;
 
@@ -78,6 +83,7 @@ namespace PS_AGONY
 	private:
 		// Materials. Declared before objectManager, which references its storage.
 		MaterialManager materialManager;
+		CollisionCallbackManager collisionCallbackManager;
 
 		// Internal helpers.
 		ObjectManager objectManager;
@@ -224,6 +230,18 @@ namespace PS_AGONY
 		// Colliders using this material fall back to the default material (0). Returns false if not destroyable.
 		bool destroyMaterial(MaterialIndex materialIndex);
 
+		// Collision callbacks. Fired at the end of a physics step, per collider side, when the impact impulse
+		// (approach speed * effective mass) reaches the collider's threshold.
+		// nullopt if 'function' is null or the table is full.
+		std::optional<CollisionCallbackIndex> createCollisionCallback(CollisionCallback function, void* userData = nullptr);
+
+		// Colliders using it are reset to no callback. Returns false for id 0 and dead ids.
+		bool destroyCollisionCallback(CollisionCallbackIndex callbackIndex);
+
+		// Id 0 clears the collider's callback (threshold ignored).
+		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
+		bool setColliderCollisionCallback(ColliderIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
+
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
@@ -258,6 +276,8 @@ namespace PS_AGONY
 		Real getRenderAlpha() const noexcept { return renderAlpha; }
 	private:
 		void physicsStep(Real deltaTime);
+
+		void dispatchCollisionEvents();
 
 		void preUpdate();
 

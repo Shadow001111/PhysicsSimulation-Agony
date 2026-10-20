@@ -41,6 +41,9 @@ namespace PS_AGONY
 		aabbMaxX.push_back(0);
 		aabbMaxY.push_back(0);
 
+		callbackId.push_back(0);
+		eventThreshold.push_back(NO_COLLISION_EVENT_THRESHOLD);
+
 		return newIndex;
 	}
 
@@ -106,4 +109,4 @@ namespace PS_AGONY
 		maxY(data.aabbMaxY.data())
 	{
 	}
-}
+}

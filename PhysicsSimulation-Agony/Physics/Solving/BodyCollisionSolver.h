@@ -4,6 +4,7 @@
 #include "Physics/SoA/ColliderSoA.h"
 #include "Physics/Material.h"
 #include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
+#include "Physics/CollisionEvent.h"
 
 #include <array>
 #include <span>
@@ -85,6 +86,10 @@ namespace PS_AGONY
 
 		size_t activeCollisionCount = 0;
 
+		// Collision events, recorded in computeConstraintData in solving order (deterministic). Cleared every solve.
+		std::vector<CollisionEvent> collisionEvents;
+		bool recordCollisionEvents = false;
+
 		SimulationSettings simulationSettings;
 	public:
 		BodyCollisionSolver() = default;
@@ -107,6 +112,12 @@ namespace PS_AGONY
 		);
 
 		void reportNoCollisions();
+
+		// Runtime gate. When false, the solver does no event work at all.
+		void setCollisionEventRecording(bool enabled);
+
+		// Valid until the next solveCollisions/reportNoCollisions.
+		const std::vector<CollisionEvent>& getCollisionEvents() const noexcept { return collisionEvents; }
 
 		// (Velocity, Position).
 		Vec2 computeConstraintErrors() const;

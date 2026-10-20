@@ -137,6 +137,8 @@ static void renderGUI(
             settings.collisionPositionSolvingIterations = static_cast<uint32_t>(posIter);
         }
 
+        ImGui::Checkbox("Collision Events", &settings.collisionEventsEnabled);
+
         for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
         {
             auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
@@ -225,8 +227,10 @@ static void renderGUI(
             constraintsTotal +
             simulationData.broadPhaseDetectorMemoryUsage +
             simulationData.narrowPhaseDetectorMemoryUsage +
-            simulationData.bodyCollisionSolverMemoryUsage +
-            simulationData.solvingPlannerMemoryUsage
+            solversTotal +
+            simulationData.solvingPlannerMemoryUsage +
+            simulationData.materialDataMemoryUsage +
+            simulationData.collisionCallbackMemoryUsage
             ;
 
         ImGui::Text("Total: %s", formatSizeBinary(totalMemory).c_str());
@@ -284,6 +288,8 @@ static void renderGUI(
 
             addMemoryRow("Broad Phase Detector", simulationData.broadPhaseDetectorMemoryUsage);
             addMemoryRow("Narrow Phase Detector", simulationData.narrowPhaseDetectorMemoryUsage);
+            addMemoryRow("Materials", simulationData.materialDataMemoryUsage);
+            addMemoryRow("Collision Callbacks", simulationData.collisionCallbackMemoryUsage);
 
             {
                 addMemoryRow("Solvers", solversTotal);

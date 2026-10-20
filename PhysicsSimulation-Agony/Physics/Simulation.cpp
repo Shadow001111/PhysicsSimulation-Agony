@@ -9,6 +9,10 @@
 #include <iostream>
 #include <cmath>
 
+// TODO: Deferred command queue. Handlers must not destroy bodies/colliders mid-drain (destroyBody swaps with back,
+// so pending events would hold stale indices). Queue create/destroy calls issued from handlers, run them after the
+// drain (creates first, then destroys), and report success/failure through callbacks. Maybe stable global ids later.
+
 namespace PS_AGONY
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
@@ -123,6 +127,62 @@ namespace PS_AGONY
         return true;
     }
 
+    std::optional<CollisionCallbackIndex> Simulation::createCollisionCallback(CollisionCallback function, void* userData)
+    {
+        return collisionCallbackManager.create(function, userData);
+    }
+
+    bool Simulation::destroyCollisionCallback(CollisionCallbackIndex callbackIndex)
+    {
+        if (!collisionCallbackManager.destroy(callbackIndex))
+            return false;
+
+        ColliderSoA& colliders = objectManager.colliders;
+        const size_t colliderCount = colliders.getCount();
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            if (colliders.callbackId[i] == callbackIndex)
+            {
+                colliders.callbackId[i] = 0;
+                colliders.eventThreshold[i] = NO_COLLISION_EVENT_THRESHOLD;
+            }
+        }
+        return true;
+    }
+
+    bool Simulation::setColliderCollisionCallback(ColliderIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold)
+    {
+        ColliderSoA& colliders = objectManager.colliders;
+        if (static_cast<size_t>(colliderIndex) >= colliders.getCount())
+            return false;
+
+        if (callbackIndex == 0)
+        {
+            colliders.callbackId[colliderIndex] = 0;
+            colliders.eventThreshold[colliderIndex] = NO_COLLISION_EVENT_THRESHOLD;
+            return true;
+        }
+
+        if (!collisionCallbackManager.isAlive(callbackIndex) || !(impulseThreshold > Real(0)))
+            return false;
+
+        colliders.callbackId[colliderIndex] = callbackIndex;
+        colliders.eventThreshold[colliderIndex] = impulseThreshold;
+        return true;
+    }
+
+    void Simulation::dispatchCollisionEvents()
+    {
+        TRACY_SCOPE_N("Dispatch collision events");
+
+        const std::vector<CollisionEvent>& events = bodyCollisionSolver.getCollisionEvents();
+        //for (size_t i = 0; i < events.size(); i++)
+        //{
+        //    collisionCallbackManager.invoke(events[i]);
+        //}
+        collisionCallbackManager.invoke(events);
+    }
+
     void Simulation::mainBodyHolderGrabAt(Vec2 grabPosition)
     {
         if (mainBodyHolder.heldBody.has_value()) return;
@@ -133,7 +193,6 @@ namespace PS_AGONY
 
         const Real* ECSTASY_RESTRICT worldCenterXPtr = objectManager.bodies.worldCenterX.data();
         const Real* ECSTASY_RESTRICT worldCenterYPtr = objectManager.bodies.worldCenterY.data();
-        const Real* ECSTASY_RESTRICT massPtr = objectManager.bodies.mass.data();
 
         // Broad-phase.
         broadPhaseColliders.clear();
@@ -176,7 +235,7 @@ namespace PS_AGONY
 
         // Inverse rotation.
         mainBodyHolder.localBodyOffset = Vec2(
-             worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
+            worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
             -worldGrabVec.x * sinRot + worldGrabVec.y * cosRot
         );
     }
@@ -213,6 +272,9 @@ namespace PS_AGONY
 
         // Reset stuff.
         bodyCollisionSolver.reportNoCollisions();
+        bodyCollisionSolver.setCollisionEventRecording(
+            simulationSettings.collisionEventsEnabled && collisionCallbackManager.hasCallbacks()
+        );
 
         // Check if any body exist.
         const size_t bodyCount = objectManager.bodies.getCount();
@@ -315,6 +377,9 @@ namespace PS_AGONY
 
             // Updating persistent contact data.
             narrowPhaseCollisionDetector.updatePersistentContactData();
+
+            // Collision events (only exist if collisions were solved).
+            dispatchCollisionEvents();
         }
     }
 
@@ -884,6 +949,7 @@ namespace PS_AGONY
         data.capsuleDataMemoryUsage = objectManager.capsules.getMemoryUsage();
 
         data.materialDataMemoryUsage = materialManager.getMemoryUsage();
+        data.collisionCallbackMemoryUsage = collisionCallbackManager.getMemoryUsage();
         data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
         data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
 
@@ -895,7 +961,7 @@ namespace PS_AGONY
         }
 
         data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
-    
+
         // TODO: Add:
         // std::vector<ColliderIndex> broadPhaseColliders;
         // std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders;

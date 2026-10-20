@@ -29,6 +29,8 @@ namespace PS_AGONY
 		const size_t collisionCount = narrowPhaseCollisions.size();
 		const size_t workerCount = planWorkerCount(collisionCount);
 
+		collisionEvents.clear();
+
 		// Single-threaded path.
 		if (workerCount <= 1)
 		{
@@ -99,6 +101,14 @@ namespace PS_AGONY
 	void BodyCollisionSolver::reportNoCollisions()
 	{
 		activeCollisionCount = 0;
+		collisionEvents.clear();
+	}
+
+	void BodyCollisionSolver::setCollisionEventRecording(bool enabled)
+	{
+		recordCollisionEvents = enabled;
+		if (enabled && collisionEvents.capacity() == 0)
+			collisionEvents.reserve(128);
 	}
 
 	Vec2 BodyCollisionSolver::computeConstraintErrors() const
@@ -165,6 +175,7 @@ namespace PS_AGONY
 		total += getVectorMemoryUsage(frictionDataContainer);
 
 		total += getVectorMemoryUsage(collidingBodyPairs);
+		total += getVectorMemoryUsage(collisionEvents);
 
 		total += solvingPlan.getMemoryUsage();
 
@@ -213,6 +224,9 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 		const MaterialIndex* ECSTASY_RESTRICT colliderMaterialIndexPtr = colliders.materialIndex;
 		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
+		const CollisionCallbackIndex* ECSTASY_RESTRICT colliderCallbackIdPtr = colliders.callbackId;
+		const Real* ECSTASY_RESTRICT colliderEventThresholdPtr = colliders.eventThreshold;
+		const bool recordEvents = recordCollisionEvents;
 
 		// Resize containers.
 		velocityHotContainer.resize(collisionCount);
@@ -271,6 +285,7 @@ namespace PS_AGONY
 				const Real invInertiaA = invInertiaPtr[data.bodyA];
 				const Real invInertiaB = invInertiaPtr[data.bodyB];
 				const Real effectiveMass = invMassA + invMassB;
+				Real impactImpulse = Real(0);
 
 				const Vec2 normal = data.normal;
 				const Vec2 tangent{ -normal.y, normal.x };
@@ -311,6 +326,31 @@ namespace PS_AGONY
 					const Real negVelocityAlongNormal = -glm::dot(relativeVelocity, normal);
 
 					point.velocityBias = (negVelocityAlongNormal > SimulationSettings::RESTITUTION_VELOCITY_THRESHOLD) ? elasticity * negVelocityAlongNormal : Real(0);
+
+					// Impulse needed to cancel the approach velocity. Resting contacts give ~0, unlike accumulated (pressure) impulses.
+					if (recordEvents)
+						impactImpulse = std::fmax(impactImpulse, negVelocityAlongNormal * point.normalMass);
+				}
+
+				if (impactImpulse > Real(0)) // && recordEvents
+				{
+					const CollisionCallbackIndex callbackA = colliderCallbackIdPtr[data.colliderA];
+					const CollisionCallbackIndex callbackB = colliderCallbackIdPtr[data.colliderB];
+
+					const bool fireA = callbackA != 0 && impactImpulse >= colliderEventThresholdPtr[data.colliderA];
+					const bool fireB = callbackB != 0 && impactImpulse >= colliderEventThresholdPtr[data.colliderB];
+
+					if (fireA || fireB)
+					{
+						const Vec2 eventPoint = data.contactCount > 1
+							? (data.contactPoints[0] + data.contactPoints[1]) * Real(0.5)
+							: data.contactPoints[0];
+
+						if (fireA)
+							collisionEvents.push_back({ data.colliderA, data.colliderB, data.bodyA, data.bodyB, eventPoint, data.normal, impactImpulse, callbackA });
+						if (fireB)
+							collisionEvents.push_back({ data.colliderB, data.colliderA, data.bodyB, data.bodyA, eventPoint, -data.normal, impactImpulse, callbackB });
+					}
 				}
 			}
 		}

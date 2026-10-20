@@ -1,10 +1,12 @@
 #pragma once
 #include "Physics/ContainerUtilities.h"
 #include "Physics/Types.h"
+#include "Physics/CollisionEvent.h"
 
 // Define all scalar SoA fields.
 // localRotation: rigid local angle; wrapped to [0, 2pi) once, at creation.
 // worldRotation: body.rotation + localRotation, re-wrapped every step.
+// callbackId: collision callback slot (0 = none). eventThreshold: impact impulse needed to fire it.
 #define PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(F) \
 	F(bodyIndex, ObjectIndex) \
 	F(localOffsetX, Real) \
@@ -21,7 +23,9 @@
 	F(aabbMinX, Real) \
 	F(aabbMinY, Real) \
 	F(aabbMaxX, Real) \
-	F(aabbMaxY, Real)
+	F(aabbMaxY, Real) \
+	F(callbackId, CollisionCallbackIndex) \
+	F(eventThreshold, Real)
 
 namespace PS_AGONY
 {
@@ -76,4 +80,4 @@ namespace PS_AGONY
 
 		size_t getCount() const noexcept { return count; }
 	};
-}
+}
