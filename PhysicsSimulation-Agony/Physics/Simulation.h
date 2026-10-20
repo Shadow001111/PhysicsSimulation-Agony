@@ -242,6 +242,9 @@ namespace PS_AGONY
 		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
 		bool setColliderCollisionCallback(ColliderIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
 
+		// TODO: Add more like that.
+		std::span<const ColliderIndex> getBodyColliders(ObjectIndex bodyIndex);
+
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);

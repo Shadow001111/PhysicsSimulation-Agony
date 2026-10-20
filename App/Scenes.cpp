@@ -5,6 +5,7 @@
 #include "Physics/Simulation.h"
 
 #include <cmath>
+#include <iostream>
 
 
 struct SceneOrientation
@@ -208,216 +209,6 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
     createSuspension(*rightWheelOpt, +1.0f);
 }
 
-
-void load_GaltonBoard(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
-{
-    constexpr int ballCount = 1500;
-    constexpr float ballRadius = 0.05f;
-
-    constexpr int pegRows = 20;
-    constexpr int pegColumns = 40;
-    constexpr float pegRadius = 0.04f;
-    constexpr float pegTopY = 0.0f;
-
-    constexpr float binHeight = 5.0f;
-    constexpr float binWidth = 0.01f;
-
-    constexpr float wallThickness = 0.1f;
-    constexpr float wallHeight = binHeight + 8.0f;
-
-    constexpr float funnelOpeningWidth = ballRadius * 5.0f * 1.5f;
-    constexpr float funnelRotation = 0.9f;
-    constexpr float funnelLength = 10.0f;
-    constexpr float funnelWidth = 0.05f;
-    constexpr float funnelYOffset = 2.0f;
-
-    //
-    constexpr float pegSpacing = (ballRadius + 0.03f + pegRadius) * 2.0f;
-    constexpr float pegBottomY = pegTopY - pegRows * pegSpacing - pegRadius;
-    constexpr float pegXBoundary = float(pegColumns - 1) * 0.5f * pegSpacing + pegRadius;
-
-
-    PS_AGONY::Material material0 = {
-        .elasticity = 0.5,
-        .staticFriction = 0.0,
-        .dynamicFriction = 0.0
-    };
-
-    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
-
-    // Pegs.
-    for (int y = 0; y < pegRows; y++)
-    {
-        const float pegY = pegTopY - pegRadius - y * pegSpacing;
-
-        const int columns = (y & 1) == 0 ? pegColumns : pegColumns - 1;
-        const float offset = (y & 1) == 0 ? 0.0f : pegSpacing * 0.5f;
-        for (int x = 0; x < columns; x++)
-        {
-            const float pegX = -pegXBoundary + pegRadius + pegSpacing * x + offset;
-
-            simulation.createCircle({
-                .base.position = { pegX, pegY },
-                .base.velocity = { 0, 0 },
-                .base.rotation = 0,
-                .base.angularVelocity = 0,
-                .base.mass = 0,
-                .base.materialIndex = material0Index,
-                .radius = pegRadius
-                });
-        }
-    }
-
-    // Walls.
-    {
-        constexpr float wallInnerBoundaryX = pegXBoundary + pegSpacing - pegRadius;
-        constexpr float wallInnerBottomY = pegBottomY - binHeight;
-
-        simulation.createBox({
-            .base.position = { 0.0f, wallInnerBottomY - wallThickness * 0.5f },
-            .base.mass = 0,
-            .base.materialIndex = material0Index,
-            .size = { wallInnerBoundaryX * 2.0f, wallThickness }
-            });
-
-        simulation.createBox({
-            .base.position = {-(wallInnerBoundaryX + wallThickness * 0.5f), wallInnerBottomY + wallHeight * 0.5f },
-            .base.mass = 0,
-            .base.materialIndex = material0Index,
-            .size = { wallThickness, wallHeight }
-            });
-
-        simulation.createBox({
-            .base.position = { (wallInnerBoundaryX + wallThickness * 0.5f), wallInnerBottomY + wallHeight * 0.5f },
-            .base.mass = 0,
-            .base.materialIndex = material0Index,
-            .size = { wallThickness, wallHeight }
-            });
-    }
-
-    // Bins.
-    {
-        for (int x = 0; x < pegColumns; x++)
-        {
-            const float binX = -pegXBoundary + pegRadius + pegSpacing * x;
-
-            simulation.createBox({
-                .base.position = { binX, pegBottomY - binHeight * 0.5f },
-                .base.mass = 0,
-                .base.materialIndex = material0Index,
-                .size = { binWidth, binHeight }
-                });
-        }
-    }
-
-    // Funnel.
-    {
-        const float funnelX = funnelOpeningWidth * 0.5f + std::sin(funnelRotation) * funnelLength * 0.5f;
-        const float funnelY = funnelYOffset + std::cos(funnelRotation) * funnelLength * 0.5f;
-
-        simulation.createBox({
-            .base.position = { -funnelX, funnelY },
-            .base.rotation = funnelRotation,
-            .base.mass = 0,
-            .base.materialIndex = material0Index,
-            .size = { funnelWidth, funnelLength }
-            });
-
-        simulation.createBox({
-            .base.position = { funnelX, funnelY },
-            .base.rotation = -funnelRotation,
-            .base.mass = 0,
-            .base.materialIndex = material0Index,
-            .size = { funnelWidth, funnelLength }
-            });
-    }
-
-    // Balls.
-    {
-        constexpr float spawnBottom = 0.1f + ballRadius + funnelYOffset;
-
-        const float rotTan = std::tan(funnelRotation);
-        const float rndStart = ballRadius * 5.0f;
-        const float rndEnd = std::cos(funnelRotation) * funnelLength - ballRadius;
-
-        for (int i = 0; i < ballCount; i++)
-        {
-            float rnd = rvg.real<float>(0.0f, 1.0f);
-            rnd = 1.0f - rnd;
-            rnd *= rnd;
-            rnd = 1.0f - rnd;
-            rnd = rndStart + rnd * (rndEnd - rndStart);
-
-            const float xBorder = funnelOpeningWidth * 0.5f + rnd * rotTan;
-
-            const float x = rvg.real<float>(-xBorder, xBorder);
-            const float y = spawnBottom + rnd;
-
-            simulation.createCircle({
-                .base.position = { x, y },
-                .base.velocity = { 0, 0 },
-                .base.rotation = 0,
-                .base.angularVelocity = 0,
-                .base.mass = 1,
-                .base.materialIndex = material0Index,
-                .radius = ballRadius
-                });
-        }
-    }
-}
-
-void load_ALotOfNotTouching(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
-{
-    constexpr int rowCount = 40;
-    constexpr int columnCount = 40;
-
-    PS_AGONY::Material material0 = {
-            .elasticity = 0.7,
-            .staticFriction = 1.0,
-            .dynamicFriction = 1.0
-    };
-
-    PS_AGONY::MaterialIndex material0Index = simulation.createMaterial(material0);
-
-    for (int ix = 0; ix < rowCount; ix++)
-        for (int iy = 0; iy < columnCount; iy++)
-        {
-            const float x = ix * 2.1f;
-            const float y = iy * 2.1f;
-
-            //simulation.createCircle({
-            //    .base.position = { x, y },
-            //    .base.velocity = { 0, 0 },
-            //    .base.rotation = 0,
-            //    .base.angularVelocity = 0,
-            //    .base.mass = 1,
-            //    .base.materialIndex = material0Index,
-            //    .radius = 1
-            //});
-
-            constexpr size_t maxVerticesCount = 10;
-            const size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
-            auto localVertices = makeConvexPolygon(rvg, verticesCount, 1);
-            simulation.createPolygon({
-                .base.position = { x, y },
-                .base.velocity = { 0, 0 },
-                .base.rotation = 0,
-                .base.mass = 1,
-                .base.materialIndex = material0Index,
-                .localVertices = { localVertices.data(), verticesCount }
-                });
-        }
-
-    simulation.createCircle({
-            .base.position = { -5, 0 },
-            .base.velocity = {  0, 0 },
-            .base.rotation = 0,
-            .base.angularVelocity = 0,
-            .base.mass = 20,
-            .base.materialIndex = material0Index,
-            .radius = 4
-        });
-}
 
 void load_LargeWorld(
     PS_AGONY::Simulation& simulation,
@@ -850,139 +641,6 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     }
 }
 
-void load_SoftBodyComparisonTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
-{
-    // === 1. CONFIGURATION AND VARIABLES ===
-    constexpr int gridWidth = 80;   // Number of horizontal particles.
-    constexpr int gridHeight = 80;  // Number of vertical particles.
-    constexpr float spacing = 0.5f;
-    constexpr float radius = spacing * 0.5f * 0.5;
-    constexpr float particleMass = 0.2f;
-
-    // Spring constants chosen for elastic but stable structural behavior
-    constexpr float springK = 4000.0f;
-    constexpr float springD = 0.0f;
-
-    constexpr float cubeGap = 8.0f; // Horizontal separation between the two soft-body cubes
-
-    PS_AGONY::Material physicsMaterial = {
-        .elasticity = 0.1f,
-        .staticFriction = 0.8f,
-        .dynamicFriction = 0.6f
-    };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
-
-    // === 2. STATIC GROUND PLATFORM ===
-    simulation.createBox({
-        .base.position = { 0.0f, -8.0f },
-        .base.mass = 0, // Static platform
-        .base.materialIndex = materialIdx,
-        .size = { 3000.0f, 2.0f } // Longer ground
-        });
-
-    // === 3. HELPER: BUILD A SQUARE SOFT-BODY CUBE, LINKED WITH EITHER SPRINGS OR RODS ===
-    const float diagSpacing = std::sqrt(2.0f) * spacing;
-    const float cubeWidth = static_cast<float>(gridWidth - 1) * spacing;
-
-    auto buildSoftBodyCube = [&](float centerX, bool useRods)
-        {
-            // Array to store created IDs; standard flat vector mapping layout: index = y * gridWidth + x
-            std::vector<std::optional<PS_AGONY::ObjectIndex>> gridNodeMap(gridWidth * gridHeight, std::nullopt);
-
-            const float startX = centerX - cubeWidth * 0.5f;
-            const float startY = 2.0f; // Elevate above the ground box
-
-            for (int y = 0; y < gridHeight; ++y)
-            {
-                for (int x = 0; x < gridWidth; ++x)
-                {
-                    float posX = startX + static_cast<float>(x) * spacing;
-                    float posY = startY + static_cast<float>(y) * spacing;
-
-                    // Slight offset or initialization tilt to stimulate dynamic cloth folding deformation
-                    auto ballOpt = simulation.createCircle({
-                        .base.position = { posX, posY },
-                        .base.velocity = { 1.5f, -3.0f }, // Initial throw velocity vector
-                        .base.rotation = 0.0f,
-                        .base.angularVelocity = 0.0f,
-                        .base.mass = particleMass,
-                        .base.materialIndex = materialIdx,
-                        .radius = radius
-                        });
-
-                    gridNodeMap[y * gridWidth + x] = ballOpt;
-                }
-            }
-
-            // Lambda helper to safely tie nodes center-to-center if both allocations succeeded
-            auto tryConnect = [&](int x1, int y1, int x2, int y2, float restLength)
-                {
-                    auto nodeA = gridNodeMap[y1 * gridWidth + x1];
-                    auto nodeB = gridNodeMap[y2 * gridWidth + x2];
-
-                    if (!nodeA || !nodeB) return;
-
-                    if (useRods)
-                    {
-                        simulation.createRod({
-                            .bodyIndexA = *nodeA,
-                            .bodyIndexB = *nodeB,
-                            .localAnchorA = { 0.0f, 0.0f }, // Center anchor
-                            .localAnchorB = { 0.0f, 0.0f }, // Center anchor
-                            .length = restLength
-                            });
-                    }
-                    else
-                    {
-                        simulation.createSpring({
-                            .bodyIndexA = *nodeA,
-                            .bodyIndexB = *nodeB,
-                            .localAnchorA = { 0.0f, 0.0f }, // Center anchor
-                            .localAnchorB = { 0.0f, 0.0f }, // Center anchor
-                            .restLength = restLength,
-                            .stiffness = springK,
-                            .damping = springD
-                            });
-                    }
-                };
-
-            for (int y = 0; y < gridHeight; ++y)
-            {
-                for (int x = 0; x < gridWidth; ++x)
-                {
-                    // Structural Horizontal Constraints (Right)
-                    if (x < gridWidth - 1)
-                    {
-                        tryConnect(x, y, x + 1, y, spacing);
-                    }
-
-                    // Structural Vertical Constraints (Down)
-                    if (y < gridHeight - 1)
-                    {
-                        tryConnect(x, y, x, y + 1, spacing);
-                    }
-
-                    // Shear Diagonal Constraints (Down-Right)
-                    if (x < gridWidth - 1 && y < gridHeight - 1)
-                    {
-                        tryConnect(x, y, x + 1, y + 1, diagSpacing);
-                    }
-
-                    // Shear Diagonal Constraints (Down-Left)
-                    if (x > 0 && y < gridHeight - 1)
-                    {
-                        tryConnect(x, y, x - 1, y + 1, diagSpacing);
-                    }
-                }
-            }
-        };
-
-    // === 4. SPAWN BOTH CUBES, SEPARATED HORIZONTALLY ===
-    const float halfOffset = cubeWidth * 0.5f + cubeGap * 0.5f;
-    buildSoftBodyCube(-halfOffset, false); // Left cube: springs (original behavior)
-    //buildSoftBodyCube(halfOffset, true);   // Right cube: rods
-}
-
 void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // Set up physical properties for the environment.
@@ -1151,236 +809,10 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
                     .base.materialIndex = envMatIdx,
                     .radius = boxSize * 0.5f,
                     .length = boxSize
-                });
+                    });
             }
         }
     }
-}
-
-void load_Test(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
-{
-    // === 1. MATERIAL SETUP ===
-    PS_AGONY::Material material = {
-        .elasticity = 0.2f,
-        .staticFriction = 0.6f,
-        .dynamicFriction = 0.4f
-    };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(material);
-
-    // === 2. STATIC FLOOR ===
-    constexpr float floorWidth = 60.0f;
-    constexpr float floorHeight = 2.0f;
-    simulation.createBox({
-        .base.position = { 0.0f, -floorHeight * 0.5f },
-        .base.velocity = { 0.0f, 0.0f },
-        .base.rotation = 0.0f,
-        .base.angularVelocity = 0.0f,
-        .base.mass = 0.0f, // Static
-        .base.materialIndex = materialIdx,
-        .size = { floorWidth, floorHeight }
-        });
-
-    // === 3. SINGLE DYNAMIC LONG PLANK ===
-    constexpr float plankWidth = 14.0f;
-    constexpr float plankHeight = 0.4f;
-    constexpr float plankMass = 8.0f;
-
-    simulation.createBox({
-        .base.position = { 0.0f, 6.0f },
-        .base.velocity = { 0.0f, 0.0f },
-        .base.rotation = 0.25f, // Slightly tilted to make the drop and collision interesting
-        .base.angularVelocity = 0.0f,
-        .base.mass = plankMass,
-        .base.materialIndex = materialIdx,
-        .size = { plankWidth, plankHeight }
-        });
-}
-
-void load_JointedCircles(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
-{
-    // === 1. MATERIAL SETUP ===
-    PS_AGONY::Material material = {
-        .elasticity = 0.5f,
-        .staticFriction = 0.5f,
-        .dynamicFriction = 0.3f
-    };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(material);
-
-    // === 2. STATIC CIRCLE (MASS = 0) ===
-    auto staticCircleOpt = simulation.createCircle({
-        .base.position = { 0.0f, 0.0f },
-        .base.velocity = { 0.0f, 0.0f },
-        .base.rotation = 0.0f,
-        .base.angularVelocity = 0.0f,
-        .base.mass = 0.0f,
-        .base.materialIndex = materialIdx,
-        .radius = 0.8f
-        });
-
-    // === 3. DYNAMIC CIRCLE ===
-    auto dynamicCircleOpt = simulation.createCircle({
-        .base.position = { 4.0f, 0.0f },
-        .base.velocity = { 0.0f, 0.0f },
-        .base.rotation = 0.0f,
-        .base.angularVelocity = 0.0f,
-        .base.mass = 3.0f,
-        .base.materialIndex = materialIdx,
-        .radius = 1.0f
-        });
-
-    if (!staticCircleOpt || !dynamicCircleOpt) return;
-
-    PS_AGONY::ObjectIndex staticCircle = *staticCircleOpt;
-    PS_AGONY::ObjectIndex dynamicCircle = *dynamicCircleOpt;
-
-    // === 4. JOINT CONNECTION ===
-    constexpr float jointK = 50'000.0f;
-    constexpr float jointD = 1000.0f;
-
-    simulation.createRevoluteJoint({
-        .bodyIndexA = staticCircle,
-        .bodyIndexB = dynamicCircle,
-        .localAnchorA = { 0.8f, 0.0f },
-        .localAnchorB = { -4.0f, 0.0f },
-        .stiffness = jointK,
-        .damping = jointD
-        });
-}
-
-// A row of piston rigs (static cylinder body + sliding piston body), each using a
-// prismatic joint with different stiffness/damping/limit settings, to exercise the
-// full parameter space in one visual pass.
-//
-// NOTE: assumes Simulation::createPrismaticJoint auto-captures referenceAngle from
-// the two bodies' rotations at creation time (mirroring the SoA field comment), so
-// it isn't passed here. Adjust if the actual API expects it explicitly.
-void load_PrismaticJointGallery(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
-{
-    // === 1. MATERIAL SETUP ===
-    PS_AGONY::Material material = {
-        .elasticity = 0.2f,
-        .staticFriction = 0.5f,
-        .dynamicFriction = 0.4f
-    };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(material);
-
-    // === 2. RIG BUILDER ===
-    // anchorPos/rotationRad define the static cylinder; axisLocal is the slide
-    // direction in the cylinder's local space (rotates with it). axisOffset/perpOffset
-    // place the piston's initial position along/off that axis, so misaligned starts
-    // (perpOffset != 0) show the joint pulling the body back onto the axis.
-    auto makePistonRig = [&](
-        PS_AGONY::Vec2 anchorPos, float rotationRad, PS_AGONY::Vec2 axisLocal,
-        float axisOffset, float perpOffset,
-        float stiffness, float damping,
-        float lowerLimit, float upperLimit, bool enableLimit,
-        float sliderMass)
-        {
-            auto anchorOpt = simulation.createBox({
-                .base.position = anchorPos,
-                .base.velocity = { 0.0f, 0.0f },
-                .base.rotation = rotationRad,
-                .base.angularVelocity = 0.0f,
-                .base.mass = 0.0f,
-                .base.materialIndex = materialIdx,
-                .size = { 1.0f, 0.5f }
-                });
-
-            if (!anchorOpt) return;
-            PS_AGONY::ObjectIndex anchor = *anchorOpt;
-
-            const float cosR = std::cos(rotationRad);
-            const float sinR = std::sin(rotationRad);
-
-            // World-space axis (rotates with the anchor, same convention as the joint).
-            const float worldAxisX = axisLocal.x * cosR - axisLocal.y * sinR;
-            const float worldAxisY = axisLocal.x * sinR + axisLocal.y * cosR;
-
-            // World-space perpendicular (90 degrees CCW from axis), used only to seed
-            // an off-axis starting position for testing the correction visually.
-            const float worldPerpX = -worldAxisY;
-            const float worldPerpY = worldAxisX;
-
-            const float sliderX = anchorPos.x + worldAxisX * axisOffset + worldPerpX * perpOffset;
-            const float sliderY = anchorPos.y + worldAxisY * axisOffset + worldPerpY * perpOffset;
-
-            auto sliderOpt = simulation.createBox({
-                .base.position = { sliderX, sliderY },
-                .base.velocity = { 0.0f, 0.0f },
-                .base.rotation = rotationRad,
-                .base.angularVelocity = 0.0f,
-                .base.mass = sliderMass,
-                .base.materialIndex = materialIdx,
-                .size = { 0.8f, 0.8f }
-                });
-
-            if (!sliderOpt) return;
-            PS_AGONY::ObjectIndex slider = *sliderOpt;
-
-            simulation.createPrismaticJoint({
-                .bodyIndexA = anchor,
-                .bodyIndexB = slider,
-                .localAnchorA = { 0.0f, 0.0f },
-                .localAnchorB = { 0.0f, 0.0f },
-                .localAxisA = axisLocal,
-                .stiffness = stiffness,
-                .damping = damping,
-                .lowerLimit = lowerLimit,
-                .upperLimit = upperLimit,
-                .enableLimit = enableLimit
-                });
-        };
-
-    // === 3. RIG LAYOUT ===
-    // Vertical piston shafts, axis pointing down so gravity drives the slider toward
-    // the limit. Spaced along X, stiffness/damping ramp up left to right.
-    constexpr float ceilingY = 6.0f;
-    constexpr PS_AGONY::Vec2 downAxis = { 0.0f, -1.0f };
-
-    // Very soft: sags loosely, oscillates a lot before settling near the limit.
-    makePistonRig({ -12.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
-        /*stiffness*/ 100.0f, /*damping*/ 10.0f,
-        /*lowerLimit*/ 0.0f, /*upperLimit*/ 4.0f, /*enableLimit*/ true,
-        /*sliderMass*/ 1.0f);
-
-    // Soft.
-    makePistonRig({ -8.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
-        2'000.0f, 150.0f,
-        0.0f, 4.0f, true,
-        1.0f);
-
-    // Medium.
-    makePistonRig({ -4.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
-        20'000.0f, 800.0f,
-        0.0f, 4.0f, true,
-        1.0f);
-
-    // Stiff.
-    makePistonRig({ 0.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
-        200'000.0f, 4'000.0f,
-        0.0f, 4.0f, true,
-        1.0f);
-
-    // Rigid: should barely deviate from the initial offset regardless of load.
-    makePistonRig({ 4.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
-        2'000'000.0f, 20'000.0f,
-        0.0f, 4.0f, true,
-        1.0f);
-
-    // No limit: same mid stiffness as the "Medium" rig, but free to fall indefinitely.
-    makePistonRig({ 8.0f, ceilingY }, 0.0f, downAxis, 1.0f, 0.0f,
-        20'000.0f, 800.0f,
-        0.0f, 0.0f, false,
-        1.0f);
-
-    // Diagonal axis, deliberately started off-axis: exercises axis rotation with body A
-    // and the axis-projection/clamp correction (visible as red-vs-blue divergence
-    // in the debug render) instead of straight vertical sag.
-    constexpr float diagonalRotation = 0.785398f; // 45 degrees.
-    makePistonRig({ 12.0f, ceilingY }, diagonalRotation, PS_AGONY::Vec2{ 1.0f, 0.0f }, 1.0f, /*perpOffset*/ 1.0f,
-        20'000.0f, 800.0f,
-        -3.0f, 3.0f, true,
-        1.0f);
 }
 
 // Hull-center height above flat ground at rest, for scale = 1 (multiply by scale).
@@ -1845,225 +1277,24 @@ void load_Tank(PS_AGONY::Simulation& simulation)
     load_ObjectCar(simulation, carX, kCarRestHeight * carScale, 0.0f, carScale);
 }
 
-// Constraint stress train: a long coupled train of carriers rolling on a static rail.
-//
-//   per carrier : 2 motors -> 2 wheels (above rail) -> 2 revolute axles -> big platform (below rail)
-//                 rod between wheels, revolute-pivoted heavy pendulum under the platform
-//   per link    : platform_i <-> platform_i+1 coupled by a prismatic (even) or slider (odd) joint + spring
-//
-// Pendulums start at different angles and lengths (desynchronized); the train couples them through
-// the platforms, so you can watch them drift into sync (Huygens-style).
-// The rail is solid and there are no collision layers, so wheels and platform are joined by joint
-// anchors that live outside their bodies (the joint "reaches around" the rail, nothing overlaps it).
-// Everything starts at zero velocity; the motors spin the train up.
-void load_ConstraintStressTest(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+static void onStarCollision(const PS_AGONY::CollisionEvent& event, void* userData)
 {
-    using PS_AGONY::Vec2;
-    using PS_AGONY::ObjectIndex;
-
-    // === 1. CONFIGURATION ===
-    constexpr int carrierCount = 40;
-
-    // Geometry.
-    constexpr float platW = 10.0f, platH = 2.0f;
-    constexpr float platMass = 300.0f;
-    constexpr float pitch = 13.0f;                 // Platform center to center.
-    constexpr float couplerGap = pitch - platW;    // Free space between platforms.
-    constexpr float wheelRadius = 1.2f;
-    constexpr float wheelMass = 8.0f;
-    constexpr float wheelDX = 3.0f;                // Wheel offset from carrier center.
-    constexpr float railY = 0.0f, railThickness = 1.0f;
-    constexpr float clearanceBelowRail = 1.5f;
-
-    // Pendulum.
-    constexpr float pendBobRadius = 1.2f;
-    constexpr float pendBobMass = 250.0f;
-    constexpr float pendLength = 6.0f;
-    constexpr float pendLengthSpread = 0.06f;      // +/- relative length variation.
-    constexpr float pendMaxAngle = 0.7f;           // Initial angle range (radians).
-
-    // Drive. Negative angular speed rolls the train to +X.
-    constexpr float driveSpeed = -4.0f;
-    constexpr float driveTorque = 600.0f;
-
-    // Constraint tuning.
-    constexpr float axleK = 1.0e6f, axleD = 1.0e3f;
-    constexpr float pivotK = 1.0e6f, pivotD = 1.0e3f;
-    constexpr float couplerK = 1.0e6f, couplerD = 1.0e3f;
-    constexpr float couplerSpringK = 3000.0f, couplerSpringD = 100.0f;
-
-    // Derived layout.
-    constexpr float platY = railY - railThickness * 0.5f - clearanceBelowRail - platH * 0.5f;
-    constexpr float wheelY = railY + railThickness * 0.5f + wheelRadius + 0.02f;
-    constexpr float axleAnchorY = wheelY - platY;                   // Platform-local, above its body.
-    constexpr float railLength = carrierCount * pitch + 200.0f;
-    constexpr float railCenterX = 100.0f;                           // Extra room ahead of the train.
-
-    const PS_AGONY::MaterialIndex railMat = simulation.createMaterial(
-        { .elasticity = 0.0f, .staticFriction = 1.2f, .dynamicFriction = 1.0f });
-    const PS_AGONY::MaterialIndex wheelMat = simulation.createMaterial(
-        { .elasticity = 0.0f, .staticFriction = 1.2f, .dynamicFriction = 1.0f });
-    const PS_AGONY::MaterialIndex bodyMat = simulation.createMaterial(
-        { .elasticity = 0.1f, .staticFriction = 0.5f, .dynamicFriction = 0.4f });
-
-    bool ok = true;
-    auto circle = [&](Vec2 pos, float rot, float mass, float radius, PS_AGONY::MaterialIndex m) -> ObjectIndex
-        {
-            auto o = simulation.createCircle({
-                .base.position = pos, .base.velocity = { 0.0f, 0.0f },
-                .base.rotation = rot, .base.angularVelocity = 0.0f,
-                .base.mass = mass, .base.materialIndex = m, .radius = radius });
-            if (!o) { ok = false; return 0; }
-            return *o;
-        };
-    auto box = [&](Vec2 pos, float mass, Vec2 size, PS_AGONY::MaterialIndex m) -> ObjectIndex
-        {
-            auto o = simulation.createBox({
-                .base.position = pos, .base.velocity = { 0.0f, 0.0f },
-                .base.rotation = 0.0f, .base.angularVelocity = 0.0f,
-                .base.mass = mass, .base.materialIndex = m, .size = size });
-            if (!o) { ok = false; return 0; }
-            return *o;
-        };
-
-    // === 2. TRACK + SAFETY FLOOR ===
-    box({ railCenterX, railY }, 0.0f, { railLength, railThickness }, railMat);
-    box({ railCenterX, -60.0f }, 0.0f, { railLength, 2.0f }, bodyMat);
-    if (!ok) return;
-
-    // === 3. CARRIERS ===
-    std::vector<ObjectIndex> platforms;
-    platforms.reserve(carrierCount);
-
-    for (int i = 0; i < carrierCount; ++i)
-    {
-        const float x = (static_cast<float>(i) - 0.5f * static_cast<float>(carrierCount - 1)) * pitch;
-
-        const ObjectIndex platform = box({ x, platY }, platMass, { platW, platH }, bodyMat);
-        if (!ok) return;
-        platforms.push_back(platform);
-
-        // Wheels above the rail, each with a motor and a revolute axle reaching around the rail.
-        ObjectIndex wheels[2];
-        for (int w = 0; w < 2; ++w)
-        {
-            const float side = (w == 0) ? -1.0f : 1.0f;
-            wheels[w] = circle({ x + side * wheelDX, wheelY }, 0.0f, wheelMass, wheelRadius, wheelMat);
-            if (!ok) return;
-
-            simulation.createRevoluteJoint({ .bodyIndexA = platform, .bodyIndexB = wheels[w],
-                .localAnchorA = { side * wheelDX, axleAnchorY }, .localAnchorB = { 0.0f, 0.0f },
-                .stiffness = axleK, .damping = axleD });
-            simulation.createMotor({ .bodyIndex = wheels[w], .targetSpeed = driveSpeed, .maxTorque = driveTorque });
-        }
-
-        // Rod keeps the wheel spacing fixed.
-        simulation.createRod({ .bodyIndexA = wheels[0], .bodyIndexB = wheels[1],
-            .localAnchorA = { 0.0f, 0.0f }, .localAnchorB = { 0.0f, 0.0f }, .length = 2.0f * wheelDX });
-
-        // Pendulum: desynchronized start (random angle, slightly different length).
-        const float angle = rvg.real<float>(-pendMaxAngle, pendMaxAngle);
-        const float length = pendLength * (1.0f + rvg.real<float>(-pendLengthSpread, pendLengthSpread));
-        const Vec2 pivot = { x, platY - platH * 0.5f };
-        const ObjectIndex bob = circle(
-            { pivot.x + length * std::sin(angle), pivot.y - length * std::cos(angle) },
-            angle, pendBobMass, pendBobRadius, bodyMat);
-        if (!ok) return;
-
-        simulation.createRevoluteJoint({ .bodyIndexA = platform, .bodyIndexB = bob,
-            .localAnchorA = { 0.0f, -platH * 0.5f }, .localAnchorB = { 0.0f, length },
-            .stiffness = pivotK, .damping = pivotD });
-    }
-
-    // === 4. COUPLERS: prismatic on even links, slider on odd links, each with an axial spring ===
-    for (int i = 0; i + 1 < carrierCount; ++i)
-    {
-        const ObjectIndex a = platforms[i];
-        const ObjectIndex b = platforms[i + 1];
-        const Vec2 anchorA = { platW * 0.5f, 0.0f };
-        const Vec2 anchorB = { -platW * 0.5f, 0.0f };
-
-        if (i % 2 == 0)
-        {
-            simulation.createPrismaticJoint({ .bodyIndexA = a, .bodyIndexB = b,
-                .localAnchorA = anchorA, .localAnchorB = anchorB, .localAxisA = { 1.0f, 0.0f },
-                .stiffness = couplerK, .damping = couplerD,
-                .lowerLimit = couplerGap - 1.0f, .upperLimit = couplerGap + 1.0f, .enableLimit = true });
-        }
-        else
-        {
-            simulation.createSliderJoint({ .bodyIndexA = a, .bodyIndexB = b,
-                .localAnchorA = anchorA, .localAnchorB = anchorB, .localAxisA = { 1.0f, 0.0f },
-                .stiffness = couplerK, .damping = couplerD,
-                .lowerLimit = couplerGap - 1.0f, .upperLimit = couplerGap + 1.0f, .enableLimit = true });
-        }
-
-        simulation.createSpring({ .bodyIndexA = a, .bodyIndexB = b,
-            .localAnchorA = anchorA, .localAnchorB = anchorB,
-            .restLength = couplerGap, .stiffness = couplerSpringK, .damping = couplerSpringD });
-    }
+    (void)event; (void)userData;
+    std::cout << "[CollisionCallbackTest]: Star hit! Impulse: " << event.impulse << "\n";
 }
 
-static void load_ConvexDecompositionTest(PS_AGONY::Simulation& simulation)
+static void load_CollisionCallbackTest(PS_AGONY::Simulation& simulation)
 {
     using namespace PS_AGONY;
+    constexpr float pi = float(Constants::PI);
 
     const MaterialIndex mat = simulation.createMaterial({
-        .elasticity = 0.0,
-        .staticFriction = 2.0,
-        .dynamicFriction = 2.0
+        .elasticity = 0.3f,
+        .staticFriction = 0.6f,
+        .dynamicFriction = 0.4f
         });
 
-    // Large convex polygon: 64 vertices (> 16 limit), CCW.
-    constexpr size_t vertexCount = 64;
-    constexpr float radius = 8.0f;
-    constexpr float twoPi = 6.28318530717958647692f;
-    std::vector<Vec2> ngon;
-    ngon.reserve(vertexCount);
-    for (size_t i = 0; i < vertexCount; ++i)
-    {
-        const float a = twoPi * static_cast<float>(i) / static_cast<float>(vertexCount);
-        ngon.push_back({ radius * std::cos(a), radius * std::sin(a) });
-    }
-
-    // Box-like polygon for the dynamic probe.
-    std::vector<Vec2> boxLike = { { -0.75f, -0.75f }, { 0.75f, -0.75f }, { 0.75f, 0.75f }, { -0.75f, 0.75f } };
-
-    auto build = [&](float cx, PhysicsGeometry::ConvexDecompositionMethod method)
-        {
-            simulation.createPolygon({
-                .base.position = { cx, 0.0f },
-                .base.mass = 0,
-                .base.materialIndex = mat,
-                .localVertices = { ngon.data(), ngon.size() },
-                .convexDecompositionMethod = method
-                });
-
-            constexpr float spawnY = 11.0f;
-            simulation.createCircle({
-                .base.position = { cx - 4.0f, spawnY },
-                .base.mass = 1,
-                .base.materialIndex = mat,
-                .radius = 0.75f
-                });
-            simulation.createBox({
-                .base.position = { cx, spawnY },
-                .base.mass = 1,
-                .base.materialIndex = mat,
-                .size = { 1.5f, 1.5f }
-                });
-            simulation.createPolygon({
-                .base.position = { cx + 4.0f, spawnY },
-                .base.mass = 1,
-                .base.materialIndex = mat,
-                .localVertices = { boxLike.data(), boxLike.size() }
-                });
-        };
-
-    build(-10.0f, PhysicsGeometry::ConvexDecompositionMethod::Fan);
-    build(10.0f, PhysicsGeometry::ConvexDecompositionMethod::Bisect);
-
-    // Closed level: interior x in [-20, 20], y in [-14, 14].
+    // Closed static room: interior x in [-20, 20], y in [-14, 14].
     auto wall = [&](float x, float y, float w, float h)
         {
             simulation.createBox({
@@ -2073,10 +1304,88 @@ static void load_ConvexDecompositionTest(PS_AGONY::Simulation& simulation)
                 .size = { w, h }
                 });
         };
-    wall(0.0f, -15.0f, 44.0f, 2.0f);  // floor
-    wall(0.0f, 15.0f, 44.0f, 2.0f);  // ceiling
-    wall(-21.0f, 0.0f, 2.0f, 32.0f);  // left
-    wall(21.0f, 0.0f, 2.0f, 32.0f);  // right
+    wall(0.0f, -15.0f, 44.0f, 2.0f);
+    wall(0.0f, 15.0f, 44.0f, 2.0f);
+    wall(-21.0f, 0.0f, 2.0f, 32.0f);
+    wall(21.0f, 0.0f, 2.0f, 32.0f);
+
+    // Same type, three sizes, mass proportional to area.
+    constexpr float sizes[3] = { 0.6f, 1.2f, 2.4f };
+    constexpr float sizeX[3] = { -12.0f, -6.0f, 0.0f };
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const float s = sizes[i];
+
+        const float radius = s * 0.5f;
+        simulation.createCircle({
+            .base.position = { sizeX[i], 10.0f },
+            .base.mass = pi * radius * radius,
+            .base.materialIndex = mat,
+            .radius = radius
+            });
+
+        simulation.createBox({
+            .base.position = { sizeX[i], 5.0f },
+            .base.mass = s * s,
+            .base.materialIndex = mat,
+            .size = { s, s }
+            });
+
+        const float capRadius = s * 0.25f;
+        const float capLength = s;
+        simulation.createCapsule({
+            .base.position = { sizeX[i], 0.0f },
+            .base.mass = (capLength * 2.0f + pi * capRadius) * capRadius,
+            .base.materialIndex = mat,
+            .radius = capRadius,
+            .length = capLength
+            });
+    }
+
+    // Single regular pentagon, CCW. Area = 2.378 r^2.
+    {
+        constexpr float r = 1.0f;
+        std::vector<Vec2> v;
+        for (int k = 0; k < 5; ++k)
+        {
+            const float a = 2.0f * pi * float(k) / 5.0f + 0.5f * pi;
+            v.push_back({ r * std::cos(a), r * std::sin(a) });
+        }
+        simulation.createPolygon({
+            .base.position = { 8.0f, 10.0f },
+            .base.mass = 2.378f * r * r,
+            .base.materialIndex = mat,
+            .localVertices = { v.data(), v.size() }
+            });
+    }
+
+    // Concave 5-point star with the collision callback. Area = 5 R r sin(36 deg).
+    {
+        constexpr float outer = 2.0f;
+        constexpr float inner = 0.8f;
+        std::vector<Vec2> v;
+        for (int k = 0; k < 10; ++k)
+        {
+            const float a = pi * float(k) / 5.0f + 0.5f * pi;
+            const float rad = (k & 1) ? inner : outer;
+            v.push_back({ rad * std::cos(a), rad * std::sin(a) });
+        }
+        const auto starOpt = simulation.createPolygon({
+            .base.position = { 12.0f, 5.0f },
+            .base.mass = 5.0f * outer * inner * 0.58778525f,
+            .base.materialIndex = mat,
+            .localVertices = { v.data(), v.size() }
+            });
+        if (!starOpt) return;
+
+        const auto callback = simulation.createCollisionCallback(onStarCollision);
+        if (!callback) return;
+
+        // A concave polygon is decomposed into several colliders: set the callback on all of them.
+        for (const ColliderIndex collider : simulation.getBodyColliders(*starOpt))
+            simulation.setColliderCollisionCallback(collider, *callback, 20.0f);
+    }
 }
 
 void loadScene(PS_AGONY::Simulation& simulation, int scene)
@@ -2086,14 +1395,6 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
 
     if (scene == 0)
     {
-        load_GaltonBoard(simulation, rvg);
-    }
-    else if (scene == 1)
-    {
-        load_ALotOfNotTouching(simulation, rvg);
-    }
-    else if (scene == 2)
-    {
         load_LargeWorld(simulation, rvg, {}, 1500);
 
         //load_LargeWorld(simulation, rvg, { -70.0f, -50.0f }, 2500 / 4);
@@ -2101,44 +1402,24 @@ void loadScene(PS_AGONY::Simulation& simulation, int scene)
         //load_LargeWorld(simulation, rvg, { -70.0f,  50.0f }, 2500 / 4);
         //load_LargeWorld(simulation, rvg, {  70.0f,  50.0f }, 2500 / 4);
     }
-    else if (scene == 3)
+    else if (scene == 1)
     {
         load_StackedPyramid(simulation, rvg);
     }
-    else if (scene == 4)
+    else if (scene == 2)
     {
         load_ConstraintBridges(simulation, rvg);
     }
-    else if (scene == 5)
-    {
-        load_SoftBodyComparisonTest(simulation, rvg);
-    }
-    else if (scene == 6)
+    else if (scene == 3)
     {
         load_CarRamp(simulation, rvg);
     }
-    else if (scene == 7)
-    {
-        load_Test(simulation, rvg);
-    }
-    else if (scene == 8)
-    {
-        load_JointedCircles(simulation, rvg);
-    }
-    else if (scene == 9)
-    {
-        load_PrismaticJointGallery(simulation, rvg);
-    }
-    else if (scene == 10)
+    else if (scene == 4)
     {
         load_Tank(simulation);
     }
-    else if (scene == 11)
+    else if (scene == 5)
     {
-        load_ConstraintStressTest(simulation, rvg);
-    }
-    else if (scene == 12)
-    {
-        load_ConvexDecompositionTest(simulation);
+        load_CollisionCallbackTest(simulation);
     }
 }

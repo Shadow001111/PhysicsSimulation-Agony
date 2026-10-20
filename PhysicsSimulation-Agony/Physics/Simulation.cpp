@@ -176,11 +176,18 @@ namespace PS_AGONY
         TRACY_SCOPE_N("Dispatch collision events");
 
         const std::vector<CollisionEvent>& events = bodyCollisionSolver.getCollisionEvents();
-        //for (size_t i = 0; i < events.size(); i++)
-        //{
-        //    collisionCallbackManager.invoke(events[i]);
-        //}
         collisionCallbackManager.invoke(events);
+    }
+
+    std::span<const ColliderIndex> Simulation::getBodyColliders(ObjectIndex bodyIndex)
+    {
+        if (bodyIndex >= objectManager.bodies.getCount())
+        {
+            return {};
+        }
+
+        std::span<const ColliderIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];
+        return indicesSpan;
     }
 
     void Simulation::mainBodyHolderGrabAt(Vec2 grabPosition)
