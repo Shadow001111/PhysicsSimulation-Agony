@@ -11,13 +11,6 @@
 
 namespace PS_AGONY::BroadPhaseInternal
 {
-	inline bool overlaps(const BvhNode& a, const BvhNode& b) noexcept
-	{
-		return
-			a.minX < b.maxX && a.maxX > b.minX &&
-			a.minY < b.maxY && a.maxY > b.minY;
-	}
-
 	// Self-tree only. Walks down from the root to build the initial frontier:
 	// leaves for self-cross testing, leaf/leaf pairs for AxB testing, and
 	// node/node pairs that still need splitting (independent sub-traversals).
@@ -69,7 +62,7 @@ namespace PS_AGONY::BroadPhaseInternal
 			}
 
 			// Prune L and R nodes.
-			if (overlaps(nodeL, nodeR))
+			if (nodeL.overlaps(nodeR))
 			{
 				if (lLeaf && rLeaf)
 				{
@@ -106,11 +99,11 @@ namespace PS_AGONY::BroadPhaseInternal
 			const uint32_t leftChildB = nodeB.leftChildIndex;
 			const uint32_t rightChildB = leftChildB + 1;
 
-			if (overlaps(nodeA, nodesB[leftChildB]))
+			if (nodeA.overlaps(nodesB[leftChildB]))
 			{
 				out.push_back({ pair.a, leftChildB });
 			}
-			if (overlaps(nodeA, nodesB[rightChildB]))
+			if (nodeA.overlaps(nodesB[rightChildB]))
 			{
 				out.push_back({ pair.a, rightChildB });
 			}
@@ -120,11 +113,11 @@ namespace PS_AGONY::BroadPhaseInternal
 			const uint32_t leftChildA = nodeA.leftChildIndex;
 			const uint32_t rightChildA = leftChildA + 1;
 
-			if (overlaps(nodesA[leftChildA], nodeB))
+			if (nodeB.overlaps(nodesA[leftChildA]))
 			{
 				out.push_back({ leftChildA, pair.b });
 			}
-			if (overlaps(nodesA[rightChildA], nodeB))
+			if (nodeB.overlaps(nodesA[rightChildA]))
 			{
 				out.push_back({ rightChildA, pair.b });
 			}
@@ -137,22 +130,85 @@ namespace PS_AGONY::BroadPhaseInternal
 		const BvhNode* nodesA,
 		const BvhNode* nodesB,
 		std::vector<BvhNodePair>& stack,
-		std::vector<BvhNodePair>& outLeafPairsToTestCollisions)
+		std::vector<BvhNodePair>& outLeafPairs)
 	{
+		// Pushes the (left, right) child pairs the same way the old pop/leaf-check did, but
+		// leaf/leaf pairs that would be popped immediately are written straight to the output.
+		auto emitChildren = [&](
+			const BvhNodePair left, const BvhNodePair right,
+			const bool overlapL, const bool overlapR,
+			const bool leafLeafL, const bool leafLeafR)
+			{
+				if (overlapR)
+				{
+					if (leafLeafR)
+					{
+						outLeafPairs.push_back(right);
+						if (overlapL)
+						{
+							if (leafLeafL) outLeafPairs.push_back(left);
+							else stack.push_back(left);
+						}
+					}
+					else
+					{
+						if (overlapL) stack.push_back(left); // Must wait for right's subtree.
+						stack.push_back(right);
+					}
+				}
+				else if (overlapL)
+				{
+					if (leafLeafL) outLeafPairs.push_back(left);
+					else stack.push_back(left);
+				}
+			};
+
 		while (!stack.empty())
 		{
 			const BvhNodePair nodePair = stack.back();
 			stack.pop_back();
 
-			const bool aLeaf = nodesA[nodePair.a].leftChildIndex == BvhNode::INVALID_INDEX;
-			const bool bLeaf = nodesB[nodePair.b].leftChildIndex == BvhNode::INVALID_INDEX;
+			const BvhNode& nodeA = nodesA[nodePair.a];
+			const BvhNode& nodeB = nodesB[nodePair.b];
+
+			const bool aLeaf = nodeA.leftChildIndex == BvhNode::INVALID_INDEX;
+			const bool bLeaf = nodeB.leftChildIndex == BvhNode::INVALID_INDEX;
 			if (aLeaf && bLeaf)
 			{
-				outLeafPairsToTestCollisions.push_back(nodePair);
+				outLeafPairs.push_back(nodePair);
 				continue;
 			}
 
-			splitLargerNode(nodesA, nodesB, nodePair, stack);
+			const Real areaA = (nodeA.maxX - nodeA.minX) * (nodeA.maxY - nodeA.minY);
+			const Real areaB = (nodeB.maxX - nodeB.minX) * (nodeB.maxY - nodeB.minY);
+
+			const bool splitB = aLeaf || (!bLeaf && (areaB > areaA));
+			if (splitB)
+			{
+				const uint32_t l = nodeB.leftChildIndex;
+				const uint32_t r = l + 1;
+				const BvhNode& cl = nodesB[l];
+				const BvhNode& cr = nodesB[r];
+
+				emitChildren(
+					{ nodePair.a, l }, { nodePair.a, r },
+					nodeA.overlaps(cl), nodeA.overlaps(cr),
+					aLeaf && cl.leftChildIndex == BvhNode::INVALID_INDEX,
+					aLeaf && cr.leftChildIndex == BvhNode::INVALID_INDEX);
+			}
+			else
+			{
+				const uint32_t l = nodeA.leftChildIndex;
+				const uint32_t r = l + 1;
+				const BvhNode& cl = nodesA[l];
+				const BvhNode& cr = nodesA[r];
+
+				emitChildren(
+					{ l, nodePair.b }, { r, nodePair.b },
+					nodeB.overlaps(cl), nodeB.overlaps(cr),
+					bLeaf && cl.leftChildIndex == BvhNode::INVALID_INDEX,
+					bLeaf && cr.leftChildIndex == BvhNode::INVALID_INDEX);
+			}
 		}
 	}
 
@@ -169,7 +225,7 @@ namespace PS_AGONY::BroadPhaseInternal
 		std::vector<BvhNodePair>& outPairs,
 		std::vector<BvhNodePair>& scratch)
 	{
-		if (!overlaps(nodesA[0], nodesB[0])) return;
+		if (!nodesA[0].overlaps(nodesB[0])) return;
 
 		outPairs.push_back({ 0, 0 });
 

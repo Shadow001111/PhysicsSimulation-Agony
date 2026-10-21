@@ -23,12 +23,17 @@ namespace PS_AGONY::BroadPhaseInternal
 
 		BvhNode() :
 			start(0), end(0)
-		{
-		}
+		{}
 
 		BvhNode(uint32_t start, uint32_t end) :
 			start(start), end(end)
+		{}
+
+		inline bool overlaps(const BvhNode& other) const noexcept
 		{
+			return
+				minX < other.maxX && maxX > other.minX &&
+				minY < other.maxY && maxY > other.minY;
 		}
 	};
 }

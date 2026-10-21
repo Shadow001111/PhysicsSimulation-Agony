@@ -327,7 +327,6 @@ namespace PS_AGONY
 
 					point.velocityBias = (negVelocityAlongNormal > SimulationSettings::RESTITUTION_VELOCITY_THRESHOLD) ? elasticity * negVelocityAlongNormal : Real(0);
 
-					// Impulse needed to cancel the approach velocity. Resting contacts give ~0, unlike accumulated (pressure) impulses.
 					if (recordEvents)
 						impactImpulse = std::fmax(impactImpulse, negVelocityAlongNormal * point.normalMass);
 				}

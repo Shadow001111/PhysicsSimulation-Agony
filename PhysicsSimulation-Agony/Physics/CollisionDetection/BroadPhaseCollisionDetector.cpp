@@ -40,17 +40,17 @@ namespace PS_AGONY
 
 			void self(uint32_t leaf)
 			{
-				BPI::testLeafSelfCross(dyn.nodes[leaf], dyn, owner, masks, pushBuffer);
+				BPI::testLeafSelfCross(dyn.nodes[leaf], dyn, owner, masks.data(), pushBuffer);
 			}
 
 			void selfPair(const BvhNodePair& p)
 			{
-				BPI::testLeafPairCross<true>(dyn.nodes[p.a], dyn, dyn.nodes[p.b], dyn, owner, masks, pushBuffer);
+				BPI::testLeafPairCross<true>(dyn.nodes[p.a], dyn, dyn.nodes[p.b], dyn, owner, masks.data(), pushBuffer);
 			}
 
 			void crossPair(const BvhNodePair& p)
 			{
-				BPI::testLeafPairCross<false>(dyn.nodes[p.a], dyn, stat.nodes[p.b], stat, nullptr, masks, pushBuffer);
+				BPI::testLeafPairCross<false>(dyn.nodes[p.a], dyn, stat.nodes[p.b], stat, nullptr, masks.data(), pushBuffer);
 			}
 
 			void flush()
@@ -189,7 +189,7 @@ namespace PS_AGONY
 			BPI::traverseRootForInitialPairs(dyn.nodes, r.selfNodePairs, r.selfLeafPairs, r.selfLeaves);
 			BPI::traverseNodePairStack(dyn.nodes, dyn.nodes, r.selfNodePairs, r.selfLeafPairs);
 
-			if (hasStatic && BPI::overlaps(dyn.nodes[0], stat.nodes[0]))
+			if (hasStatic && dyn.nodes[0].overlaps(stat.nodes[0]))
 			{
 				r.crossNodePairs.push_back({ 0, 0 });
 				BPI::traverseNodePairStack(dyn.nodes, stat.nodes, r.crossNodePairs, r.crossLeafPairs);

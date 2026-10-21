@@ -74,7 +74,7 @@ namespace PS_AGONY::BroadPhaseInternal
 		const BvhNode& node,
 		const BvhTreeView& tree,
 		const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
-		std::array<uint32_t, BvhNode::KD_LEAF_SIZE>& masks,
+		uint32_t* ECSTASY_RESTRICT masks,
 		PairPushBuffer& pushBuffer)
 	{
 		const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
@@ -137,22 +137,22 @@ namespace PS_AGONY::BroadPhaseInternal
 		const BvhNode& nodeB,
 		const BvhTreeView& treeB,
 		[[maybe_unused]] const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
-		std::array<uint32_t, BvhNode::KD_LEAF_SIZE>& masks,
+		uint32_t* ECSTASY_RESTRICT masks,
 		PairPushBuffer& pushBuffer)
 	{
 		const uint32_t countA = nodeA.end - nodeA.start;
 
 		const size_t srcIndexA = nodeA.leafIndex * BvhNode::KD_LEAF_SIZE;
-		const Real* leafAMinX = treeA.leafMinX + srcIndexA;
-		const Real* leafAMaxX = treeA.leafMaxX + srcIndexA;
-		const Real* leafAMinY = treeA.leafMinY + srcIndexA;
-		const Real* leafAMaxY = treeA.leafMaxY + srcIndexA;
+		const Real* ECSTASY_RESTRICT leafAMinX = treeA.leafMinX + srcIndexA;
+		const Real* ECSTASY_RESTRICT leafAMaxX = treeA.leafMaxX + srcIndexA;
+		const Real* ECSTASY_RESTRICT leafAMinY = treeA.leafMinY + srcIndexA;
+		const Real* ECSTASY_RESTRICT leafAMaxY = treeA.leafMaxY + srcIndexA;
 
 		const size_t srcIndexB = nodeB.leafIndex * BvhNode::KD_LEAF_SIZE;
-		const Real* leafBMinX = treeB.leafMinX + srcIndexB;
-		const Real* leafBMaxX = treeB.leafMaxX + srcIndexB;
-		const Real* leafBMinY = treeB.leafMinY + srcIndexB;
-		const Real* leafBMaxY = treeB.leafMaxY + srcIndexB;
+		const Real* ECSTASY_RESTRICT leafBMinX = treeB.leafMinX + srcIndexB;
+		const Real* ECSTASY_RESTRICT leafBMaxX = treeB.leafMaxX + srcIndexB;
+		const Real* ECSTASY_RESTRICT leafBMinY = treeB.leafMinY + srcIndexB;
+		const Real* ECSTASY_RESTRICT leafBMaxY = treeB.leafMaxY + srcIndexB;
 
 		for (uint32_t i = 0; i < countA; i++)
 		{

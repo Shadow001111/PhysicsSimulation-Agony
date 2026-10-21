@@ -80,4 +80,4 @@ namespace PS_AGONY
 
 		size_t getCount() const noexcept { return count; }
 	};
-}
+}

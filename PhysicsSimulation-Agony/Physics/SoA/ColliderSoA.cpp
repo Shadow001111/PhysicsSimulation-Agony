@@ -109,4 +109,4 @@ namespace PS_AGONY
 		maxY(data.aabbMaxY.data())
 	{
 	}
-}
+}

@@ -488,16 +488,15 @@ namespace PS_AGONY::BroadPhaseInternal
 			}
 
 			// Leaf: copy collider AABBs into the leaf SoA and merge them.
-			const uint32_t leafIndex = node.leafIndex;
-			Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafAABBs.minX.data() + leafIndex);
-			Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafAABBs.maxX.data() + leafIndex);
-			Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafAABBs.minY.data() + leafIndex);
-			Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafAABBs.maxY.data() + leafIndex);
+			Real* ECSTASY_RESTRICT leafMinXPtr = reinterpret_cast<Real*>(leafAABBs.minX.data() + node.leafIndex);
+			Real* ECSTASY_RESTRICT leafMaxXPtr = reinterpret_cast<Real*>(leafAABBs.maxX.data() + node.leafIndex);
+			Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<Real*>(leafAABBs.minY.data() + node.leafIndex);
+			Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<Real*>(leafAABBs.maxY.data() + node.leafIndex);
 
-			Real minX = DEAD_MIN;
-			Real maxX = DEAD_MAX;
-			Real minY = DEAD_MIN;
-			Real maxY = DEAD_MAX;
+			node.minX = DEAD_MIN;
+			node.maxX = DEAD_MAX;
+			node.minY = DEAD_MIN;
+			node.maxY = DEAD_MAX;
 
 			const uint32_t nodeStart = node.start;
 			const uint32_t nodeRange = node.end - nodeStart;
@@ -516,13 +515,11 @@ namespace PS_AGONY::BroadPhaseInternal
 				leafMinYPtr[k] = bodyMinY;
 				leafMaxYPtr[k] = bodyMaxY;
 
-				minX = std::fmin(minX, bodyMinX);
-				maxX = std::fmax(maxX, bodyMaxX);
-				minY = std::fmin(minY, bodyMinY);
-				maxY = std::fmax(maxY, bodyMaxY);
+				node.minX = std::fmin(node.minX, bodyMinX);
+				node.maxX = std::fmax(node.maxX, bodyMaxX);
+				node.minY = std::fmin(node.minY, bodyMinY);
+				node.maxY = std::fmax(node.maxY, bodyMaxY);
 			}
-			node.minX = minX; node.maxX = maxX;
-			node.minY = minY; node.maxY = maxY;
 		}
 	}
 }
