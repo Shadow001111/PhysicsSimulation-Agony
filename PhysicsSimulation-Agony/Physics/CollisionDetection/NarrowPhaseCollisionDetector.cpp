@@ -157,6 +157,12 @@ namespace PS_AGONY
         return index + 1 == count ? Index(0) : Index(index + 1);
     }
 
+    // Builds a 4-lane vector in registers. 'a' goes to lane 0 (Simd::set loads in reverse order).
+    static __forceinline Ecstasy::Core::Simd<Real, sizeof(Real) * 32> makeReal4(Real a, Real b, Real c, Real d)
+    {
+        return Ecstasy::Core::Simd<Real, sizeof(Real) * 32>::set(d, c, b, a);
+    }
+
     static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
     {
         using Int = std::conditional_t<sizeof(Real) == 8, uint64_t, uint32_t>;
@@ -245,264 +251,6 @@ namespace PS_AGONY
     [[nodiscard]] static __forceinline Real clampValue(Real value, Real lo, Real hi)
     {
         return std::fmin(std::fmax(value, lo), hi);
-    }
-
-    // Capsule (B) vs convex hull (A): a box or a polygon. Runs in the hull-local space and returns the
-    // manifold in world space: the normal points from the hull towards the capsule, the points lie on
-    // the capsule surface.
-    // Only the 2 core endpoints are projected (O(n)) and the capsule side axis is folded into the same
-    // pass. Disjoint cores resolve the exact closest feature, so rounded corners are exact.
-    // 2 contacts are produced whenever the capsule lies along a hull face.
-    // IsBox: analytic separation from 'boxHalfExtents'. Otherwise the polygon arrays are used; the polygon
-    // must be valid (>= 3 vertices, no degenerate edges), this is not checked here.
-    template <bool IsBox>
-    [[nodiscard]] static __forceinline bool collideCapsuleConvex(
-        [[maybe_unused]] const Vec2* ECSTASY_RESTRICT vertsPtr,
-        [[maybe_unused]] const Vec2* ECSTASY_RESTRICT normalsPtr,
-        [[maybe_unused]] uint32_t vertexCount,
-        [[maybe_unused]] const Vec2& boxHalfExtents,
-        const Vec2& positionA,
-        const Vec2& rightA, // Hull rotation (cos, sin).
-        const Vec2& positionB,
-        const Vec2& axisB,  // Capsule rotation (cos, sin).
-        Real halfLengthB,
-        Real radius,
-        CapsuleManifold& out
-    )
-    {
-        const Vec2 upA = { -rightA.y, rightA.x };
-        const Vec2 centerDelta = positionB - positionA;
-
-        if constexpr (IsBox)
-        {
-            // Bounding circle rejection (skips the AABB corner cases from the broad phase).
-            const Real reach = std::sqrt(glm::dot(boxHalfExtents, boxHalfExtents)) + halfLengthB + radius;
-            if (glm::dot(centerDelta, centerDelta) >= reach * reach) return false;
-        }
-
-        // Capsule pose in hull-local space.
-        const Vec2 centerLocal = { glm::dot(centerDelta, rightA), glm::dot(centerDelta, upA) };
-        const Vec2 axis = { rightA.x * axisB.x + rightA.y * axisB.y, rightA.x * axisB.y - rightA.y * axisB.x };
-        const Vec2 halfCore = axis * halfLengthB;
-        const Vec2 s0 = centerLocal - halfCore;
-        const Vec2 s1 = centerLocal + halfCore;
-        const Real length = halfLengthB * Real(2);
-
-        const Vec2 sideAxis = { -axis.y, axis.x };
-        const Real sideOffset = glm::dot(sideAxis, centerLocal);
-
-        const auto vertexAt = [&](uint32_t i) -> Vec2
-            {
-                if constexpr (IsBox) return Vec2(((i + 1) & 2u) ? boxHalfExtents.x : -boxHalfExtents.x, (i & 2u) ? boxHalfExtents.y : -boxHalfExtents.y);
-                else return vertsPtr[i];
-            };
-        const auto normalAt = [&](uint32_t i) -> Vec2
-            {
-                if constexpr (IsBox) return BOX_NORMALS[i];
-                else return normalsPtr[i];
-            };
-
-        // Best hull face and hull extent along the capsule side axis.
-        Real faceSeparation;
-        uint32_t faceIndex = 0;
-        Real sideSeparation;
-        Vec2 sideNormal;
-        uint32_t sideVertex;
-
-        if constexpr (IsBox)
-        {
-            const Real minX = std::fmin(s0.x, s1.x);
-            const Real maxX = std::fmax(s0.x, s1.x);
-            const Real minY = std::fmin(s0.y, s1.y);
-            const Real maxY = std::fmax(s0.y, s1.y);
-
-            // Faces in id order: bottom, right, top, left.
-            faceSeparation = -maxY - boxHalfExtents.y;
-            const Real sepRight = minX - boxHalfExtents.x;
-            const Real sepTop = minY - boxHalfExtents.y;
-            const Real sepLeft = -maxX - boxHalfExtents.x;
-            if (sepRight > faceSeparation) { faceSeparation = sepRight; faceIndex = 1; }
-            if (sepTop > faceSeparation) { faceSeparation = sepTop; faceIndex = 2; }
-            if (sepLeft > faceSeparation) { faceSeparation = sepLeft; faceIndex = 3; }
-            if (faceSeparation >= radius) return false;
-
-            const Real sideExtent = boxHalfExtents.x * std::fabs(sideAxis.x) + boxHalfExtents.y * std::fabs(sideAxis.y);
-            sideSeparation = std::fabs(sideOffset) - sideExtent;
-            if (sideSeparation >= radius) return false;
-
-            // Box corner that pokes furthest towards the capsule side.
-            sideNormal = sideOffset >= Real(0) ? sideAxis : -sideAxis;
-            const uint32_t signX = sideNormal.x >= Real(0) ? 1u : 0u;
-            const uint32_t signY = sideNormal.y >= Real(0) ? 1u : 0u;
-            sideVertex = (signY << 1) | (signX ^ signY);
-        }
-        else
-        {
-            faceSeparation = -std::numeric_limits<Real>::max();
-            Real minSide = std::numeric_limits<Real>::max();
-            Real maxSide = -std::numeric_limits<Real>::max();
-            uint32_t minSideVertex = 0;
-            uint32_t maxSideVertex = 0;
-
-            for (uint32_t i = 0; i < vertexCount; i++)
-            {
-                const Vec2 v = vertsPtr[i];
-                const Vec2 n = normalsPtr[i];
-
-                const Real separation = std::fmin(glm::dot(n, s0 - v), glm::dot(n, s1 - v));
-                if (separation >= radius) return false;
-                if (separation > faceSeparation)
-                {
-                    faceSeparation = separation;
-                    faceIndex = i;
-                }
-
-                const Real side = glm::dot(v, sideAxis);
-                if (side < minSide) { minSide = side; minSideVertex = i; }
-                if (side > maxSide) { maxSide = side; maxSideVertex = i; }
-            }
-
-            const Real sidePlus = sideOffset - maxSide;   // Capsule on the +side of the polygon.
-            const Real sideMinus = minSide - sideOffset;  // Capsule on the -side of the polygon.
-            sideSeparation = std::fmax(sidePlus, sideMinus);
-            if (sideSeparation >= radius) return false;
-
-            const bool onPlusSide = sidePlus >= sideMinus;
-            sideNormal = onPlusSide ? sideAxis : -sideAxis;
-            sideVertex = onPlusSide ? maxSideVertex : minSideVertex;
-        }
-
-        out.points[1] = Vec2();
-        out.ids[1] = 0;
-
-        // Squared distance from 'w' to the capsule core.
-        const auto coreDistSquared = [&](const Vec2& w) -> Real
-            {
-                const Vec2 d = s0 + axis * clampValue(glm::dot(w - s0, axis), Real(0), length) - w;
-                return glm::dot(d, d);
-            };
-
-        // A face contact fills 'out' in the do-block. Every vertex outcome only records
-        // (vertexId, vertexNormal, vertexSeparation) and leaves the block: one shared vertex tail below.
-        bool faceContact = false;
-        uint32_t vertexId = 0;
-        Vec2 vertexNormal;
-        Real vertexSeparation;
-
-        do
-        {
-            // Capsule side axis separates best (with a bias towards faces for stable ids): a vertex pokes the capsule side.
-            if (sideSeparation > faceSeparation + SAT_EPSILON)
-            {
-                vertexId = sideVertex;
-                vertexNormal = sideNormal;
-                vertexSeparation = sideSeparation;
-                break;
-            }
-
-            // Face contact: the hull face is the reference, the capsule core the incident segment.
-            const uint32_t i0 = faceIndex;
-            const uint32_t i1 = IsBox ? ((i0 + 1u) & 3u) : nextIndex(i0, vertexCount);
-            const Vec2 a = vertexAt(i0);
-            const Vec2 b = vertexAt(i1);
-            const Vec2 n = normalAt(i0);
-            const Vec2 tangent = { -n.y, n.x };
-
-            vertexNormal = n;
-            vertexSeparation = faceSeparation;
-
-            Vec2 c0 = s0;
-            Vec2 c1 = s1;
-            Real e0 = glm::dot(s0 - a, n);
-            Real e1 = glm::dot(s1 - a, n);
-
-            if (faceSeparation > Real(0))
-            {
-                // Disjoint cores: only the part of the segment above the edge sees the face;
-                // an overhanging part may be closer to an end vertex of the edge.
-                const Real edgeLength = glm::dot(b - a, tangent);
-                const Real t0 = glm::dot(s0 - a, tangent);
-                const Real t1 = glm::dot(s1 - a, tangent);
-
-                const bool beyondStart = t0 < Real(0) || t1 < Real(0);
-                const bool beyondEnd = t0 > edgeLength || t1 > edgeLength;
-                if (beyondStart || beyondEnd)
-                {
-                    if (clipSegment(c0, c1, a, tangent)) { vertexId = i0; break; }
-                    if (clipSegment(c0, c1, b, -tangent)) { vertexId = i1; break; }
-
-                    e0 = glm::dot(c0 - a, n);
-                    e1 = glm::dot(c1 - a, n);
-
-                    const Real minE = std::fmin(e0, e1);
-                    const Real faceDistSquared = minE * minE;
-
-                    if (beyondStart && coreDistSquared(a) + SAT_EPSILON < faceDistSquared) { vertexId = i0; break; }
-                    if (beyondEnd && coreDistSquared(b) + SAT_EPSILON < faceDistSquared) { vertexId = i1; break; }
-                }
-            }
-
-            const Real minSeparation = faceSeparation > Real(0) ? std::fmin(e0, e1) : faceSeparation;
-            const Vec2 span = c1 - c0;
-            const bool hasSecond = glm::dot(span, span) >= ZERO_DIVISION_BOUNDARY_SQUARED;
-            const Real contactLimit = radius + SAT_EPSILON;
-            const uint32_t idBase = REFERENCE_BODY_TAG | (i0 << 1);
-
-            uint32_t contactCount = 0;
-            if (e0 <= contactLimit)
-            {
-                out.points[contactCount] = c0 - n * radius;
-                out.ids[contactCount] = idBase;
-                contactCount++;
-            }
-            if (hasSecond && e1 <= contactLimit)
-            {
-                out.points[contactCount] = c1 - n * radius;
-                out.ids[contactCount] = idBase | 1u;
-                contactCount++;
-            }
-            if (contactCount == 0) [[unlikely]] return false;
-
-            out.normal = n;
-            out.depth = radius - minSeparation;
-            out.contactCount = contactCount;
-            faceContact = true;
-        } while (false);
-
-        if (!faceContact)
-        {
-            // Single contact between a hull vertex and the capsule core.
-            // 'vertexSeparation' > 0 means the cores are disjoint: the exact vertex distance decides.
-            const Vec2 w = vertexAt(vertexId);
-            const Vec2 q = s0 + axis * clampValue(glm::dot(w - s0, axis), Real(0), length);
-
-            Vec2 normal = vertexNormal;
-            Real depth = radius - vertexSeparation;
-            if (vertexSeparation > Real(0))
-            {
-                const Vec2 d = q - w;
-                const Real distSquared = glm::dot(d, d);
-                if (distSquared >= radius * radius) return false;
-                if (distSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
-                {
-                    const Real distance = std::sqrt(distSquared);
-                    normal = d * (Real(1) / distance);
-                    depth = radius - distance;
-                }
-            }
-
-            out.normal = normal;
-            out.depth = depth;
-            out.contactCount = 1;
-            out.points[0] = q - normal * radius;
-            out.ids[0] = CAPSULE_VERTEX_CONTACT_TAG | vertexId;
-        }
-
-        // Hull-local -> world.
-        out.normal = rightA * out.normal.x + upA * out.normal.y;
-        out.points[0] = positionA + rightA * out.points[0].x + upA * out.points[0].y;
-        out.points[1] = positionA + rightA * out.points[1].x + upA * out.points[1].y;
-        return true;
     }
 
     /*               */
@@ -1035,7 +783,6 @@ namespace PS_AGONY
         }
     }
 
-
     /*===COLLISION METHODS===*/
 
     void NarrowPhaseCollisionDetector::collisionCircleCircle(
@@ -1230,9 +977,6 @@ namespace PS_AGONY
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
-            const Real cosB = rotationCosPtr[indexB];
-            const Real sinB = rotationSinPtr[indexB];
-
             const ObjectIndex shapeA = shapeIndexPtr[indexA];
             const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
@@ -1240,13 +984,13 @@ namespace PS_AGONY
             const Real halfWidthB = halfWidthPtr[shapeB];
             const Real halfHeightB = halfHeightPtr[shapeB];
 
-            const Vec2 right = { cosB, sinB };
-            const Vec2 up = { -sinB, cosB };
+            const Real cosB = rotationCosPtr[indexB];
+            const Real sinB = rotationSinPtr[indexB];
 
-            const Vec2 d = positionA - positionB;
+            const Vec2 deltaGlobal = positionA - positionB;
             const Vec2 circleLocalPosition = {
-                glm::dot(d, right),
-                glm::dot(d, up)
+                deltaGlobal.x *  cosB + deltaGlobal.y * sinB,
+                deltaGlobal.x * -sinB + deltaGlobal.y * cosB
             };
 
             const Vec2 closestLocal = {
@@ -1259,7 +1003,7 @@ namespace PS_AGONY
 
             if (squaredDistance >= radiusA * radiusA) continue;
 
-            if (squaredDistance >= ZERO_DIVISION_BOUNDARY_SQUARED)
+            if (squaredDistance >= ZERO_DIVISION_BOUNDARY_SQUARED) [[likely]]
             {
                 const Real distance = std::sqrt(squaredDistance);
                 const Real invDistance = Real(1) / distance;
@@ -1273,10 +1017,10 @@ namespace PS_AGONY
                 const Vec2 contactOnCircle = positionA + normal * radiusA;
 
                 uint32_t contactId = 0;
-                if (circleLocalPosition.x > halfWidthB)  contactId |= BOX_FACE_RIGHT;
-                else if (circleLocalPosition.x < -halfWidthB)  contactId |= BOX_FACE_LEFT;
-                if (circleLocalPosition.y > halfHeightB) contactId |= BOX_FACE_TOP;
-                else if (circleLocalPosition.y < -halfHeightB) contactId |= BOX_FACE_BOTTOM;
+                contactId |= (uint32_t)(circleLocalPosition.x >  halfWidthB);       // Bit 0 (1): BOX_FACE_RIGHT
+                contactId |= (uint32_t)(circleLocalPosition.x < -halfWidthB)  << 1; // Bit 1 (2): BOX_FACE_LEFT
+                contactId |= (uint32_t)(circleLocalPosition.y >  halfHeightB) << 2; // Bit 2 (4): BOX_FACE_TOP
+                contactId |= (uint32_t)(circleLocalPosition.y < -halfHeightB) << 3; // Bit 3 (8): BOX_FACE_BOTTOM
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
@@ -1295,24 +1039,16 @@ namespace PS_AGONY
             // Circle center inside box: choose nearest face.
             const Real dx = halfWidthB - std::fabs(circleLocalPosition.x);
             const Real dy = halfHeightB - std::fabs(circleLocalPosition.y);
-            const bool useX = dx < dy;
-            const Real minPen = useX ? dx : dy;
+            const bool useY = dy <= dx;
+            const Real minPen = useY ? dy : dx;
 
-            const Real sx = std::copysign(Real(1), circleLocalPosition.x);
-            const Real sy = std::copysign(Real(1), circleLocalPosition.y);
+            const Real sign = std::copysign(Real(1), circleLocalPosition[useY]);
 
-            Vec2 normalLocal;
-            uint32_t contactId;
-            if (useX)
-            {
-                normalLocal = Vec2(sx, Real(0));
-                contactId = sx > 0 ? BOX_FACE_RIGHT : BOX_FACE_LEFT;
-            }
-            else
-            {
-                normalLocal = Vec2(Real(0), sy);
-                contactId = sy > 0 ? BOX_FACE_TOP : BOX_FACE_BOTTOM;
-            }
+            Vec2 normalLocal{};
+            const uint32_t elementIndex{ useY };
+            normalLocal[elementIndex] = sign;
+            
+            const uint32_t contactId = 1 << (uint32_t(sign <= 0) + (elementIndex << 1));
 
             const Vec2 normal = -Vec2{
                 cosB * normalLocal.x - sinB * normalLocal.y,
@@ -1320,7 +1056,6 @@ namespace PS_AGONY
             };
             const Real depth = radiusA + minPen;
             const Vec2 contactOnCircle = positionA + normal * radiusA;
-
 
             outCollisionData.emplace_back(
                 indexA, indexB,
@@ -1370,13 +1105,10 @@ namespace PS_AGONY
             const Vec2* ECSTASY_RESTRICT localNormals = localPolygonVertices.normals();
             const size_t vertexCount = localPolygonVertices.size();
 
-            const Vec2 rightB = { cosB,  sinB };
-            const Vec2 upB = { -sinB, cosB };
-
-            const Vec2 abPosDelta = positionA - positionB;
+            const Vec2 deltaGlobal = positionA - positionB;
             const Vec2 circleLocal = {
-                glm::dot(abPosDelta, rightB),
-                glm::dot(abPosDelta, upB)
+                deltaGlobal.x *  cosB + deltaGlobal.y * sinB,
+                deltaGlobal.x * -sinB + deltaGlobal.y * cosB
             };
 
             uint32_t supportEdge = 0;
@@ -1390,23 +1122,22 @@ namespace PS_AGONY
                 // Center is outside the polygon but within radiusA of it.
                 const Vec2 a = localVerts[supportEdge];
                 const Vec2 b = localVerts[nextIndex(supportEdge, uint32_t(vertexCount))];
-                const Vec2 q = closestPointOnSegment(circleLocal, a, b);
-                const Vec2 d = circleLocal - q;
-                const Real distSquared = glm::dot(d, d);
+                const Vec2 closestPoint = closestPointOnSegment(circleLocal, a, b);
+                const Vec2 closestPointDelta = circleLocal - closestPoint;
+                const Real distSquared = glm::dot(closestPointDelta, closestPointDelta);
 
-                if (distSquared < ZERO_DIVISION_BOUNDARY_SQUARED)
+                if (distSquared > radiusA * radiusA) continue;
+
+                if (distSquared < ZERO_DIVISION_BOUNDARY_SQUARED) [[unlikely]]
                 {
-                    normalLocal = localNormals[supportEdge];
                     separation = 0;
+                    normalLocal = localNormals[supportEdge];
                 }
                 else
                 {
-                    const Real dist = std::sqrt(distSquared);
-                    normalLocal = d * (Real(1) / dist);
-                    separation = dist;
+                    separation = std::sqrt(distSquared);
+                    normalLocal = closestPointDelta * (Real(1) / separation);
                 }
-
-                if (separation > radiusA) continue;
             }
             else
             {
@@ -1416,8 +1147,8 @@ namespace PS_AGONY
             }
 
             Vec2 normal = -Vec2{
-                rightB.x * normalLocal.x + upB.x * normalLocal.y,
-                rightB.y * normalLocal.x + upB.y * normalLocal.y
+                cosB * normalLocal.x - sinB * normalLocal.y,
+                sinB * normalLocal.x + cosB * normalLocal.y
             };
 
             const Real depth = radiusA - separation;
@@ -1540,10 +1271,10 @@ namespace PS_AGONY
                 const RealSimd isCloseToZeroMask = distance < RealSimd(ZERO_DIVISION_BOUNDARY);
 
                 // Circle center on the core: push out along the capsule side, away from the circle's side.
-                const RealSimd sideOffset = dY * cosB - dX * sinB;
+                const RealSimd sideOffset = RealSimd::mulSub(dY, cosB, dX * sinB);
                 const RealSimd flipMask = sideOffset < zero;
-                const RealSimd fallbackX = RealSimd::blendv(sinB, zero - sinB, flipMask);
-                const RealSimd fallbackY = RealSimd::blendv(zero - cosB, cosB, flipMask);
+                const RealSimd fallbackX = RealSimd::blendv( sinB, -sinB, flipMask);
+                const RealSimd fallbackY = RealSimd::blendv(-cosB,  cosB, flipMask);
 
                 const RealSimd normalX = RealSimd::blendv(deltaX * invDistance, fallbackX, isCloseToZeroMask);
                 const RealSimd normalY = RealSimd::blendv(deltaY * invDistance, fallbackY, isCloseToZeroMask);
@@ -1612,7 +1343,7 @@ namespace PS_AGONY
             {
                 // Circle center on the core: push out along the capsule side, away from the circle's side.
                 normal = { sinB, -cosB };
-                flipSignIfNegative(normal, glm::dot(d, Vec2(-sinB, cosB)));
+                flipSignIfNegative(normal, d.x * sinB + d.y * cosB);
             }
             else
             {
@@ -1647,6 +1378,9 @@ namespace PS_AGONY
             B_UP
         };
 
+        // Fits exactly 4 Reals.
+        using Real4Simd = Ecstasy::Core::Simd<Real, sizeof(Real) * 32>;
+
         const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
         const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
@@ -1680,44 +1414,53 @@ namespace PS_AGONY
             const Vec2 rightB = { cosB,  sinB };
             const Vec2 upB = { -sinB, cosB };
 
-            const Real absRelativeCos = std::fabs(cosA * cosB + sinA * sinB);
-            const Real absRelativeSin = std::fabs(cosA * sinB - sinA * cosB);
+            // Signed relative rotation: relCos = rightA.rightB, relSin = rightA x rightB.
+            const Real relCos = cosA * cosB + sinA * sinB;
+            const Real relSin = cosA * sinB - sinA * cosB;
+            const Real absRelativeCos = std::fabs(relCos);
+            const Real absRelativeSin = std::fabs(relSin);
 
             const Vec2 centerDelta = positionB - positionA;
-            const Real centerDeltaOnRightA = glm::dot(centerDelta, rightA);
-            const Real centerDeltaOnUpA = glm::dot(centerDelta, upA);
-            const Real centerDeltaOnRightB = glm::dot(centerDelta, rightB);
-            const Real centerDeltaOnUpB = glm::dot(centerDelta, upB);
 
-            const Real projectedRadiusBOnRightA = halfWidthB * absRelativeCos + halfHeightB * absRelativeSin;
-            const Real projectedRadiusBOnUpA = halfWidthB * absRelativeSin + halfHeightB * absRelativeCos;
-            const Real projectedRadiusAOnRightB = halfWidthA * absRelativeCos + halfHeightA * absRelativeSin;
-            const Real projectedRadiusAOnUpB = halfWidthA * absRelativeSin + halfHeightA * absRelativeCos;
+            // Lanes: [A_RIGHT, A_UP, B_RIGHT, B_UP]. Built in registers (no store->load forwarding stalls).
+            const Real4Simd halfWidthV = makeReal4(halfWidthB, halfWidthB, halfWidthA, halfWidthA);
+            const Real4Simd halfHeightV = makeReal4(halfHeightB, halfHeightB, halfHeightA, halfHeightA);
+            const Real4Simd halfWidthHeightV = makeReal4(halfWidthA, halfHeightA, halfWidthB, halfHeightB);
+            const Real4Simd cosSinV1 = makeReal4(absRelativeCos, absRelativeSin, absRelativeCos, absRelativeSin);
+            const Real4Simd cosSinV2 = makeReal4(absRelativeSin, absRelativeCos, absRelativeSin, absRelativeCos);
 
-            Vec2 normal{};
-            Real depth = std::numeric_limits<Real>::max();
-            SATAxis bestAxis = SATAxis::A_RIGHT;
+            const Real4Simd radiusSumV = Real4Simd::mulAdd(halfWidthV, cosSinV1, Real4Simd::mulAdd(halfHeightV, cosSinV2, halfWidthHeightV));
 
-            auto sat = [&](Real radiusSum, Real centerDeltaOnAxis, Vec2 axis, SATAxis axisType) -> bool
-                {
-                    const Real overlap = radiusSum - std::fabs(centerDeltaOnAxis);
-                    if (overlap < Real(0)) return false;
-                    if (overlap < depth)
-                    {
-                        depth = overlap;
-                        normal = axis;
-                        flipSignIfNegative(normal, centerDeltaOnAxis);
-                        bestAxis = axisType;
-                    }
-                    return true;
-                };
+            // Axis components per lane; dot(centerDelta, axis) = dx * axisX + dy * axisY.
+            const Real4Simd axisXV = makeReal4(cosA, -sinA, cosB, -sinB);
+            const Real4Simd axisYV = makeReal4(sinA, cosA, sinB, cosB);
+            const Real4Simd centerDeltaOnAxisV = Real4Simd::mulAdd(Real4Simd(centerDelta.x), axisXV, Real4Simd(centerDelta.y) * axisYV);
 
-            if (!sat(projectedRadiusBOnRightA + halfWidthA, centerDeltaOnRightA, rightA, SATAxis::A_RIGHT)) continue;
-            if (!sat(projectedRadiusBOnUpA + halfHeightA, centerDeltaOnUpA, upA, SATAxis::A_UP))    continue;
-            if (!sat(projectedRadiusAOnRightB + halfWidthB, centerDeltaOnRightB, rightB, SATAxis::B_RIGHT)) continue;
-            if (!sat(projectedRadiusAOnUpB + halfHeightB, centerDeltaOnUpB, upB, SATAxis::B_UP))    continue;
+            const Real4Simd overlap = radiusSumV - (Real4Simd::getAbsMask() & centerDeltaOnAxisV);
+            if ((overlap < Real4Simd(0)).movemask() != 0) continue; // Abort!
 
-            const bool refIsA = bestAxis < SATAxis::B_RIGHT;
+            // Scalar branchless argmin (lowest index wins ties).
+            alignas(Real4Simd::bytes) Real overlapArray[4];
+            overlap.store(overlapArray);
+
+            const Real depth = std::fmin(std::fmin(overlapArray[0], overlapArray[1]), std::fmin(overlapArray[2], overlapArray[3]));
+            const uint32_t notAxis0 = overlapArray[0] != depth;
+            const uint32_t notAxis01 = notAxis0 & (uint32_t)(overlapArray[1] != depth);
+            const uint32_t notAxis012 = notAxis01 & (uint32_t)(overlapArray[2] != depth);
+            const uint32_t bestAxis = notAxis0 + notAxis01 + notAxis012;
+
+            alignas(Real4Simd::bytes) Real axisXArray[4];
+            alignas(Real4Simd::bytes) Real axisYArray[4];
+            alignas(Real4Simd::bytes) Real centerDeltaOnAxisArray[4];
+            axisXV.store(axisXArray);
+            axisYV.store(axisYArray);
+            centerDeltaOnAxisV.store(centerDeltaOnAxisArray);
+
+            Vec2 normal = { axisXArray[bestAxis], axisYArray[bestAxis] };
+            flipSignIfNegative(normal, centerDeltaOnAxisArray[bestAxis]);
+
+            //
+            const bool refIsA = SATAxis(bestAxis) < SATAxis::B_RIGHT;
 
             Vec2 positionRef, positionInc;
             Real halfWidthRef, halfHeightRef, halfWidthInc, halfHeightInc;
@@ -1757,11 +1500,13 @@ namespace PS_AGONY
                 refNormal = -normal;
             }
 
+            // refNormal == sign * (reference face axis), so no dot is needed.
+            const Real sign = std::copysign(Real(1), refIsA ? centerDeltaOnAxisArray[bestAxis] : -centerDeltaOnAxisArray[bestAxis]);
+
             Vec2 refEdgeStart, refEdgeEnd, refFaceCenter, sideDir;
             {
                 // The reference face axis is the SAT axis with the minimum overlap.
-                const bool useX = bestAxis == SATAxis::A_RIGHT || bestAxis == SATAxis::B_RIGHT;
-                const Real sign = std::copysign(Real(1), glm::dot(refNormal, useX ? rightRef : upRef));
+                const bool useX = SATAxis(bestAxis) == SATAxis::A_RIGHT || SATAxis(bestAxis) == SATAxis::B_RIGHT;
 
                 if (useX)
                 {
@@ -1780,20 +1525,23 @@ namespace PS_AGONY
 
             Vec2 incEdgeStart, incEdgeEnd;
             {
-                const Real dotX = glm::dot(refNormal, rightInc);
-                const Real dotY = glm::dot(refNormal, upInc);
+                // dot(refAxis, rightInc | upInc) per best axis: 0:(c,-s) 1:(s,c) 2:(c,s) 3:(-s,c), times 'sign'.
+                const bool axisIsUp = (bestAxis & 1u) != 0;
+                const Real sideTerm = (bestAxis == 0 || bestAxis == 3) ? -relSin : relSin;
+                const Real dotX = sign * (axisIsUp ? sideTerm : relCos);
+                const Real dotY = sign * (axisIsUp ? relCos : sideTerm);
                 const bool useX = std::fabs(dotX) > std::fabs(dotY);
-                const Real sign = -std::copysign(Real(1), useX ? dotX : dotY);
+                const Real incSign = -std::copysign(Real(1), useX ? dotX : dotY);
 
                 Vec2 faceCenter, edgeOffset;
                 if (useX)
                 {
-                    faceCenter = positionInc + rightInc * (sign * halfWidthInc);
+                    faceCenter = positionInc + rightInc * (incSign * halfWidthInc);
                     edgeOffset = upInc * halfHeightInc;
                 }
                 else
                 {
-                    faceCenter = positionInc + upInc * (sign * halfHeightInc);
+                    faceCenter = positionInc + upInc * (incSign * halfHeightInc);
                     edgeOffset = rightInc * halfWidthInc;
                 }
                 incEdgeStart = faceCenter + edgeOffset;
@@ -2173,23 +1921,219 @@ namespace PS_AGONY
             const ObjectIndex shapeA = shapeIndexPtr[indexA];
             const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
-            CapsuleManifold manifold;
-            if (!collideCapsuleConvex<true>(
-                nullptr, nullptr, 4, Vec2(halfWidthPtr[shapeA], halfHeightPtr[shapeA]),
-                Vec2(positionXPtr[indexA], positionYPtr[indexA]), Vec2(rotationCosPtr[indexA], rotationSinPtr[indexA]),
-                Vec2(positionXPtr[indexB], positionYPtr[indexB]), Vec2(rotationCosPtr[indexB], rotationSinPtr[indexB]),
-                halfLengthPtr[shapeB], capsuleRadiusPtr[shapeB], manifold)) continue;
+            // Box A, capsule B. The normal points from the box towards the capsule.
+            const Vec2 halfExtents = { halfWidthPtr[shapeA], halfHeightPtr[shapeA] };
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 rightA = { rotationCosPtr[indexA], rotationSinPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+            const Vec2 axisB = { rotationCosPtr[indexB], rotationSinPtr[indexB] };
+            const Real halfLengthB = halfLengthPtr[shapeB];
+            const Real radius = capsuleRadiusPtr[shapeB];
+
+            const Vec2 upA = { -rightA.y, rightA.x };
+            const Vec2 centerDelta = positionB - positionA;
+
+            // Capsule pose in box-local space, folded into the +,+ quadrant.
+            const Real localX = glm::dot(centerDelta, rightA);
+            const Real localY = glm::dot(centerDelta, upA);
+            const Real sx = std::copysign(Real(1), localX);
+            const Real sy = std::copysign(Real(1), localY);
+            const Vec2 center = { localX * sx, localY * sy };
+            const Vec2 axis = { (rightA.x * axisB.x + rightA.y * axisB.y) * sx, (rightA.x * axisB.y - rightA.y * axisB.x) * sy };
+            const Real absAxisX = std::fabs(axis.x);
+            const Real absAxisY = std::fabs(axis.y);
+
+            // Faces: since center >= 0, only right (x) and top (y) can separate best.
+            const Real sepX = center.x - halfLengthB * absAxisX - halfExtents.x;
+            const Real sepY = center.y - halfLengthB * absAxisY - halfExtents.y;
+            const Real faceSeparation = std::fmax(sepX, sepY);
+            if (faceSeparation >= radius) continue;
+
+            // Capsule side axis.
+            const Vec2 sideAxis = { -axis.y, axis.x };
+            const Real sideOffset = glm::dot(sideAxis, center);
+            const Real sideSeparation = std::fabs(sideOffset) - (halfExtents.x * absAxisY + halfExtents.y * absAxisX);
+            if (sideSeparation >= radius) continue;
+
+            // Side axis wins (bias towards faces for stable ids): a box corner pokes the capsule side.
+            const bool sideWins = sideSeparation > faceSeparation + SAT_EPSILON;
+            const bool swap = !sideWins && sepY > sepX;
+
+            // Working frame: reference face at x = ext.x.
+            const Vec2 ext = swap ? Vec2(halfExtents.y, halfExtents.x) : halfExtents;
+            const Vec2 dir = swap ? Vec2(axis.y, axis.x) : axis;
+            const Vec2 mid = swap ? Vec2(center.y, center.x) : center;
+            const Vec2 basisX = rightA * sx;
+            const Vec2 basisY = upA * sy;
+            const Vec2 worldX = swap ? basisY : basisX;
+            const Vec2 worldY = swap ? basisX : basisY;
+
+            const Vec2 halfCore = dir * halfLengthB;
+            const Vec2 s0 = mid - halfCore;
+            const Vec2 s1 = mid + halfCore;
+            const Real length = halfLengthB * Real(2);
+
+            // Squared distance from 'w' to the capsule core.
+            const auto coreDistSquared = [&](const Vec2& w) -> Real
+            {
+                const Vec2 d = s0 + dir * std::fmin(std::fmax(glm::dot(w - s0, dir), Real(0)), length) - w;
+                return glm::dot(d, d);
+            };
+
+            Vec2 normal = { 1, 0 };
+            Real depth = Real(0);
+            uint32_t contactCount = 0;
+            Vec2 point0 = {};
+            Vec2 point1 = {};
+            uint32_t id0 = 0;
+            uint32_t id1 = 0;
+
+            bool faceContact = false;
+            bool rejected = false;
+            bool cornerPosX = true;
+            bool cornerPosY = true;
+            Vec2 vertexNormal = { 1, 0 };
+            Real vertexSeparation = faceSeparation;
+
+            if (sideWins)
+            {
+                vertexNormal = sideOffset >= 0 ? sideAxis : -sideAxis;
+                vertexSeparation = sideSeparation;
+                cornerPosX = vertexNormal.x >= 0;
+                cornerPosY = vertexNormal.y >= 0;
+            }
+            else do
+            {
+                Vec2 c0 = s0;
+                Vec2 c1 = s1;
+                Real e0 = s0.x - ext.x;
+                Real e1 = s1.x - ext.x;
+
+                if (faceSeparation > 0)
+                {
+                    // Disjoint cores: only the part of the segment above the face sees it.
+                    // The fold guarantees y-max >= 0, so the segment is never fully beyond the lower end.
+                    const Real minY = std::fmin(s0.y, s1.y);
+                    const Real maxY = std::fmax(s0.y, s1.y);
+
+                    if (minY > ext.y) break; // Fully beyond the upper end: corner (+,+).
+
+                    const bool beyondLow = minY < -ext.y;
+                    const bool beyondHigh = maxY > ext.y;
+                    if (beyondLow || beyondHigh)
+                    {
+                        // Here s0.y != s1.y. Clip the segment to |y| <= ext.y.
+                        const Real invDy = Real(1) / (s1.y - s0.y);
+                        const Real tA = (-ext.y - s0.y) * invDy;
+                        const Real tB = (ext.y - s0.y) * invDy;
+                        const Real tLow = std::fmax(Real(0), std::fmin(tA, tB));
+                        const Real tHigh = std::fmin(Real(1), std::fmax(tA, tB));
+                        const Vec2 span = s1 - s0;
+                        c0 = s0 + span * tLow;
+                        c1 = s0 + span * tHigh;
+                        e0 = c0.x - ext.x;
+                        e1 = c1.x - ext.x;
+
+                        const Real minE = std::fmin(e0, e1);
+                        const Real faceDistSquared = minE * minE;
+
+                        if (beyondLow && coreDistSquared(Vec2(ext.x, -ext.y)) + SAT_EPSILON < faceDistSquared)
+                        {
+                            cornerPosY = false;
+                            break;
+                        }
+                        if (beyondHigh && coreDistSquared(ext) + SAT_EPSILON < faceDistSquared) break;
+                    }
+                }
+
+                const Vec2 clipped = c1 - c0;
+                const bool hasSecond = glm::dot(clipped, clipped) >= ZERO_DIVISION_BOUNDARY_SQUARED;
+                const Real contactLimit = radius + SAT_EPSILON;
+                const uint32_t faceId = swap ? (sy < Real(0) ? 0u : 2u) : (sx < Real(0) ? 3u : 1u);
+                const uint32_t idBase = REFERENCE_BODY_TAG | (faceId << 1);
+
+                if (e0 <= contactLimit)
+                {
+                    point0 = Vec2(c0.x - radius, c0.y);
+                    id0 = idBase;
+                    contactCount = 1;
+                }
+                if (hasSecond && e1 <= contactLimit)
+                {
+                    const Vec2 p = Vec2(c1.x - radius, c1.y);
+                    if (contactCount == 0)
+                    {
+                        point0 = p;
+                        id0 = idBase | 1u;
+                    }
+                    else
+                    {
+                        point1 = p;
+                        id1 = idBase | 1u;
+                    }
+                    contactCount++;
+                }
+                if (contactCount == 0) [[unlikely]]
+                {
+                    rejected = true;
+                    break;
+                }
+
+                depth = radius - std::fmin(e0, e1);
+                faceContact = true;
+            } while (false);
+
+            if (rejected) [[unlikely]] continue;
+
+            if (!faceContact)
+            {
+                // Single contact between a box corner and the capsule core.
+                // 'vertexSeparation' > 0 means the cores are disjoint: the exact corner distance decides.
+                const Vec2 w = { cornerPosX ? ext.x : -ext.x, cornerPosY ? ext.y : -ext.y };
+                const Vec2 q = s0 + dir * std::fmin(std::fmax(glm::dot(w - s0, dir), Real(0)), length);
+
+                normal = vertexNormal;
+                depth = radius - vertexSeparation;
+                if (vertexSeparation > Real(0))
+                {
+                    const Vec2 d = q - w;
+                    const Real distSquared = glm::dot(d, d);
+                    if (distSquared >= radius * radius) continue;
+                    if (distSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
+                    {
+                        const Real distance = std::sqrt(distSquared);
+                        normal = d * (Real(1) / distance);
+                        depth = radius - distance;
+                    }
+                }
+
+                // Corner id in real box space (undo swap, then fold). Corner order: (-,-), (+,-), (+,+), (-,+).
+                const bool foldedPosX = swap ? cornerPosY : cornerPosX;
+                const bool foldedPosY = swap ? cornerPosX : cornerPosY;
+                const bool realPosX = foldedPosX != (sx < Real(0));
+                const bool realPosY = foldedPosY != (sy < Real(0));
+                const uint32_t vertexId = (realPosY ? 2u : 0u) | ((realPosX != realPosY) ? 1u : 0u);
+
+                contactCount = 1;
+                point0 = q - normal * radius;
+                id0 = CAPSULE_VERTEX_CONTACT_TAG | vertexId;
+            }
+
+            // Working frame -> world.
+            normal = worldX * normal.x + worldY * normal.y;
+            point0 = positionA + worldX * point0.x + worldY * point0.y;
+            if (contactCount > 1) point1 = positionA + worldX * point1.x + worldY * point1.y;
 
             outCollisionData.emplace_back(
                 indexA, indexB,
                 colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
-                manifold.normal,
-                manifold.depth,
-                manifold.contactCount,
-                manifold.points[0],
-                manifold.points[1],
-                manifold.ids[0],
-                manifold.ids[1]
+                normal,
+                depth,
+                contactCount,
+                point0,
+                point1,
+                id0,
+                id1
             );
         }
     }
@@ -2441,25 +2385,225 @@ namespace PS_AGONY
             const ObjectIndex shapeA = shapeIndexPtr[indexA];
             const ObjectIndex shapeB = shapeIndexPtr[indexB];
 
-            const PolygonGeometry& localPolygonVertices = polyGeometryPtr[shapeA];
+            // Polygon A, capsule B. The normal points from the polygon towards the capsule.
+            const PolygonGeometry& geometry = polyGeometryPtr[shapeA];
+            const Vec2* ECSTASY_RESTRICT vertsPtr = geometry.vertices();
+            const Vec2* ECSTASY_RESTRICT normalsPtr = geometry.normals();
+            const uint32_t vertexCount = uint32_t(geometry.size());
 
-            CapsuleManifold manifold;
-            if (!collideCapsuleConvex<false>(
-                localPolygonVertices.vertices(), localPolygonVertices.normals(), uint32_t(localPolygonVertices.size()), Vec2(),
-                Vec2(positionXPtr[indexA], positionYPtr[indexA]), Vec2(rotationCosPtr[indexA], rotationSinPtr[indexA]),
-                Vec2(positionXPtr[indexB], positionYPtr[indexB]), Vec2(rotationCosPtr[indexB], rotationSinPtr[indexB]),
-                halfLengthPtr[shapeB], capsuleRadiusPtr[shapeB], manifold)) continue;
+            const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
+            const Vec2 rightA = { rotationCosPtr[indexA], rotationSinPtr[indexA] };
+            const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
+            const Vec2 axisB = { rotationCosPtr[indexB], rotationSinPtr[indexB] };
+            const Real halfLengthB = halfLengthPtr[shapeB];
+            const Real radius = capsuleRadiusPtr[shapeB];
+
+            const Vec2 upA = { -rightA.y, rightA.x };
+            const Vec2 centerDelta = positionB - positionA;
+
+            // Capsule pose in polygon-local space.
+            const Vec2 centerLocal = { glm::dot(centerDelta, rightA), glm::dot(centerDelta, upA) };
+            const Vec2 axis = { rightA.x * axisB.x + rightA.y * axisB.y, rightA.x * axisB.y - rightA.y * axisB.x };
+            const Vec2 halfCore = axis * halfLengthB;
+            const Vec2 s0 = centerLocal - halfCore;
+            const Vec2 s1 = centerLocal + halfCore;
+            const Real length = halfLengthB * Real(2);
+
+            const Vec2 sideAxis = { -axis.y, axis.x };
+            const Real sideOffset = glm::dot(sideAxis, centerLocal);
+
+            // Best face and polygon extent along the capsule side axis, in one pass.
+            Real faceSeparation = -std::numeric_limits<Real>::max();
+            uint32_t faceIndex = 0;
+            Real minSide = std::numeric_limits<Real>::max();
+            Real maxSide = -std::numeric_limits<Real>::max();
+            uint32_t minSideVertex = 0;
+            uint32_t maxSideVertex = 0;
+            bool rejected = false;
+
+            for (uint32_t i = 0; i < vertexCount; i++)
+            {
+                const Vec2 v = vertsPtr[i];
+                const Vec2 n = normalsPtr[i];
+
+                const Real separation = std::fmin(glm::dot(n, s0 - v), glm::dot(n, s1 - v));
+                if (separation >= radius)
+                {
+                    rejected = true;
+                    break;
+                }
+                if (separation > faceSeparation)
+                {
+                    faceSeparation = separation;
+                    faceIndex = i;
+                }
+
+                const Real side = glm::dot(v, sideAxis);
+                if (side < minSide) { minSide = side; minSideVertex = i; }
+                if (side > maxSide) { maxSide = side; maxSideVertex = i; }
+            }
+            if (rejected) continue;
+
+            const Real sidePlus = sideOffset - maxSide;   // Capsule on the +side of the polygon.
+            const Real sideMinus = minSide - sideOffset;  // Capsule on the -side of the polygon.
+            const Real sideSeparation = std::fmax(sidePlus, sideMinus);
+            if (sideSeparation >= radius) continue;
+
+            // Squared distance from 'w' to the capsule core.
+            const auto coreDistSquared = [&](const Vec2& w) -> Real
+                {
+                    const Vec2 d = s0 + axis * std::fmin(std::fmax(glm::dot(w - s0, axis), Real(0)), length) - w;
+                    return glm::dot(d, d);
+                };
+
+            Vec2 normal = {};
+            Real depth = Real(0);
+            uint32_t contactCount = 0;
+            Vec2 point0 = {};
+            Vec2 point1 = {};
+            uint32_t id0 = 0;
+            uint32_t id1 = 0;
+
+            bool faceContact = false;
+            uint32_t vertexId = 0;
+            Vec2 vertexNormal = {};
+            Real vertexSeparation = Real(0);
+
+            do
+            {
+                // Side axis wins (bias towards faces for stable ids): a vertex pokes the capsule side.
+                if (sideSeparation > faceSeparation + SAT_EPSILON)
+                {
+                    const bool onPlusSide = sidePlus >= sideMinus;
+                    vertexId = onPlusSide ? maxSideVertex : minSideVertex;
+                    vertexNormal = onPlusSide ? sideAxis : -sideAxis;
+                    vertexSeparation = sideSeparation;
+                    break;
+                }
+
+                // Face contact: the polygon face is the reference, the capsule core the incident segment.
+                const uint32_t i0 = faceIndex;
+                const uint32_t i1 = nextIndex(i0, vertexCount);
+                const Vec2 a = vertsPtr[i0];
+                const Vec2 b = vertsPtr[i1];
+                const Vec2 n = normalsPtr[i0];
+                const Vec2 tangent = { -n.y, n.x };
+
+                vertexNormal = n;
+                vertexSeparation = faceSeparation;
+
+                Vec2 c0 = s0;
+                Vec2 c1 = s1;
+                Real e0 = glm::dot(s0 - a, n);
+                Real e1 = glm::dot(s1 - a, n);
+
+                if (faceSeparation > Real(0))
+                {
+                    // Disjoint cores: only the part of the segment above the edge sees the face;
+                    // an overhanging part may be closer to an end vertex of the edge.
+                    const Real edgeLength = glm::dot(b - a, tangent);
+                    const Real t0 = glm::dot(s0 - a, tangent);
+                    const Real t1 = glm::dot(s1 - a, tangent);
+
+                    const bool beyondStart = std::fmin(t0, t1) < Real(0);
+                    const bool beyondEnd = std::fmax(t0, t1) > edgeLength;
+                    if (beyondStart || beyondEnd)
+                    {
+                        if (clipSegment(c0, c1, a, tangent)) { vertexId = i0; break; }
+                        if (clipSegment(c0, c1, b, -tangent)) { vertexId = i1; break; }
+
+                        e0 = glm::dot(c0 - a, n);
+                        e1 = glm::dot(c1 - a, n);
+
+                        const Real minE = std::fmin(e0, e1);
+                        const Real faceDistSquared = minE * minE;
+
+                        if (beyondStart && coreDistSquared(a) + SAT_EPSILON < faceDistSquared) { vertexId = i0; break; }
+                        if (beyondEnd && coreDistSquared(b) + SAT_EPSILON < faceDistSquared) { vertexId = i1; break; }
+                    }
+                }
+
+                const Vec2 span = c1 - c0;
+                const bool hasSecond = glm::dot(span, span) >= ZERO_DIVISION_BOUNDARY_SQUARED;
+                const Real contactLimit = radius + SAT_EPSILON;
+                const uint32_t idBase = REFERENCE_BODY_TAG | (i0 << 1);
+
+                if (e0 <= contactLimit)
+                {
+                    point0 = c0 - n * radius;
+                    id0 = idBase;
+                    contactCount = 1;
+                }
+                if (hasSecond && e1 <= contactLimit)
+                {
+                    const Vec2 p = c1 - n * radius;
+                    if (contactCount == 0)
+                    {
+                        point0 = p;
+                        id0 = idBase | 1u;
+                    }
+                    else
+                    {
+                        point1 = p;
+                        id1 = idBase | 1u;
+                    }
+                    contactCount++;
+                }
+                if (contactCount == 0) [[unlikely]]
+                {
+                    rejected = true;
+                    break;
+                }
+
+                normal = n;
+                depth = radius - std::fmin(e0, e1);
+                faceContact = true;
+            } while (false);
+
+            if (rejected) [[unlikely]] continue;
+
+            if (!faceContact)
+            {
+                // Single contact between a polygon vertex and the capsule core.
+                // 'vertexSeparation' > 0 means the cores are disjoint: the exact vertex distance decides.
+                const Vec2 w = vertsPtr[vertexId];
+                const Vec2 q = s0 + axis * std::fmin(std::fmax(glm::dot(w - s0, axis), Real(0)), length);
+
+                normal = vertexNormal;
+                depth = radius - vertexSeparation;
+                if (vertexSeparation > Real(0))
+                {
+                    const Vec2 d = q - w;
+                    const Real distSquared = glm::dot(d, d);
+                    if (distSquared >= radius * radius) continue;
+                    if (distSquared >= ZERO_DIVISION_BOUNDARY_SQUARED)
+                    {
+                        const Real distance = std::sqrt(distSquared);
+                        normal = d * (Real(1) / distance);
+                        depth = radius - distance;
+                    }
+                }
+
+                contactCount = 1;
+                point0 = q - normal * radius;
+                id0 = CAPSULE_VERTEX_CONTACT_TAG | vertexId;
+            }
+
+            // Polygon-local -> world.
+            normal = rightA * normal.x + upA * normal.y;
+            point0 = positionA + rightA * point0.x + upA * point0.y;
+            if (contactCount > 1) point1 = positionA + rightA * point1.x + upA * point1.y;
 
             outCollisionData.emplace_back(
                 indexA, indexB,
                 colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
-                manifold.normal,
-                manifold.depth,
-                manifold.contactCount,
-                manifold.points[0],
-                manifold.points[1],
-                manifold.ids[0],
-                manifold.ids[1]
+                normal,
+                depth,
+                contactCount,
+                point0,
+                point1,
+                id0,
+                id1
             );
         }
     }
