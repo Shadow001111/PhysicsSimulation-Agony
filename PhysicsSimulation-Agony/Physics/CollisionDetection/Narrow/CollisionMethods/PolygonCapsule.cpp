@@ -4,12 +4,9 @@
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
-#include "Ecstasy/Core/Simd.h"
 
 namespace PS_AGONY
 {
-    using RealSimd = Ecstasy::Core::Simd<Real>;
-
     void NarrowPhaseCollisionDetector::collisionPolygonCapsule(
         std::span<const ObjectPair> pairs,
         CacheLineAlignedVector<BodyCollisionData>& outCollisionData)
@@ -240,6 +237,7 @@ namespace PS_AGONY
             normal = rightA * normal.x + upA * normal.y;
             point0 = positionA + rightA * point0.x + upA * point0.y;
             if (contactCount > 1) point1 = positionA + rightA * point1.x + upA * point1.y;
+            // TODO: Maybe remove branch? Showed +1% of execution time though.
 
             outCollisionData.emplace_back(
                 indexA, indexB,

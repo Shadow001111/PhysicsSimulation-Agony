@@ -4,12 +4,9 @@
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
-#include "Ecstasy/Core/Simd.h"
 
 namespace PS_AGONY
 {
-    using RealSimd = Ecstasy::Core::Simd<Real>;
-
     void NarrowPhaseCollisionDetector::collisionCapsuleCapsule(
         std::span<const ObjectPair> pairs,
         CacheLineAlignedVector<BodyCollisionData>& outCollisionData)

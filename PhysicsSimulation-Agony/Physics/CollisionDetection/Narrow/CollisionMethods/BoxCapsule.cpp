@@ -3,12 +3,9 @@
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
-#include "Ecstasy/Core/Simd.h"
 
 namespace PS_AGONY
 {
-    using RealSimd = Ecstasy::Core::Simd<Real>;
-
     void NarrowPhaseCollisionDetector::collisionBoxCapsule(
         std::span<const ObjectPair> pairs,
         CacheLineAlignedVector<BodyCollisionData>& outCollisionData)
@@ -49,7 +46,7 @@ namespace PS_AGONY
             const Real localY = glm::dot(centerDelta, upA);
             const Real sx = std::copysign(Real(1), localX);
             const Real sy = std::copysign(Real(1), localY);
-            const Vec2 center = { localX * sx, localY * sy };
+            const Vec2 center = { std::fabs(localX), std::fabs(localY) };
             const Vec2 axis = { (rightA.x * axisB.x + rightA.y * axisB.y) * sx, (rightA.x * axisB.y - rightA.y * axisB.x) * sy };
             const Real absAxisX = std::fabs(axis.x);
             const Real absAxisY = std::fabs(axis.y);
