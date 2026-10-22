@@ -106,15 +106,14 @@ namespace PS_AGONY
         for (size_t i = 0; i < count; i++)
         {
             const ColliderIndex colliderIndex = colliderIndexPtr[i];
+            const PolygonGeometry& geometry = geometryPtr[i];
+            const Vec2* verticesPtr = geometry.vertices();
+            const size_t vertexCount = geometry.size();
 
             const Real x = worldPosXPtr[colliderIndex];
             const Real y = worldPosYPtr[colliderIndex];
             const Real cos = worldRotationCosPtr[colliderIndex];
             const Real sin = worldRotationSinPtr[colliderIndex];
-
-            const PolygonGeometry& geometry = geometryPtr[i];
-            const Vec2* verticesPtr = geometry.vertices();
-            const size_t vertexCount = geometry.size();
 
             Real minX = std::numeric_limits<Real>::max();
             Real minY = std::numeric_limits<Real>::max();

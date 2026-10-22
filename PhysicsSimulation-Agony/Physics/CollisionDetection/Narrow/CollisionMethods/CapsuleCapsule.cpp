@@ -61,7 +61,7 @@ namespace PS_AGONY
             const Real extentB = std::fabs(b) * halfLengthB;
             const Real overlapLo = std::fmax(-halfLengthA, centerAlongA - extentB);
             const Real overlapHi = std::fmin(halfLengthA, centerAlongA + extentB);
-            const bool hasOverlap = parallel && overlapHi - overlapLo >= ZERO_DIVISION_BOUNDARY;
+            const bool hasOverlap = parallel && (overlapHi - overlapLo >= ZERO_DIVISION_BOUNDARY);
 
             Real s, t;
             if (hasOverlap)
@@ -73,11 +73,8 @@ namespace PS_AGONY
             {
                 s = parallel ? Real(0) : clampValue((b * f - c) / sinSquared, -halfLengthA, halfLengthA);
                 t = b * s + f;
-                if (t < -halfLengthB || t > halfLengthB)
-                {
-                    t = clampValue(t, -halfLengthB, halfLengthB);
-                    s = clampValue(b * t - c, -halfLengthA, halfLengthA);
-                }
+                t = clampValue(t, -halfLengthB, halfLengthB);
+                s = clampValue(b * t - c, -halfLengthA, halfLengthA);
             }
 
             const Vec2 pointA = positionA + axisA * s;
@@ -101,8 +98,10 @@ namespace PS_AGONY
                 const Vec2 sideB = { -axisB.y, axisB.x };
                 const Real offsetA = glm::dot(centerDelta, sideA);
                 const Real offsetB = glm::dot(centerDelta, sideB);
-                const Real depthA = radiusSum + std::fabs(glm::dot(axisB, sideA)) * halfLengthB - std::fabs(offsetA);
-                const Real depthB = radiusSum + std::fabs(glm::dot(axisA, sideB)) * halfLengthA - std::fabs(offsetB);
+
+                // Fake depths. I took out common addition of 'radiusSum'.
+                const Real depthA = std::fabs(glm::dot(axisB, sideA)) * halfLengthB - std::fabs(offsetA);
+                const Real depthB = std::fabs(glm::dot(axisA, sideB)) * halfLengthA - std::fabs(offsetB);
 
                 if (depthA <= depthB)
                 {
@@ -116,6 +115,7 @@ namespace PS_AGONY
                     flipSignIfNegative(normal, offsetB);
                     depth = depthB;
                 }
+                depth += radiusSum;
             }
 
             Vec2 contactPoints[MAX_CONTACTS_PER_MANIFOLD] = { Vec2(), Vec2() };

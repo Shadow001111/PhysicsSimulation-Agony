@@ -536,14 +536,16 @@ namespace PS_AGONY
         for (size_t i = 0; i < colliderCount; i++)
         {
             const ObjectIndex body = ownerPtr[i];
-            const Real bCos = bodyCosPtr[body];
-            const Real bSin = bodySinPtr[body];
-
             const Real offX = localOffXPtr[i];
             const Real offY = localOffYPtr[i];
 
-            worldPosXPtr[i] = bodyWorldXPtr[body] + (offX * bCos - offY * bSin);
-            worldPosYPtr[i] = bodyWorldYPtr[body] + (offX * bSin + offY * bCos);
+            const Real bCos = bodyCosPtr[body];
+            const Real bSin = bodySinPtr[body];
+            const Real bodyWorldX = bodyWorldXPtr[body];
+            const Real bodyWorldY = bodyWorldYPtr[body];
+
+            worldPosXPtr[i] = bodyWorldX + (offX * bCos - offY * bSin);
+            worldPosYPtr[i] = bodyWorldY + (offX * bSin + offY * bCos);
         }
     }
 
@@ -554,7 +556,7 @@ namespace PS_AGONY
         const size_t colliderCount = objectManager.colliders.getCount();
         if (colliderCount == 0) return;
 
-        // 1) worldRotation = body's rotation + collider's fixed local rotation.
+        // worldRotation = bodyRotation + localRotation.
         {
             const Real* ECSTASY_RESTRICT bodyRotationPtr = objectManager.bodies.rotation.data();
             const ObjectIndex* ECSTASY_RESTRICT ownerPtr = objectManager.colliders.bodyIndex.data();
@@ -568,12 +570,10 @@ namespace PS_AGONY
             }
         }
 
-        // 2) FastCosSin::order4CosSin requires angles in [0, 2pi); body.rotation is
-        //    already wrapped, but adding localRotation can push the sum back out
-        //    of range, so wrap again before the batch trig call.
+        // Wrap rotations to [0, 2pi) range.
         wrapColliderRotations(objectManager.colliders);
 
-        // 3) Batch cos/sin, same approximation/approach bodies use.
+        // Compute cos/sin.
         FastCosSin::order5Array(
             objectManager.colliders.worldRotation.data(),
             objectManager.colliders.worldRotationCos.data(),
