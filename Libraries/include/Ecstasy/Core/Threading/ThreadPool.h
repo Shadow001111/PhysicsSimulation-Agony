@@ -8,7 +8,9 @@
 #include <span>
 #include <functional>
 
-#include "../TracyProfiler.h"
+#include "ThreadUtils.h"
+#include <vector>
+#include <stdexcept>
 
 namespace Ecstasy::Core::Threading
 {
@@ -17,8 +19,6 @@ namespace Ecstasy::Core::Threading
     class alignas(64) WorkerThread
     {
     public:
-        static constexpr int32_t INVALID_THREAD_PIN_INDEX = 0;
-
         ChaseLevQueue tasks{ 1024 * 64 };
         std::thread thread;
         size_t threadId;
@@ -27,9 +27,9 @@ namespace Ecstasy::Core::Threading
 
         WorkerThread(size_t idx) : threadId(idx) {}
 
-        void run(ThreadPool* pool, int32_t pinIndex);
+        void run(ThreadPool* pool);
     private:
-        void configureThread(int32_t pinIndex);
+        void configureThread(ThreadPool* pool);
     };
 
     class WorkerThreadContainer
@@ -123,6 +123,16 @@ namespace Ecstasy::Core::Threading
         size_t getThreadCount() const noexcept { return threadCount; }
     };
 
+    struct ThreadPoolConfig
+    {
+        size_t numThreads = 0;                      // 0 = one worker per selected CPU. Clamped to the selected CPU count.
+        CoreSet coreSet = CoreSet::All;
+        SmtMode smtMode = SmtMode::Logical;
+        bool pin = true;                            // Pin worker i to one CPU of the ordered list.
+        std::vector<uint32_t> affinity;             // Explicit CPU ids (group * 64 + index). Overrides coreSet/smtMode.
+        std::function<void(size_t)> onThreadStart;  // Runs on each worker (arg: worker index) after pin/priority, before its loop.
+    };
+
     // TODO: Must use multiproducer queue, because enqueue can come from different threads.
     class ThreadPool
     {
@@ -136,6 +146,10 @@ namespace Ecstasy::Core::Threading
 
         // Tasks that have not finished yet (queued + running).
         alignas(64) std::atomic<size_t> unfinishedTaskCount{ 0 };
+
+        // Read-only after construction. pinnedCpus[i] = CPU of worker i (empty = unpinned).
+        alignas(64) std::vector<CpuInfo> pinnedCpus;
+        std::function<void(size_t)> onThreadStart;
 
         void onTaskClaimed();
         void onTaskComplete();
@@ -157,14 +171,7 @@ namespace Ecstasy::Core::Threading
         // Wakes only the workers that received tasks. Call after counters are updated.
         void wakeDistributed(std::span<const uint32_t> targets, size_t startSlot, size_t base, size_t remainder);
     public:
-        enum class CoreMode
-        {
-            AnyCores,
-            PerfomanceCores
-            // EfficiencyCores maybe?
-        };
-
-        explicit ThreadPool(size_t numThreads = 0, CoreMode coreMode = CoreMode::AnyCores);
+        explicit ThreadPool(const ThreadPoolConfig& config = {});
         ~ThreadPool();
 
         ThreadPool(const ThreadPool&) = delete;
@@ -186,12 +193,14 @@ namespace Ecstasy::Core::Threading
         size_t getThreadCount() const noexcept { return workers.getThreadCount(); }
         size_t getQueuedTasks() const noexcept { return queuedTaskCount.load(std::memory_order_relaxed); }
         size_t getPendingTasks() const noexcept { return unfinishedTaskCount.load(std::memory_order_relaxed); }
+
+        std::span<const CpuInfo> getPinnedCpus() const noexcept { return pinnedCpus; }
+        void printTopology() const { printCpuTopology(pinnedCpus); }
     };
 
     template<class F, class... Args>
     inline void ThreadPool::enqueue(F&& f, Args&&... args)
     {
-        TRACY_SCOPE_N("ThreadPool::enqueue");
 
         // Choose a worker in round-robin order.
         size_t idx = nextWorker.fetch_add(1, std::memory_order_relaxed) % workers.getThreadCount();
@@ -218,7 +227,6 @@ namespace Ecstasy::Core::Threading
     inline auto ThreadPool::enqueueFuture(F&& f, Args&&... args)
         -> std::future<typename std::invoke_result_t<F, Args...>>
     {
-        TRACY_SCOPE_N("ThreadPool::enqueueFuture");
 
         const size_t idx = nextWorker.fetch_add(1, std::memory_order_relaxed) % workers.getThreadCount();
         WorkerThread& worker = workers[idx];
@@ -248,7 +256,6 @@ namespace Ecstasy::Core::Threading
     inline std::vector<std::future<ResultType>> ThreadPool::enqueueFutureBulk(
         std::vector<std::function<ResultType()>> funcs, std::span<const uint32_t> targets)
     {
-        TRACY_SCOPE_N("ThreadPool::enqueueFutureBulk");
 
         const size_t taskCount = funcs.size();
         if (taskCount == 0) return {};

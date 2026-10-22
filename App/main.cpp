@@ -5,7 +5,7 @@
 
 #include "Render/SimulationRenderer.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+//#include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Graphics/WindowManager.h"
 
 #include "imgui.h"
@@ -16,6 +16,7 @@
 #include <iomanip>
 #include <thread>
 #include <sstream>
+#include <format>
 
 
 static std::string formatSize(size_t value)
@@ -613,13 +614,29 @@ static int gameFunc()
     //Ecstasy::Graphics::TextRenderer::setGlyphInstanceBatchSize(1024);
 
     // Setup threading backend.
-    static Ecstasy::Core::Threading::ThreadPool pool(
-        std::thread::hardware_concurrency(),
-        Ecstasy::Core::Threading::ThreadPool::CoreMode::AnyCores
-    );
-    static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
+    {
+        auto onThreadStart = [](size_t workerIndex)
+        {
+            // TODO: Make it work. Fix Tracy includes.
+            //std::string threadName = std::format("Worker_{}", workerIndex);
+            //tracy::SetThreadName(threadName.c_str());
+        };
 
-    PS_AGONY::Threading::setThreadingBackend(&backend);
+        Ecstasy::Core::Threading::ThreadPoolConfig cfg = {
+            .numThreads = 0, // Every. Maybe should clamp to some count, idk. Who will run this will 64 cores anyway? No difference, just a lot of empty threads.
+            .coreSet = Ecstasy::Core::Threading::CoreSet::Performance,
+            .smtMode = Ecstasy::Core::Threading::SmtMode::Physical,
+            .pin = true,
+            .onThreadStart = onThreadStart
+        };
+
+        static Ecstasy::Core::Threading::ThreadPool pool(cfg);
+        static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
+
+        PS_AGONY::Threading::setThreadingBackend(&backend);
+
+        pool.printTopology();
+    }
 
     // Simulation.
     PS_AGONY::Simulation simulation{};
