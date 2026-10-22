@@ -292,10 +292,6 @@ namespace PS_AGONY
 		void rebuildSpatialData();
 
 		void buildColliderAABBs();
-		void buildCircleAABBs();
-		void buildBoxAABBs();
-		void buildPolygonAABBs();
-		void buildCapsuleAABBs();
 
 		void computeBodyWorldCenters();
 

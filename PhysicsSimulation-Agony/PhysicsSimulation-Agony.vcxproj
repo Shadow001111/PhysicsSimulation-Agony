@@ -257,6 +257,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
+    <ClCompile Include="Physics\SimulationImpl\ColliderAABBBuilder.cpp" />
     <ClCompile Include="Physics\SimulationImpl\LeftOutFunctions.cpp" />
     <ClCompile Include="Physics\CollisionDetection\Broad\BvhTree.cpp" />
     <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxCapsule.cpp" />
@@ -304,6 +305,7 @@
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Physics\SimulationImpl\ColliderAABBBuilder.h" />
     <ClInclude Include="Physics\SimulationImpl\LeftOutFunctions.h" />
     <ClInclude Include="Physics\CollisionDetection\Broad\BvhTree.h" />
     <ClInclude Include="Physics\CollisionDetection\Broad\BvhTreeView.h" />
