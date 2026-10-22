@@ -5,6 +5,7 @@
 #include <future>
 #include <atomic>
 #include <latch>
+#include <span>
 #include <functional>
 
 #include "../TracyProfiler.h"
@@ -22,6 +23,7 @@ namespace Ecstasy::Core::Threading
         std::thread thread;
         size_t threadId;
         std::atomic<bool> stop{ false };
+        alignas(64) std::atomic<uint32_t> wakeVersion{ 0 };
 
         WorkerThread(size_t idx) : threadId(idx) {}
 
@@ -126,7 +128,6 @@ namespace Ecstasy::Core::Threading
     {
         friend WorkerThread;
 
-        alignas(64) std::atomic<uint32_t> workVersion{ 0 };
         alignas(64) WorkerThreadContainer workers;
         alignas(64) std::atomic<size_t> nextWorker{ 0 };
 
@@ -140,6 +141,21 @@ namespace Ecstasy::Core::Threading
         void onTaskComplete();
 
         ChaseLevQueue& getWorkerQueue(size_t idx) { return workers[idx].tasks; }
+
+        static void wake(WorkerThread& worker) noexcept
+        {
+            worker.wakeVersion.fetch_add(1, std::memory_order_release);
+            worker.wakeVersion.notify_one();
+        }
+
+        // Empty targets = every worker.
+        size_t workerAt(std::span<const uint32_t> targets, size_t slot) const noexcept
+        {
+            return targets.empty() ? slot : targets[slot] % workers.getThreadCount();
+        }
+
+        // Wakes only the workers that received tasks. Call after counters are updated.
+        void wakeDistributed(std::span<const uint32_t> targets, size_t startSlot, size_t base, size_t remainder);
     public:
         enum class CoreMode
         {
@@ -160,10 +176,11 @@ namespace Ecstasy::Core::Threading
         template<class F, class... Args>
         auto enqueueFuture(F&& f, Args&&... args) -> std::future<typename std::invoke_result_t<F, Args...>>;
 
-        void enqueueBulk(std::vector<Task>& tasks);
+        // 'targets': worker indices to distribute to and wake. Empty = all workers.
+        void enqueueBulk(std::vector<Task>& tasks, std::span<const uint32_t> targets = {});
 
         template<typename ResultType>
-        inline std::vector<std::future<ResultType>> enqueueFutureBulk(std::vector<std::function<ResultType()>> funcs);
+        inline std::vector<std::future<ResultType>> enqueueFutureBulk(std::vector<std::function<ResultType()>> funcs, std::span<const uint32_t> targets = {});
 
         void shutdown();
         size_t getThreadCount() const noexcept { return workers.getThreadCount(); }
@@ -182,7 +199,7 @@ namespace Ecstasy::Core::Threading
 
         if (worker.stop.load(std::memory_order_relaxed)) [[unlikely]]
             throw std::runtime_error("enqueue on stopped ThreadPool");
-        
+
         Task task = [f = std::forward<F>(f),
             ...args = std::forward<Args>(args)]() mutable {
             std::invoke(std::move(f), std::move(args)...);
@@ -194,8 +211,7 @@ namespace Ecstasy::Core::Threading
         queuedTaskCount.fetch_add(1, std::memory_order_release);
         unfinishedTaskCount.fetch_add(1, std::memory_order_release);
 
-        workVersion.fetch_add(1, std::memory_order_release);
-        workVersion.notify_one();
+        wake(worker);
     }
 
     template<class F, class... Args>
@@ -223,15 +239,14 @@ namespace Ecstasy::Core::Threading
 
         queuedTaskCount.fetch_add(1, std::memory_order_release);
         unfinishedTaskCount.fetch_add(1, std::memory_order_release);
-        
-        workVersion.fetch_add(1, std::memory_order_release);
-        workVersion.notify_one();
+
+        wake(worker);
         return result;
     }
 
     template<typename ResultType>
     inline std::vector<std::future<ResultType>> ThreadPool::enqueueFutureBulk(
-        std::vector<std::function<ResultType()>> funcs)
+        std::vector<std::function<ResultType()>> funcs, std::span<const uint32_t> targets)
     {
         TRACY_SCOPE_N("ThreadPool::enqueueFutureBulk");
 
@@ -254,15 +269,16 @@ namespace Ecstasy::Core::Threading
         }
 
         // Distribute contiguous blocks to worker queues in round-robin order.
-        const size_t base = taskCount / workerCount;
-        const size_t remainder = taskCount % workerCount;
+        const size_t slotCount = targets.empty() ? workerCount : targets.size();
+        const size_t base = taskCount / slotCount;
+        const size_t remainder = taskCount % slotCount;
 
-        const size_t startOffset = nextWorker.fetch_add(remainder, std::memory_order_relaxed) % workerCount;
+        const size_t startOffset = nextWorker.fetch_add(remainder, std::memory_order_relaxed) % slotCount;
 
         size_t taskOffset = 0;
-        for (size_t i = 0; i < workerCount; i++)
+        for (size_t i = 0; i < slotCount; i++)
         {
-            const size_t workerIdx = (startOffset + i) % workerCount;
+            const size_t workerIdx = workerAt(targets, (startOffset + i) % slotCount);
             const size_t count = base + (i < remainder ? 1 : 0);
             if (count == 0) continue;
 
@@ -289,8 +305,7 @@ namespace Ecstasy::Core::Threading
         queuedTaskCount.fetch_add(taskCount, std::memory_order_release);
         unfinishedTaskCount.fetch_add(taskCount, std::memory_order_release);
 
-        workVersion.fetch_add(1, std::memory_order_release);
-        workVersion.notify_all();
+        wakeDistributed(targets, startOffset, base, remainder);
 
         return futures;
     }

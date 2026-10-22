@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <utility>
+#include <span>
 
 namespace PS_AGONY::Threading
 {
@@ -18,7 +19,7 @@ namespace PS_AGONY::Threading
 
 		// Runs fn(context, i) for i in [0, taskCount) on pool threads, all concurrently
 		// (submit as one bulk operation). Must return without waiting for the tasks.
-		virtual void launch(size_t taskCount, TaskFn fn, void* context) = 0;
+		virtual void launch(size_t taskCount, TaskFn fn, void* context, std::span<const uint32_t> targets = {}) = 0;
 	};
 
 	// Splits taskRange into chunks: about threadCount * loadBalancingFactor of them.

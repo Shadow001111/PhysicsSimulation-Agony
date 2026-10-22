@@ -12,7 +12,7 @@ namespace PS_AGONY::Threading
 
 		size_t getThreadCount() const noexcept override { return pool.getThreadCount(); }
 
-		void launch(size_t taskCount, TaskFn fn, void* context) override
+		void launch(size_t taskCount, TaskFn fn, void* context, std::span<const uint32_t> targets = {}) override
 		{
 			if (taskCount == 0) return;
 
@@ -23,7 +23,7 @@ namespace PS_AGONY::Threading
 			{
 				tasks.emplace_back([fn, context, i]() { fn(context, i); });
 			}
-			pool.enqueueBulk(tasks);
+			pool.enqueueBulk(tasks, targets);
 		}
 	};
 }

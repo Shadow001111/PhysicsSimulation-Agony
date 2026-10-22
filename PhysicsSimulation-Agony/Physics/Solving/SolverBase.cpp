@@ -84,10 +84,17 @@ namespace PS_AGONY
 				wData.isDestroyed.notify_one();
 			};
 
+		std::vector<uint32_t> threadIndices(workerCount - 1);
+		for (uint32_t i = 0; i < workerCount - 1; i++)
+		{
+			threadIndices[i] = i;
+		}
+
 		backend.launch(
 			workerCount - 1, // The calling thread is worker 0.
 			[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i + 1); },
-			&workerFunc
+			&workerFunc,
+			threadIndices
 		);
 		workerFunc(0);
 

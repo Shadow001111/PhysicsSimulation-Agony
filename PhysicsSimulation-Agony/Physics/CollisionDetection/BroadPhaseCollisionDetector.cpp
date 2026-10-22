@@ -353,10 +353,17 @@ namespace PS_AGONY
 				wData.isDone = false;
 			}
 
+			std::vector<uint32_t> threadIndices(launchCount);
+			for (uint32_t i = 0; i < launchCount; i++)
+			{
+				threadIndices[i] = i;
+			}
+
 			threadingBackend.launch(
 				launchCount,
 				[](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(); },
-				&workerFunc
+				&workerFunc,
+				threadIndices
 			);
 		}
 

@@ -676,18 +676,25 @@ namespace PS_AGONY
                 destroyedWorkerCount.notify_one();
             };
 
+        // Thread indices.
+        std::vector<uint32_t> threadIndices(workerCount - 1);
+        for (uint32_t i = 0; i < workerCount - 1; i++)
+        {
+            threadIndices[i] = i;
+        }
+
         // One less task submitted to the pool: the calling thread takes that slot itself.
         threadingBackend.launch(
             workerCount - 1,
             [](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(false); },
-            &workerFunc
+            &workerFunc,
+            threadIndices
         );
 
         {
             TRACY_SCOPE_N("Participate in work");
             workerFunc(true);
         }
-
         {
             TRACY_SCOPE_N("Wait for workers to finish and combine data");
             mergeReady(true);
