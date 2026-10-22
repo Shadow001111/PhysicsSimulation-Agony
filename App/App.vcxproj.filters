@@ -92,5 +92,8 @@
     <ClInclude Include="Render\SimulationRenderer_Internal.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="EcstasyThreadingBackend.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

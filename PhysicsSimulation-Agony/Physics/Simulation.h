@@ -1,8 +1,9 @@
 #pragma once
-#include "Types.h"
 #include "ConstraintSystem.h"
-#include "Material.h"
 #include "Constants.h"
+
+#include "Types/Material.h"
+#include "Types/Types.h"
 
 #include "CollisionDetection/Broad/BroadPhaseCollisionDetector.h"
 #include "CollisionDetection/Narrow/NarrowPhaseCollisionDetector.h"
@@ -252,7 +253,7 @@ namespace PS_AGONY
 		const BroadPhaseCollisionDetector& getBroadPhaseCollisionDetector() const noexcept { return broadPhaseCollisionDetector; };
 		const NarrowPhaseCollisionDetector& getNarrowPhaseCollisionDetector() const noexcept { return narrowPhaseCollisionDetector; };
 
-		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }
+		auto getBodyCollisionData() const noexcept { return narrowPhaseCollisionDetector.getBodyCollisionData(); }
 
 		SimulationSettings& getSimulationSettings() noexcept { return simulationSettings; }
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
@@ -301,7 +302,6 @@ namespace PS_AGONY
 		void computeColliderWorldTransforms();
 		void computeColliderWorldPositions();
 		void computeColliderWorldRotations();
-		void wrapColliderRotations();
 
 		void applyBodyHolderConstraint(Real deltaTime);
 

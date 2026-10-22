@@ -1,7 +1,6 @@
 #include "Simulation.h"
-#include "Threading.h"
 #include "FastCosSin.h"
-#include "Constants.h"
+#include "SimulationImpl/LeftOutFunctions.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
@@ -175,7 +174,7 @@ namespace PS_AGONY
     {
         TRACY_SCOPE_N("Dispatch collision events");
 
-        const std::vector<CollisionEvent>& events = bodyCollisionSolver.getCollisionEvents();
+        std::span<const CollisionEvent> events = bodyCollisionSolver.getCollisionEvents();
         collisionCallbackManager.invoke(events);
     }
 
@@ -309,7 +308,7 @@ namespace PS_AGONY
         bodyCollisionSolver.setDataViewers(
             objectManager.bodies,
             ColliderSoAViewer(objectManager.colliders),
-            materialManager.getMaterials()
+            materialManager.getMaterials().data()
         );
 
         // Remap warm-starting data if a collider was deleted. Persistent contact data is
@@ -350,7 +349,7 @@ namespace PS_AGONY
         //}
 
         // Computing important data.
-        Integrator::wrapRotation(objectManager.bodies);
+        wrapBodyRotations(objectManager.bodies);
         Integrator::computeRotationCosSin(objectManager.bodies);
 
         // Compute transforms, AABBs and (re)build trees.
@@ -359,13 +358,13 @@ namespace PS_AGONY
         if (objectManager.colliders.getCount() > 1)
         {
             // Broad phase.
-            const std::vector<ObjectPair>& broad = broadPhaseCollisionDetector.findCollisions(
+            const std::span<const ObjectPair> broad = broadPhaseCollisionDetector.findCollisions(
                 ExecutionPolicy::ForceSingleThreaded
             );
             if (broad.empty()) return;
 
             // Narrow phase.
-            const std::vector<BodyCollisionData>& narrow = narrowPhaseCollisionDetector.findCollisions(
+            const std::span<BodyCollisionData> narrow = narrowPhaseCollisionDetector.findCollisions(
                 broad
             );
             if (narrow.empty())
@@ -744,7 +743,7 @@ namespace PS_AGONY
         // 2) FastCosSin::order4CosSin requires angles in [0, 2pi); body.rotation is
         //    already wrapped, but adding localRotation can push the sum back out
         //    of range, so wrap again before the batch trig call.
-        wrapColliderRotations();
+        wrapColliderRotations(objectManager.colliders);
 
         // 3) Batch cos/sin, same approximation/approach bodies use.
         FastCosSin::order5Array(
@@ -753,48 +752,6 @@ namespace PS_AGONY
             objectManager.colliders.worldRotationSin.data(),
             colliderCount
         );
-    }
-
-    void Simulation::wrapColliderRotations()
-    {
-        TRACY_SCOPE_NC("Wrap collider rotations", Ecstasy::Core::Color::Cyan);
-
-        // Unlike bodies.wrapRotation(), no wrap-count bookkeeping is needed here:
-        // worldRotation is fully recomputed from scratch every step (body.rotation
-        // + fixed localRotation), never integrated/accumulated on its own, so
-        // there's nothing to unwrap later for render interpolation.
-
-        constexpr size_t LANES = RealSimd::lanes;
-
-        Real* ECSTASY_RESTRICT worldRotationPtr = objectManager.colliders.worldRotation.data();
-        const size_t colliderCount = objectManager.colliders.getCount();
-
-        const RealSimd twoPIV(Constants::TWO_PI);
-        const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
-
-        size_t i = 0;
-        for (; i + LANES <= colliderCount; i += LANES)
-        {
-            RealSimd rot = RealSimd::load(worldRotationPtr + i);
-
-            RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
-            rot = rot - wrapCount * twoPIV;
-
-            RealSimd isRotNegativeMask = rot < RealSimd(0);
-            rot += isRotNegativeMask & twoPIV;
-
-            rot.store(worldRotationPtr + i);
-        }
-        for (; i < colliderCount; i++)
-        {
-            Real rot = worldRotationPtr[i];
-            Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
-            rot -= wrapCount * Constants::TWO_PI;
-
-            if (rot < Real(0)) rot += Constants::TWO_PI;
-
-            worldRotationPtr[i] = rot;
-        }
     }
 
     void Simulation::applyBodyHolderConstraint(Real deltaTime)

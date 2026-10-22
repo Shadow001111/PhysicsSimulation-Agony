@@ -5,28 +5,30 @@
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
+#include <iostream>
+
 namespace PS_AGONY
 {
 	void BodyCollisionSolver::setDataViewers(
 		BodySoA& bodiesIn,
 		const ColliderSoAViewer& collidersIn,
-		const std::vector<Material>& materialsIn
+		const Material* materials
 	)
 	{
 		SolverBase::setResources(bodiesIn);
 		colliders = collidersIn;
-		materials = &materialsIn;
+		this->materials = materials;
 	}
 
 	void BodyCollisionSolver::solveCollisions(
-		const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+		std::span<BodyCollisionData> collisionData,
 		uint32_t velocityIterations,
 		uint32_t positionIterations
 	)
 	{
 		TRACY_SCOPE_NC("Solve collisions", Ecstasy::Core::Color::OliveDrab);
 
-		const size_t collisionCount = narrowPhaseCollisions.size();
+		const size_t collisionCount = collisionData.size();
 		const size_t workerCount = planWorkerCount(collisionCount);
 
 		collisionEvents.clear();
@@ -35,7 +37,7 @@ namespace PS_AGONY
 		if (workerCount <= 1)
 		{
 			activeCollisionCount = collisionCount;
-			computeConstraintData(narrowPhaseCollisions, nullptr, collisionCount);
+			computeConstraintData(collisionData, nullptr);
 
 			{
 				TRACY_SCOPE_N("Solve collision constraints (Single-threaded)");
@@ -54,7 +56,7 @@ namespace PS_AGONY
 				}
 			}
 
-			scatterImpulses(narrowPhaseCollisions, nullptr, collisionCount);
+			scatterImpulses(collisionData, nullptr);
 			return;
 		}
 
@@ -65,7 +67,7 @@ namespace PS_AGONY
 			collidingBodyPairs.resize(collisionCount);
 			for (size_t i = 0; i < collisionCount; i++)
 			{
-				const BodyCollisionData& collData = narrowPhaseCollisions[i];
+				const BodyCollisionData& collData = collisionData[i];
 				collidingBodyPairs[i] = { collData.bodyA, collData.bodyB };
 			}
 		}
@@ -84,18 +86,17 @@ namespace PS_AGONY
 
 		// Constraint data is gathered straight through the plan's indices, so no separate reorder copy of the full data is needed.
 		const auto& flatIndices = solvingPlan.getFlatIndices();
-		const size_t mappedCount = flatIndices.size();
 		const size_t* flatIndicesPtr = flatIndices.data();
 
-		activeCollisionCount = mappedCount;
-		computeConstraintData(narrowPhaseCollisions, flatIndicesPtr, mappedCount);
+		activeCollisionCount = collisionCount;
+		computeConstraintData(collisionData, flatIndicesPtr);
 
 		{
 			TRACY_SCOPE_N("Solve collision constraints (Multi-threaded)");
 			solveConstraintsThreaded(velocityIterations, positionIterations);
 		}
 
-		scatterImpulses(narrowPhaseCollisions, flatIndicesPtr, mappedCount);
+		scatterImpulses(collisionData, flatIndicesPtr);
 	}
 
 	void BodyCollisionSolver::reportNoCollisions()
@@ -209,7 +210,7 @@ namespace PS_AGONY
 		return std::min(availableWorkerCount, neededWorkerCount);
 	}
 
-	void BodyCollisionSolver::computeConstraintData(const std::vector<BodyCollisionData>& source, const size_t* order, size_t collisionCount)
+	void BodyCollisionSolver::computeConstraintData(std::span<BodyCollisionData> source, const size_t* order)
 	{
 		TRACY_SCOPE_NC("Compute constraint data", Ecstasy::Core::Color::Chocolate);
 
@@ -223,10 +224,11 @@ namespace PS_AGONY
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 		const MaterialIndex* ECSTASY_RESTRICT colliderMaterialIndexPtr = colliders.materialIndex;
-		const Material* ECSTASY_RESTRICT materialPtr = materials->data();
 		const CollisionCallbackIndex* ECSTASY_RESTRICT colliderCallbackIdPtr = colliders.callbackId;
 		const Real* ECSTASY_RESTRICT colliderEventThresholdPtr = colliders.eventThreshold;
 		const bool recordEvents = recordCollisionEvents;
+
+		const size_t collisionCount = source.size();
 
 		// Resize containers.
 		velocityHotContainer.resize(collisionCount);
@@ -273,8 +275,8 @@ namespace PS_AGONY
 
 				const MaterialIndex materialIndexA = colliderMaterialIndexPtr[data.colliderA];
 				const MaterialIndex materialIndexB = colliderMaterialIndexPtr[data.colliderB];
-				const Material* materialA = materialPtr + materialIndexA;
-				const Material* materialB = materialPtr + materialIndexB;
+				const Material* materialA = materials + materialIndexA;
+				const Material* materialB = materials + materialIndexB;
 
 				const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5);
 				frictionData.staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
@@ -355,17 +357,27 @@ namespace PS_AGONY
 		}
 	}
 
-	void BodyCollisionSolver::scatterImpulses(const std::vector<BodyCollisionData>& target, const size_t* order, size_t collisionCount) const
+	void BodyCollisionSolver::scatterImpulses(std::span<BodyCollisionData> target, const size_t* order) const
 	{
 		TRACY_SCOPE_N("Scatter persistent contact data back");
 
 		const VelocityHotData* ECSTASY_RESTRICT hotPtr = velocityHotContainer.data();
-		const BodyCollisionData* targetPtr = target.data();
+		BodyCollisionData* ECSTASY_RESTRICT targetPtr = target.data();
 
-		// target is const&, but persistentContactData is mutable -> legal write.
-		for (size_t i = 0; i < collisionCount; i++)
+		const size_t collisionCount = target.size();
+		if (order)
 		{
-			targetPtr[order ? order[i] : i].persistentContactData = hotPtr[i].impulses;
+			for (size_t i = 0; i < collisionCount; i++)
+			{
+				targetPtr[order[i]].persistentContactData = hotPtr[i].impulses;
+			}
+		}
+		else
+		{
+			for (size_t i = 0; i < collisionCount; i++)
+			{
+				targetPtr[i].persistentContactData = hotPtr[i].impulses;
+			}
 		}
 	}
 

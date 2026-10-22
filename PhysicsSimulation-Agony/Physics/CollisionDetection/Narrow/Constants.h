@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/Types.h"
+#include "Physics/Types/Types.h"
 
 namespace PS_AGONY
 {
@@ -14,8 +14,8 @@ namespace PS_AGONY
     constexpr Real DEFAULT_NORMAL_Y = 0;
 
     // Threading.
-    constexpr size_t MULTITHREAD_PAIR_THRESHOLD = 6000;
     constexpr size_t PAIRS_PER_WORKER = 3000;
+    constexpr size_t MULTITHREAD_PAIR_THRESHOLD = PAIRS_PER_WORKER * 2;
     constexpr size_t LOAD_BALANCING_FACTOR = 4;
 
     // Memory layout.

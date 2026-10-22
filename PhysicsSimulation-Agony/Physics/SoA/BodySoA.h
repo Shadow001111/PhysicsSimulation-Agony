@@ -1,6 +1,7 @@
 #pragma once
 #include "Physics/ContainerUtilities.h"
-#include "Physics/Types.h"
+#include "Physics/Types/Types.h"
+
 #include <cstdint>
 #include <vector>
 

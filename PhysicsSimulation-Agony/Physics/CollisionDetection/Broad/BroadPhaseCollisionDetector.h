@@ -6,10 +6,7 @@
 #include "Math.h"
 
 #include "Physics/ObjectSoA.h"
-#include "Physics/ExecutionPolicy.h"
-
-#include "Ecstasy/Core/Portablity.h"
-#include "Ecstasy/Core/Simd.h"
+#include "Physics/Types/ExecutionPolicy.h"
 
 #include <atomic>
 #include <cstdint>
@@ -40,21 +37,21 @@ namespace PS_AGONY
 	{
 		struct QueryResources
 		{
-			std::vector<BvhNodePair> selfNodePairs;
-			std::vector<BvhNodePair> selfLeafPairs;
-			std::vector<uint32_t> selfLeaves;
-			std::vector<BvhNodePair> crossNodePairs;
-			std::vector<BvhNodePair> crossLeafPairs;
+			CacheLineAlignedVector<BvhNodePair> selfNodePairs;
+			CacheLineAlignedVector<BvhNodePair> selfLeafPairs;
+			CacheLineAlignedVector<uint32_t> selfLeaves;
+			CacheLineAlignedVector<BvhNodePair> crossNodePairs;
+			CacheLineAlignedVector<BvhNodePair> crossLeafPairs;
 		};
 
 		struct QueryPairsThreadedResources
 		{
 			struct alignas(64) WorkerData
 			{
-				std::vector<BvhNodePair> nodePairsToTraverse;
-				std::vector<BvhNodePair> selfLeafPairs;
-				std::vector<BvhNodePair> crossLeafPairs;
-				std::vector<ObjectPair> collisionData;
+				CacheLineAlignedVector<BvhNodePair> nodePairsToTraverse;
+				CacheLineAlignedVector<BvhNodePair> selfLeafPairs;
+				CacheLineAlignedVector<BvhNodePair> crossLeafPairs;
+				CacheLineAlignedVector<ObjectPair> collisionData;
 
 				std::atomic<bool> isDone{ false };
 
@@ -108,7 +105,7 @@ namespace PS_AGONY
 			std::vector<WorkerData> workerData;
 			std::vector<Task> tasks;
 			std::vector<TaskOutput> taskOutputs;
-			std::vector<BvhNodePair> crossScratch;
+			CacheLineAlignedVector<BvhNodePair> crossScratch;
 		};
 
 		AABBSoAViewer collidersAABB;
@@ -121,7 +118,7 @@ namespace PS_AGONY
 		QueryResources queryResources;
 		QueryPairsThreadedResources queryPairsThreadedResources;
 
-		std::vector<ObjectPair> collisionData; // Pairs of COLLIDER indices.
+		CacheLineAlignedVector<ObjectPair> collisionData; // Pairs of COLLIDER indices.
 	public:
 		BroadPhaseCollisionDetector() = default;
 		~BroadPhaseCollisionDetector() = default;
@@ -155,7 +152,7 @@ namespace PS_AGONY
 
 		// Finds overlapping collider pairs: dynamic-dynamic and dynamic-static. Dynamic-static
 		// pairs are ordered (dynamic, static). Returns empty if there are no dynamic colliders.
-		const std::vector<ObjectPair>& findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Auto);
+		std::span<const ObjectPair> findCollisions(ExecutionPolicy executionPolicy = ExecutionPolicy::Auto);
 
 		void getLeafNodeAABBs(BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<AABB>& outAABBs) const;
 

@@ -3,16 +3,12 @@
 #include "Constants.h"
 
 #include "Physics/Threading.h"
-#include "Physics/Limits.h"
 
 #include "Ecstasy/Core/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
-#include "Ecstasy/Core/Simd.h"
 
-#include <bit>
 #include <tuple>
 #include <algorithm>
-#include <iostream>
 
 /*
  * NARROW PHASE: DESIGN NOTES
@@ -57,44 +53,31 @@
 
 namespace PS_AGONY
 {
-    // TODO: Remove.
-    using RealSimd = Ecstasy::Core::Simd<Real>;
-
-
-    template <typename Map>
-    size_t robinHoodMapMemoryUsage(const Map& map)
-    {
-        // mask() + 1 == current bucket count (always a power of two).
-        auto const numElementsWithBuffer = map.calcNumElementsWithBuffer(map.mask() + 1);
-        return map.calcNumBytesTotal(numElementsWithBuffer);
-    }
-
-
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
         SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> mat;
 
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Circle) = &NarrowPhaseCollisionDetector::collisionCircleCircle;
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Box) = &NarrowPhaseCollisionDetector::collisionCircleBox;
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionCirclePolygon;
-        mat((size_t)BodyType::Circle, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionCircleCapsule;
+        auto add = [&](BodyType typeA, BodyType typeB, CollisionFunc func)
+            {
+                mat((size_t)typeA, (size_t)typeB) = func;
+            };
 
-        mat((size_t)BodyType::Box, (size_t)BodyType::Box) = &NarrowPhaseCollisionDetector::collisionBoxBox;
-        mat((size_t)BodyType::Box, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionBoxPolygon;
-        mat((size_t)BodyType::Box, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionBoxCapsule;
+        add(BodyType::Circle , BodyType::Circle , &NarrowPhaseCollisionDetector::collisionCircleCircle  );
+        add(BodyType::Circle , BodyType::Box    , &NarrowPhaseCollisionDetector::collisionCircleBox     );
+        add(BodyType::Circle , BodyType::Polygon, &NarrowPhaseCollisionDetector::collisionCirclePolygon );
+        add(BodyType::Circle , BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionCircleCapsule );
 
-        mat((size_t)BodyType::Polygon, (size_t)BodyType::Polygon) = &NarrowPhaseCollisionDetector::collisionPolygonPolygon;
-        mat((size_t)BodyType::Polygon, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionPolygonCapsule;
+        add(BodyType::Box    , BodyType::Box    , &NarrowPhaseCollisionDetector::collisionBoxBox        );
+        add(BodyType::Box    , BodyType::Polygon, &NarrowPhaseCollisionDetector::collisionBoxPolygon    );
+        add(BodyType::Box    , BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionBoxCapsule    );
 
-        mat((size_t)BodyType::Capsule, (size_t)BodyType::Capsule) = &NarrowPhaseCollisionDetector::collisionCapsuleCapsule;
+        add(BodyType::Polygon, BodyType::Polygon, &NarrowPhaseCollisionDetector::collisionPolygonPolygon);
+        add(BodyType::Polygon, BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionPolygonCapsule);
+
+        add(BodyType::Capsule, BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionCapsuleCapsule);
         return mat;
         }();
 
-
-
-    NarrowPhaseCollisionDetector::NarrowPhaseCollisionDetector()
-    {
-    }
 
     void NarrowPhaseCollisionDetector::setDataViewers(
         const BodySoAViewer& bodies,
@@ -113,8 +96,8 @@ namespace PS_AGONY
         this->capsules = capsules;
     }
 
-    const std::vector<BodyCollisionData>& NarrowPhaseCollisionDetector::findCollisions(
-        const std::vector<ObjectPair>& colliderPairs,
+    std::span<BodyCollisionData> NarrowPhaseCollisionDetector::findCollisions(
+        std::span<const ObjectPair> colliderPairs,
         ExecutionPolicy executionPolicy
     )
     {
@@ -158,7 +141,7 @@ namespace PS_AGONY
     }
 
     void NarrowPhaseCollisionDetector::findCollisionsInCircle(
-        const std::vector<ObjectIndex>& collidersToCheck,
+        std::span<const ObjectIndex> collidersToCheck,
         Vec2 pos, Real radius,
         std::vector<std::pair<ObjectIndex, Real>>& outColliding
     ) const
@@ -299,7 +282,7 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::remapPersistentContactData(const std::vector<ObjectDeletion>& deletedColliders)
+    void NarrowPhaseCollisionDetector::remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders)
     {
         if (deletedColliders.empty() || previousContactDataContainer.empty())
         {
@@ -414,13 +397,14 @@ namespace PS_AGONY
             }
             total += PS_AGONY::getVectorMemoryUsage(chunkData.results);
         }
-
-        total += robinHoodMapMemoryUsage(previousContactDataContainer);
-
+        {
+            auto const numElementsWithBuffer = previousContactDataContainer.calcNumElementsWithBuffer(previousContactDataContainer.mask() + 1);
+            total += previousContactDataContainer.calcNumBytesTotal(numElementsWithBuffer);
+        }
         return total;
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(const std::vector<ObjectPair>& colliderPairs)
+    void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs)
     {
         TRACY_SCOPE_N("Single-threaded narrow phase");
 
@@ -440,12 +424,12 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs, size_t workerCount)
+    void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount)
     {
         TRACY_SCOPE_N("Multi-threaded narrow phase");
 
         auto& threadingBackend = Threading::getThreadingBackend();
-        workerCount = std::max<size_t>(std::min<size_t>(workerCount, threadingBackend.getThreadCount()), 1); // At least the calling thread.
+        size_t workerCount = std::max<size_t>(std::min<size_t>(maxWorkerCount, threadingBackend.getThreadCount()), 1); // At least the calling thread.
 
         size_t chunkCount, chunkSize;
         if constexpr (DETERMINISTIC)
@@ -548,7 +532,7 @@ namespace PS_AGONY
         }
     }
 
-    void NarrowPhaseCollisionDetector::processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData, std::vector<BodyCollisionData>& out)
+    void NarrowPhaseCollisionDetector::processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out)
     {
         TRACY_SCOPE_N("Process pair range");
 
@@ -581,8 +565,8 @@ namespace PS_AGONY
         }
 
         // Dispatch each non-empty type group.
-        const auto& pairsDA = chunkData.pairs.getDirectAccess();
-        const auto& collisionFuncsDA = collisionFuncs.getDirectAccess();
+        const auto pairsDA = chunkData.pairs.getDirectAccess();
+        const auto collisionFuncsDA = collisionFuncs.getDirectAccess();
 
         constexpr size_t count = chunkData.pairs.STORED_COUNT;
         for (size_t i = 0; i < count; i++)
@@ -612,7 +596,7 @@ namespace PS_AGONY
 
                 const CachedContactPair& data = it->second;
 
-                // Match current contacts with previous frame contacts using contactIds
+                // Match current contacts with previous frame contacts using contactIds.
                 for (uint32_t i = 0; i < collData.contactCount; i++)
                 {
                     if (data.contactIds[0] != INVALID_CONTACT_ID && collData.contactIds[i] == data.contactIds[0])

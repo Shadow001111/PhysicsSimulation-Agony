@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Physics/Types.h"
+#include "Physics/Types/Types.h"
 #include <cstddef>
 #include <span>
 #include <vector>

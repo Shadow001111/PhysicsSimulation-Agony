@@ -260,6 +260,7 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_rectpack.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_textedit.h" />
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
+    <ClInclude Include="EcstasyThreadingBackend.h" />
     <ClInclude Include="Render\ShapeRenderer.h" />
     <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Render\SimulationRenderer_Internal.h" />

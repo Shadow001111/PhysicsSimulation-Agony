@@ -10,8 +10,8 @@ namespace PS_AGONY
     using RealSimd = Ecstasy::Core::Simd<Real>;
 
     void NarrowPhaseCollisionDetector::collisionBoxCapsule(
-        const std::vector<ObjectPair>& pairs,
-        std::vector<BodyCollisionData>& outCollisionData)
+        std::span<const ObjectPair> pairs,
+        CacheLineAlignedVector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Box-capsule collision");
 

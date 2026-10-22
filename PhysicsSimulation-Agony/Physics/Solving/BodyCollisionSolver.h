@@ -2,13 +2,12 @@
 #include "SolverBase.h"
 
 #include "Physics/SoA/ColliderSoA.h"
-#include "Physics/Material.h"
 #include "Physics/CollisionDetection/Narrow/NarrowPhaseCollisionDetector.h"
-#include "Physics/CollisionEvent.h"
+#include "Physics/Types/Material.h"
+#include "Physics/Types/CollisionEvent.h"
 
 #include <array>
 #include <span>
-#include <vector>
 
 namespace PS_AGONY
 {
@@ -73,7 +72,7 @@ namespace PS_AGONY
 
 		// Member fields.
 
-		const std::vector<Material>* materials = nullptr;
+		const Material* materials = nullptr;
 		ColliderSoAViewer colliders;
 
 		CacheLineAlignedVector<ObjectPair> collidingBodyPairs;
@@ -87,7 +86,7 @@ namespace PS_AGONY
 		size_t activeCollisionCount = 0;
 
 		// Collision events, recorded in computeConstraintData in solving order (deterministic). Cleared every solve.
-		std::vector<CollisionEvent> collisionEvents;
+		CacheLineAlignedVector<CollisionEvent> collisionEvents;
 		bool recordCollisionEvents = false;
 
 		SimulationSettings simulationSettings;
@@ -102,11 +101,11 @@ namespace PS_AGONY
 		void setDataViewers(
 			BodySoA& bodies,
 			const ColliderSoAViewer& colliders,
-			const std::vector<Material>& materials
+			const Material* materials
 		);
 
 		void solveCollisions(
-			const std::vector<BodyCollisionData>& narrowPhaseCollisions,
+			std::span<BodyCollisionData> collisionData,
 			uint32_t velocityIterations,
 			uint32_t positionIterations
 		);
@@ -117,7 +116,7 @@ namespace PS_AGONY
 		void setCollisionEventRecording(bool enabled);
 
 		// Valid until the next solveCollisions/reportNoCollisions.
-		const std::vector<CollisionEvent>& getCollisionEvents() const noexcept { return collisionEvents; }
+		std::span<const CollisionEvent> getCollisionEvents() const noexcept { return collisionEvents; }
 
 		// (Velocity, Position).
 		Vec2 computeConstraintErrors() const;
@@ -129,10 +128,10 @@ namespace PS_AGONY
 		size_t planWorkerCount(size_t collisionCount) const;
 
 		// Builds all constraint streams. If 'order' is not null, constraint c is built from source[order[c]].
-		void computeConstraintData(const std::vector<BodyCollisionData>& source, const size_t* order, size_t collisionCount);
+		void computeConstraintData(std::span<BodyCollisionData> source, const size_t* order);
 
-		// Writes the solved impulses back to the detector's (mutable) persistent contact data.
-		void scatterImpulses(const std::vector<BodyCollisionData>& target, const size_t* order, size_t collisionCount) const;
+		// Writes the solved impulses back to the detector's persistent contact data.
+		void scatterImpulses(std::span<BodyCollisionData> target, const size_t* order) const;
 
 		void applyWarmStarting(SolvingPlan::Pass pass);
 

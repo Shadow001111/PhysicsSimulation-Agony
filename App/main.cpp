@@ -1,7 +1,7 @@
 #include "Scenes.h"
+#include "EcstasyThreadingBackend.h"
 
 #include "Physics/Simulation.h"
-#include "Physics/EcstasyThreadingBackend.h"
 
 #include "Render/SimulationRenderer.h"
 
@@ -16,7 +16,7 @@
 #include <iomanip>
 #include <thread>
 #include <sstream>
-#include <format>
+//#include <format>
 
 
 static std::string formatSize(size_t value)
@@ -313,7 +313,7 @@ static void renderGUI(
     ImGui::End();
 }
 
-ObjectCreatorState renderObjectCreatorUI(
+static ObjectCreatorState renderObjectCreatorUI(
     PS_AGONY::Simulation& simulation,
     const PS_AGONY::Camera2D camera
 )
@@ -436,9 +436,10 @@ ObjectCreatorState renderObjectCreatorUI(
             static int dragging_node_idx = -1;
             ImVec2 mouse_pos = ImGui::GetIO().MousePos;
 
-            PS_AGONY::Vec2 mouse_local;
-            mouse_local.x = static_cast<PS_AGONY::Real>((mouse_pos.x - center.x) / grid_scale);
-            mouse_local.y = static_cast<PS_AGONY::Real>(-(mouse_pos.y - center.y) / grid_scale);
+            PS_AGONY::Vec2 mouse_local{
+                 (mouse_pos.x - center.x) / grid_scale,
+                -(mouse_pos.y - center.y) / grid_scale
+            };
 
             if (mouse_local.x < -5.0f) mouse_local.x = -5.0f;
             if (mouse_local.x > 5.0f) mouse_local.x = 5.0f;

@@ -8,8 +8,8 @@
 namespace PS_AGONY
 {
     void NarrowPhaseCollisionDetector::collisionCirclePolygon(
-        const std::vector<ObjectPair>& pairs,
-        std::vector<BodyCollisionData>& outCollisionData)
+        std::span<const ObjectPair> pairs,
+        CacheLineAlignedVector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-polygon collision");
 

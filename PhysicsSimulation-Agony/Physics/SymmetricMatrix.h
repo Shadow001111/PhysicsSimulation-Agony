@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <utility>
+#include <span>
 
 template <class T, size_t N>
 class SymmetricMatrix
@@ -53,6 +54,6 @@ public:
         return mData[index(r, c)];
     }
 
-    auto& getDirectAccess() noexcept { return mData; }
-    const auto& getDirectAccess() const noexcept { return mData; }
+    std::span<T> getDirectAccess() noexcept { return mData; }
+    std::span<const T> getDirectAccess() const noexcept { return mData; }
 };

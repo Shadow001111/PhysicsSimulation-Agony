@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/Types.h"
+#include "Physics/Types/Types.h"
 
 #include <optional>
 

@@ -1,5 +1,4 @@
 #include "BroadPhaseCollisionDetector.h"
-
 #include "LeafPairTesting.h"
 #include "BvhPairTraversal.h"
 
@@ -33,7 +32,7 @@ namespace PS_AGONY
 				const BPI::BvhTreeView& dynIn,
 				const BPI::BvhTreeView& statIn,
 				const ObjectIndex* ownerIn,
-				std::vector<ObjectPair>& dest) noexcept :
+				CacheLineAlignedVector<ObjectPair>& dest) noexcept :
 				dyn(dynIn), stat(statIn), owner(ownerIn), pushBuffer(dest)
 			{
 			}
@@ -101,7 +100,7 @@ namespace PS_AGONY
 		}
 	}
 
-	const std::vector<ObjectPair>& BroadPhaseCollisionDetector::findCollisions(ExecutionPolicy executionPolicy)
+	std::span<const ObjectPair> BroadPhaseCollisionDetector::findCollisions(ExecutionPolicy executionPolicy)
 	{
 		TRACY_SCOPE_N("Find broad-phase collisions");
 

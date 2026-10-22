@@ -2,7 +2,6 @@
 #include "BvhNode.h"
 #include "BvhNodePair.h"
 
-#include "Physics/ObjectSoA.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <algorithm>
@@ -16,9 +15,9 @@ namespace PS_AGONY::BroadPhaseInternal
 	// node/node pairs that still need splitting (independent sub-traversals).
 	inline void traverseRootForInitialPairs(
 		const BvhNode* ECSTASY_RESTRICT nodesPtr,
-		std::vector<BvhNodePair>& outNodePairsToTraverse,
-		std::vector<BvhNodePair>& outLeafPairsToTestCollisions,
-		std::vector<uint32_t>& outLeavesToTestCollisions)
+		CacheLineAlignedVector<BvhNodePair>& outNodePairsToTraverse,
+		CacheLineAlignedVector<BvhNodePair>& outLeafPairsToTestCollisions,
+		CacheLineAlignedVector<uint32_t>& outLeavesToTestCollisions)
 	{
 		if (nodesPtr[0].leftChildIndex == BvhNode::INVALID_INDEX) [[unlikely]] // Root is leaf.
 		{
@@ -82,7 +81,7 @@ namespace PS_AGONY::BroadPhaseInternal
 		const BvhNode* nodesA,
 		const BvhNode* nodesB,
 		const BvhNodePair pair,
-		std::vector<BvhNodePair>& out)
+		CacheLineAlignedVector<BvhNodePair>& out)
 	{
 		const BvhNode& nodeA = nodesA[pair.a];
 		const BvhNode& nodeB = nodesB[pair.b];
@@ -129,8 +128,8 @@ namespace PS_AGONY::BroadPhaseInternal
 	inline void traverseNodePairStack(
 		const BvhNode* nodesA,
 		const BvhNode* nodesB,
-		std::vector<BvhNodePair>& stack,
-		std::vector<BvhNodePair>& outLeafPairs)
+		CacheLineAlignedVector<BvhNodePair>& stack,
+		CacheLineAlignedVector<BvhNodePair>& outLeafPairs)
 	{
 		// Pushes the (left, right) child pairs the same way the old pop/leaf-check did, but
 		// leaf/leaf pairs that would be popped immediately are written straight to the output.
@@ -222,8 +221,8 @@ namespace PS_AGONY::BroadPhaseInternal
 		const BvhNode* nodesA,
 		const BvhNode* nodesB,
 		size_t minTasks,
-		std::vector<BvhNodePair>& outPairs,
-		std::vector<BvhNodePair>& scratch)
+		CacheLineAlignedVector<BvhNodePair>& outPairs,
+		CacheLineAlignedVector<BvhNodePair>& scratch)
 	{
 		if (!nodesA[0].overlaps(nodesB[0])) return;
 

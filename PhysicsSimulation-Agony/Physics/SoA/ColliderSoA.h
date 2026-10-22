@@ -1,7 +1,7 @@
 #pragma once
 #include "Physics/ContainerUtilities.h"
-#include "Physics/Types.h"
-#include "Physics/CollisionEvent.h"
+#include "Physics/Types/Types.h"
+#include "Physics/Types/CollisionEvent.h"
 
 // Define all scalar SoA fields.
 // localRotation: rigid local angle; wrapped to [0, 2pi) once, at creation.

@@ -1,8 +1,7 @@
 #pragma once
-#include "Physics/Material.h"
-#include "Physics/Types.h"
+#include "Physics/Types/Material.h"
+#include "Physics/Types/Types.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <vector>
 

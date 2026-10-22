@@ -3,8 +3,6 @@
 #include "BvhTreeView.h"
 #include "Math.h"
 
-#include "Physics/ObjectSoA.h"
-
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 
@@ -53,9 +51,9 @@ namespace PS_AGONY::BroadPhaseInternal
 	{
 		ObjectPair buffer[PAIR_PUSH_BUFFER_CAPACITY];
 		uint32_t size = 0;
-		std::vector<ObjectPair>& dest;
+		CacheLineAlignedVector<ObjectPair>& dest;
 
-		explicit PairPushBuffer(std::vector<ObjectPair>& destIn) noexcept : dest(destIn) {}
+		explicit PairPushBuffer(CacheLineAlignedVector<ObjectPair>& destIn) noexcept : dest(destIn) {}
 
 		inline void push(ObjectIndex a, ObjectIndex b) noexcept
 		{

@@ -1,13 +1,11 @@
 #pragma once
 #include "ShapeRenderer.h"
 
-#include <span>
-
-#include "Physics/Camera2D.h"
 #include "Physics/ObjectSoA.h"
-
+#include "Physics/Types/Camera2D.h"
 #include "Physics/SimulationImpl/PolygonBuild.h"
 
+#include <span>
 #include <optional>
 
 namespace PS_AGONY

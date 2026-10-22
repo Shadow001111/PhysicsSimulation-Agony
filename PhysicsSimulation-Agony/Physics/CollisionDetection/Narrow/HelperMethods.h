@@ -1,7 +1,7 @@
 #pragma once
 #include "Constants.h"
 
-#include "Physics/Types.h"
+#include "Physics/Types/Types.h"
 
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
@@ -12,18 +12,18 @@ namespace PS_AGONY
 {
     // Next index with wrap-around; replaces a runtime integer modulo.
     template <typename Index>
-    [[nodiscard]] static __forceinline Index nextIndex(Index index, Index count)
+    [[nodiscard]] inline Index nextIndex(Index index, Index count)
     {
         return index + 1 == count ? Index(0) : Index(index + 1);
     }
 
     // Builds a 4-lane vector in registers. 'a' goes to lane 0 (Simd::set loads in reverse order).
-    static __forceinline Ecstasy::Core::Simd<Real, sizeof(Real) * 32> makeReal4(Real a, Real b, Real c, Real d)
+    inline Ecstasy::Core::Simd<Real, sizeof(Real) * 32> makeReal4(Real a, Real b, Real c, Real d)
     {
         return Ecstasy::Core::Simd<Real, sizeof(Real) * 32>::set(d, c, b, a);
     }
 
-    static __forceinline void flipSignIfNegative(Vec2& v, const Real& sign)
+    inline void flipSignIfNegative(Vec2& v, const Real& sign)
     {
         using Int = std::conditional_t<sizeof(Real) == 8, uint64_t, uint32_t>;
         constexpr Int signBit = Int(1) << (sizeof(Real) * 8 - 1);
@@ -33,7 +33,7 @@ namespace PS_AGONY
         v.y = std::bit_cast<Real>(std::bit_cast<Int>(v.y) ^ signMask);
     }
 
-    [[nodiscard]] static bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
+    [[nodiscard]] inline bool clipSegment(Vec2& p1, Vec2& p2, Vec2 planePoint, Vec2 planeNormal)
     {
         const Real d1 = glm::dot(p1 - planePoint, planeNormal);
         const Real d2 = glm::dot(p2 - planePoint, planeNormal);
@@ -51,7 +51,7 @@ namespace PS_AGONY
         return false;
     }
 
-    static void projectVerticesOnAxis(
+    inline void projectVerticesOnAxis(
         const Vec2* ECSTASY_RESTRICT verticesPtr,
         size_t vertexCount,
         const Vec2& axis,
@@ -70,7 +70,7 @@ namespace PS_AGONY
         }
     }
 
-    [[nodiscard]] static Vec2 closestPointOnSegment(const Vec2& p, const Vec2& a, const Vec2& b)
+    [[nodiscard]] inline Vec2 closestPointOnSegment(const Vec2& p, const Vec2& a, const Vec2& b)
     {
         const Vec2 ab = b - a;
         const Real denom = glm::dot(ab, ab);
@@ -81,7 +81,7 @@ namespace PS_AGONY
 
     // Finds the polygon edge with the greatest signed separation from 'point' (polygon-local space).
     // Returns false as soon as any edge separates the point by more than 'maxDistance': no contact possible.
-    [[nodiscard]] static bool findSupportEdge(
+    [[nodiscard]] inline bool findSupportEdge(
         const Vec2* vertsPtr,
         const Vec2* normalsPtr,
         size_t vertexCount,
@@ -108,7 +108,7 @@ namespace PS_AGONY
         return true;
     }
 
-    [[nodiscard]] static __forceinline Real clampValue(Real value, Real lo, Real hi)
+    [[nodiscard]] inline __forceinline Real clampValue(Real value, Real lo, Real hi)
     {
         return std::fmin(std::fmax(value, lo), hi);
     }

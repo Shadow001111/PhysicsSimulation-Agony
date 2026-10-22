@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/Types.h"
+#include "Physics/Types/Types.h"
 #include "Physics/SoA/BodySoA.h"
 
 namespace PS_AGONY::Integrator
@@ -17,8 +17,6 @@ namespace PS_AGONY::Integrator
 	void integratePhase2_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
 
 	void dampAngularVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
-
-	void wrapRotation(BodySoA& bodies);
 
 	void computeRotationCosSin(BodySoA& bodies);
 }

@@ -159,18 +159,21 @@
     <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CapsuleCapsule.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\SimulationImpl\LeftOutFunctions.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Physics\Simulation.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Types.h">
+    <ClInclude Include="Physics\Types\Types.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\ObjectSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Material.h">
+    <ClInclude Include="Physics\Types\Material.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.h">
@@ -230,7 +233,7 @@
     <ClInclude Include="Physics\ConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Camera2D.h">
+    <ClInclude Include="Physics\Types\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\ObjectManager.h">
@@ -266,7 +269,7 @@
     <ClInclude Include="Physics\Solving\PrismaticJointSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\ExecutionPolicy.h">
+    <ClInclude Include="Physics\Types\ExecutionPolicy.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\CollisionDetection\Broad\Math.h">
@@ -326,13 +329,10 @@
     <ClInclude Include="Physics\SoA\Shapes\CapsuleSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\EcstasyThreadingBackend.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\MaterialManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionEvent.h">
+    <ClInclude Include="Physics\Types\CollisionEvent.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\CollisionCallbackManager.h">
@@ -342,6 +342,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\CollisionDetection\Narrow\Constants.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\SimulationImpl\LeftOutFunctions.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

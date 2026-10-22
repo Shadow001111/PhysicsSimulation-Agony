@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/CollisionEvent.h"
+#include "Physics/Types/CollisionEvent.h"
 
 #include <cstddef>
 #include <cstdint>

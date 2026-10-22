@@ -2,9 +2,9 @@
 #include "PolygonDecomposition.h"
 
 #include "Physics/ObjectSoA.h"
-#include "Physics/Types.h"
 #include "Physics/ConstraintSystem.h"
-#include "Physics/Material.h"
+#include "Physics/Types/Types.h"
+#include "Physics/Types/Material.h"
 
 #include <optional>
 #include <span>

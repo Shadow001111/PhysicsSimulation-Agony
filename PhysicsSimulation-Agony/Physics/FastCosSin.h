@@ -1,5 +1,5 @@
 #pragma once
-#include "Types.h"
+#include "Types/Types.h"
 
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"

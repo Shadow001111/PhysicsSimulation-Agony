@@ -1,5 +1,5 @@
 #pragma once
-#include "Physics/Types.h"
+#include "Types.h"
 
 #include <cstdint>
 #include <limits>

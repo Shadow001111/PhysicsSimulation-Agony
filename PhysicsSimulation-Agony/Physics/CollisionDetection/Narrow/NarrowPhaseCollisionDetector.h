@@ -1,13 +1,13 @@
 #pragma once
-#include "Physics/Types.h"
 #include "Physics/ObjectSoA.h"
-#include "Physics/SoA/ColliderSoA.h"
 #include "Physics/SymmetricMatrix.h"
-#include "Physics/ExecutionPolicy.h"
+#include "Physics/Types/Types.h"
+#include "Physics/Types/ExecutionPolicy.h"
 
 #include <atomic>
-#include <robin_hood.h>
 #include <array>
+#include <span>
+#include <robin_hood.h>
 
 namespace PS_AGONY
 {
@@ -28,7 +28,7 @@ namespace PS_AGONY
 		uint32_t contactCount;
 		Vec2 contactPoints[2];
 		uint32_t contactIds[2];
-		mutable std::array<PersistentContactData, 2> persistentContactData{};
+		std::array<PersistentContactData, 2> persistentContactData{};
 
 		BodyCollisionData() = default;
 
@@ -61,8 +61,8 @@ namespace PS_AGONY
 		struct alignas(64) ChunkData
 		{
 			size_t start = 0, end = 0;
-			SymmetricMatrix<std::vector<ObjectPair>, BODY_TYPE_COUNT> pairs; // Pairs of COLLIDER indices.
-			std::vector<BodyCollisionData> results;
+			SymmetricMatrix<CacheLineAlignedVector<ObjectPair>, BODY_TYPE_COUNT> pairs; // Pairs of COLLIDER indices.
+			CacheLineAlignedVector<BodyCollisionData> results;
 			alignas(64) std::atomic<bool> finished{ false };
 
 			ChunkData() = default;
@@ -129,7 +129,7 @@ namespace PS_AGONY
 		};
 
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
-			const std::vector<ObjectPair>&, std::vector<BodyCollisionData>&
+			std::span<const ObjectPair>, CacheLineAlignedVector<BodyCollisionData>&
 			);
 
 		// Static fields.
@@ -138,8 +138,8 @@ namespace PS_AGONY
 
 		// Fields.
 
-		std::vector<BodyCollisionData> allCollisionData;
-		std::vector<ChunkData> chunks;
+		CacheLineAlignedVector<BodyCollisionData> allCollisionData;
+		CacheLineAlignedVector<ChunkData> chunks;
 
 		robin_hood::unordered_flat_map<ColliderPairKey, CachedContactPair, ColliderPairKeyHasher> previousContactDataContainer;
 
@@ -157,7 +157,7 @@ namespace PS_AGONY
 		static constexpr bool DETERMINISTIC = true;
 		static constexpr size_t DETERMINISTIC_CHUNK_SIZE = 2048;
 
-		NarrowPhaseCollisionDetector();
+		NarrowPhaseCollisionDetector() = default;
 		~NarrowPhaseCollisionDetector() = default;
 		NarrowPhaseCollisionDetector(const NarrowPhaseCollisionDetector&) = delete;
 		NarrowPhaseCollisionDetector& operator=(const NarrowPhaseCollisionDetector&) = delete;
@@ -173,15 +173,14 @@ namespace PS_AGONY
 			const CapsuleSoAViewer& capsules
 		);
 
-		// 'colliderPairs' are COLLIDER index pairs (as produced by BroadPhaseCollisionDetector).
-		const std::vector<BodyCollisionData>& findCollisions(
-			const std::vector<ObjectPair>& colliderPairs,
+		std::span<BodyCollisionData> findCollisions(
+			std::span<const ObjectPair> colliderPairs,
 			ExecutionPolicy executionPolicy = ExecutionPolicy::Auto
 		);
 
 		// 'collidersToCheck' and the first element of each 'outColliding' pair are COLLIDER indices.
 		void findCollisionsInCircle(
-			const std::vector<ObjectIndex>& collidersToCheck,
+			std::span<const ObjectIndex> collidersToCheck,
 			Vec2 pos,
 			Real radius,
 			std::vector<std::pair<ObjectIndex, Real>>& outColliding
@@ -191,29 +190,30 @@ namespace PS_AGONY
 
 		// 'deletedColliders' is the collider swap-remove log (same shape as ObjectDeletion,
 		// but every index in it is a collider index, not a body index).
-		void remapPersistentContactData(const std::vector<ObjectDeletion>& deletedColliders);
+		void remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders);
 
 		void clearData();
 
-		const std::vector<BodyCollisionData>& getBodyCollisionData() const noexcept { return allCollisionData; }
+		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return allCollisionData; }
+		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return allCollisionData; }
 
 		size_t getMemoryUsage() const;
 	private:
-		void findCollisionsSingleThreaded(const std::vector<ObjectPair>& colliderPairs);
-		void findCollisionsMultiThreaded(const std::vector<ObjectPair>& colliderPairs, size_t workerCount);
+		void findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs);
+		void findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount);
 
 		// Appends results to 'out' and applies warm-starting to the appended range only.
-		void processPairs(const std::vector<ObjectPair>& pairs, ChunkData& chunkData, std::vector<BodyCollisionData>& out);
+		void processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out);
 
-		void collisionCircleCircle(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCircleBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCirclePolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCircleCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxBox(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxPolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionBoxCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionPolygonPolygon(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionPolygonCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
-		void collisionCapsuleCapsule(const std::vector<ObjectPair>& pairs, std::vector<BodyCollisionData>& outCollisionData);
+		void collisionCircleCircle	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCircleBox		(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCirclePolygon	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCircleCapsule	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionBoxBox		(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionBoxPolygon	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionBoxCapsule	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionPolygonPolygon(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionPolygonCapsule(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCapsuleCapsule(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 	};
 }

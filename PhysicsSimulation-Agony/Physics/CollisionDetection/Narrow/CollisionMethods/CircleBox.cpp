@@ -7,8 +7,8 @@
 namespace PS_AGONY
 {
     void NarrowPhaseCollisionDetector::collisionCircleBox(
-        const std::vector<ObjectPair>& pairs,
-        std::vector<BodyCollisionData>& outCollisionData)
+        std::span<const ObjectPair> pairs,
+        CacheLineAlignedVector<BodyCollisionData>& outCollisionData)
     {
         TRACY_SCOPE_N("Circle-box collision");
 
