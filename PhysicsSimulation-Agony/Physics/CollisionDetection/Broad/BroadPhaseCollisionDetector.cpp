@@ -1,7 +1,7 @@
 #include "BroadPhaseCollisionDetector.h"
 
-#include "BroadPhaseInternal/LeafPairTesting.h"
-#include "BroadPhaseInternal/BvhPairTraversal.h"
+#include "LeafPairTesting.h"
+#include "BvhPairTraversal.h"
 
 #include "Physics/Threading.h"
 

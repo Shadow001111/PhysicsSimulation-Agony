@@ -257,7 +257,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
-    <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Broad\BvhTree.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxCapsule.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxPolygon.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxBox.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CapsuleCapsule.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleCapsule.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CirclePolygon.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleBox.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleCircle.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\PolygonCapsule.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\PolygonPolygon.cpp" />
     <ClCompile Include="Physics\SoA\ColliderSoA.cpp" />
     <ClCompile Include="Physics\SoA\Constraints\MotorSoA.cpp" />
     <ClCompile Include="Physics\SoA\Constraints\PrismaticJointSoA.cpp" />
@@ -281,8 +291,8 @@
     <ClCompile Include="Physics\Solving\SliderJointSolver.cpp" />
     <ClCompile Include="Physics\Solving\SolvingPlanner.cpp" />
     <ClCompile Include="Physics\FastCosSin.cpp" />
-    <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp" />
-    <ClCompile Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.cpp" />
+    <ClCompile Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.cpp" />
     <ClCompile Include="Physics\Simulation.cpp" />
     <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp" />
     <ClCompile Include="Physics\SimulationImpl\PolygonDecomposition.cpp" />
@@ -293,8 +303,10 @@
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhTree.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhTreeView.h" />
+    <ClInclude Include="Physics\CollisionDetection\Narrow\Constants.h" />
+    <ClInclude Include="Physics\CollisionDetection\Narrow\HelperMethods.h" />
     <ClInclude Include="Physics\CollisionEvent.h" />
     <ClInclude Include="Physics\EcstasyThreadingBackend.h" />
     <ClInclude Include="Physics\Limits.h" />
@@ -305,18 +317,18 @@
     <ClInclude Include="Physics\SoA\Shapes\CapsuleSoA.h" />
     <ClInclude Include="Physics\Solving\ConstraintScheduler.h" />
     <ClInclude Include="Physics\Solving\ConstraintSolverBase.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhPairTraversal.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\LeafPairTesting.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\Math.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhNodePair.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhPairTraversal.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\LeafPairTesting.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\Math.h" />
     <ClInclude Include="Physics\ExecutionPolicy.h" />
     <ClInclude Include="Physics\SoA\Constraints\RodSoA.h" />
     <ClInclude Include="Physics\SoA\Constraints\SliderJointSoA.h" />
     <ClInclude Include="Physics\Solving\MotorSolver.h" />
     <ClInclude Include="Physics\Solving\RevoluteJointSolver.h" />
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNode.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\QueryShapes.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhNode.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\QueryShapes.h" />
     <ClInclude Include="Physics\SimulationImpl\ObjectManager.h" />
     <ClInclude Include="Physics\Integration\Integrator.h" />
     <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h" />
@@ -337,8 +349,8 @@
     <ClInclude Include="Physics\Constants.h" />
     <ClInclude Include="Physics\FastCosSin.h" />
     <ClInclude Include="Physics\Interactivity\BodyHolder.h" />
-    <ClInclude Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.h" />
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.h" />
+    <ClInclude Include="Physics\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.h" />
+    <ClInclude Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.h" />
     <ClInclude Include="Physics\ObjectSoA.h" />
     <ClInclude Include="Physics\Material.h" />
     <ClInclude Include="Physics\Simulation.h" />

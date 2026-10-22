@@ -1,12 +1,12 @@
 #pragma once
+#include "BvhNode.h"
+#include "BvhNodePair.h"
+#include "BvhTree.h"
+#include "QueryShapes.h"
+#include "Math.h"
+
 #include "Physics/ObjectSoA.h"
 #include "Physics/ExecutionPolicy.h"
-
-#include "BroadPhaseInternal/BvhNode.h"
-#include "BroadPhaseInternal/BvhNodePair.h"
-#include "BroadPhaseInternal/BvhTree.h"
-#include "BroadPhaseInternal/QueryShapes.h"
-#include "BroadPhaseInternal/Math.h"
 
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"

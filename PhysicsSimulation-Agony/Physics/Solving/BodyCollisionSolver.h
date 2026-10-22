@@ -3,7 +3,7 @@
 
 #include "Physics/SoA/ColliderSoA.h"
 #include "Physics/Material.h"
-#include "Physics/CollisionDetection/NarrowPhaseCollisionDetector.h"
+#include "Physics/CollisionDetection/Narrow/NarrowPhaseCollisionDetector.h"
 #include "Physics/CollisionEvent.h"
 
 #include <array>

@@ -4,8 +4,8 @@
 #include "Material.h"
 #include "Constants.h"
 
-#include "CollisionDetection/BroadPhaseCollisionDetector.h"
-#include "CollisionDetection/NarrowPhaseCollisionDetector.h"
+#include "CollisionDetection/Broad/BroadPhaseCollisionDetector.h"
+#include "CollisionDetection/Narrow/NarrowPhaseCollisionDetector.h"
 
 #include "Solving/ConstraintScheduler.h"
 #include "Solving/BodyCollisionSolver.h"

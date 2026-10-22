@@ -30,10 +30,10 @@
     <ClCompile Include="Physics\Simulation.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.cpp">
+    <ClCompile Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.cpp">
+    <ClCompile Include="Physics\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\Threading.cpp">
@@ -87,7 +87,7 @@
     <ClCompile Include="Physics\Solving\MotorSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.cpp">
+    <ClCompile Include="Physics\CollisionDetection\Broad\BvhTree.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="Physics\Solving\WaveRunner.cpp">
@@ -129,6 +129,36 @@
     <ClCompile Include="Physics\SoA\Constraints\SpringSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CirclePolygon.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleBox.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleCircle.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleCapsule.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxBox.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxPolygon.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxCapsule.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\PolygonPolygon.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\PolygonCapsule.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CapsuleCapsule.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Physics\Simulation.h">
@@ -143,10 +173,10 @@
     <ClInclude Include="Physics\Material.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseCollisionDetector.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\NarrowPhaseCollisionDetector.h">
+    <ClInclude Include="Physics\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Threading.h">
@@ -215,10 +245,10 @@
     <ClInclude Include="Physics\SoA\ColliderSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\QueryShapes.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\QueryShapes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNode.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhNode.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\FixedClock.h">
@@ -239,16 +269,16 @@
     <ClInclude Include="Physics\ExecutionPolicy.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\Math.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\Math.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhNodePair.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhNodePair.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\LeafPairTesting.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\LeafPairTesting.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhPairTraversal.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhPairTraversal.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Solving\ConstraintSolverBase.h">
@@ -275,10 +305,10 @@
     <ClInclude Include="Physics\Solving\MotorSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTree.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhTree.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\BroadPhaseInternal\BvhTreeView.h">
+    <ClInclude Include="Physics\CollisionDetection\Broad\BvhTreeView.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\Solving\WaveRunner.h">
@@ -306,6 +336,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Physics\SimulationImpl\CollisionCallbackManager.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\Narrow\HelperMethods.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Physics\CollisionDetection\Narrow\Constants.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
