@@ -1,6 +1,6 @@
 #include "LeftOutFunctions.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 
@@ -13,7 +13,7 @@ namespace PS_AGONY
 
     void wrapBodyRotations(BodySoA& bodies)
     {
-        TRACY_SCOPE_NC("Wrap body rotations", Ecstasy::Core::Color::Cyan);
+        TRACY_SCOPE_NC("Wrap body rotations", PS_AGONY::Profiling::Color::Cyan);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
@@ -63,7 +63,7 @@ namespace PS_AGONY
 
     void wrapColliderRotations(ColliderSoA& colliders)
     {
-        TRACY_SCOPE_NC("Wrap collider rotations", Ecstasy::Core::Color::Cyan);
+        TRACY_SCOPE_NC("Wrap collider rotations", PS_AGONY::Profiling::Color::Cyan);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT rotationPtr = colliders.worldRotation.data();

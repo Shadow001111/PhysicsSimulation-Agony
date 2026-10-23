@@ -1,6 +1,6 @@
 #include "SliderJointSolver.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <algorithm>
@@ -9,7 +9,7 @@ namespace PS_AGONY
 {
 	void SliderJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute slider joint constraint data", Ecstasy::Core::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute slider joint constraint data", PS_AGONY::Profiling::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -177,7 +177,7 @@ namespace PS_AGONY
 
 	void SliderJointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve slider joint velocity constraints", Ecstasy::Core::Color::Violet);
+		TRACY_SCOPE_NC("Solve slider joint velocity constraints", PS_AGONY::Profiling::Color::Violet);
 
 		std::span<SliderJointConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 

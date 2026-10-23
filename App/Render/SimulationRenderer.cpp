@@ -5,7 +5,7 @@
 #include "Physics/Constants.h"
 #include "Physics/FastCosSin.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <algorithm>

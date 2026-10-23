@@ -2,7 +2,7 @@
 #include "../Constants.h"
 #include "../HelperMethods.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
@@ -54,7 +54,6 @@ namespace PS_AGONY
             const Real length = halfLengthB * Real(2);
 
             const Vec2 sideAxis = { -axis.y, axis.x };
-            const Real sideOffset = glm::dot(sideAxis, centerLocal);
 
             // Best face and polygon extent along the capsule side axis, in one pass.
             Real faceSeparation = -std::numeric_limits<Real>::max();
@@ -88,6 +87,7 @@ namespace PS_AGONY
             }
             if (rejected) continue;
 
+            const Real sideOffset = glm::dot(sideAxis, centerLocal);
             const Real sidePlus = sideOffset - maxSide;   // Capsule on the +side of the polygon.
             const Real sideMinus = minSide - sideOffset;  // Capsule on the -side of the polygon.
             const Real sideSeparation = std::fmax(sidePlus, sideMinus);
@@ -215,6 +215,7 @@ namespace PS_AGONY
 
                 normal = vertexNormal;
                 depth = radius - vertexSeparation;
+                // TODO: Maybe precompute radius * radius? But radius is used in loop too, adds to register pressure.
                 if (vertexSeparation > Real(0))
                 {
                     const Vec2 d = q - w;

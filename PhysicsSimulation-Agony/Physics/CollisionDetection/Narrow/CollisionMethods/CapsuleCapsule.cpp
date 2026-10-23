@@ -2,7 +2,7 @@
 #include "../Constants.h"
 #include "../HelperMethods.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY

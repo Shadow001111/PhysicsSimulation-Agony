@@ -1,13 +1,13 @@
 #include "SpringSolver.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
 {
 	void SpringSolver::computeConstraintData(Real deltaTime, std::span<const size_t> springIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute spring constraint data", Ecstasy::Core::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute spring constraint data", PS_AGONY::Profiling::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -123,7 +123,7 @@ namespace PS_AGONY
 
 	void SpringSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve spring velocity constraints", Ecstasy::Core::Color::Violet);
+		TRACY_SCOPE_NC("Solve spring velocity constraints", PS_AGONY::Profiling::Color::Violet);
 
 		std::span<const SpringConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 

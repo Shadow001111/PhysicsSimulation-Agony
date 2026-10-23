@@ -305,6 +305,7 @@
     <ClCompile Include="Physics\Solving\SpringSolver.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Physics\Profiling\TracyProfiler.h" />
     <ClInclude Include="Physics\SimulationImpl\ColliderAABBBuilder.h" />
     <ClInclude Include="Physics\SimulationImpl\LeftOutFunctions.h" />
     <ClInclude Include="Physics\CollisionDetection\Broad\BvhTree.h" />

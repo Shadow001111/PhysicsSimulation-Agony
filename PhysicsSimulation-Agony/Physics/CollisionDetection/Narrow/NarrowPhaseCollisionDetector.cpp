@@ -4,7 +4,7 @@
 
 #include "Physics/Threading.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <tuple>

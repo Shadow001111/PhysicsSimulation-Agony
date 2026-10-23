@@ -1,6 +1,6 @@
 #include "PrismaticJointSolver.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <cmath>
@@ -23,7 +23,7 @@ namespace PS_AGONY
 
 	void PrismaticJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute prismatic joint constraint data", Ecstasy::Core::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute prismatic joint constraint data", PS_AGONY::Profiling::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -211,7 +211,7 @@ namespace PS_AGONY
 
 	void PrismaticJointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve prismatic joint velocity constraints", Ecstasy::Core::Color::Violet);
+		TRACY_SCOPE_NC("Solve prismatic joint velocity constraints", PS_AGONY::Profiling::Color::Violet);
 
 		std::span<PrismaticJointConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 

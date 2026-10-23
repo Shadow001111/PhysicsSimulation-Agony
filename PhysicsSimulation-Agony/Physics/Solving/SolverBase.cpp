@@ -2,7 +2,7 @@
 
 #include "Physics/Threading.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
@@ -100,7 +100,7 @@ namespace PS_AGONY
 
 		// Wait for all workers to finish every iteration and terminate.
 		{
-			TRACY_SCOPE_NC("Wait for workers to finish", Ecstasy::Core::Color::Brown);
+			TRACY_SCOPE_NC("Wait for workers to finish", PS_AGONY::Profiling::Color::Brown);
 			for (size_t i = 1; i < workerResources.workerData.size(); i++)
 			{
 				workerResources.workerData[i].isDestroyed.wait(false, std::memory_order_acquire);

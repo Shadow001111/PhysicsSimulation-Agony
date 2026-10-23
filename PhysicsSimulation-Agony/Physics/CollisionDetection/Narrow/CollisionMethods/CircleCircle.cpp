@@ -1,7 +1,7 @@
 #include "../NarrowPhaseCollisionDetector.h"
 #include "../Constants.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 

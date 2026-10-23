@@ -1,6 +1,6 @@
 #include "ConstraintScheduler.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 
 #include <algorithm>
 
@@ -8,7 +8,7 @@ namespace PS_AGONY
 {
 	void ConstraintScheduler::solve(const ConstraintSystemArray& systems, Real deltaTime, BodySoA& bodies)
 	{
-		TRACY_SCOPE_NC("Solve constraints", Ecstasy::Core::Color::OliveDrab);
+		TRACY_SCOPE_NC("Solve constraints", PS_AGONY::Profiling::Color::OliveDrab);
 
 		active.clear();
 		ticks.clear();

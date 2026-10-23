@@ -1,13 +1,13 @@
 #include "MotorSolver.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
 {
 	void MotorSolver::computeConstraintData(Real deltaTime, std::span<const size_t> constraintIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute motor constraint data", Ecstasy::Core::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute motor constraint data", PS_AGONY::Profiling::Color::Chocolate);
 
 		// Body data is read-only here; the warm start is applied separately in warmStart().
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
@@ -55,7 +55,7 @@ namespace PS_AGONY
 
 	void MotorSolver::warmStart(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Warm start motors", Ecstasy::Core::Color::Violet);
+		TRACY_SCOPE_NC("Warm start motors", PS_AGONY::Profiling::Color::Violet);
 
 		const MotorConstraintData* ECSTASY_RESTRICT dataPtr = constraintContainer.data() + pass.start;
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
@@ -70,7 +70,7 @@ namespace PS_AGONY
 
 	void MotorSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve motor velocity constraints", Ecstasy::Core::Color::Violet);
+		TRACY_SCOPE_NC("Solve motor velocity constraints", PS_AGONY::Profiling::Color::Violet);
 
 		MotorConstraintData* ECSTASY_RESTRICT dataPtr = constraintContainer.data() + pass.start;
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();

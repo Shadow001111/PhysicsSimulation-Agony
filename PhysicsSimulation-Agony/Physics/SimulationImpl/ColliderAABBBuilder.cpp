@@ -1,6 +1,6 @@
 #include "ColliderAABBBuilder.h"
 
-#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY
@@ -10,7 +10,7 @@ namespace PS_AGONY
         const size_t count = circles.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build circle AABBs", Ecstasy::Core::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build circle AABBs", PS_AGONY::Profiling::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
         const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
@@ -43,7 +43,7 @@ namespace PS_AGONY
         const size_t count = boxes.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build box AABBs", Ecstasy::Core::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build box AABBs", PS_AGONY::Profiling::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
         const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
@@ -88,7 +88,7 @@ namespace PS_AGONY
         const size_t count = polygons.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build polygon AABBs", Ecstasy::Core::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build polygon AABBs", PS_AGONY::Profiling::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
         const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
@@ -143,7 +143,7 @@ namespace PS_AGONY
         const size_t count = capsules.getCount();
         if (count == 0) return;
 
-        TRACY_SCOPE_NC("Build capsule AABBs", Ecstasy::Core::Color::DarkGreen);
+        TRACY_SCOPE_NC("Build capsule AABBs", PS_AGONY::Profiling::Color::DarkGreen);
 
         const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
         const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();

@@ -5,7 +5,7 @@
 
 #include "Render/SimulationRenderer.h"
 
-//#include "Ecstasy/Core/TracyProfiler.h"
+#include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Graphics/WindowManager.h"
 
 #include "imgui.h"
@@ -16,7 +16,7 @@
 #include <iomanip>
 #include <thread>
 #include <sstream>
-//#include <format>
+#include <format>
 
 
 static std::string formatSize(size_t value)
@@ -619,8 +619,8 @@ static int gameFunc()
         auto onThreadStart = [](size_t workerIndex)
         {
             // TODO: Make it work. Fix Tracy includes.
-            //std::string threadName = std::format("Worker_{}", workerIndex);
-            //tracy::SetThreadName(threadName.c_str());
+            std::string threadName = std::format("Worker_{}", workerIndex);
+            tracy::SetThreadName(threadName.c_str());
         };
 
         Ecstasy::Core::Threading::ThreadPoolConfig cfg = {

@@ -2,7 +2,7 @@
 #include <tracy/Tracy.hpp>
 #include <cstdint>
 
-namespace Ecstasy::Core
+namespace PS_AGONY::Profiling
 {
     enum class Color : uint32_t
     {
@@ -70,3 +70,35 @@ namespace Ecstasy::Core
     #define TRACY_SCOPE_N(name)
     #define TRACY_SCOPE_NC(name, color)
 #endif
+
+//#if TRACY_ENABLE
+//inline void* operator new(size_t size)
+//{
+//    void* ptr = malloc(size);
+//    if (!ptr) [[unlikely]] throw std::bad_alloc{};
+//    TracyAlloc(ptr, size);
+//    return ptr;
+//}
+//
+//inline void operator delete(void* ptr) noexcept
+//{
+//    if (!ptr) [[unlikely]] return;
+//    TracyFree(ptr);
+//    free(ptr);
+//}
+//
+//inline void* operator new[](size_t size)
+//{
+//    void* ptr = malloc(size);
+//    if (!ptr) [[unlikely]] throw std::bad_alloc{};
+//    TracyAlloc(ptr, size);
+//    return ptr;
+//}
+//
+//inline void operator delete[](void* ptr) noexcept
+//{
+//    if (!ptr) [[unlikely]] return;
+//    TracyFree(ptr);
+//    free(ptr);
+//}
+//#endif
