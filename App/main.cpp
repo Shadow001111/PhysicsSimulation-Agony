@@ -538,6 +538,100 @@ static ObjectCreatorState renderObjectCreatorUI(
     return state;
 }
 
+static bool createFramebuffer(
+    Ecstasy::Graphics::WindowManager& wnd,
+    Ecstasy::OpenGL::FrameBuffer& framebuffer
+)
+{
+    TRACY_SCOPE_N("Create framebuffer");
+
+    framebuffer.create(wnd.getWidth(), wnd.getHeight());
+
+    const bool bindless = Ecstasy::OpenGL::Texture::getExtensions().bindless;
+
+    const  Ecstasy::OpenGL::Texture::Parameters params
+    {
+        .minFilter = GL_NEAREST,
+        .magFilter = GL_NEAREST,
+        .wrapS = GL_CLAMP_TO_EDGE,
+        .wrapT = GL_CLAMP_TO_EDGE
+    };
+
+    const Ecstasy::OpenGL::Texture::Parameters idParams
+    {
+        .minFilter = GL_NEAREST,
+        .magFilter = GL_NEAREST,
+        .wrapS = GL_CLAMP_TO_EDGE,
+        .wrapT = GL_CLAMP_TO_EDGE
+    };
+
+    framebuffer.createColorAttachment("color", GL_RGBA8, params, bindless);
+    framebuffer.createDepthAttachment("depth", GL_DEPTH_COMPONENT32F, params, bindless);
+    framebuffer.createColorAttachment("id", GL_R32UI, idParams, /*bindless*/ false);
+
+    if (!framebuffer.isComplete())
+    {
+        std::cerr << "[main]: Failed to create framebuffer.\n";
+        return false;
+    }
+
+    wnd.linkFramebuffer(&framebuffer);
+
+    framebuffer.bind();
+    return true;
+}
+
+static void createThreadingBackend()
+{
+    auto onThreadStart = [](const Ecstasy::Core::Threading::WorkerInfo& info)
+        {
+            std::string threadName;
+
+            switch (info.type)
+            {
+            case Ecstasy::Core::Threading::CoreType::Unknown:
+                threadName = std::format("Worker_{}", info.globalIndex);
+                break;
+            case Ecstasy::Core::Threading::CoreType::Performance:
+                threadName = std::format("Worker_{}_P{}", info.globalIndex, info.typeIndex);
+                break;
+            case Ecstasy::Core::Threading::CoreType::Efficiency:
+                threadName = std::format("Worker_{}_E{}", info.globalIndex, info.typeIndex);
+                break;
+            }
+
+            tracy::SetThreadName(threadName.c_str());
+        };
+
+    Ecstasy::Core::Threading::ThreadPoolConfig cfg = {
+        .numThreads = 0, // Every. Maybe should clamp to some count, idk. Who will run this will 64 cores anyway? No difference, just a lot of empty threads.
+        .coreSet = Ecstasy::Core::Threading::CoreSet::Performance,
+        .smtMode = Ecstasy::Core::Threading::SmtMode::Physical,
+        .pin = true,
+        .onThreadStart = onThreadStart,
+        .priority = Ecstasy::Core::Threading::ThreadPriority::Highest,
+        .reservedCpus = 1 // First CPU is for the main thread, which also runs tasks.
+    };
+
+    static Ecstasy::Core::Threading::ThreadPool pool(cfg);
+    static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
+
+    PS_AGONY::Threading::setThreadingBackend(&backend);
+
+    // Pin main thread to the reserved CPU.
+    if (const auto reserved = pool.getReservedCpus(); !reserved.empty())
+    {
+        if (!Ecstasy::Core::Threading::pinCurrentThreadToCpu(reserved[0]))
+            std::cerr << "Failed to pin main thread to reserved CPU.\n";
+    }
+
+    // Set main thread priority.
+    if (!Ecstasy::Core::Threading::setThreadPriority(Ecstasy::Core::Threading::ThreadPriority::Highest))
+        std::cerr << "Failed to set main thread priority.\n";
+
+    pool.printTopology();
+}
+
 static int gameFunc()
 {
     // Window.
@@ -570,94 +664,10 @@ static int gameFunc()
 
     // Create framebuffer.
     Ecstasy::OpenGL::FrameBuffer framebuffer;
-    {
-        TRACY_SCOPE_N("Create framebuffer");
-
-        framebuffer.create(wnd.getWidth(), wnd.getHeight());
-
-        const bool bindless = Ecstasy::OpenGL::Texture::getExtensions().bindless;
-
-        const  Ecstasy::OpenGL::Texture::Parameters params
-        {
-            .minFilter = GL_NEAREST,
-            .magFilter = GL_NEAREST,
-            .wrapS = GL_CLAMP_TO_EDGE,
-            .wrapT = GL_CLAMP_TO_EDGE
-        };
-
-        const Ecstasy::OpenGL::Texture::Parameters idParams
-        {
-            .minFilter = GL_NEAREST,
-            .magFilter = GL_NEAREST,
-            .wrapS = GL_CLAMP_TO_EDGE,
-            .wrapT = GL_CLAMP_TO_EDGE
-        };
-
-        framebuffer.createColorAttachment("color", GL_RGBA8, params, bindless);
-        framebuffer.createDepthAttachment("depth", GL_DEPTH_COMPONENT32F, params, bindless);
-        framebuffer.createColorAttachment("id", GL_R32UI, idParams, /*bindless*/ false);
-
-        if (!framebuffer.isComplete())
-        {
-            std::cerr << "[main]: Failed to create framebuffer.\n";
-            return 1;
-        }
-
-        wnd.linkFramebuffer(&framebuffer);
-
-        framebuffer.bind();
-    }
+    if (!createFramebuffer(wnd, framebuffer)) return 1;
 
     // Setup threading backend.
-    {
-        auto onThreadStart = [](const Ecstasy::Core::Threading::WorkerInfo& info)
-            {
-                std::string threadName;
-
-                switch (info.type)
-                {
-                case Ecstasy::Core::Threading::CoreType::Unknown:
-                    threadName = std::format("Worker_{}", info.globalIndex);
-                    break;
-                case Ecstasy::Core::Threading::CoreType::Performance:
-                    threadName = std::format("Worker_{}_P{}", info.globalIndex, info.typeIndex);
-                    break;
-                case Ecstasy::Core::Threading::CoreType::Efficiency:
-                    threadName = std::format("Worker_{}_E{}", info.globalIndex, info.typeIndex);
-                    break;
-                }
-
-                tracy::SetThreadName(threadName.c_str());
-            };
-
-        Ecstasy::Core::Threading::ThreadPoolConfig cfg = {
-            .numThreads = 0, // Every. Maybe should clamp to some count, idk. Who will run this will 64 cores anyway? No difference, just a lot of empty threads.
-            .coreSet = Ecstasy::Core::Threading::CoreSet::Performance,
-            .smtMode = Ecstasy::Core::Threading::SmtMode::Physical,
-            .pin = true,
-            .onThreadStart = onThreadStart,
-            .priority = Ecstasy::Core::Threading::ThreadPriority::Highest,
-            .reservedCpus = 1 // First CPU is for the main thread, which also runs tasks.
-        };
-
-        static Ecstasy::Core::Threading::ThreadPool pool(cfg);
-        static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
-
-        PS_AGONY::Threading::setThreadingBackend(&backend);
-
-        // Pin main thread to the reserved CPU.
-        if (const auto reserved = pool.getReservedCpus(); !reserved.empty())
-        {
-            if (!Ecstasy::Core::Threading::pinCurrentThreadToCpu(reserved[0]))
-                std::cerr << "Failed to pin main thread to reserved CPU.\n";
-        }
-
-        // Set main thread priority.
-        if (!Ecstasy::Core::Threading::setThreadPriority(Ecstasy::Core::Threading::ThreadPriority::Highest))
-            std::cerr << "Failed to set main thread priority.\n";
-
-        pool.printTopology();
-    }
+    createThreadingBackend();
 
     // Simulation.
     PS_AGONY::Simulation simulation{};
@@ -888,9 +898,5 @@ static int gameFunc()
 
 int main()
 {
-    int result = 0;
-
-    result = gameFunc();
-
-    return result;
+    return gameFunc();
 }
