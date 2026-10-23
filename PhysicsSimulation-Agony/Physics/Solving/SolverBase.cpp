@@ -24,44 +24,45 @@ namespace PS_AGONY
 			return;
 		}
 
-		auto& backend = Threading::getThreadingBackend();
+		auto& threadingBackend = Threading::getThreadingBackend();
 
-		// Worker data.
-		workerResources.workerData.resize(workerCount);
-		for (auto& w : workerResources.workerData)
+		// workerCount is the requested participant count (pool + main). Clamp to what the pool can serve.
+		const size_t poolWorkers = threadingBackend.getThreadCount();
+		const size_t launchCount = workerCount > 1 ? std::min(poolWorkers, workerCount - 1) : 0;
+		const size_t participants = launchCount + 1;
+
+		// Never shrink. Reset only active slots (slot 0 included).
+		if (workerResources.workerData.size() < participants)
 		{
-			w.isDestroyed.store(false, std::memory_order_release);
+			workerResources.workerData.resize(participants);
+		}
+		for (size_t i = 0; i < participants; i++)
+		{
+			workerResources.workerData[i].isDestroyed.store(false, std::memory_order_release);
 		}
 
 		workerResources.currentWaveTicket.store(0, std::memory_order_release);
-		workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
+		workerResources.workNotDone.store(static_cast<uint32_t>(participants), std::memory_order_release);
 
 		auto workerFunc = [&](size_t workerIndex)
 			{
-				auto& wData = workerResources.workerData[workerIndex];
-
 				uint32_t localTicket = 0;
-				while (true)
+				while (localTicket < totalTicks)
 				{
-					// All waves x all iterations done -> stop.
-					if (localTicket >= totalTicks) break;
-
 					const size_t waveIndex = localTicket % waveCount;
 
 					taskFunc(waveIndex, workerIndex, localTicket);
 
-					// Decrease atomic counter; last one to finish advances the wave and wakes everyone.
 					const uint32_t remaining = workerResources.workNotDone.fetch_sub(1, std::memory_order_acq_rel) - 1;
 					if (remaining == 0)
 					{
-						workerResources.workNotDone.store(static_cast<uint32_t>(workerCount), std::memory_order_release);
+						workerResources.workNotDone.store(static_cast<uint32_t>(participants), std::memory_order_release);
 						workerResources.currentWaveTicket.fetch_add(1, std::memory_order_release);
 						workerResources.currentWaveTicket.notify_all();
 						localTicket++;
 					}
 					else
 					{
-						// Wait for new wave.
 						for (int i = 0; i < 2'000; i++)
 						{
 							ECSTASY_SPIN_PAUSE();
@@ -76,32 +77,38 @@ namespace PS_AGONY
 
 						localTicket = workerResources.currentWaveTicket.load(std::memory_order_acquire);
 					}
-
-					// Loop naturally wraps back to wave 0 via (localTicket % waveCount) until totalTicks is hit.
 				}
 
-				wData.isDestroyed.store(true, std::memory_order_release);
-				wData.isDestroyed.notify_one();
+				// Main (slot 0) never signals itself.
+				if (workerIndex != 0)
+				{
+					auto& wData = workerResources.workerData[workerIndex];
+					wData.isDestroyed.store(true, std::memory_order_release);
+					wData.isDestroyed.notify_one();
+				}
 			};
 
-		std::vector<uint32_t> threadIndices(workerCount - 1);
-		for (uint32_t i = 0; i < workerCount - 1; i++)
+		if (launchCount > 0)
 		{
-			threadIndices[i] = i;
+			std::vector<uint32_t> threadIndices(launchCount);
+			for (uint32_t i = 0; i < launchCount; i++)
+			{
+				threadIndices[i] = i;
+			}
+
+			threadingBackend.launch(
+				launchCount,
+				[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i + 1); },
+				&workerFunc,
+				threadIndices
+			);
 		}
 
-		backend.launch(
-			workerCount - 1, // The calling thread is worker 0.
-			[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i + 1); },
-			&workerFunc,
-			threadIndices
-		);
 		workerFunc(0);
 
-		// Wait for all workers to finish every iteration and terminate.
 		{
 			TRACY_SCOPE_NC("Wait for workers to finish", PS_AGONY::Profiling::Color::Brown);
-			for (size_t i = 1; i < workerResources.workerData.size(); i++)
+			for (size_t i = 1; i < participants; i++)
 			{
 				workerResources.workerData[i].isDestroyed.wait(false, std::memory_order_acquire);
 			}

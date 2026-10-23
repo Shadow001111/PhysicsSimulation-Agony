@@ -16,12 +16,22 @@ namespace Ecstasy::Core::Threading
 {
     class ThreadPool;  // forward declaration
 
+    // Passed to onThreadStart. Indices are unique among this pool's workers.
+    struct WorkerInfo
+    {
+        size_t globalIndex = 0;                 // Worker index in the pool.
+        CoreType type = CoreType::Unknown;
+        size_t typeIndex = 0;                   // Index among this pool's workers of the same type, from 0.
+        const CpuInfo* cpu = nullptr;           // nullptr if unpinned.
+    };
+
     class alignas(64) WorkerThread
     {
     public:
         ChaseLevQueue tasks{ 1024 * 64 };
         std::thread thread;
         size_t threadId;
+        WorkerInfo info;
         std::atomic<bool> stop{ false };
         alignas(64) std::atomic<uint32_t> wakeVersion{ 0 };
 
@@ -130,7 +140,14 @@ namespace Ecstasy::Core::Threading
         SmtMode smtMode = SmtMode::Logical;
         bool pin = true;                            // Pin worker i to one CPU of the ordered list.
         std::vector<uint32_t> affinity;             // Explicit CPU ids (group * 64 + index). Overrides coreSet/smtMode.
-        std::function<void(size_t)> onThreadStart;  // Runs on each worker (arg: worker index) after pin/priority, before its loop.
+        std::function<void(const WorkerInfo&)> onThreadStart;  // Runs on each worker after pin/priority, before its loop.
+        ThreadPriority priority = ThreadPriority::Normal;
+        uint32_t spinCount = 5000;                  // Idle spins before a worker sleeps.
+        size_t reservedCpus = 0;                    // Taken from the front of the ordered CPU list, not given to workers.
+        // With SMT, the sibling of a reserved CPU may still run a worker and
+        // shares execution units with main. Set reserveWholeCore to avoid that.
+        // At least one CPU always stays with the workers.
+        bool reserveWholeCore = false;              // Also exclude SMT siblings (same coreId) of reserved CPUs from workers.
     };
 
     // TODO: Must use multiproducer queue, because enqueue can come from different threads.
@@ -149,7 +166,10 @@ namespace Ecstasy::Core::Threading
 
         // Read-only after construction. pinnedCpus[i] = CPU of worker i (empty = unpinned).
         alignas(64) std::vector<CpuInfo> pinnedCpus;
-        std::function<void(size_t)> onThreadStart;
+        std::vector<CpuInfo> reservedCpus;  // Read-only after construction. For the main thread; no worker uses these.
+        std::function<void(const WorkerInfo&)> onThreadStart;
+        ThreadPriority priority;
+        uint32_t spinCount;
 
         void onTaskClaimed();
         void onTaskComplete();
@@ -195,6 +215,9 @@ namespace Ecstasy::Core::Threading
         size_t getPendingTasks() const noexcept { return unfinishedTaskCount.load(std::memory_order_relaxed); }
 
         std::span<const CpuInfo> getPinnedCpus() const noexcept { return pinnedCpus; }
+        std::span<const CpuInfo> getReservedCpus() const noexcept { return reservedCpus; }
+        // Valid after construction (written before the worker threads start).
+        const WorkerInfo& getWorkerInfo(size_t i) const noexcept { return workers[i].info; }
         void printTopology() const { printCpuTopology(pinnedCpus); }
     };
 

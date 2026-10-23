@@ -213,12 +213,13 @@ namespace PS_AGONY
 		TRACY_SCOPE_N("Query pairs (Threaded)");
 
 		auto& threadingBackend = Threading::getThreadingBackend();
-		const size_t workerCount = threadingBackend.getThreadCount() > 0 ? threadingBackend.getThreadCount() - 1 : 0;
-		if (workerCount == 0)
+		const size_t poolWorkers = threadingBackend.getThreadCount();
+		if (poolWorkers == 0)
 		{
 			queryPairs();
 			return;
 		}
+		const size_t participants = poolWorkers + 1; // Pool workers + main thread.
 
 		using TK = QueryPairsThreadedResources::TaskKind;
 		auto& tr = queryPairsThreadedResources;
@@ -243,7 +244,7 @@ namespace PS_AGONY
 			if (hasStatic)
 			{
 				BPI::expandCrossRootPairsOrdered(
-					dyn.nodes, stat.nodes, workerCount * CROSS_TASKS_PER_WORKER,
+					dyn.nodes, stat.nodes, participants * CROSS_TASKS_PER_WORKER,
 					r.crossNodePairs, tr.crossScratch);
 			}
 		}
@@ -253,7 +254,7 @@ namespace PS_AGONY
 		auto addRanges = [&](TK kind, size_t n, bool reverse)
 			{
 				if (n == 0) return;
-				const size_t divisor = workerCount * TASKS_PER_WORKER;
+				const size_t divisor = participants * TASKS_PER_WORKER;
 				const size_t chunk = std::max<size_t>(1, (n + divisor - 1) / divisor);
 				const size_t first = tr.tasks.size();
 				for (size_t b = 0; b < n; b += chunk)
@@ -273,76 +274,84 @@ namespace PS_AGONY
 
 		tr.taskOutputs.resize(taskCount);
 
-		const size_t launchCount = std::min<size_t>(workerCount, taskCount);
-		if (tr.workerData.size() < launchCount) tr.workerData.resize(launchCount); // Never shrink: keeps buffers.
+		// Main thread always works too (slot 0), so the pool needs at most taskCount - 1 workers.
+		const size_t launchCount = std::min<size_t>(poolWorkers, taskCount - 1);
+		if (tr.workerData.size() < launchCount + 1) tr.workerData.resize(launchCount + 1); // Never shrink: keeps buffers.
 
-		alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 0 };
+		alignas(64) std::atomic<uint32_t> globalWorkerIndex{ 1 }; // Slot 0 is reserved for main.
 		alignas(64) std::atomic<uint32_t> nextTask{ 0 };
+
+		auto runWorker = [&](uint32_t workerIndex)
+			{
+				TRACY_SCOPE_N("Query pairs worker thread");
+
+				auto& wData = tr.workerData[workerIndex];
+
+				LeafTester tester(dyn, stat, colliderBodyIndex, wData.collisionData);
+
+				for (;;)
+				{
+					const uint32_t t = nextTask.fetch_add(1, std::memory_order_relaxed);
+					if (t >= taskCount) break;
+
+					const auto& task = tr.tasks[t];
+					const uint32_t outBegin = static_cast<uint32_t>(wData.collisionData.size());
+
+					switch (task.kind)
+					{
+					case TK::SelfLeaves:
+						for (uint32_t i = task.begin; i < task.end; i++)
+							tester.self(r.selfLeaves[i]);
+						break;
+
+					case TK::SelfLeafPairs:
+						for (uint32_t i = task.begin; i < task.end; i++)
+							tester.selfPair(r.selfLeafPairs[i]);
+						break;
+
+					case TK::SelfNodes:
+						// Descending: matches the single-threaded stack pop order.
+						for (uint32_t i = task.end; i-- > task.begin; )
+						{
+							wData.nodePairsToTraverse.clear();
+							wData.selfLeafPairs.clear();
+							wData.nodePairsToTraverse.push_back(r.selfNodePairs[i]);
+							BPI::traverseNodePairStack(dyn.nodes, dyn.nodes, wData.nodePairsToTraverse, wData.selfLeafPairs);
+							for (const BvhNodePair& p : wData.selfLeafPairs) tester.selfPair(p);
+						}
+						break;
+
+					case TK::CrossNodes:
+						for (uint32_t i = task.begin; i < task.end; i++)
+						{
+							wData.nodePairsToTraverse.clear();
+							wData.crossLeafPairs.clear();
+							wData.nodePairsToTraverse.push_back(r.crossNodePairs[i]);
+							BPI::traverseNodePairStack(dyn.nodes, stat.nodes, wData.nodePairsToTraverse, wData.crossLeafPairs);
+							for (const BvhNodePair& p : wData.crossLeafPairs) tester.crossPair(p);
+						}
+						break;
+					}
+
+					tester.flush(); // Task output must be contiguous and complete in collisionData.
+					tr.taskOutputs[t] = { workerIndex, outBegin, static_cast<uint32_t>(wData.collisionData.size()) };
+				}
+			};
+
+		auto poolFunc = [&]()
+			{
+				const uint32_t workerIndex = globalWorkerIndex.fetch_add(1, std::memory_order_relaxed);
+				runWorker(workerIndex);
+
+				auto& wData = tr.workerData[workerIndex];
+				wData.isDone.store(true, std::memory_order_release);
+				wData.isDone.notify_one();
+			};
+
 		{
 			TRACY_SCOPE_N("Launch workers");
 
-			auto workerFunc = [&]()
-				{
-					TRACY_SCOPE_N("Query pairs worker thread");
-
-					const auto workerIndex = globalWorkerIndex.fetch_add(1, std::memory_order_relaxed);
-					auto& wData = tr.workerData[workerIndex];
-
-					LeafTester tester(dyn, stat, colliderBodyIndex, wData.collisionData);
-
-					for (;;)
-					{
-						const uint32_t t = nextTask.fetch_add(1, std::memory_order_relaxed);
-						if (t >= taskCount) break;
-
-						const auto& task = tr.tasks[t];
-						const uint32_t outBegin = static_cast<uint32_t>(wData.collisionData.size());
-
-						switch (task.kind)
-						{
-						case TK::SelfLeaves:
-							for (uint32_t i = task.begin; i < task.end; i++)
-								tester.self(r.selfLeaves[i]);
-							break;
-
-						case TK::SelfLeafPairs:
-							for (uint32_t i = task.begin; i < task.end; i++)
-								tester.selfPair(r.selfLeafPairs[i]);
-							break;
-
-						case TK::SelfNodes:
-							// Descending: matches the single-threaded stack pop order.
-							for (uint32_t i = task.end; i-- > task.begin; )
-							{
-								wData.nodePairsToTraverse.clear();
-								wData.selfLeafPairs.clear();
-								wData.nodePairsToTraverse.push_back(r.selfNodePairs[i]);
-								BPI::traverseNodePairStack(dyn.nodes, dyn.nodes, wData.nodePairsToTraverse, wData.selfLeafPairs);
-								for (const BvhNodePair& p : wData.selfLeafPairs) tester.selfPair(p);
-							}
-							break;
-
-						case TK::CrossNodes:
-							for (uint32_t i = task.begin; i < task.end; i++)
-							{
-								wData.nodePairsToTraverse.clear();
-								wData.crossLeafPairs.clear();
-								wData.nodePairsToTraverse.push_back(r.crossNodePairs[i]);
-								BPI::traverseNodePairStack(dyn.nodes, stat.nodes, wData.nodePairsToTraverse, wData.crossLeafPairs);
-								for (const BvhNodePair& p : wData.crossLeafPairs) tester.crossPair(p);
-							}
-							break;
-						}
-
-						tester.flush(); // Task output must be contiguous and complete in collisionData.
-						tr.taskOutputs[t] = { workerIndex, outBegin, static_cast<uint32_t>(wData.collisionData.size()) };
-					}
-
-					wData.isDone.store(true, std::memory_order_release);
-					wData.isDone.notify_one();
-				};
-
-			for (size_t i = 0; i < launchCount; i++)
+			for (size_t i = 0; i <= launchCount; i++) // Includes main slot 0.
 			{
 				auto& wData = tr.workerData[i];
 				wData.nodePairsToTraverse.clear();
@@ -352,29 +361,33 @@ namespace PS_AGONY
 				wData.isDone = false;
 			}
 
-			std::vector<uint32_t> threadIndices(launchCount);
-			for (uint32_t i = 0; i < launchCount; i++)
+			if (launchCount > 0)
 			{
-				threadIndices[i] = i;
-			}
+				std::vector<uint32_t> threadIndices(launchCount);
+				for (uint32_t i = 0; i < launchCount; i++)
+				{
+					threadIndices[i] = i;
+				}
 
-			threadingBackend.launch(
-				launchCount,
-				[](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(); },
-				&workerFunc,
-				threadIndices
-			);
+				threadingBackend.launch(
+					launchCount,
+					[](void* ctx, size_t) { (*static_cast<decltype(poolFunc)*>(ctx))(); },
+					&poolFunc,
+					threadIndices
+				);
+			}
 		}
 
-		// Wait for all workers, then concatenate task outputs in canonical task order.
+		runWorker(0); // Main thread participates.
+
+		// Wait for pool workers only (slots 1..launchCount), then concatenate in canonical task order.
 		{
 			TRACY_SCOPE_N("Wait for workers to finish and combine data");
 
-			for (size_t i = 0; i < launchCount; i++)
+			for (size_t i = 1; i <= launchCount; i++)
 			{
 				tr.workerData[i].isDone.wait(false, std::memory_order_acquire);
 			}
-
 		}
 		{
 			TRACY_SCOPE_N("Combine");

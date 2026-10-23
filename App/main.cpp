@@ -608,33 +608,53 @@ static int gameFunc()
         framebuffer.bind();
     }
 
-    // Text renderer.
-    //Ecstasy::Graphics::TextRenderer::init();
-    //Ecstasy::Graphics::TextRenderer::loadFont("RusEngMinecraft", 8);
-    //Ecstasy::Graphics::TextRenderer::setCurrentFont("RusEngMinecraft");
-    //Ecstasy::Graphics::TextRenderer::setGlyphInstanceBatchSize(1024);
-
     // Setup threading backend.
     {
-        auto onThreadStart = [](size_t workerIndex)
-        {
-            // TODO: Make it work. Fix Tracy includes.
-            std::string threadName = std::format("Worker_{}", workerIndex);
-            tracy::SetThreadName(threadName.c_str());
-        };
+        auto onThreadStart = [](const Ecstasy::Core::Threading::WorkerInfo& info)
+            {
+                std::string threadName;
+
+                switch (info.type)
+                {
+                case Ecstasy::Core::Threading::CoreType::Unknown:
+                    threadName = std::format("Worker_{}", info.globalIndex);
+                    break;
+                case Ecstasy::Core::Threading::CoreType::Performance:
+                    threadName = std::format("Worker_{}_P{}", info.globalIndex, info.typeIndex);
+                    break;
+                case Ecstasy::Core::Threading::CoreType::Efficiency:
+                    threadName = std::format("Worker_{}_E{}", info.globalIndex, info.typeIndex);
+                    break;
+                }
+
+                tracy::SetThreadName(threadName.c_str());
+            };
 
         Ecstasy::Core::Threading::ThreadPoolConfig cfg = {
             .numThreads = 0, // Every. Maybe should clamp to some count, idk. Who will run this will 64 cores anyway? No difference, just a lot of empty threads.
             .coreSet = Ecstasy::Core::Threading::CoreSet::Performance,
             .smtMode = Ecstasy::Core::Threading::SmtMode::Physical,
             .pin = true,
-            .onThreadStart = onThreadStart
+            .onThreadStart = onThreadStart,
+            .priority = Ecstasy::Core::Threading::ThreadPriority::Highest,
+            .reservedCpus = 1 // First CPU is for the main thread, which also runs tasks.
         };
 
         static Ecstasy::Core::Threading::ThreadPool pool(cfg);
         static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
 
         PS_AGONY::Threading::setThreadingBackend(&backend);
+
+        // Pin main thread to the reserved CPU.
+        if (const auto reserved = pool.getReservedCpus(); !reserved.empty())
+        {
+            if (!Ecstasy::Core::Threading::pinCurrentThreadToCpu(reserved[0]))
+                std::cerr << "Failed to pin main thread to reserved CPU.\n";
+        }
+
+        // Set main thread priority.
+        if (!Ecstasy::Core::Threading::setThreadPriority(Ecstasy::Core::Threading::ThreadPriority::Highest))
+            std::cerr << "Failed to set main thread priority.\n";
 
         pool.printTopology();
     }

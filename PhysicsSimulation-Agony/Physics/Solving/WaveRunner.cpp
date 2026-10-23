@@ -59,15 +59,25 @@ namespace PS_AGONY
 					}
 				}
 
-				workerData[workerIndex].isDestroyed.store(true, std::memory_order_release);
-				workerData[workerIndex].isDestroyed.notify_one();
+				// Main (slot 0) never signals itself.
+				if (workerIndex != 0)
+				{
+					workerData[workerIndex].isDestroyed.store(true, std::memory_order_release);
+					workerData[workerIndex].isDestroyed.notify_one();
+				}
 			};
 
-		threadingBackend.launch(
-			workerCount,
-			[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i); },
-			&workerFunc
-		);
+		// workerCount = participants (pool + main). Main takes slot 0.
+		const size_t launchCount = workerCount - 1;
+		if (launchCount > 0)
+		{
+			// Backend index i is 0-based -> pool slots 1..launchCount.
+			threadingBackend.launch(
+				launchCount,
+				[](void* ctx, size_t i) { (*static_cast<decltype(workerFunc)*>(ctx))(i + 1); },
+				&workerFunc
+			);
+		}
 		workerFunc(0);
 
 		{

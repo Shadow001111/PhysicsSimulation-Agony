@@ -1,5 +1,4 @@
 #pragma once
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -18,6 +17,25 @@ namespace Ecstasy::Core::Threading
     {
         Logical,
         Physical
+    };
+
+    // Type of the core a worker runs on. Unknown = unpinned worker.
+    enum class CoreType : uint8_t
+    {
+        Performance, // Also used for every core on non-hybrid CPUs.
+        Efficiency,
+        Unknown
+    };
+
+    enum class ThreadPriority
+    {
+        Idle,
+        Lowest,
+        BelowNormal,
+        Normal,
+        AboveNormal,
+        Highest,
+        TimeCritical
     };
 
     struct CpuInfo
@@ -49,7 +67,7 @@ namespace Ecstasy::Core::Threading
     std::vector<CpuInfo> resolveCpus(std::span<const uint32_t> ids, size_t* invalid = nullptr);
 
     bool pinCurrentThreadToCpu(const CpuInfo& cpu);
-    bool setThreadPriorityToHighest();
+    bool setThreadPriority(ThreadPriority priority);
 
     // Console overview of the topology. 'pinned[i]' = CPU of worker i (optional).
     void printCpuTopology(std::span<const CpuInfo> pinned = {});

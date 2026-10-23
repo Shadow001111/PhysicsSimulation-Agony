@@ -426,25 +426,33 @@ namespace PS_AGONY
 
     void NarrowPhaseCollisionDetector::findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount)
     {
-        TRACY_SCOPE_N("Multi-threaded narrow phase");
+        if (colliderPairs.empty()) [[unlikely]] return;
 
         auto& threadingBackend = Threading::getThreadingBackend();
-        size_t workerCount = std::max<size_t>(std::min<size_t>(maxWorkerCount, threadingBackend.getThreadCount()), 1); // At least the calling thread.
+        const size_t poolCount = threadingBackend.getThreadCount(); // Main thread not included.
+        const size_t participants = std::max<size_t>(std::min<size_t>(maxWorkerCount, poolCount + 1), 1); // Includes main.
+
+        if (participants <= 1)
+        {
+            findCollisionsSingleThreaded(colliderPairs);
+            return;
+        }
+
+        TRACY_SCOPE_N("Multi-threaded narrow phase");
 
         size_t chunkCount, chunkSize;
         if constexpr (DETERMINISTIC)
         {
-            // Fixed chunk size: partitioning (and thus output order) is independent of thread count.
             chunkSize = DETERMINISTIC_CHUNK_SIZE;
             chunkCount = (colliderPairs.size() + chunkSize - 1) / chunkSize;
         }
         else
         {
             std::tie(chunkCount, chunkSize) = Threading::getChunkCountAndSize(
-                threadingBackend.getThreadCount(), colliderPairs.size(), LOAD_BALANCING_FACTOR);
+                participants, colliderPairs.size(), LOAD_BALANCING_FACTOR);
         }
 
-        if (chunks.size() < chunkCount) chunks.resize(chunkCount); // Grow-only: keeps chunk buffers alive.
+        if (chunks.size() < chunkCount) chunks.resize(chunkCount);
 
         for (size_t i = 0; i < chunkCount; i++)
         {
@@ -454,11 +462,12 @@ namespace PS_AGONY
             cd.finished = false;
         }
 
+        // Main takes chunks too, so never launch more workers than chunkCount - 1.
+        const size_t launchCount = std::min<size_t>(participants - 1, chunkCount - 1);
+
         alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> workerChunkIndex{ 0 };
         alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
 
-        // Only the calling thread merges, strictly in chunk order. It merges whatever is
-        // already finished between its own chunks, so most copying overlaps with the workers.
         size_t nextToMerge = 0;
         auto mergeReady = [&](bool blocking)
             {
@@ -494,24 +503,30 @@ namespace PS_AGONY
                         cd.finished.notify_one();
                     }
                 }
-                destroyedWorkerCount.fetch_add(1, std::memory_order_release);
-                destroyedWorkerCount.notify_one();
+
+                // Only pool workers signal; main never signals itself.
+                if (!isMainThread)
+                {
+                    destroyedWorkerCount.fetch_add(1, std::memory_order_release);
+                    destroyedWorkerCount.notify_one();
+                }
             };
 
-        // Thread indices.
-        std::vector<uint32_t> threadIndices(workerCount - 1);
-        for (uint32_t i = 0; i < workerCount - 1; i++)
+        if (launchCount > 0)
         {
-            threadIndices[i] = i;
-        }
+            std::vector<uint32_t> threadIndices(launchCount);
+            for (uint32_t i = 0; i < launchCount; i++)
+            {
+                threadIndices[i] = i;
+            }
 
-        // One less task submitted to the pool: the calling thread takes that slot itself.
-        threadingBackend.launch(
-            workerCount - 1,
-            [](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(false); },
-            &workerFunc,
-            threadIndices
-        );
+            threadingBackend.launch(
+                launchCount,
+                [](void* ctx, size_t) { (*static_cast<decltype(workerFunc)*>(ctx))(false); },
+                &workerFunc,
+                threadIndices
+            );
+        }
 
         {
             TRACY_SCOPE_N("Participate in work");
@@ -521,12 +536,13 @@ namespace PS_AGONY
             TRACY_SCOPE_N("Wait for workers to finish and combine data");
             mergeReady(true);
         }
+        if (launchCount > 0)
         {
             TRACY_SCOPE_N("Wait for workers to get destroyed");
             while (true)
             {
                 const auto value = destroyedWorkerCount.load(std::memory_order_acquire);
-                if (value == workerCount) break;
+                if (value == launchCount) break;
                 destroyedWorkerCount.wait(value, std::memory_order_acquire);
             }
         }
