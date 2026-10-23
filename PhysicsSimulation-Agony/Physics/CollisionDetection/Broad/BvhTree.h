@@ -14,7 +14,7 @@
 #include <span>
 #include <vector>
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	enum class BvhTreeTypeFlag : uint8_t
 	{

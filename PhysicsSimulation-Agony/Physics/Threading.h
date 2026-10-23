@@ -2,7 +2,7 @@
 #include <utility>
 #include <span>
 
-namespace PS_AGONY::Threading
+namespace PS_AGONY2D::Threading
 {
 	using TaskFn = void(*)(void* context, size_t workerIndex);
 

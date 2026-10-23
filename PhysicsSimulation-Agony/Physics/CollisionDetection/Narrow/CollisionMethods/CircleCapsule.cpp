@@ -8,7 +8,7 @@
 
 #include <bit>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 

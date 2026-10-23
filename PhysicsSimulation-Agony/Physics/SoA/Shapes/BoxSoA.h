@@ -8,7 +8,7 @@
 	F(halfWidth, Real) \
 	F(halfHeight, Real)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	struct BoxSoA
 	{

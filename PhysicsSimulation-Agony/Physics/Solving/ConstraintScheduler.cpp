@@ -4,11 +4,11 @@
 
 #include <algorithm>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void ConstraintScheduler::solve(const ConstraintSystemArray& systems, Real deltaTime, BodySoA& bodies)
 	{
-		TRACY_SCOPE_NC("Solve constraints", PS_AGONY::Profiling::Color::OliveDrab);
+		TRACY_SCOPE_NC("Solve constraints", PS_AGONY2D::Profiling::Color::OliveDrab);
 
 		active.clear();
 		ticks.clear();

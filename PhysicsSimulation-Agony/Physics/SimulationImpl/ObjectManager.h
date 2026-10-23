@@ -10,7 +10,7 @@
 #include <span>
 #include <vector>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	struct BodyCreateParams
 	{

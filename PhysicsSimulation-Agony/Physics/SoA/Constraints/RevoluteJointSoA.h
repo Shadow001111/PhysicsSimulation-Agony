@@ -11,7 +11,7 @@
     F(stiffness, Real) \
     F(damping, Real)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // Revolute joint: pins localAnchorA (on bodyA) to localAnchorB (on bodyB) together,
     // leaving rotation free.

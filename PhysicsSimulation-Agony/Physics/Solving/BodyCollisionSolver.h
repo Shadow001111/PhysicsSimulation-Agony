@@ -9,7 +9,7 @@
 #include <array>
 #include <span>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	class BodyCollisionSolver : public SolverBase
 	{

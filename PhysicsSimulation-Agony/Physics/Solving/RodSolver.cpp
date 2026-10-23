@@ -3,11 +3,11 @@
 #include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void RodSolver::computeConstraintData(Real deltaTime, std::span<const size_t> rodIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute rod constraint data", PS_AGONY::Profiling::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute rod constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
 		// Baumgarte stabilization factor for the rigid distance constraint.
 		// Note: placeholder value - not yet tuned/profiled for stability vs. stiffness at
@@ -113,7 +113,7 @@ namespace PS_AGONY
 
 	void RodSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve rod velocity constraints", PS_AGONY::Profiling::Color::Violet);
+		TRACY_SCOPE_NC("Solve rod velocity constraints", PS_AGONY2D::Profiling::Color::Violet);
 
 		std::span<const RodConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 

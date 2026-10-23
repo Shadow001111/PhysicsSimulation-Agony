@@ -6,14 +6,14 @@
 
 #include "Physics/FastCosSin.h"
 
-namespace PS_AGONY::Integrator
+namespace PS_AGONY2D::Integrator
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
     void integrateVelocities_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
-        TRACY_SCOPE_NC("Integrate velocities (semi-implicit)", PS_AGONY::Profiling::Color::Red);
+        TRACY_SCOPE_NC("Integrate velocities (semi-implicit)", PS_AGONY2D::Profiling::Color::Red);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
@@ -55,7 +55,7 @@ namespace PS_AGONY::Integrator
 
     void integrateKinematics_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
-        TRACY_SCOPE_NC("Integrate kinematics (semi-implicit)", PS_AGONY::Profiling::Color::Blue);
+        TRACY_SCOPE_NC("Integrate kinematics (semi-implicit)", PS_AGONY2D::Profiling::Color::Blue);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
@@ -100,7 +100,7 @@ namespace PS_AGONY::Integrator
 
     void integratePhase1_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
-        TRACY_SCOPE_NC("Integrate phase1 (velocity-verlet)", PS_AGONY::Profiling::Color::Red);
+        TRACY_SCOPE_NC("Integrate phase1 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
@@ -143,7 +143,7 @@ namespace PS_AGONY::Integrator
 
     void integratePhase2_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
     {
-        TRACY_SCOPE_NC("Integrate phase2 (velocity-verlet)", PS_AGONY::Profiling::Color::Red);
+        TRACY_SCOPE_NC("Integrate phase2 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
@@ -220,7 +220,7 @@ namespace PS_AGONY::Integrator
             return;
         }
 
-        TRACY_SCOPE_NC("Damp angular velocities", PS_AGONY::Profiling::Color::Red);
+        TRACY_SCOPE_NC("Damp angular velocities", PS_AGONY2D::Profiling::Color::Red);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT angularVelocityPtr = bodies.angularVelocity.data();
@@ -264,7 +264,7 @@ namespace PS_AGONY::Integrator
 
     void computeRotationCosSin(BodySoA& bodies)
     {
-        TRACY_SCOPE_NC("Compute rotation cos/sin", PS_AGONY::Profiling::Color::Teal);
+        TRACY_SCOPE_NC("Compute rotation cos/sin", PS_AGONY2D::Profiling::Color::Teal);
 
         FastCosSin::order5Array(
             bodies.rotation.data(),

@@ -1,7 +1,7 @@
 #pragma once
 #include "Types/Types.h"
 
-namespace PS_AGONY::Constants
+namespace PS_AGONY2D::Constants
 {
 	constexpr double FULL_PI = 3.14159265358979323846;
 

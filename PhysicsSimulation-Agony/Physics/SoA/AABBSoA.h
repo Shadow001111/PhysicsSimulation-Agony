@@ -2,7 +2,7 @@
 #include "../Types.h"
 #include "../ContainerUtilities.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	struct AABBSoA
 	{
@@ -16,10 +16,10 @@ namespace PS_AGONY
 		size_t getMemoryUsage() const noexcept
 		{
 			return
-				PS_AGONY::getVectorMemoryUsage(minX) +
-				PS_AGONY::getVectorMemoryUsage(minY) +
-				PS_AGONY::getVectorMemoryUsage(maxX) +
-				PS_AGONY::getVectorMemoryUsage(maxY);
+				PS_AGONY2D::getVectorMemoryUsage(minX) +
+				PS_AGONY2D::getVectorMemoryUsage(minY) +
+				PS_AGONY2D::getVectorMemoryUsage(maxX) +
+				PS_AGONY2D::getVectorMemoryUsage(maxY);
 		}
 	};
 

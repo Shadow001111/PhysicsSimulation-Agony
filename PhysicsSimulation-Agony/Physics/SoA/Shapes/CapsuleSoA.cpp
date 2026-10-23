@@ -1,7 +1,7 @@
 #include "CapsuleSoA.h"
 #include <utility>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void CapsuleSoA::append(
 		ColliderIndex colliderIndex,

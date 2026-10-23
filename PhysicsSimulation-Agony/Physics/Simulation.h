@@ -24,7 +24,7 @@
 #include <optional>
 #include <array>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	class Simulation
 	{

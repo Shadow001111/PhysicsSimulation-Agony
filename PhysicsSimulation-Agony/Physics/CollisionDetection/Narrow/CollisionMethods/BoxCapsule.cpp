@@ -4,7 +4,7 @@
 #include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     void NarrowPhaseCollisionDetector::collisionBoxCapsule(
         std::span<const ObjectPair> pairs,

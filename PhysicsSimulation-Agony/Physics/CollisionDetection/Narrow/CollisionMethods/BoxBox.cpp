@@ -6,7 +6,7 @@
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 

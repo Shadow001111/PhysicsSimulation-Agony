@@ -63,21 +63,21 @@ struct DebugData
     float smoothedDelta = 0.0f; // Seconds.
     float deltaTime = 0.0f; // Seconds.
 
-    PS_AGONY::Simulation::DebugData simulationDebugData;
+    PS_AGONY2D::Simulation::DebugData simulationDebugData;
 };
 
 struct ObjectCreatorState
 {
     bool isFocused = false;
-    PS_AGONY::BodyType bodyType;
-    PS_AGONY::CircleCreateParams circleParams;
-    PS_AGONY::BoxCreateParams boxParams;
-    PS_AGONY::PolygonCreateParams polygonParams;
+    PS_AGONY2D::BodyType bodyType;
+    PS_AGONY2D::CircleCreateParams circleParams;
+    PS_AGONY2D::BoxCreateParams boxParams;
+    PS_AGONY2D::PolygonCreateParams polygonParams;
 };
 
 
 static void renderGUI(
-    PS_AGONY::Simulation& simulation,
+    PS_AGONY2D::Simulation& simulation,
     PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
     PS_AGONY_RENDER::RenderOptions& renderOptions,
     const DebugData& debugData
@@ -117,13 +117,13 @@ static void renderGUI(
         float timeScale = static_cast<float>(settings.clockSettings.timeScale);
         if (ImGui::SliderFloat("Time scale", &timeScale, 0.0f, 1.0f, "%.3f"))
         {
-            settings.clockSettings.timeScale = static_cast<PS_AGONY::Real>(timeScale);
+            settings.clockSettings.timeScale = static_cast<PS_AGONY2D::Real>(timeScale);
         }
 
         float hz = static_cast<float>(1.0 / settings.clockSettings.updateInterval);
         if (ImGui::SliderFloat("Update Rate (Hz)", &hz, 10.0f, 1000.0f, "%.0f Hz"))
         {
-            settings.clockSettings.updateInterval = static_cast<PS_AGONY::Real>(1.0f / hz);
+            settings.clockSettings.updateInterval = static_cast<PS_AGONY2D::Real>(1.0f / hz);
         }
 
         int velIter = static_cast<int>(settings.collisionVelocitySolvingIterations);
@@ -140,9 +140,9 @@ static void renderGUI(
 
         ImGui::Checkbox("Collision Events", &settings.collisionEventsEnabled);
 
-        for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+        for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
         {
-            auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
+            auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
             int iters = int(system.iterations);
 
             const std::string label = std::string(system.getName()) + " Iterations";
@@ -214,11 +214,11 @@ static void renderGUI(
         size_t constraintsTotal = 0;
         size_t solversTotal = simulationData.bodyCollisionSolverMemoryUsage;
 
-        for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+        for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
         {
             constraintsTotal += simulationData.constraintDataMemoryUsage[i];
 
-            solversTotal += simulation.getConstraintSystem(PS_AGONY::ConstraintType(i)).getSolverMemoryUsage();
+            solversTotal += simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i)).getSolverMemoryUsage();
         }
 
         const size_t totalMemory =
@@ -278,9 +278,9 @@ static void renderGUI(
 
             {
                 addMemoryRow("Constraints", constraintsTotal);
-                for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+                for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
                 {
-                    const auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
+                    const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
                     const std::string label = std::string(system.getName()) + "s";
 
                     addMemoryRow(label.c_str(), simulationData.constraintDataMemoryUsage[i], true);
@@ -295,9 +295,9 @@ static void renderGUI(
             {
                 addMemoryRow("Solvers", solversTotal);
                 addMemoryRow("Body Collision Solver", simulationData.bodyCollisionSolverMemoryUsage, true);
-                for (int i = 0; i < int(PS_AGONY::ConstraintType::COUNT); i++)
+                for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
                 {
-                    const auto& system = simulation.getConstraintSystem(PS_AGONY::ConstraintType(i));
+                    const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
                     const std::string label = std::string(system.getName()) + " Solver";
 
                     addMemoryRow(label.c_str(), system.getSolverMemoryUsage(), true);
@@ -314,8 +314,8 @@ static void renderGUI(
 }
 
 static ObjectCreatorState renderObjectCreatorUI(
-    PS_AGONY::Simulation& simulation,
-    const PS_AGONY::Camera2D camera
+    PS_AGONY2D::Simulation& simulation,
+    const PS_AGONY2D::Camera2D camera
 )
 {
     ImGuiIO& io = ImGui::GetIO();
@@ -336,7 +336,7 @@ static ObjectCreatorState renderObjectCreatorUI(
     static float circleRadius = 1.0f;
     static float boxWidth = 1.0f, boxHeight = 1.0f;
 
-    static std::vector<PS_AGONY::Vec2> polyVertices = {
+    static std::vector<PS_AGONY2D::Vec2> polyVertices = {
         { -1.0f, -1.0f },
         {  1.0f, -1.0f },
         {  0.0f,  1.0f }
@@ -356,13 +356,13 @@ static ObjectCreatorState renderObjectCreatorUI(
     ImGui::Separator();
 
     auto buildBaseParams = [&]() {
-        PS_AGONY::BodyCreateParams base;
+        PS_AGONY2D::BodyCreateParams base;
         base.position = camera.screenToWorldSpace({ 0.0, 0.0 });
-        base.velocity = { static_cast<PS_AGONY::Real>(vel[0]), static_cast<PS_AGONY::Real>(vel[1]) };
-        base.rotation = static_cast<PS_AGONY::Real>(rotation);
-        base.angularVelocity = static_cast<PS_AGONY::Real>(angularVelocity);
-        base.mass = static_cast<PS_AGONY::Real>(mass);
-        base.materialIndex = static_cast<PS_AGONY::MaterialIndex>(materialIndex);
+        base.velocity = { static_cast<PS_AGONY2D::Real>(vel[0]), static_cast<PS_AGONY2D::Real>(vel[1]) };
+        base.rotation = static_cast<PS_AGONY2D::Real>(rotation);
+        base.angularVelocity = static_cast<PS_AGONY2D::Real>(angularVelocity);
+        base.mass = static_cast<PS_AGONY2D::Real>(mass);
+        base.materialIndex = static_cast<PS_AGONY2D::MaterialIndex>(materialIndex);
         return base;
         };
 
@@ -379,15 +379,15 @@ static ObjectCreatorState renderObjectCreatorUI(
         ImGui::Spacing();
         if (ImGui::Button("Spawn Circle", ImVec2(-1, 30)))
         {
-            PS_AGONY::CircleCreateParams params;
+            PS_AGONY2D::CircleCreateParams params;
             params.base = buildBaseParams();
-            params.radius = static_cast<PS_AGONY::Real>(circleRadius);
+            params.radius = static_cast<PS_AGONY2D::Real>(circleRadius);
             simulation.createCircle(params);
         }
 
-        state.bodyType = PS_AGONY::BodyType::Circle;
+        state.bodyType = PS_AGONY2D::BodyType::Circle;
         state.circleParams.base = buildBaseParams();
-        state.circleParams.radius = static_cast<PS_AGONY::Real>(circleRadius);
+        state.circleParams.radius = static_cast<PS_AGONY2D::Real>(circleRadius);
     }
     else if (selectedShape == 1)
     {
@@ -400,15 +400,15 @@ static ObjectCreatorState renderObjectCreatorUI(
         ImGui::Spacing();
         if (ImGui::Button("Spawn Box", ImVec2(-1, 30)))
         {
-            PS_AGONY::BoxCreateParams params;
+            PS_AGONY2D::BoxCreateParams params;
             params.base = buildBaseParams();
-            params.size = { static_cast<PS_AGONY::Real>(boxWidth), static_cast<PS_AGONY::Real>(boxHeight) };
+            params.size = { static_cast<PS_AGONY2D::Real>(boxWidth), static_cast<PS_AGONY2D::Real>(boxHeight) };
             simulation.createBox(params);
         }
 
-        state.bodyType = PS_AGONY::BodyType::Box;
+        state.bodyType = PS_AGONY2D::BodyType::Box;
         state.boxParams.base = buildBaseParams();
-        state.boxParams.size = { static_cast<PS_AGONY::Real>(boxWidth), static_cast<PS_AGONY::Real>(boxHeight) };
+        state.boxParams.size = { static_cast<PS_AGONY2D::Real>(boxWidth), static_cast<PS_AGONY2D::Real>(boxHeight) };
     }
     else if (selectedShape == 2)
     {
@@ -436,7 +436,7 @@ static ObjectCreatorState renderObjectCreatorUI(
             static int dragging_node_idx = -1;
             ImVec2 mouse_pos = ImGui::GetIO().MousePos;
 
-            PS_AGONY::Vec2 mouse_local{
+            PS_AGONY2D::Vec2 mouse_local{
                  (mouse_pos.x - center.x) / grid_scale,
                 -(mouse_pos.y - center.y) / grid_scale
             };
@@ -522,14 +522,14 @@ static ObjectCreatorState renderObjectCreatorUI(
         ImGui::BeginDisabled(polyVertices.size() < 3);
         if (ImGui::Button("Spawn Polygon", ImVec2(-1, 30)))
         {
-            PS_AGONY::PolygonCreateParams params;
+            PS_AGONY2D::PolygonCreateParams params;
             params.base = buildBaseParams();
             params.localVertices = polyVertices;
             simulation.createPolygon(params);
         }
         ImGui::EndDisabled();
 
-        state.bodyType = PS_AGONY::BodyType::Polygon;
+        state.bodyType = PS_AGONY2D::BodyType::Polygon;
         state.polygonParams.base = buildBaseParams();
         state.polygonParams.localVertices = polyVertices;
     }
@@ -614,9 +614,9 @@ static void createThreadingBackend()
     };
 
     static Ecstasy::Core::Threading::ThreadPool pool(cfg);
-    static PS_AGONY::Threading::EcstasyThreadingBackend backend(pool);
+    static PS_AGONY2D::Threading::EcstasyThreadingBackend backend(pool);
 
-    PS_AGONY::Threading::setThreadingBackend(&backend);
+    PS_AGONY2D::Threading::setThreadingBackend(&backend);
 
     // Pin main thread to the reserved CPU.
     if (const auto reserved = pool.getReservedCpus(); !reserved.empty())
@@ -670,7 +670,7 @@ static int gameFunc()
     createThreadingBackend();
 
     // Simulation.
-    PS_AGONY::Simulation simulation{};
+    PS_AGONY2D::Simulation simulation{};
     //simulation.getSimulationSettings().clockSettings.updateInterval = 1.0 / 40.0;
 
     auto& mainBodyHolder = simulation.getMainBodyHolder();
@@ -723,8 +723,8 @@ static int gameFunc()
         // Handle input.
         if (!io.WantCaptureKeyboard)
         {
-            const PS_AGONY::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
-            const PS_AGONY::Real zoomSpeed = 2.0 * deltaTime;
+            const PS_AGONY2D::Real cameraSpeed = 1.0 * deltaTime * camera.viewRange;
+            const PS_AGONY2D::Real zoomSpeed = 2.0 * deltaTime;
 
             if (windowInputManager.isKeyPressed(GLFW_KEY_W))
                 camera.position.y += cameraSpeed;
@@ -745,7 +745,7 @@ static int gameFunc()
         const bool isHoldingBody = mainBodyHolder.heldBody.has_value();
         if (!io.WantCaptureMouse || isHoldingBody)
         {
-            PS_AGONY::Vec2 mouseWorldPosition;
+            PS_AGONY2D::Vec2 mouseWorldPosition;
             {
                 const glm::dvec2 mousePosition = windowInputManager.getMousePosition();
 
@@ -818,10 +818,10 @@ static int gameFunc()
             framebuffer.clearDrawBufferUint("id", idClear);
 
             // Get camera AABB.
-            PS_AGONY::AABB cameraAABB;
+            PS_AGONY2D::AABB cameraAABB;
             {
-                const PS_AGONY::Vec2 minCorner = camera.screenToWorldSpace({ -1.0, -1.0 });
-                const PS_AGONY::Vec2 maxCorner = camera.screenToWorldSpace({ 1.0,  1.0 });
+                const PS_AGONY2D::Vec2 minCorner = camera.screenToWorldSpace({ -1.0, -1.0 });
+                const PS_AGONY2D::Vec2 maxCorner = camera.screenToWorldSpace({ 1.0,  1.0 });
 
                 cameraAABB = {
                     .minX = std::fmin(minCorner.x, maxCorner.x),
@@ -843,15 +843,15 @@ static int gameFunc()
             if (creatorState.isFocused)
             {
                 const void* previewParams = nullptr;
-                if (creatorState.bodyType == PS_AGONY::BodyType::Circle)
+                if (creatorState.bodyType == PS_AGONY2D::BodyType::Circle)
                 {
                     previewParams = &creatorState.circleParams;
                 }
-                else if (creatorState.bodyType == PS_AGONY::BodyType::Box)
+                else if (creatorState.bodyType == PS_AGONY2D::BodyType::Box)
                 {
                     previewParams = &creatorState.boxParams;
                 }
-                else if (creatorState.bodyType == PS_AGONY::BodyType::Polygon)
+                else if (creatorState.bodyType == PS_AGONY2D::BodyType::Polygon)
                 {
                     previewParams = &creatorState.polygonParams;
                 }

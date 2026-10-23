@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// Can be changed.
 

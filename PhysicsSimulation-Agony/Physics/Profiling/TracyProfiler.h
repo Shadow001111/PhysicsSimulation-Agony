@@ -2,7 +2,7 @@
 #include <tracy/Tracy.hpp>
 #include <cstdint>
 
-namespace PS_AGONY::Profiling
+namespace PS_AGONY2D::Profiling
 {
     enum class Color : uint32_t
     {

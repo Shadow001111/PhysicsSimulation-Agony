@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <bit>
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	inline constexpr uint64_t ceilLog2(uint64_t n, uint64_t groupSize = 1)
 	{

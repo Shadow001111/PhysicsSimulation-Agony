@@ -1,7 +1,7 @@
 #include "BoxSoA.h"
 #include <utility>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void BoxSoA::append(
 		ColliderIndex colliderIndex,

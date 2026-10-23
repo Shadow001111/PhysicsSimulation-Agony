@@ -3,7 +3,7 @@
 
 #include "Physics/SoA/Constraints/PrismaticJointSoA.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	struct PrismaticJointConstraintData
 	{

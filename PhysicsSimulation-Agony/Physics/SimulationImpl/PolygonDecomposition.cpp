@@ -5,7 +5,7 @@
 #include <limits>
 #include <optional>
 
-namespace PS_AGONY::PhysicsGeometry
+namespace PS_AGONY2D::PhysicsGeometry
 {
     namespace
     {

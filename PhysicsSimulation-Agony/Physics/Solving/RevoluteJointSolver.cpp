@@ -3,11 +3,11 @@
 #include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void RevoluteJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute joint constraint data", PS_AGONY::Profiling::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute joint constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -116,7 +116,7 @@ namespace PS_AGONY
 
 	void RevoluteJointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve joint velocity constraints", PS_AGONY::Profiling::Color::Violet);
+		TRACY_SCOPE_NC("Solve joint velocity constraints", PS_AGONY2D::Profiling::Color::Violet);
 
 		std::span<const RevoluteJointConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 

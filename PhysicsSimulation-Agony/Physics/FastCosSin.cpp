@@ -3,7 +3,7 @@
 
 #include <cmath>
 
-namespace PS_AGONY::FastCosSin
+namespace PS_AGONY2D::FastCosSin
 {
 	// Constants.
 

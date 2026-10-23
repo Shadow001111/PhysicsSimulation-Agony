@@ -3,7 +3,7 @@
 #include <utility>
 
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	ObjectIndex RevoluteJointSoA::append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping)
 	{

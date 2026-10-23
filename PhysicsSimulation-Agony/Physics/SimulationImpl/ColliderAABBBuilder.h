@@ -6,7 +6,7 @@
 #include "Physics/SoA/Shapes/PolygonSoA.h"
 #include "Physics/SoA/Shapes/CapsuleSoA.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void buildCircleAABBs (ColliderSoA& colliders, const CircleSoA& circles);
 	void buildBoxAABBs	  (ColliderSoA& colliders, const BoxSoA& boxes);

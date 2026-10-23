@@ -17,7 +17,7 @@
 #include <array>
 #include <cmath>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// One implementation per ConstraintType. Owns the constraint SoA and its solver, wires
 	// them to BodySoA (attachments, cascade deletion, index remapping) and solves them.

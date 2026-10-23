@@ -3,7 +3,7 @@
 #include <utility>
 
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void BodySoA::append(
 		Vec2 pos, Vec2 vel, Real rot, Real anglVel,

@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	using namespace Ecstasy::Core::MemoryAllocation;
 

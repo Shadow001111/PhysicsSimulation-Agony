@@ -27,7 +27,7 @@
 	F(callbackId, CollisionCallbackIndex) \
 	F(eventThreshold, Real)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	struct ColliderSoA
 	{

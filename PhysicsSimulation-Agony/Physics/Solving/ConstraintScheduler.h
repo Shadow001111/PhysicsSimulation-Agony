@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// Solves all constraint types together. Each type keeps its own solving plan (replanned only when
 	// that type changes); the scheduler only interleaves their iterations:

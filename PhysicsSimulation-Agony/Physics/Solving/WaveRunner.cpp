@@ -5,7 +5,7 @@
 #include "Physics/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void WaveRunner::runImpl(size_t workerCount, uint32_t tickCount, TaskFn fn, void* context)
 	{
@@ -81,7 +81,7 @@ namespace PS_AGONY
 		workerFunc(0);
 
 		{
-			TRACY_SCOPE_NC("Wait for workers to finish", PS_AGONY::Profiling::Color::Brown);
+			TRACY_SCOPE_NC("Wait for workers to finish", PS_AGONY2D::Profiling::Color::Brown);
 			for (size_t i = 1; i < workerCount; i++)
 			{
 				workerData[i].isDestroyed.wait(false, std::memory_order_acquire);

@@ -16,7 +16,7 @@
     F(upperLimit, Real) \
     F(enableLimit, uint8_t)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // Same as prismatic joint, but rotations are free.
     struct SliderJointSoA

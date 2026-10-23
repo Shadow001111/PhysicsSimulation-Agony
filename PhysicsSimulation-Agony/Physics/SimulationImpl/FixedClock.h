@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     class FixedClock
     {

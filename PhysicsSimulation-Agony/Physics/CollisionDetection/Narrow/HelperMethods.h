@@ -8,7 +8,7 @@
 
 #include <bit>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // Next index with wrap-around; replaces a runtime integer modulo.
     template <typename Index>

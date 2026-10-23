@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// Convex polygon local-space geometry: vertices plus precomputed outward unit edge normals.
 	// Single allocation laid out as [vertices | normals]. normals()[i] belongs to edge i -> i+1.

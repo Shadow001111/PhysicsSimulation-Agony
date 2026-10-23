@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	// Self-tree only. Walks down from the root to build the initial frontier:
 	// leaves for self-cross testing, leaf/leaf pairs for AxB testing, and

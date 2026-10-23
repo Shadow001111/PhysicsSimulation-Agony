@@ -1,7 +1,7 @@
 #pragma once
 #include "Physics/Types/Types.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // Numeric tolerances.
     constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;

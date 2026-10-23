@@ -34,7 +34,7 @@
     F(attachments, BodyAttachment) \
     F(colliderIndices, ColliderIndex)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     struct BodySoA
     {

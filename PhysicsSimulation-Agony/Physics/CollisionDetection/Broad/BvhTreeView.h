@@ -3,7 +3,7 @@
 
 #include "Physics/ObjectSoA.h"
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	// Non-owning pointers into a BvhTree. Valid until the tree is rebuilt.
 	struct BvhTreeView

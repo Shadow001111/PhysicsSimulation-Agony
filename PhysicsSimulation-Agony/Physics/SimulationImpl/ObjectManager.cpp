@@ -7,7 +7,7 @@
 #include <cmath>
 #include <iostream>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     ObjectManager::ObjectManager(const std::vector<Material>& materials) :
         materials(materials)

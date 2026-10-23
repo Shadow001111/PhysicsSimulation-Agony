@@ -7,7 +7,7 @@
 
 #include <iostream>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void BodyCollisionSolver::setDataViewers(
 		BodySoA& bodiesIn,
@@ -26,7 +26,7 @@ namespace PS_AGONY
 		uint32_t positionIterations
 	)
 	{
-		TRACY_SCOPE_NC("Solve collisions", PS_AGONY::Profiling::Color::OliveDrab);
+		TRACY_SCOPE_NC("Solve collisions", PS_AGONY2D::Profiling::Color::OliveDrab);
 
 		const size_t collisionCount = collisionData.size();
 		const size_t workerCount = planWorkerCount(collisionCount);
@@ -62,7 +62,7 @@ namespace PS_AGONY
 
 		// Multi-threading path.
 		{
-			TRACY_SCOPE_NC("Collect body pairs from collision data", PS_AGONY::Profiling::Color::Red);
+			TRACY_SCOPE_NC("Collect body pairs from collision data", PS_AGONY2D::Profiling::Color::Red);
 
 			collidingBodyPairs.resize(collisionCount);
 			for (size_t i = 0; i < collisionCount; i++)
@@ -72,7 +72,7 @@ namespace PS_AGONY
 			}
 		}
 		{
-			TRACY_SCOPE_NC("Plan execution", PS_AGONY::Profiling::Color::Blue);
+			TRACY_SCOPE_NC("Plan execution", PS_AGONY2D::Profiling::Color::Blue);
 
 			SolvingPlanner::threadLocal().planStandardExecution(collidingBodyPairs, bodies->getCount(), workerCount, solvingPlan);
 
@@ -114,7 +114,7 @@ namespace PS_AGONY
 
 	Vec2 BodyCollisionSolver::computeConstraintErrors() const
 	{
-		TRACY_SCOPE_NC("Compute (body collision) constraint errors", PS_AGONY::Profiling::Color::Gray);
+		TRACY_SCOPE_NC("Compute (body collision) constraint errors", PS_AGONY2D::Profiling::Color::Gray);
 
 		const size_t collisionCount = activeCollisionCount;
 		if (collisionCount == 0) return { Real(0), Real(0) };
@@ -212,7 +212,7 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::computeConstraintData(std::span<BodyCollisionData> source, const size_t* order)
 	{
-		TRACY_SCOPE_NC("Compute constraint data", PS_AGONY::Profiling::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
 		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
 		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
@@ -383,7 +383,7 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::applyWarmStarting(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Apply warm starting (body collisions)", PS_AGONY::Profiling::Color::Violet);
+		TRACY_SCOPE_NC("Apply warm starting (body collisions)", PS_AGONY2D::Profiling::Color::Violet);
 
 		std::span<const VelocityHotData> collisionDataSpan(velocityHotContainer.data() + pass.start, pass.size);
 		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
@@ -469,7 +469,7 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve collision velocity constraints", PS_AGONY::Profiling::Color::Violet);
+		TRACY_SCOPE_NC("Solve collision velocity constraints", PS_AGONY2D::Profiling::Color::Violet);
 
 		std::span<VelocityHotData> collisionDataSpan(velocityHotContainer.data() + pass.start, pass.size);
 		std::span<const VelocityConstraintData> constraintDataSpan(velocityConstraintContainer.data() + pass.start, pass.size);
@@ -957,7 +957,7 @@ namespace PS_AGONY
 
 	void BodyCollisionSolver::solvePositionConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve collision position constraints", PS_AGONY::Profiling::Color::Indigo);
+		TRACY_SCOPE_NC("Solve collision position constraints", PS_AGONY2D::Profiling::Color::Indigo);
 
 		std::span<const PositionHotData> collisionDataSpan(positionHotContainer.data() + pass.start, pass.size);
 

@@ -17,7 +17,7 @@
     F(upperLimit, Real) \
     F(enableLimit, uint8_t)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // A prismatic (slider / piston) joint. Locks relative translation between two
     // bodies to a single axis attached to body A (so the axis rotates with A), and

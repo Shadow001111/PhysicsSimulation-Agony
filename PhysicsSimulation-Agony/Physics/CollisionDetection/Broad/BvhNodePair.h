@@ -2,7 +2,7 @@
 #include "BvhNode.h"
 #include "Math.h"
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	// A pair of BVH node indices awaiting overlap testing/traversal.
 	// Shared by the single-threaded and threaded broad-phase query paths.

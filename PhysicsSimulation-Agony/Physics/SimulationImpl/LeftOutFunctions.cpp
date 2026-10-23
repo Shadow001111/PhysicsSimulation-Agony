@@ -6,14 +6,14 @@
 
 #include "Physics/Constants.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
     void wrapBodyRotations(BodySoA& bodies)
     {
-        TRACY_SCOPE_NC("Wrap body rotations", PS_AGONY::Profiling::Color::Cyan);
+        TRACY_SCOPE_NC("Wrap body rotations", PS_AGONY2D::Profiling::Color::Cyan);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
@@ -63,7 +63,7 @@ namespace PS_AGONY
 
     void wrapColliderRotations(ColliderSoA& colliders)
     {
-        TRACY_SCOPE_NC("Wrap collider rotations", PS_AGONY::Profiling::Color::Cyan);
+        TRACY_SCOPE_NC("Wrap collider rotations", PS_AGONY2D::Profiling::Color::Cyan);
 
         // Get pointers.
         Real* ECSTASY_RESTRICT rotationPtr = colliders.worldRotation.data();

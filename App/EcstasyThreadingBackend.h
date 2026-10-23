@@ -2,7 +2,7 @@
 #include "Physics/Threading.h"
 #include "Ecstasy/Core/Threading/ThreadPool.h"
 
-namespace PS_AGONY::Threading
+namespace PS_AGONY2D::Threading
 {
 	class EcstasyThreadingBackend final : public IThreadingBackend
 	{

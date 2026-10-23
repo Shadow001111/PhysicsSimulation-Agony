@@ -14,7 +14,7 @@
 #include <vector>
 #include <array>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	using BvhNode = BroadPhaseInternal::BvhNode;
 	using BvhNodePair = BroadPhaseInternal::BvhNodePair;

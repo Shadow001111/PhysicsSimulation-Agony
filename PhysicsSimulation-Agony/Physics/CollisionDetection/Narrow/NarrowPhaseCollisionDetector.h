@@ -9,7 +9,7 @@
 #include <span>
 #include <robin_hood.h>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	struct PersistentContactData
 	{

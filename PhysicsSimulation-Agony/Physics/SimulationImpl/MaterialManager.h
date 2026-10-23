@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// Owns materials. Indices are stable: destroyed slots are recycled, never erased.
 	// Slot 0 is the default material and cannot be destroyed.

@@ -8,14 +8,14 @@
 #include <span>
 #include <optional>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	class Simulation;
 }
 
 namespace PS_AGONY_RENDER
 {
-	using namespace PS_AGONY;
+	using namespace PS_AGONY2D;
 
 	// Defined in SimulationRenderer_Internal.h; only forward-declared here so
 	// the public header stays free of private implementation detail.

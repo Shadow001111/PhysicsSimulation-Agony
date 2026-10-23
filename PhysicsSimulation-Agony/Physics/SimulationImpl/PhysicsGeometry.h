@@ -9,7 +9,7 @@
 #include <vector>
 #include <span>
 
-namespace PS_AGONY::PhysicsGeometry
+namespace PS_AGONY2D::PhysicsGeometry
 {
 	Real calculateCircleInertia(
 		Real mass,

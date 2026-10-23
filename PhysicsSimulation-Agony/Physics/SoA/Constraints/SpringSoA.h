@@ -12,7 +12,7 @@
     F(stiffness, Real) \
     F(damping, Real)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     struct SpringSoA
     {

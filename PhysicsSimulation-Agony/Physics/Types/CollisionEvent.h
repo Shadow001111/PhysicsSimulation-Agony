@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// 0 is reserved: "no collision callback".
 	using CollisionCallbackIndex = uint16_t;

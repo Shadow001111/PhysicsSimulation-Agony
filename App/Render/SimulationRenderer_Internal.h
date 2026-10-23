@@ -14,7 +14,7 @@
 
 namespace PS_AGONY_RENDER
 {
-	using namespace PS_AGONY;
+	using namespace PS_AGONY2D;
 
 	[[nodiscard]] static inline uint32_t idToHexColor(uint32_t x) noexcept
 	{
@@ -34,7 +34,7 @@ namespace PS_AGONY_RENDER
 		const Real& wrapCount,
 		const Real& alpha)
 	{
-		const Real fullRotation = rot + wrapCount * PS_AGONY::Constants::TWO_PI;
+		const Real fullRotation = rot + wrapCount * PS_AGONY2D::Constants::TWO_PI;
 
 		Real interpolatedRotation = oldRot + (fullRotation - oldRot) * alpha;
 

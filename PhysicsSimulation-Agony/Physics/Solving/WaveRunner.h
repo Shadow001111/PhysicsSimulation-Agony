@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// Runs `tickCount` ticks on `workerCount` workers with one barrier per tick. The caller's
 	// thread is worker 0; the others come from the global thread pool. Blocks until all ticks are done.

@@ -12,7 +12,7 @@
 #define PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(F) \
     F(accumulatedImpulse, Real)
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // Single-body angular motor: drives angular velocity toward targetSpeed, torque limited by maxTorque.
     struct MotorSoA

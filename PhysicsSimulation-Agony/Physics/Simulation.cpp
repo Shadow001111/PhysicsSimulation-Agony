@@ -14,7 +14,7 @@
 // so pending events would hold stale indices). Queue create/destroy calls issued from handlers, run them after the
 // drain (creates first, then destroys), and report success/failure through callbacks. Maybe stable global ids later.
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 
@@ -33,7 +33,7 @@ namespace PS_AGONY
 
     void Simulation::update(Real deltaTime)
     {
-        TRACY_SCOPE_NC("Simulation update", PS_AGONY::Profiling::Color::Wheat);
+        TRACY_SCOPE_NC("Simulation update", PS_AGONY2D::Profiling::Color::Wheat);
 
         // Delta time check.
         if (deltaTime <= 0) return;
@@ -270,7 +270,7 @@ namespace PS_AGONY
 
     void Simulation::physicsStep(Real deltaTime)
     {
-        TRACY_SCOPE_NC("Physics step", PS_AGONY::Profiling::Color::Orange);
+        TRACY_SCOPE_NC("Physics step", PS_AGONY2D::Profiling::Color::Orange);
 
         // Clear data. Unnecessary, but usually it won't get cleared if narrow phase cd will get get reached.
         narrowPhaseCollisionDetector.clearData();
@@ -431,7 +431,7 @@ namespace PS_AGONY
     {
         // Set old positions.
         {
-            TRACY_SCOPE_NC("Set old position/rotation/wrap-count", PS_AGONY::Profiling::Color::Black);
+            TRACY_SCOPE_NC("Set old position/rotation/wrap-count", PS_AGONY2D::Profiling::Color::Black);
 
             std::copy(objectManager.bodies.offsetX.begin(), objectManager.bodies.offsetX.end(), objectManager.bodies.renderOldOffsetX.begin());
             std::copy(objectManager.bodies.offsetY.begin(), objectManager.bodies.offsetY.end(), objectManager.bodies.renderOldOffsetY.begin());
@@ -451,7 +451,7 @@ namespace PS_AGONY
 
     void Simulation::buildColliderAABBs()
     {
-        TRACY_SCOPE_NC("Build collider AABBs", PS_AGONY::Profiling::Color::Green);
+        TRACY_SCOPE_NC("Build collider AABBs", PS_AGONY2D::Profiling::Color::Green);
         buildCircleAABBs(objectManager.colliders, objectManager.circles);
         buildBoxAABBs(objectManager.colliders, objectManager.boxes);
         buildPolygonAABBs(objectManager.colliders, objectManager.polygons);
@@ -460,7 +460,7 @@ namespace PS_AGONY
 
     void Simulation::computeBodyWorldCenters()
     {
-        TRACY_SCOPE_NC("Compute true positions", PS_AGONY::Profiling::Color::Magenta);
+        TRACY_SCOPE_NC("Compute true positions", PS_AGONY2D::Profiling::Color::Magenta);
 
         const Real* ECSTASY_RESTRICT positionXPtr = objectManager.bodies.offsetX.data();
         const Real* ECSTASY_RESTRICT positionYPtr = objectManager.bodies.offsetY.data();
@@ -507,7 +507,7 @@ namespace PS_AGONY
 
     void Simulation::computeColliderWorldTransforms()
     {
-        TRACY_SCOPE_NC("Compute collider world transforms", PS_AGONY::Profiling::Color::Magenta);
+        TRACY_SCOPE_NC("Compute collider world transforms", PS_AGONY2D::Profiling::Color::Magenta);
 
         computeColliderWorldPositions();
         computeColliderWorldRotations();

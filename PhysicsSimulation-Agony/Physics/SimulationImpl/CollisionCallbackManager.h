@@ -7,7 +7,7 @@
 #include <vector>
 #include <span>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	// Owns collision callbacks. Indices are stable: destroyed slots are recycled, never erased.
 	// Slot 0 is a permanent no-op and cannot be destroyed.

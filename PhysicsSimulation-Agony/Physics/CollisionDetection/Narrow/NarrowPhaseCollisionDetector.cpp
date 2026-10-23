@@ -51,7 +51,7 @@
  *   5. Register in 'collisionFuncs'. Argument order is (lower BodyType, higher BodyType).
  */
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     const SymmetricMatrix<NarrowPhaseCollisionDetector::CollisionFunc, NarrowPhaseCollisionDetector::BODY_TYPE_COUNT>
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
@@ -385,17 +385,17 @@ namespace PS_AGONY
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
         size_t total = sizeof(NarrowPhaseCollisionDetector);
-        total += PS_AGONY::getVectorMemoryUsage(allCollisionData);
+        total += PS_AGONY2D::getVectorMemoryUsage(allCollisionData);
 
-        total += PS_AGONY::getVectorMemoryUsage(chunks);
+        total += PS_AGONY2D::getVectorMemoryUsage(chunks);
 
         for (const auto& chunkData : chunks)
         {
             for (const auto& vec : chunkData.pairs.getDirectAccess())
             {
-                total += PS_AGONY::getVectorMemoryUsage(vec);
+                total += PS_AGONY2D::getVectorMemoryUsage(vec);
             }
-            total += PS_AGONY::getVectorMemoryUsage(chunkData.results);
+            total += PS_AGONY2D::getVectorMemoryUsage(chunkData.results);
         }
         {
             auto const numElementsWithBuffer = previousContactDataContainer.calcNumElementsWithBuffer(previousContactDataContainer.mask() + 1);

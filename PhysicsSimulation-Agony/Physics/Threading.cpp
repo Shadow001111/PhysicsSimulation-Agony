@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace PS_AGONY::Threading
+namespace PS_AGONY2D::Threading
 {
 	namespace
 	{
@@ -21,7 +21,7 @@ namespace PS_AGONY::Threading
 		IThreadingBackend* backend = backendPtr.load(std::memory_order_acquire);
 		if (!backend) [[unlikely]]
 		{
-			std::cerr << "[PS_AGONY][getThreadingBackend]: No threading backend set. Call Threading::setThreadingBackend() first.\n";
+			std::cerr << "[PS_AGONY2D][getThreadingBackend]: No threading backend set. Call Threading::setThreadingBackend() first.\n";
 			std::abort();
 		}
 		return *backend;

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-namespace PS_AGONY::FastCosSin
+namespace PS_AGONY2D::FastCosSin
 {
 	using RealSimd = Ecstasy::Core::Simd<Real>;
 

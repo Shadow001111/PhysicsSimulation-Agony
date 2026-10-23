@@ -3,7 +3,7 @@
 
 #include "Ecstasy/Graphics/Camera2D.h"
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	using Camera2D = Ecstasy::Graphics::Camera2D<Ecstasy::Core::FloatingPointSystem<Real>>;
 }

@@ -15,19 +15,19 @@ struct SceneOrientation
 };
 
 
-static PS_AGONY::Real cross(
-    const PS_AGONY::Vec2& a,
-    const PS_AGONY::Vec2& b,
-    const PS_AGONY::Vec2& c)
+static PS_AGONY2D::Real cross(
+    const PS_AGONY2D::Vec2& a,
+    const PS_AGONY2D::Vec2& b,
+    const PS_AGONY2D::Vec2& c)
 {
     return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
-std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& rvg, size_t targetVertices, float radius)
+std::vector<PS_AGONY2D::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& rvg, size_t targetVertices, float radius)
 {
     const size_t sampleCount = std::max<size_t>(targetVertices * 4, 12);
 
-    std::vector<PS_AGONY::Vec2> pts;
+    std::vector<PS_AGONY2D::Vec2> pts;
     pts.reserve(sampleCount);
 
     for (size_t i = 0; i < sampleCount; ++i) {
@@ -41,7 +41,7 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& 
             return (p1.x < p2.x) || (p1.x == p2.x && p1.y < p2.y);
         });
 
-    std::vector<PS_AGONY::Vec2> hull;
+    std::vector<PS_AGONY2D::Vec2> hull;
     hull.reserve(pts.size() * 2);
 
     for (const auto& p : pts)
@@ -76,7 +76,7 @@ std::vector<PS_AGONY::Vec2> makeConvexPolygon(Ecstasy::Core::Random::Generator& 
 // Chassis-center height above flat ground at rest, for scale = 1 (multiply by scale).
 static constexpr float kCarRestHeight = 0.9f + 2.2f + 0.02f;
 
-void load_ObjectCar(PS_AGONY::Simulation& simulation,
+void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
     float positionX,
     float positionY,
     float rotation,
@@ -108,16 +108,16 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
     const float sliderDamping = 1.0e3f * dampScale;
 
     // === MATERIALS ===
-    const PS_AGONY::MaterialIndex carMatIdx = simulation.createMaterial({
+    const PS_AGONY2D::MaterialIndex carMatIdx = simulation.createMaterial({
         .elasticity = 0.1f, .staticFriction = 0.8f, .dynamicFriction = 0.6f });
 
-    const PS_AGONY::MaterialIndex wheelMatIdx = simulation.createMaterial({
+    const PS_AGONY2D::MaterialIndex wheelMatIdx = simulation.createMaterial({
         .elasticity = 0.1f, .staticFriction = 1.2f, .dynamicFriction = 0.9f });
 
     // === CHASSIS-LOCAL -> WORLD ===
     const float cosR = std::cos(rotation);
     const float sinR = std::sin(rotation);
-    auto toWorld = [&](float lx, float ly) -> PS_AGONY::Vec2 {
+    auto toWorld = [&](float lx, float ly) -> PS_AGONY2D::Vec2 {
         return { positionX + lx * cosR - ly * sinR,
                  positionY + lx * sinR + ly * cosR };
         };
@@ -133,10 +133,10 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
         .size = { frameWidth, frameHeight }
         });
     if (!chassisOpt) return;
-    const PS_AGONY::ObjectIndex chassis = *chassisOpt;
+    const PS_AGONY2D::ObjectIndex chassis = *chassisOpt;
 
     // === WHEEL FACTORY ===
-    auto createWheel = [&](float side) -> std::optional<PS_AGONY::ObjectIndex> {
+    auto createWheel = [&](float side) -> std::optional<PS_AGONY2D::ObjectIndex> {
         return simulation.createCircle({
             .base.position = toWorld(side * wheelOffset, -suspensionDrop),
             .base.velocity = { 0.0f, 0.0f },
@@ -154,7 +154,7 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
 
     // === SUSPENSION FACTORY ===
     // side = -1 (left) or +1 (right)
-    auto createSuspension = [&](PS_AGONY::ObjectIndex wheel, float side)
+    auto createSuspension = [&](PS_AGONY2D::ObjectIndex wheel, float side)
         {
             const float anchorX = side * wheelOffset;
             const float anchorY = -frameHeight * 0.5f;
@@ -211,7 +211,7 @@ void load_ObjectCar(PS_AGONY::Simulation& simulation,
 
 
 void load_LargeWorld(
-    PS_AGONY::Simulation& simulation,
+    PS_AGONY2D::Simulation& simulation,
     Ecstasy::Core::Random::Generator& rvg,
     SceneOrientation sceneOrientation,
     const int bodyCountPerType
@@ -225,12 +225,12 @@ void load_LargeWorld(
     constexpr float terrainBaseY = -20.0f;
 
     // === 1. MATERIAL SETUP ===
-    PS_AGONY::Material worldMaterial = {
+    PS_AGONY2D::Material worldMaterial = {
         .elasticity = 0.9f,
         .staticFriction = 0.8f,
         .dynamicFriction = 0.6f
     };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(worldMaterial);
+    PS_AGONY2D::MaterialIndex materialIdx = simulation.createMaterial(worldMaterial);
 
     // === 2. HIGH BOUNDS (SIDE WALLS) ===
     // Left Bounding Wall
@@ -273,7 +273,7 @@ void load_LargeWorld(
         float posY = terrainBaseY;
 
         // Define vertices locally relative to `.base.position` in Counter-Clockwise order
-        PS_AGONY::Vec2 localVertices[4] = {
+        PS_AGONY2D::Vec2 localVertices[4] = {
             { -halfSegmentWidth, 0.0f },             // Bottom-Left
             {  halfSegmentWidth, 0.0f },             // Bottom-Right
             {  halfSegmentWidth, y2 - terrainBaseY }, // Top-Right
@@ -367,7 +367,7 @@ void load_LargeWorld(
         float rotation = rvg.real<float>(0.0f, 6.28f);
         float length = rvg.real<float>(0.3f, 0.8f);
         float radius = rvg.real<float>(0.3f, 0.8f);
-        float mass = (length * 2.0f + float(PS_AGONY::Constants::PI) * radius) * radius;
+        float mass = (length * 2.0f + float(PS_AGONY2D::Constants::PI) * radius) * radius;
 
         simulation.createCapsule({
             .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
@@ -381,7 +381,7 @@ void load_LargeWorld(
     }
 }
 
-void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+void load_StackedPyramid(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === CONFIGURATION VARIABLES ===
     constexpr int pyramidRows = 60;
@@ -394,12 +394,12 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random
 
     // === 1. MATERIAL SETUP ===
     // High friction and lower elasticity help the pyramid remain stable upon initialization
-    PS_AGONY::Material pyramidMaterial = {
+    PS_AGONY2D::Material pyramidMaterial = {
         .elasticity = 0.1f,
         .staticFriction = 0.8f,
         .dynamicFriction = 0.6f
     };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(pyramidMaterial);
+    PS_AGONY2D::MaterialIndex materialIdx = simulation.createMaterial(pyramidMaterial);
 
     // === 2. STATIC FLOOR ===
     simulation.createBox({
@@ -451,7 +451,7 @@ void load_StackedPyramid(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random
     }
 }
 
-void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // === 1. CONFIGURATION AND MATERIALS ===
     constexpr float cliffWidth = 25.0f;
@@ -483,12 +483,12 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     constexpr float jointK = 2200.0f;   // Joint stiffness.
     constexpr float jointD = 18.0f;     // Joint damping.
 
-    PS_AGONY::Material physicsMaterial = {
+    PS_AGONY2D::Material physicsMaterial = {
         .elasticity = 0.2f,
         .staticFriction = 0.7f,
         .dynamicFriction = 0.5f
     };
-    PS_AGONY::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
+    PS_AGONY2D::MaterialIndex materialIdx = simulation.createMaterial(physicsMaterial);
 
     // === 2. CREATE TERRAIN CLIFFS ===
     const float leftCliffX = -(gapWidth * 0.5f + cliffWidth * 0.5f);
@@ -509,8 +509,8 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
 
     if (!leftCliffOpt || !rightCliffOpt) return;
 
-    const PS_AGONY::ObjectIndex leftCliff = *leftCliffOpt;
-    const PS_AGONY::ObjectIndex rightCliff = *rightCliffOpt;
+    const PS_AGONY2D::ObjectIndex leftCliff = *leftCliffOpt;
+    const PS_AGONY2D::ObjectIndex rightCliff = *rightCliffOpt;
 
     const float spanStartX = -gapWidth * 0.5f;
 
@@ -523,8 +523,8 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     // Each has the same signature (bodyA, bodyB, localA, localB, restLen), so buildBridge
     // below can stay a single generic lambda regardless of which constraint it's fed.
 
-    auto joinWithSpring = [&](PS_AGONY::ObjectIndex bodyA, PS_AGONY::ObjectIndex bodyB,
-        PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB, float restLen)
+    auto joinWithSpring = [&](PS_AGONY2D::ObjectIndex bodyA, PS_AGONY2D::ObjectIndex bodyB,
+        PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
         {
             // Dual anchors (top/bottom offset) so the pair resists torsional flipping.
             simulation.createSpring({
@@ -547,8 +547,8 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
                 });
         };
 
-    auto joinWithJoint = [&](PS_AGONY::ObjectIndex bodyA, PS_AGONY::ObjectIndex bodyB,
-        PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB, float /*restLen*/)
+    auto joinWithJoint = [&](PS_AGONY2D::ObjectIndex bodyA, PS_AGONY2D::ObjectIndex bodyB,
+        PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float /*restLen*/)
         {
             // Point constraint - distance is implicit in the anchor placement, not a parameter.
             simulation.createRevoluteJoint({
@@ -561,8 +561,8 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
                 });
         };
 
-    auto joinWithRod = [&](PS_AGONY::ObjectIndex bodyA, PS_AGONY::ObjectIndex bodyB,
-        PS_AGONY::Vec2 localA, PS_AGONY::Vec2 localB, float restLen)
+    auto joinWithRod = [&](PS_AGONY2D::ObjectIndex bodyA, PS_AGONY2D::ObjectIndex bodyB,
+        PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
         {
             // Rigid, inextensible - restLen becomes the rod's fixed length.
             simulation.createRod({
@@ -579,7 +579,7 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     // its own inlined instantiation, so picking a constraint type costs nothing at runtime.
     auto buildBridge = [&](float bridgeY, auto&& joinPlanks)
         {
-            std::vector<PS_AGONY::ObjectIndex> planks;
+            std::vector<PS_AGONY2D::ObjectIndex> planks;
             planks.reserve(plankCount);
 
             for (int i = 0; i < plankCount; ++i)
@@ -606,14 +606,14 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
 
             const float cliffLocalY = bridgeY - plankHeight * 0.5f - cliffY;
 
-            joinPlanks(leftCliff, planks.front(), PS_AGONY::Vec2{ cliffWidth * 0.5f, cliffLocalY }, PS_AGONY::Vec2{ -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
+            joinPlanks(leftCliff, planks.front(), PS_AGONY2D::Vec2{ cliffWidth * 0.5f, cliffLocalY }, PS_AGONY2D::Vec2{ -plankWidth * 0.5f, 0.0f }, cliffToPlankRestLen);
 
             for (size_t i = 0; i + 1 < planks.size(); ++i)
             {
-                joinPlanks(planks[i], planks[i + 1], PS_AGONY::Vec2{ plankWidth * 0.5f, 0.0f }, PS_AGONY::Vec2{ -plankWidth * 0.5f, 0.0f }, interPlankRestLen);
+                joinPlanks(planks[i], planks[i + 1], PS_AGONY2D::Vec2{ plankWidth * 0.5f, 0.0f }, PS_AGONY2D::Vec2{ -plankWidth * 0.5f, 0.0f }, interPlankRestLen);
             }
 
-            joinPlanks(planks.back(), rightCliff, PS_AGONY::Vec2{ plankWidth * 0.5f, 0.0f }, PS_AGONY::Vec2{ -cliffWidth * 0.5f, cliffLocalY }, cliffToPlankRestLen);
+            joinPlanks(planks.back(), rightCliff, PS_AGONY2D::Vec2{ plankWidth * 0.5f, 0.0f }, PS_AGONY2D::Vec2{ -cliffWidth * 0.5f, cliffLocalY }, cliffToPlankRestLen);
         };
 
     // === 5. BUILD THE THREE BRIDGES ===
@@ -641,15 +641,15 @@ void load_ConstraintBridges(PS_AGONY::Simulation& simulation, Ecstasy::Core::Ran
     }
 }
 
-void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
+void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
     // Set up physical properties for the environment.
-    PS_AGONY::Material envMaterial = {
+    PS_AGONY2D::Material envMaterial = {
         .elasticity = 0.05f,
         .staticFriction = 0.9f,
         .dynamicFriction = 0.7f
     };
-    PS_AGONY::MaterialIndex envMatIdx = simulation.createMaterial(envMaterial);
+    PS_AGONY2D::MaterialIndex envMatIdx = simulation.createMaterial(envMaterial);
 
     // Define ramp geometry parameters and ground limits.
     constexpr int rampPoints = 120;
@@ -666,7 +666,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
     const float leftRampEndX = -flatWidth * 0.5f;
 
     // Create the left cycloid ramp polygon with points evenly spaced on X.
-    std::vector<PS_AGONY::Vec2> leftVertices;
+    std::vector<PS_AGONY2D::Vec2> leftVertices;
     leftVertices.reserve(rampPoints + 3);
 
     leftVertices.push_back({ leftRampStartX, terrainBaseY });
@@ -705,7 +705,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
 
     // Create right ramp by mirroring leftVertices across X axis (-x)
     // Iterating in reverse preserves Counter-Clockwise (CCW) winding order
-    std::vector<PS_AGONY::Vec2> rightVertices;
+    std::vector<PS_AGONY2D::Vec2> rightVertices;
     rightVertices.reserve(leftVertices.size());
     for (auto it = leftVertices.rbegin(); it != leftVertices.rend(); ++it)
     {
@@ -717,7 +717,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
         .localVertices = { leftVertices.data(), leftVertices.size() },
-        .concaveDecompositionMethod = PS_AGONY::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
+        .concaveDecompositionMethod = PS_AGONY2D::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
         });
 
     simulation.createPolygon({
@@ -725,7 +725,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
         .localVertices = {rightVertices.data(), rightVertices.size()},
-        .concaveDecompositionMethod = PS_AGONY::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
+        .concaveDecompositionMethod = PS_AGONY2D::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
         });
 
     // Create the central flat ground runout area centered at zero.
@@ -755,7 +755,7 @@ void load_CarRamp(PS_AGONY::Simulation& simulation, Ecstasy::Core::Random::Gener
     const float targetStartX = 50.0f;
     const float targetStartY = flatGroundY + (boxSize * 0.5f);
 
-    PS_AGONY::Vec2 boxPolyVertices[4] = {
+    PS_AGONY2D::Vec2 boxPolyVertices[4] = {
         { -boxSize * 0.5f, -boxSize * 0.5f },
         {  boxSize * 0.5f, -boxSize * 0.5f },
         {  boxSize * 0.5f,  boxSize * 0.5f },
@@ -831,7 +831,7 @@ static constexpr float kTankRestHeight = 0.725f + 0.6f + 1.6f;
 // The end wheels sit outside the road wheels on x and higher up, so the front and rear of the
 // track slope upward and climb obstacles. The rollers stay inside the road wheels' x range.
 // Forward is +x; the sprocket (powered) is at the rear, the idler (tensioner) at the front.
-void load_ObjectTank(PS_AGONY::Simulation& simulation,
+void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
     float positionX,
     float positionY,
     float rotation,
@@ -922,17 +922,17 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
 
     // === MATERIALS ===
     // Elasticity 0 everywhere: nothing should bounce on a tank.
-    const PS_AGONY::MaterialIndex linkMat = simulation.createMaterial({       // Rubber/cleats: grips ground and wheels.
+    const PS_AGONY2D::MaterialIndex linkMat = simulation.createMaterial({       // Rubber/cleats: grips ground and wheels.
         .elasticity = 0.0f, .staticFriction = 1.2f, .dynamicFriction = 1.0f });
-    const PS_AGONY::MaterialIndex wheelMat = simulation.createMaterial({      // Grips the track so it can drive it.
+    const PS_AGONY2D::MaterialIndex wheelMat = simulation.createMaterial({      // Grips the track so it can drive it.
         .elasticity = 0.0f, .staticFriction = 0.8f, .dynamicFriction = 0.7f });
-    const PS_AGONY::MaterialIndex hullMat = simulation.createMaterial({       // Slippery: the track slides under it if they touch.
+    const PS_AGONY2D::MaterialIndex hullMat = simulation.createMaterial({       // Slippery: the track slides under it if they touch.
         .elasticity = 0.0f, .staticFriction = 0.05f, .dynamicFriction = 0.03f });
 
     // === HULL-LOCAL -> WORLD ===
     const float cosR = std::cos(rotation);
     const float sinR = std::sin(rotation);
-    auto toWorld = [&](float lx, float ly) -> PS_AGONY::Vec2 {
+    auto toWorld = [&](float lx, float ly) -> PS_AGONY2D::Vec2 {
         return { positionX + lx * cosR - ly * sinR,
                  positionY + lx * sinR + ly * cosR };
         };
@@ -946,11 +946,11 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
         .size = { hullWidth, hullHeight }
         });
     if (!hullOpt) return;
-    const PS_AGONY::ObjectIndex hull = *hullOpt;
+    const PS_AGONY2D::ObjectIndex hull = *hullOpt;
 
     // === WHEEL FACTORY ===
     // Mass scales with area (radius^2), anchored to the road wheel.
-    auto createWheel = [&](float localX, float localY, float radius) -> std::optional<PS_AGONY::ObjectIndex>
+    auto createWheel = [&](float localX, float localY, float radius) -> std::optional<PS_AGONY2D::ObjectIndex>
         {
             const float ratio = radius / roadWheelRadius;
             return simulation.createCircle({
@@ -1149,7 +1149,7 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
     for (const PathSegment& seg : path)
         perimeter += seg.length;
 
-    auto pathPoint = [&](float d) -> PS_AGONY::Vec2
+    auto pathPoint = [&](float d) -> PS_AGONY2D::Vec2
         {
             for (size_t k = 0; k < path.size(); ++k)
             {
@@ -1172,17 +1172,17 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
     const int linkCount = static_cast<int>(perimeter / linkPitch + 0.5f);
 
     // Pivot i is the joint point between link i-1 and link i; link i spans pivot i -> pivot i+1.
-    std::vector<PS_AGONY::Vec2> pivots(linkCount);
+    std::vector<PS_AGONY2D::Vec2> pivots(linkCount);
     for (int i = 0; i < linkCount; ++i)
         pivots[i] = pathPoint(perimeter * static_cast<float>(i) / static_cast<float>(linkCount));
 
     // === TRACK LINKS ===
-    std::vector<PS_AGONY::ObjectIndex> links(linkCount);
+    std::vector<PS_AGONY2D::ObjectIndex> links(linkCount);
     std::vector<float> halfChord(linkCount);
     for (int i = 0; i < linkCount; ++i)
     {
-        const PS_AGONY::Vec2 a = pivots[i];
-        const PS_AGONY::Vec2 b = pivots[(i + 1) % linkCount];
+        const PS_AGONY2D::Vec2 a = pivots[i];
+        const PS_AGONY2D::Vec2 b = pivots[(i + 1) % linkCount];
         const float dx = b.x - a.x;
         const float dy = b.y - a.y;
         const float chord = std::sqrt(dx * dx + dy * dy);
@@ -1216,7 +1216,7 @@ void load_ObjectTank(PS_AGONY::Simulation& simulation,
 }
 
 // Scene: flat ground with configurable obstacles, a tank (scale 2) and a car (scale 1) in front of it.
-void load_Tank(PS_AGONY::Simulation& simulation)
+void load_Tank(PS_AGONY2D::Simulation& simulation)
 {
     // === CONFIGURATION ===
     constexpr float groundWidth = 400.0f;
@@ -1244,7 +1244,7 @@ void load_Tank(PS_AGONY::Simulation& simulation)
     };
 
     // === MATERIAL ===
-    const PS_AGONY::MaterialIndex groundMat = simulation.createMaterial({
+    const PS_AGONY2D::MaterialIndex groundMat = simulation.createMaterial({
         .elasticity = 0.0f, .staticFriction = 1.0f, .dynamicFriction = 0.9f });
 
     // === TERRAIN ===
@@ -1277,15 +1277,15 @@ void load_Tank(PS_AGONY::Simulation& simulation)
     load_ObjectCar(simulation, carX, kCarRestHeight * carScale, 0.0f, carScale);
 }
 
-static void onStarCollision(const PS_AGONY::CollisionEvent& event, void* userData)
+static void onStarCollision(const PS_AGONY2D::CollisionEvent& event, void* userData)
 {
     (void)event; (void)userData;
     std::cout << "[CollisionCallbackTest]: Star hit! Impulse: " << event.impulse << "\n";
 }
 
-static void load_CollisionCallbackTest(PS_AGONY::Simulation& simulation)
+static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
 {
-    using namespace PS_AGONY;
+    using namespace PS_AGONY2D;
     constexpr float pi = float(Constants::PI);
 
     const MaterialIndex mat = simulation.createMaterial({
@@ -1388,7 +1388,7 @@ static void load_CollisionCallbackTest(PS_AGONY::Simulation& simulation)
     }
 }
 
-void loadScene(PS_AGONY::Simulation& simulation, int scene)
+void loadScene(PS_AGONY2D::Simulation& simulation, int scene)
 {
     Ecstasy::Core::Random::Generator rvg{}; // Random value generator.
     rvg.setSeed(0);

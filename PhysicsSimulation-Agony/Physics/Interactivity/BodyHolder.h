@@ -3,7 +3,7 @@
 
 #include <optional>
 
-namespace PS_AGONY::Interactivity
+namespace PS_AGONY2D::Interactivity
 {
 	class BodyHolder
 	{

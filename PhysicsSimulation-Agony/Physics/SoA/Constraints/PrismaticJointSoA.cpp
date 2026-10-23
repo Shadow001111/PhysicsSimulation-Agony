@@ -3,7 +3,7 @@
 #include <utility>
 
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	ObjectIndex PrismaticJointSoA::append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Vec2 axisA, Real referenceAngle, Real stiffness, Real damping, Real lowerLimit, Real upperLimit, bool enableLimit)
 	{

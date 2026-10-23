@@ -1,8 +1,8 @@
 #pragma once
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	class Simulation;
 }
 
-void loadScene(PS_AGONY::Simulation& simulation, int scene);
+void loadScene(PS_AGONY2D::Simulation& simulation, int scene);

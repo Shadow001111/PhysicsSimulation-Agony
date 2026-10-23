@@ -1,7 +1,7 @@
 #pragma once
 #include "BvhNode.h"
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	using RealSimd = Ecstasy::Core::Simd<Real>;
 

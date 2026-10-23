@@ -6,7 +6,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	namespace
 	{
@@ -23,7 +23,7 @@ namespace PS_AGONY
 
 	void PrismaticJointSolver::computeConstraintData(Real deltaTime, std::span<const size_t> jointIndices, size_t outOffset)
 	{
-		TRACY_SCOPE_NC("Compute prismatic joint constraint data", PS_AGONY::Profiling::Color::Chocolate);
+		TRACY_SCOPE_NC("Compute prismatic joint constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
 		auto rotate = [](const Vec2& v, Real cos, Real sin) -> Vec2
 			{
@@ -211,7 +211,7 @@ namespace PS_AGONY
 
 	void PrismaticJointSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
-		TRACY_SCOPE_NC("Solve prismatic joint velocity constraints", PS_AGONY::Profiling::Color::Violet);
+		TRACY_SCOPE_NC("Solve prismatic joint velocity constraints", PS_AGONY2D::Profiling::Color::Violet);
 
 		std::span<PrismaticJointConstraintData> constraintDataSpan(constraintContainer.data() + pass.start, pass.size);
 

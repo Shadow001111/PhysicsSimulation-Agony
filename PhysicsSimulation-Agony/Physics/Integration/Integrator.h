@@ -2,7 +2,7 @@
 #include "Physics/Types/Types.h"
 #include "Physics/SoA/BodySoA.h"
 
-namespace PS_AGONY::Integrator
+namespace PS_AGONY2D::Integrator
 {
 	struct IntegrationSettings
 	{

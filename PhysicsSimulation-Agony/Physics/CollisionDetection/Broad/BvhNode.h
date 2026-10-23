@@ -3,7 +3,7 @@
 
 #include "Physics/Types/Types.h"
 
-namespace PS_AGONY::BroadPhaseInternal
+namespace PS_AGONY2D::BroadPhaseInternal
 {
 	// Note: Splitting on cold and hot didn't help.
 	struct BvhNode

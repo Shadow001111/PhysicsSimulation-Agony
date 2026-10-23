@@ -9,7 +9,7 @@
 #include <cmath>
 #include <limits>
 
-namespace PS_AGONY::PhysicsGeometry
+namespace PS_AGONY2D::PhysicsGeometry
 {
     Real calculateCircleInertia(Real mass, Real radius, Vec2 centerOfMass)
     {

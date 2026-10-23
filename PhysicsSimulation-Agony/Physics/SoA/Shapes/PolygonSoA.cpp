@@ -3,7 +3,7 @@
 #include <cmath>
 #include <utility>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
 	void PolygonGeometry::allocate(size_t count)
 	{

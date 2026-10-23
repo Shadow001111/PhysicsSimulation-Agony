@@ -6,7 +6,7 @@
 #include <vector>
 #include <span>
 
-namespace PS_AGONY
+namespace PS_AGONY2D
 {
     // Result of a single planning call: the wave/worker schedule for one solver's
     // constraint set. Owned by the solver (not the planner) so its buffers persist

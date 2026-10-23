@@ -5,7 +5,7 @@
 #include <span>
 #include <vector>
 
-namespace PS_AGONY::PhysicsGeometry
+namespace PS_AGONY2D::PhysicsGeometry
 {
     enum class ConcaveDecompositionMethod
     {
