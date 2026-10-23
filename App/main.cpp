@@ -702,6 +702,9 @@ static int gameFunc()
         wnd.pollEvents();
         windowInputManager.processInput();
 
+        // Update camera aspect ratio.
+        camera.aspectRatio = wnd.getAspectRatio();
+
         // Start the ImGui frame.
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
