@@ -6,9 +6,9 @@
 // public surface unchanged while letting the three translation units
 // share code.
 
-#include "Physics/ObjectSoA.h"
-#include "Physics/Constants.h"
-#include "Physics/FastCosSin.h"
+#include "PS_AGONY2D/ObjectSoA.h"
+#include "PS_AGONY2D/Constants.h"
+#include "PS_AGONY2D/FastCosSin.h"
 
 #include <cstdint>
 

@@ -1,9 +1,9 @@
 #include "SimulationRenderer.h"
 #include "SimulationRenderer_Internal.h"
 
-#include "Physics/Simulation.h"
+#include "PS_AGONY2D/Simulation.h"
 
-#include "Physics/Profiling/TracyProfiler.h"
+#include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <cmath>

@@ -1,9 +1,9 @@
 #pragma once
 #include "ShapeRenderer.h"
 
-#include "Physics/ObjectSoA.h"
-#include "Physics/Types/Camera2D.h"
-#include "Physics/SimulationImpl/PolygonBuild.h"
+#include "PS_AGONY2D/ObjectSoA.h"
+#include "PS_AGONY2D/Types/Camera2D.h"
+#include "PS_AGONY2D/SimulationImpl/PolygonBuild.h"
 
 #include <span>
 #include <optional>

@@ -24,142 +24,142 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Physics\Simulation.cpp">
+    <ClCompile Include="PS_AGONY2D\Simulation.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Broad\BroadPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Threading.cpp">
+    <ClCompile Include="PS_AGONY2D\Threading.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\FastCosSin.cpp">
+    <ClCompile Include="PS_AGONY2D\FastCosSin.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\SolvingPlanner.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\SolvingPlanner.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\SolverBase.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\SolverBase.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\BodyCollisionSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\BodyCollisionSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\SpringSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\SpringSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\BodySoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\BodySoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\ObjectManager.cpp">
+    <ClCompile Include="PS_AGONY2D\SimulationImpl\ObjectManager.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Integration\Integrator.cpp">
+    <ClCompile Include="PS_AGONY2D\Integration\Integrator.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\PhysicsGeometry.cpp">
+    <ClCompile Include="PS_AGONY2D\SimulationImpl\PhysicsGeometry.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\FixedClock.cpp">
+    <ClCompile Include="PS_AGONY2D\SimulationImpl\FixedClock.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\RodSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\RodSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\PrismaticJointSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\PrismaticJointSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\RevoluteJointSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\RevoluteJointSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\SliderJointSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\SliderJointSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\PolygonDecomposition.cpp">
+    <ClCompile Include="PS_AGONY2D\SimulationImpl\PolygonDecomposition.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\MotorSolver.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\MotorSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Broad\BvhTree.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Broad\BvhTree.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\WaveRunner.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\WaveRunner.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\Solving\ConstraintScheduler.cpp">
+    <ClCompile Include="PS_AGONY2D\Solving\ConstraintScheduler.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Shapes\BoxSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Shapes\BoxSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Shapes\CapsuleSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Shapes\CapsuleSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Shapes\CircleSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Shapes\CircleSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Shapes\PolygonSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Shapes\PolygonSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\ColliderSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\ColliderSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Constraints\MotorSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Constraints\MotorSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Constraints\PrismaticJointSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Constraints\PrismaticJointSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Constraints\RevoluteJointSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Constraints\RevoluteJointSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Constraints\RodSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Constraints\RodSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Constraints\SliderJointSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Constraints\SliderJointSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SoA\Constraints\SpringSoA.cpp">
+    <ClCompile Include="PS_AGONY2D\SoA\Constraints\SpringSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CirclePolygon.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\CirclePolygon.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleBox.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\CircleBox.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleCircle.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\CircleCircle.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CircleCapsule.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\CircleCapsule.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxBox.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\BoxBox.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxPolygon.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\BoxPolygon.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\BoxCapsule.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\BoxCapsule.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\PolygonPolygon.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\PolygonPolygon.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\PolygonCapsule.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\PolygonCapsule.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\CollisionDetection\Narrow\CollisionMethods\CapsuleCapsule.cpp">
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\Narrow\CollisionMethods\CapsuleCapsule.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\LeftOutFunctions.cpp">
+    <ClCompile Include="PS_AGONY2D\SimulationImpl\LeftOutFunctions.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Physics\SimulationImpl\ColliderAABBBuilder.cpp">
+    <ClCompile Include="PS_AGONY2D\SimulationImpl\ColliderAABBBuilder.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp">
@@ -167,193 +167,193 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Physics\Simulation.h">
+    <ClInclude Include="PS_AGONY2D\Simulation.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Types\Types.h">
+    <ClInclude Include="PS_AGONY2D\Types\Types.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\ObjectSoA.h">
+    <ClInclude Include="PS_AGONY2D\ObjectSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Types\Material.h">
+    <ClInclude Include="PS_AGONY2D\Types\Material.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\BroadPhaseCollisionDetector.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BroadPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\NarrowPhaseCollisionDetector.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Threading.h">
+    <ClInclude Include="PS_AGONY2D\Threading.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SymmetricMatrix.h">
+    <ClInclude Include="PS_AGONY2D\SymmetricMatrix.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Interactivity\BodyHolder.h">
+    <ClInclude Include="PS_AGONY2D\Interactivity\BodyHolder.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Constants.h">
+    <ClInclude Include="PS_AGONY2D\Constants.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\FastCosSin.h">
+    <ClInclude Include="PS_AGONY2D\FastCosSin.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\SolvingPlanner.h">
+    <ClInclude Include="PS_AGONY2D\Solving\SolvingPlanner.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\ContainerUtilities.h">
+    <ClInclude Include="PS_AGONY2D\ContainerUtilities.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\SolverBase.h">
+    <ClInclude Include="PS_AGONY2D\Solving\SolverBase.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\BodyCollisionSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\BodyCollisionSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\SpringSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\SpringSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\AABBSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\AABBSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\BodySoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\BodySoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Shapes\CircleSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Shapes\CircleSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Shapes\BoxSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Shapes\BoxSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Shapes\PolygonSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Shapes\PolygonSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\SpringSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Constraints\SpringSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\ConstraintSystem.h">
+    <ClInclude Include="PS_AGONY2D\ConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Types\Camera2D.h">
+    <ClInclude Include="PS_AGONY2D\Types\Camera2D.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\ObjectManager.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ObjectManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Integration\Integrator.h">
+    <ClInclude Include="PS_AGONY2D\Integration\Integrator.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\PhysicsGeometry.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\PhysicsGeometry.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\ColliderSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\ColliderSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\QueryShapes.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\QueryShapes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\BvhNode.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhNode.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\FixedClock.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\FixedClock.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\RodSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Constraints\RodSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\RodSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\RodSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\PrismaticJointSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Constraints\PrismaticJointSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\PrismaticJointSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\PrismaticJointSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Types\ExecutionPolicy.h">
+    <ClInclude Include="PS_AGONY2D\Types\ExecutionPolicy.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\Math.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\Math.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\BvhNodePair.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhNodePair.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\LeafPairTesting.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\LeafPairTesting.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\BvhPairTraversal.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhPairTraversal.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\ConstraintSolverBase.h">
+    <ClInclude Include="PS_AGONY2D\Solving\ConstraintSolverBase.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\SliderJointSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Constraints\SliderJointSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\RevoluteJointSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\RevoluteJointSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\RevoluteJointSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Constraints\RevoluteJointSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\SliderJointSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\SliderJointSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\PolygonDecomposition.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\PolygonDecomposition.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Constraints\MotorSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Constraints\MotorSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\MotorSolver.h">
+    <ClInclude Include="PS_AGONY2D\Solving\MotorSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\BvhTree.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhTree.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Broad\BvhTreeView.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhTreeView.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\WaveRunner.h">
+    <ClInclude Include="PS_AGONY2D\Solving\WaveRunner.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Solving\ConstraintScheduler.h">
+    <ClInclude Include="PS_AGONY2D\Solving\ConstraintScheduler.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\PolygonBuild.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\PolygonBuild.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Limits.h">
+    <ClInclude Include="PS_AGONY2D\Limits.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SoA\Shapes\CapsuleSoA.h">
+    <ClInclude Include="PS_AGONY2D\SoA\Shapes\CapsuleSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\MaterialManager.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\MaterialManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Types\CollisionEvent.h">
+    <ClInclude Include="PS_AGONY2D\Types\CollisionEvent.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\CollisionCallbackManager.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\CollisionCallbackManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Narrow\HelperMethods.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\HelperMethods.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\CollisionDetection\Narrow\Constants.h">
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\Constants.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\LeftOutFunctions.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\LeftOutFunctions.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\SimulationImpl\ColliderAABBBuilder.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ColliderAABBBuilder.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Physics\Profiling\TracyProfiler.h">
+    <ClInclude Include="PS_AGONY2D\Profiling\TracyProfiler.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

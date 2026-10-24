@@ -1,11 +1,11 @@
 #include "SimulationRenderer.h"
 #include "SimulationRenderer_Internal.h"
 
-#include "Physics/Simulation.h"
-#include "Physics/Constants.h"
-#include "Physics/FastCosSin.h"
+#include "PS_AGONY2D/Simulation.h"
+#include "PS_AGONY2D/Constants.h"
+#include "PS_AGONY2D/FastCosSin.h"
 
-#include "Physics/Profiling/TracyProfiler.h"
+#include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
 #include <algorithm>

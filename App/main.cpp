@@ -1,11 +1,11 @@
 #include "Scenes.h"
 #include "EcstasyThreadingBackend.h"
 
-#include "Physics/Simulation.h"
+#include "PS_AGONY2D/Simulation.h"
 
 #include "Render/SimulationRenderer.h"
 
-#include "Physics/Profiling/TracyProfiler.h"
+#include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Graphics/WindowManager.h"
 
 #include "imgui.h"
