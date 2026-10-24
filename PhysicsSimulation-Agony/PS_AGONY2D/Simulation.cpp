@@ -447,6 +447,8 @@ namespace PS_AGONY2D
         computeBodyWorldCenters();
         computeColliderWorldTransforms();
         buildColliderAABBs();
+
+        broadPhaseCollisionDetector.refitTrees(BroadPhaseInternal::BvhTreeTypeFlag::Dynamic);
     }
 
     void Simulation::buildColliderAABBs()

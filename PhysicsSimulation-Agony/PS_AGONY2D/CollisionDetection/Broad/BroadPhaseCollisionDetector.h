@@ -147,6 +147,8 @@ namespace PS_AGONY2D
 			StaticTreeUpdate staticUpdate
 		);
 
+		void refitTrees(BroadPhaseInternal::BvhTreeTypeFlag flags);
+
 		// Forces a static tree rebuild on the next buildTrees.
 		void requestStaticRebuild() noexcept { staticRebuildRequested = true; }
 

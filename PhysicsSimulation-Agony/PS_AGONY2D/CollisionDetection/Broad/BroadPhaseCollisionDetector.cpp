@@ -100,6 +100,17 @@ namespace PS_AGONY2D
 		}
 	}
 
+	void BroadPhaseCollisionDetector::refitTrees(BroadPhaseInternal::BvhTreeTypeFlag flags)
+	{
+		uint32_t mask = static_cast<uint32_t>(flags);
+		while (mask)
+		{
+			const uint32_t treeIndex = std::countr_zero(mask);
+			mask &= mask - 1;
+			trees[treeIndex].refit(collidersAABB);
+		}
+	}
+
 	std::span<const ObjectPair> BroadPhaseCollisionDetector::findCollisions(ExecutionPolicy executionPolicy)
 	{
 		TRACY_SCOPE_N("Find broad-phase collisions");
