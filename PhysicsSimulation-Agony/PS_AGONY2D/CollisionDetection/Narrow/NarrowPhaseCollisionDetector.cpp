@@ -141,15 +141,15 @@ namespace PS_AGONY2D
     }
 
     void NarrowPhaseCollisionDetector::findCollisionsInCircle(
-        std::span<const ObjectIndex> collidersToCheck,
+        std::span<const ObjectDenseIndex> collidersToCheck,
         Vec2 pos, Real radius,
-        std::vector<std::pair<ObjectIndex, Real>>& outColliding
+        std::vector<std::pair<ObjectDenseIndex, Real>>& outColliding
     ) const
     {
-        for (ObjectIndex colliderIndex : collidersToCheck)
+        for (ObjectDenseIndex colliderIndex : collidersToCheck)
         {
             const BodyType type = colliders.shapeType[colliderIndex];
-            const ObjectIndex shapeIdx = colliders.shapeIndex[colliderIndex];
+            const ObjectDenseIndex shapeIdx = colliders.shapeIndex[colliderIndex];
             const Vec2 colliderPos = { colliders.worldPosX[colliderIndex], colliders.worldPosY[colliderIndex] };
 
             Real sdf = std::numeric_limits<Real>::max();
@@ -295,12 +295,12 @@ namespace PS_AGONY2D
         // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot,
         // or INVALID_COLLIDER_INDEX if the slot holds a collider created after the cache was built
         // (or was vacated). Slots never touched are identity.
-        robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> slotToEntity;
-        robin_hood::unordered_flat_set<ColliderIndex> dead;
+        robin_hood::unordered_flat_map<ColliderDenseIndex, ColliderDenseIndex> slotToEntity;
+        robin_hood::unordered_flat_set<ColliderDenseIndex> dead;
         slotToEntity.reserve(deletedColliders.size() * 2);
         dead.reserve(deletedColliders.size());
 
-        auto entityAt = [&](ColliderIndex slot) -> ColliderIndex
+        auto entityAt = [&](ColliderDenseIndex slot) -> ColliderDenseIndex
             {
                 const auto it = slotToEntity.find(slot);
                 return it == slotToEntity.end() ? slot : it->second;
@@ -308,15 +308,15 @@ namespace PS_AGONY2D
 
         for (const auto& deletion : deletedColliders)
         {
-            const ColliderIndex d = deletion.deletedIndex;
-            const ColliderIndex s = deletion.swappedFromIndex;
+            const ColliderDenseIndex d = deletion.deletedIndex;
+            const ColliderDenseIndex s = deletion.swappedFromIndex;
 
-            const ColliderIndex victim = entityAt(d);
+            const ColliderDenseIndex victim = entityAt(d);
             if (victim != INVALID_COLLIDER_INDEX) dead.insert(victim);
 
             if (s != INVALID_COLLIDER_INDEX && s != d)
             {
-                const ColliderIndex moved = entityAt(s);
+                const ColliderDenseIndex moved = entityAt(s);
                 slotToEntity[d] = moved;
                 slotToEntity[s] = INVALID_COLLIDER_INDEX; // Vacated; a later create may reuse it.
             }
@@ -327,9 +327,9 @@ namespace PS_AGONY2D
         }
 
         // original index -> final index (INVALID_COLLIDER_INDEX if deleted). Untouched indices are absent.
-        robin_hood::unordered_flat_map<ColliderIndex, ColliderIndex> remap;
+        robin_hood::unordered_flat_map<ColliderDenseIndex, ColliderDenseIndex> remap;
         remap.reserve(dead.size() + slotToEntity.size());
-        for (const ColliderIndex e : dead) remap[e] = INVALID_COLLIDER_INDEX;
+        for (const ColliderDenseIndex e : dead) remap[e] = INVALID_COLLIDER_INDEX;
         for (const auto& [slot, entity] : slotToEntity)
         {
             if (entity != INVALID_COLLIDER_INDEX && entity != slot) remap[entity] = slot;
@@ -340,8 +340,8 @@ namespace PS_AGONY2D
 
         for (auto it = previousContactDataContainer.begin(); it != previousContactDataContainer.end();)
         {
-            ColliderIndex a = it->first.colliderA;
-            ColliderIndex b = it->first.colliderB;
+            ColliderDenseIndex a = it->first.colliderA;
+            ColliderDenseIndex b = it->first.colliderB;
 
             const auto ra = remap.find(a);
             const auto rb = remap.find(b);

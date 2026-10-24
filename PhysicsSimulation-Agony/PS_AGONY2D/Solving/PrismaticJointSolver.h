@@ -7,7 +7,7 @@ namespace PS_AGONY2D
 {
 	struct PrismaticJointConstraintData
 	{
-		ObjectIndex bodyIndexA, bodyIndexB;
+		ObjectDenseIndex bodyIndexA, bodyIndexB;
 
 		Vec2 axis; // World-space axis (rotates with body A); translation is locked perpendicular to this.
 		Vec2 perp; // World-space perpendicular to axis.

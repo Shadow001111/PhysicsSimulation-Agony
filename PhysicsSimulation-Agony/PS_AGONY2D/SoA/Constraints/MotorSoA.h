@@ -1,10 +1,11 @@
 #pragma once
 #include "PS_AGONY2D/ContainerUtilities.h"
 #include "PS_AGONY2D/Types/Types.h"
+#include "PS_AGONY2D/HandleTable.h"
 
 // Define all scalar SoA fields.
 #define PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(F) \
-    F(bodyIndex, ObjectIndex) \
+    F(bodyIndex, ObjectDenseIndex) \
     F(targetSpeed, Real) \
     F(maxTorque, Real)
 
@@ -23,8 +24,17 @@ namespace PS_AGONY2D
         PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(DECLARE_FIELD)
         #undef DECLARE_FIELD
 
-        ObjectIndex append(ObjectIndex index, Real speed, Real torqueLimit);
+        HandleTable handles;
+
+        ObjectDenseIndex append(ObjectDenseIndex index, Real speed, Real torqueLimit);
+        void swapWithBack(size_t index);
+        void popBack();
         size_t swapRemove(size_t index);
+
+        bool isValid(Handle h) const noexcept { return handles.isValid(h); }
+        uint32_t indexOf(Handle h) const noexcept { return handles.indexOf(h); }
+        uint32_t indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
+        Handle handleAt(size_t index) const noexcept { return handles.handleAt(index); }
 
         size_t getCount() const noexcept { return bodyIndex.size(); }
         size_t getMemoryUsage() const noexcept;

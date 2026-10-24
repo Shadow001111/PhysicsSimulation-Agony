@@ -131,8 +131,8 @@ namespace PS_AGONY2D
 		for (size_t c = 0; c < collisionCount; c++)
 		{
 			const VelocityHotData& data = velocityHotContainer[c];
-			const ObjectIndex bodyIndexA = data.bodyA;
-			const ObjectIndex bodyIndexB = data.bodyB;
+			const ObjectDenseIndex bodyIndexA = data.bodyA;
+			const ObjectDenseIndex bodyIndexB = data.bodyB;
 
 			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };
@@ -403,8 +403,8 @@ namespace PS_AGONY2D
 			const VelocityConstraintData& velocityConstraintData = constraintDataSpan[c];
 
 			// Get body indices.
-			const ObjectIndex bodyIndexA = collisionData.bodyA;
-			const ObjectIndex bodyIndexB = collisionData.bodyB;
+			const ObjectDenseIndex bodyIndexA = collisionData.bodyA;
+			const ObjectDenseIndex bodyIndexB = collisionData.bodyB;
 
 			// Get body data.
 			const Real invMassA = invMassPtr[bodyIndexA];
@@ -487,8 +487,8 @@ namespace PS_AGONY2D
 			VelocityHotData& collisionData = collisionDataSpan[c];
 			const VelocityConstraintData& velocityConstraintData = constraintDataSpan[c];
 
-			const ObjectIndex bodyIndexA = collisionData.bodyA;
-			const ObjectIndex bodyIndexB = collisionData.bodyB;
+			const ObjectDenseIndex bodyIndexA = collisionData.bodyA;
+			const ObjectDenseIndex bodyIndexB = collisionData.bodyB;
 
 			const Real invMassA = invMassPtr[bodyIndexA];
 			const Real invMassB = invMassPtr[bodyIndexB];
@@ -972,8 +972,8 @@ namespace PS_AGONY2D
 		for (size_t c = 0; c < collisionCount; c++)
 		{
 			const auto& data = collisionDataSpan[c];
-			const ObjectIndex bodyIndexA = data.bodyA;
-			const ObjectIndex bodyIndexB = data.bodyB;
+			const ObjectDenseIndex bodyIndexA = data.bodyA;
+			const ObjectDenseIndex bodyIndexB = data.bodyB;
 
 			const Vec2 positionA = { positionXPtr[bodyIndexA], positionYPtr[bodyIndexA] };
 			const Vec2 positionB = { positionXPtr[bodyIndexB], positionYPtr[bodyIndexB] };

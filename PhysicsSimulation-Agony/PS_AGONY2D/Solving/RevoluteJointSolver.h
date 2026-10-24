@@ -7,7 +7,7 @@ namespace PS_AGONY2D
 {
 	struct RevoluteJointConstraintData
 	{
-		ObjectIndex bodyIndexA, bodyIndexB;
+		ObjectDenseIndex bodyIndexA, bodyIndexB;
 		Vec2 rotatedAnchorA, rotatedAnchorB;
 		// Symmetric inverse effective mass matrix: [invK11 invK12; invK12 invK22].
 		// All three left at 0 means "nothing to solve" (mirrors SpringSolver's invEffectiveMass == 0 sentinel).

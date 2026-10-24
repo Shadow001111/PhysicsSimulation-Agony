@@ -27,7 +27,7 @@ namespace PS_AGONY2D
 	// Params for attaching a new collider to an EXISTING body immediately (no standalone colliders).
 	struct CircleColliderCreateParams
 	{
-		ObjectIndex bodyIndex;
+		ObjectDenseIndex bodyIndex;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -36,7 +36,7 @@ namespace PS_AGONY2D
 
 	struct BoxColliderCreateParams
 	{
-		ObjectIndex bodyIndex;
+		ObjectDenseIndex bodyIndex;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -45,7 +45,7 @@ namespace PS_AGONY2D
 
 	struct PolygonColliderCreateParams
 	{
-		ObjectIndex bodyIndex;
+		ObjectDenseIndex bodyIndex;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -58,7 +58,7 @@ namespace PS_AGONY2D
 	// If 'localStart' and 'localEnd' are set, they dominate.
 	struct CapsuleColliderCreateParams
 	{
-		ObjectIndex bodyIndex;
+		ObjectDenseIndex bodyIndex;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -74,7 +74,7 @@ namespace PS_AGONY2D
 	// [firstColliderIndex, firstColliderIndex + colliderCount).
 	struct PolygonColliderCreateResult
 	{
-		ColliderIndex firstColliderIndex{ 0 };
+		ColliderDenseIndex firstColliderIndex{ 0 };
 		size_t colliderCount{ 0 };
 	};
 
@@ -129,55 +129,55 @@ namespace PS_AGONY2D
 	private:
 		// Persistent collider ID lists (maintained in O(1) on create/destroy; never rebuilt per frame).
 		// A collider lives in exactly one list, chosen by its body's isStatic flag (fixed at creation).
-		std::vector<ObjectIndex> dynamicColliderIDs;
-		std::vector<ObjectIndex> staticColliderIDs;
+		std::vector<ObjectDenseIndex> dynamicColliderIDs;
+		std::vector<ObjectDenseIndex> staticColliderIDs;
 		std::vector<uint32_t> colliderSlot; // colliderIndex -> position inside its list.
 
 	public:
-		std::span<const ObjectIndex> getDynamicColliderIDs() const noexcept { return dynamicColliderIDs; }
-		std::span<const ObjectIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
+		std::span<const ObjectDenseIndex> getDynamicColliderIDs() const noexcept { return dynamicColliderIDs; }
+		std::span<const ObjectDenseIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
 
 		explicit ObjectManager(const std::vector<Material>& materials);
 
 		// Creates a body with NO colliders attached. Mass/inertia are taken directly
 		// from params; since there's no shape yet, inertia is not auto-derived and
 		// attaching colliders afterward does not recompute mass/inertia/COM for you.
-		std::optional<ObjectIndex> createBody(const BodyCreateParams& params);
+		std::optional<ObjectDenseIndex> createBody(const BodyCreateParams& params);
 
 		// Attaches a new collider of the given shape to an EXISTING body immediately.
 		// Returns std::nullopt if bodyIndex is invalid.
-		std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params);
-		std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params);
+		std::optional<ColliderDenseIndex> createCircleCollider(const CircleColliderCreateParams& params);
+		std::optional<ColliderDenseIndex> createBoxCollider(const BoxColliderCreateParams& params);
 		std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params);
-		std::optional<ColliderIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params);
+		std::optional<ColliderDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params);
 
-		std::optional<ObjectIndex> createCircle(const CircleCreateParams& params);
-		std::optional<ObjectIndex> createBox(const BoxCreateParams& params);
-		std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params);
-		std::optional<ObjectIndex> createCapsule(const CapsuleCreateParams& params);
+		std::optional<ObjectDenseIndex> createCircle(const CircleCreateParams& params);
+		std::optional<ObjectDenseIndex> createBox(const BoxCreateParams& params);
+		std::optional<ObjectDenseIndex> createPolygon(const PolygonCreateParams& params);
+		std::optional<ObjectDenseIndex> createCapsule(const CapsuleCreateParams& params);
 
 		// Destroys a body and cascade-deletes every collider/spring attached to it.
-		void destroyBody(ObjectIndex bodyIndex, ConstraintSystemArray& constraintSystems);
+		void destroyBody(ObjectDenseIndex bodyIndex, ConstraintSystemArray& constraintSystems);
 
 		// Destroys a single collider without touching its owning body.
-		void destroyCollider(ColliderIndex colliderIndex, ConstraintSystemArray& constraintSystems);
+		void destroyCollider(ColliderDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems);
 	private:
 		//
-		ColliderIndex createColliderInternal(
-			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
-			MaterialIndex materialIndex, BodyType shapeType, ObjectIndex shapeIndex
+		ColliderDenseIndex createColliderInternal(
+			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
+			MaterialIndex materialIndex, BodyType shapeType, ObjectDenseIndex shapeIndex
 		);
 
 		// Appends a single convex-polygon collider (assumed already convex, CCW, >=3 vertices -
 		// no validation is performed here) to bodyIndex. Shared by createPolygon() and
 		// createPolygonCollider() so the collider/shape-SoA wiring is written once.
-		ColliderIndex createConvexPolygonColliderInternal(
-			ObjectIndex bodyIndex, Vec2 localOffset, Real localRotation,
+		ColliderDenseIndex createConvexPolygonColliderInternal(
+			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
 			MaterialIndex materialIndex, std::vector<Vec2> convexVertices
 		);
 
 		// Removes a single collider (and its underlying shape-SoA entry) from bodyIndex's
 		// owned list. Shared by destroyCollider() and destroyBody()'s cascade loop.
-		void destroyColliderInternal(ObjectIndex bodyIndex, ColliderIndex colliderIndex);
+		void destroyColliderInternal(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex);
 	};
 }

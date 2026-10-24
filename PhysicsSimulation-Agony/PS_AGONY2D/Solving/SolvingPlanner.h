@@ -98,7 +98,7 @@ namespace PS_AGONY2D
             size_t cacheLineBytes,
             SolvingPlan& outPlan,
             const uint8_t* isStatic = nullptr);
-        void planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic = nullptr);
+        void planSingleStandardExecution(const std::vector<ObjectDenseIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic = nullptr);
 
         [[nodiscard]] size_t getMemoryUsage() const;
     };

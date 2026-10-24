@@ -34,7 +34,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 	{
 	public:
 		// Rebuilds the tree over 'ids' (collider indices into 'aabbs').
-		void build(const AABBSoAViewer& aabbs, std::span<const ColliderIndex> ids);
+		void build(const AABBSoAViewer& aabbs, std::span<const ColliderDenseIndex> ids);
 
 		// Refits to the current AABBs. Membership must match the last build().
 		void refit(const AABBSoAViewer& aabbs);
@@ -50,7 +50,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		void getLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
 
 		template <typename ShapeQuery>
-		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const;
+		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderDenseIndex>& outColliders) const;
 
 		template <typename ShapeQuery>
 		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const;
@@ -84,15 +84,15 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
 
-		Bounds gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ColliderIndex> ids);
+		Bounds gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ColliderDenseIndex> ids);
 		void transformCentroids(uint32_t count, const Bounds& bounds);
 		void computeMortonCodes(uint32_t count);
-		void sortByMortonCodes(std::span<const ColliderIndex> ids);
+		void sortByMortonCodes(std::span<const ColliderDenseIndex> ids);
 		uint32_t buildNodes(uint32_t count); // Returns leaf count.
 		void fitNodes(const AABBSoAViewer& aabbs, bool isRebuild);
 
 		std::vector<BvhNode> nodes;
-		std::vector<ObjectIndex> colliderIndices; // Collider indices, sorted by Morton code.
+		std::vector<ObjectDenseIndex> colliderIndices; // Collider indices, sorted by Morton code.
 		LeafAABBSoA leafAABBs;
 
 		// Build scratch.
@@ -104,7 +104,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 	};
 
 	template <typename ShapeQuery>
-	inline void BvhTree::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderIndex>& outColliders) const
+	inline void BvhTree::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderDenseIndex>& outColliders) const
 	{
 		using RealSimd = Ecstasy::Core::Simd<Real>;
 
@@ -118,7 +118,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const Real* ECSTASY_RESTRICT leafMinYPtr = reinterpret_cast<const Real*>(leafAABBs.minY.data());
 		const Real* ECSTASY_RESTRICT leafMaxYPtr = reinterpret_cast<const Real*>(leafAABBs.maxY.data());
 		const BvhNode* ECSTASY_RESTRICT nodePtr = nodes.data();
-		const ObjectIndex* ECSTASY_RESTRICT indicesPtr = colliderIndices.data();
+		const ObjectDenseIndex* ECSTASY_RESTRICT indicesPtr = colliderIndices.data();
 
 		uint32_t stack[MAX_STACK_CAPACITY];
 		uint32_t stackSize = 0;

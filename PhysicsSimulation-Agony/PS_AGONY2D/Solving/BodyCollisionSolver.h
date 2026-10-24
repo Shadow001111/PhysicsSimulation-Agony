@@ -39,7 +39,7 @@ namespace PS_AGONY2D
 		// TODO: also cache invMassA/B and invInertiaA/B here to avoid per-iteration body gathers (not measured yet).
 		struct VelocityHotData
 		{
-			ObjectIndex bodyA, bodyB;
+			ObjectDenseIndex bodyA, bodyB;
 			Vec2 normal;
 			uint32_t contactCount;
 			std::array<PersistentContactData, 2> impulses; // Working copy; scattered back to the detector's data at the end.
@@ -47,7 +47,7 @@ namespace PS_AGONY2D
 
 		struct PositionHotData
 		{
-			ObjectIndex bodyA, bodyB;
+			ObjectDenseIndex bodyA, bodyB;
 			Vec2 normal;
 			Real penetrationBase;
 		};

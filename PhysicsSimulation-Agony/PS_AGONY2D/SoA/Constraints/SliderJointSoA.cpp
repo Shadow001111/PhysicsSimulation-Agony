@@ -5,9 +5,9 @@
 
 namespace PS_AGONY2D
 {
-	ObjectIndex SliderJointSoA::append(ObjectIndex indexA, ObjectIndex indexB, Vec2 anchorA, Vec2 anchorB, Vec2 axisA, Real stiffness, Real damping, Real lowerLimit, Real upperLimit, bool enableLimit)
+	ObjectDenseIndex SliderJointSoA::append(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Vec2 anchorA, Vec2 anchorB, Vec2 axisA, Real stiffness, Real damping, Real lowerLimit, Real upperLimit, bool enableLimit)
 	{
-		const ObjectIndex newIndex = this->bodyIndexA.size();
+		const ObjectDenseIndex newIndex = this->bodyIndexA.size();
 
 		this->bodyIndexA.push_back(indexA);
 		this->bodyIndexB.push_back(indexB);
@@ -20,30 +20,51 @@ namespace PS_AGONY2D
 		this->upperLimit.push_back(upperLimit);
 		this->enableLimit.push_back(enableLimit ? uint8_t(1) : uint8_t(0));
 
+		handles.push();
+
 		return newIndex;
+	}
+
+	void SliderJointSoA::swapWithBack(size_t index)
+	{
+		if (index >= bodyIndexA.size()) [[unlikely]]
+		{
+			return;
+		}
+		handles.swapWithBack(index);
+
+		#define SWAP_FIELD(name, type) std::swap(name[index], name.back());
+		PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(SWAP_FIELD)
+		#undef SWAP_FIELD
+	}
+
+	void SliderJointSoA::popBack()
+	{
+		if (bodyIndexA.empty()) [[unlikely]]
+		{
+			return;
+		}
+		handles.popBack();
+
+		#define POP_FIELD(name, type) name.pop_back();
+		PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(POP_FIELD)
+		#undef POP_FIELD
 	}
 
 	size_t SliderJointSoA::swapRemove(size_t index)
 	{
 		const size_t lastIndex = bodyIndexA.size() - 1;
-
 		if (index != lastIndex)
 		{
-			#define SWAP_FIELD(name, type) std::swap(name[index], name[lastIndex]);
-			PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(SWAP_FIELD)
-			#undef SWAP_FIELD
+			swapWithBack(index);
 		}
-
-		#define POP_FIELD(name, type) name.pop_back();
-		PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(POP_FIELD)
-		#undef POP_FIELD
-
+		popBack();
 		return lastIndex;
 	}
 
 	size_t SliderJointSoA::getMemoryUsage() const noexcept
 	{
-		size_t total = 0;
+		size_t total = handles.getMemoryUsage();
 
 		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
 		PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(MEM_FIELD)

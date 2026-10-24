@@ -21,8 +21,8 @@ namespace PS_AGONY2D
 	// time so downstream solvers (which only ever act on bodies) never re-resolve them.
 	struct BodyCollisionData
 	{
-		ColliderIndex colliderA, colliderB;
-		ObjectIndex bodyA, bodyB;
+		ColliderDenseIndex colliderA, colliderB;
+		ObjectDenseIndex bodyA, bodyB;
 		Vec2 normal;
 		Real penetration;
 		uint32_t contactCount;
@@ -33,8 +33,8 @@ namespace PS_AGONY2D
 		BodyCollisionData() = default;
 
 		BodyCollisionData(
-			ColliderIndex colliderA, ColliderIndex colliderB,
-			ObjectIndex bodyA, ObjectIndex bodyB,
+			ColliderDenseIndex colliderA, ColliderDenseIndex colliderB,
+			ObjectDenseIndex bodyA, ObjectDenseIndex bodyB,
 			Vec2 normal,
 			Real depth,
 			uint32_t contactCount,
@@ -108,8 +108,8 @@ namespace PS_AGONY2D
 		// than one simultaneous collider pair, and warm-starting must not conflate them.
 		struct ColliderPairKey
 		{
-			ColliderIndex colliderA;
-			ColliderIndex colliderB;
+			ColliderDenseIndex colliderA;
+			ColliderDenseIndex colliderB;
 
 			bool operator==(const ColliderPairKey& other) const noexcept
 			{
@@ -180,10 +180,10 @@ namespace PS_AGONY2D
 
 		// 'collidersToCheck' and the first element of each 'outColliding' pair are COLLIDER indices.
 		void findCollisionsInCircle(
-			std::span<const ObjectIndex> collidersToCheck,
+			std::span<const ObjectDenseIndex> collidersToCheck,
 			Vec2 pos,
 			Real radius,
-			std::vector<std::pair<ObjectIndex, Real>>& outColliding
+			std::vector<std::pair<ObjectDenseIndex, Real>>& outColliding
 		) const;
 
 		void updatePersistentContactData();

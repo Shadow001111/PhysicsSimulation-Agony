@@ -4,7 +4,7 @@
 namespace PS_AGONY2D
 {
 	void BoxSoA::append(
-		ColliderIndex colliderIndex,
+		ColliderDenseIndex colliderIndex,
 		Real halfWidth,
 		Real halfHeight
 	)

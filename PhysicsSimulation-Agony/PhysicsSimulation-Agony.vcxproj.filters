@@ -356,5 +356,8 @@
     <ClInclude Include="PS_AGONY2D\Profiling\TracyProfiler.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="PS_AGONY2D\HandleTable.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

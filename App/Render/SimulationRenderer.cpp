@@ -2,11 +2,8 @@
 #include "SimulationRenderer_Internal.h"
 
 #include "PS_AGONY2D/Simulation.h"
-#include "PS_AGONY2D/Constants.h"
-#include "PS_AGONY2D/FastCosSin.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
-#include "Ecstasy/Core/Portablity.h"
 
 #include <algorithm>
 #include <cmath>
@@ -250,7 +247,7 @@ namespace PS_AGONY_RENDER
                 vec.clear();
             }
 
-            for (ColliderIndex collider : foundColliders)
+            for (ColliderDenseIndex collider : foundColliders)
             {
                 BodyType shape = colliders.shapeType[collider];
                 foundColliderShapes[(size_t)shape].push_back(collider);

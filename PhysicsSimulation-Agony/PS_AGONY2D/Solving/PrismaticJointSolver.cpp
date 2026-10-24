@@ -68,8 +68,8 @@ namespace PS_AGONY2D
 			const size_t i = jointIndicesPtr[jointIndex];
 			PrismaticJointConstraintData& constraintData = constraintContainer[outOffset + jointIndex];
 
-			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
+			const ObjectDenseIndex bodyIndexA = viewer.bodyIndexA[i];
+			const ObjectDenseIndex bodyIndexB = viewer.bodyIndexB[i];
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;
@@ -231,8 +231,8 @@ namespace PS_AGONY2D
 			PrismaticJointConstraintData& constraintData = constraintDataSpan[c];
 			if (!constraintData.blockValid && constraintData.limitDirection == Real(0)) continue;
 
-			const ObjectIndex bodyIndexA = constraintData.bodyIndexA;
-			const ObjectIndex bodyIndexB = constraintData.bodyIndexB;
+			const ObjectDenseIndex bodyIndexA = constraintData.bodyIndexA;
+			const ObjectDenseIndex bodyIndexB = constraintData.bodyIndexB;
 
 			const Real invMassA = invMassPtr[bodyIndexA];
 			const Real invMassB = invMassPtr[bodyIndexB];

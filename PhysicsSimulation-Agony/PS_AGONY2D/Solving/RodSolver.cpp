@@ -43,8 +43,8 @@ namespace PS_AGONY2D
 			const size_t i = rodIndicesPtr[rodIndex];
 			RodConstraintData& constraintData = constraintContainer[outOffset + rodIndex];
 
-			const ObjectIndex bodyIndexA = viewer.bodyIndexA[i];
-			const ObjectIndex bodyIndexB = viewer.bodyIndexB[i];
+			const ObjectDenseIndex bodyIndexA = viewer.bodyIndexA[i];
+			const ObjectDenseIndex bodyIndexB = viewer.bodyIndexB[i];
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;
@@ -134,8 +134,8 @@ namespace PS_AGONY2D
 			if (constraintData.invEffectiveMass == Real(0)) continue;
 
 			// Get body indices.
-			const ObjectIndex bodyIndexA = constraintData.bodyIndexA;
-			const ObjectIndex bodyIndexB = constraintData.bodyIndexB;
+			const ObjectDenseIndex bodyIndexA = constraintData.bodyIndexA;
+			const ObjectDenseIndex bodyIndexB = constraintData.bodyIndexB;
 
 			// Get body data.
 			const Real invMassA = invMassPtr[bodyIndexA];

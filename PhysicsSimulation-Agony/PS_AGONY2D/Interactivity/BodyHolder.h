@@ -1,5 +1,6 @@
 #pragma once
 #include "PS_AGONY2D/Types/Types.h"
+#include "PS_AGONY2D/HandleTable.h"
 
 #include <optional>
 
@@ -10,7 +11,7 @@ namespace PS_AGONY2D::Interactivity
 		Vec2 holderPosition;
 		Vec2 holderVelocity;
 	public:
-		std::optional<ObjectIndex> heldBody;
+		std::optional<Handle> heldBody;
 		Vec2 localBodyOffset;
 
 		void setPosition(const Vec2& newPosition, Real deltaTime)

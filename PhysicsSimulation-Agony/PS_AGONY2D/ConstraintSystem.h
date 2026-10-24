@@ -29,7 +29,7 @@ namespace PS_AGONY2D
 		virtual ~IConstraintSystem() = default;
 
 		virtual void removeConstraint(uint32_t index, BodySoA& bodies) = 0;
-		virtual void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) = 0;
+		virtual void remapBodyIndex(uint32_t index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) = 0;
 
 		// Binds data views and (re)plans if this type changed. Solving is driven by ConstraintScheduler through getSolver().
 		virtual void prepare(BodySoA& bodies) = 0;
@@ -58,7 +58,7 @@ namespace PS_AGONY2D
 
 		// Appends a single-body constraint and registers it with its body.
 		template<class... Args>
-		uint32_t createSingleImpl(ObjectIndex index, BodySoA& bodies, Args&&... args)
+		uint32_t createSingleImpl(ObjectDenseIndex index, BodySoA& bodies, Args&&... args)
 		{
 			const uint32_t newIndex = static_cast<uint32_t>(soa.append(index, std::forward<Args>(args)...));
 			bodies.addAttachment(index, Type, newIndex);
@@ -68,7 +68,7 @@ namespace PS_AGONY2D
 
 		// Appends a constraint and registers it with both bodies it touches.
 		template<class... Args>
-		uint32_t createImpl(ObjectIndex indexA, ObjectIndex indexB, BodySoA& bodies, Args&&... args)
+		uint32_t createImpl(ObjectDenseIndex indexA, ObjectDenseIndex indexB, BodySoA& bodies, Args&&... args)
 		{
 			const uint32_t newIndex = static_cast<uint32_t>(soa.append(indexA, indexB, std::forward<Args>(args)...));
 			bodies.addAttachment(indexA, Type, newIndex);
@@ -119,7 +119,7 @@ namespace PS_AGONY2D
 			}
 		}
 
-		void remapBodyIndex(uint32_t index, ObjectIndex oldBodyIndex, ObjectIndex newBodyIndex) final
+		void remapBodyIndex(uint32_t index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) final
 		{
 			if (index >= soa.getCount()) [[unlikely]]
 			{
@@ -161,8 +161,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
+			ObjectDenseIndex bodyIndexA;
+			ObjectDenseIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Real restLength;
@@ -184,8 +184,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
+			ObjectDenseIndex bodyIndexA;
+			ObjectDenseIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Real stiffness;
@@ -206,8 +206,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
+			ObjectDenseIndex bodyIndexA;
+			ObjectDenseIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Real length;
@@ -227,8 +227,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
+			ObjectDenseIndex bodyIndexA;
+			ObjectDenseIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Vec2 localAxisA; // Axis in body A's local space that translation is locked to; need not be pre-normalized.
@@ -268,8 +268,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectIndex bodyIndexA;
-			ObjectIndex bodyIndexB;
+			ObjectDenseIndex bodyIndexA;
+			ObjectDenseIndex bodyIndexB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Vec2 localAxisA; // Axis in body A's local space; need not be pre-normalized.
@@ -302,7 +302,7 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectIndex bodyIndex;
+			ObjectDenseIndex bodyIndex;
 			Real targetSpeed;  // Target angular velocity.
 			Real maxTorque;    // Torque limit.
 		};

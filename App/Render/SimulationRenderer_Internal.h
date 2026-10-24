@@ -86,7 +86,7 @@ namespace PS_AGONY_RENDER
 			};
 		}
 
-		[[nodiscard]] __forceinline BodyTransformSample sample(ObjectIndex bodyIndex) const noexcept
+		[[nodiscard]] __forceinline BodyTransformSample sample(ObjectDenseIndex bodyIndex) const noexcept
 		{
 			if (interpolate)
 			{

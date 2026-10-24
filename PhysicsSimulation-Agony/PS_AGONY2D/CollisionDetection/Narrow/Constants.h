@@ -25,7 +25,7 @@ namespace PS_AGONY2D
     constexpr size_t MAX_CONTACTS_PER_MANIFOLD = 2;
     constexpr uint32_t REFERENCE_BODY_TAG = 0x80000000u;
     constexpr uint32_t INVALID_CONTACT_ID = std::numeric_limits<uint32_t>::max();
-    constexpr ColliderIndex INVALID_COLLIDER_INDEX = std::numeric_limits<ColliderIndex>::max();
+    constexpr ColliderDenseIndex INVALID_COLLIDER_INDEX = std::numeric_limits<ColliderDenseIndex>::max();
 
     // Circle-box contact ids: circle center outside the box (region flags).
     constexpr uint32_t BOX_FACE_RIGHT = 1;

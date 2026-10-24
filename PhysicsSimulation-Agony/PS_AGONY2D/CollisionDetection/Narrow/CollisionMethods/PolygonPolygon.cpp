@@ -28,8 +28,8 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
 
@@ -46,8 +46,8 @@ namespace PS_AGONY2D
             const Real cosB = rotationCosPtr[indexB];
             const Real sinB = rotationSinPtr[indexB];
 
-            const ObjectIndex shapeA = shapeIndexPtr[indexA];
-            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectDenseIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectDenseIndex shapeB = shapeIndexPtr[indexB];
 
             const PolygonGeometry& localVertsAContainer = polyGeometryPtr[shapeA];
             const PolygonGeometry& localVertsBContainer = polyGeometryPtr[shapeB];

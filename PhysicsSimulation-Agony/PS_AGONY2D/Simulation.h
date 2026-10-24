@@ -129,8 +129,8 @@ namespace PS_AGONY2D
 		Real renderAlpha = 0;
 
 		// Other.
-		std::vector<ColliderIndex> broadPhaseColliders;
-		std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders;
+		std::vector<ColliderDenseIndex> broadPhaseColliders;
+		std::vector<std::pair<ColliderDenseIndex, Real>> narrowPhaseColliders;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -144,17 +144,17 @@ namespace PS_AGONY2D
 		void setPause(bool pause) noexcept { paused = pause; }
 		bool isPaused() const noexcept { return paused; }
 
-		__forceinline std::optional<ObjectIndex> createBody(const BodyCreateParams& params)
+		__forceinline std::optional<ObjectDenseIndex> createBody(const BodyCreateParams& params)
 		{
 			return objectManager.createBody(params);
 		}
 
-		__forceinline std::optional<ColliderIndex> createCircleCollider(const CircleColliderCreateParams& params)
+		__forceinline std::optional<ColliderDenseIndex> createCircleCollider(const CircleColliderCreateParams& params)
 		{
 			return objectManager.createCircleCollider(params);
 		}
 
-		__forceinline std::optional<ColliderIndex> createBoxCollider(const BoxColliderCreateParams& params)
+		__forceinline std::optional<ColliderDenseIndex> createBoxCollider(const BoxColliderCreateParams& params)
 		{
 			return objectManager.createBoxCollider(params);
 		}
@@ -164,46 +164,109 @@ namespace PS_AGONY2D
 			return objectManager.createPolygonCollider(params);
 		}
 
-		__forceinline std::optional<ColliderIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params)
+		__forceinline std::optional<ColliderDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params)
 		{
 			return objectManager.createCapsuleCollider(params);
 		}
 
-		__forceinline std::optional<ObjectIndex> createCircle(const CircleCreateParams& params)
+		__forceinline std::optional<ObjectDenseIndex> createCircle(const CircleCreateParams& params)
 		{
 			return objectManager.createCircle(params);
 		}
 
-		__forceinline std::optional<ObjectIndex> createBox(const BoxCreateParams& params)
+		__forceinline std::optional<ObjectDenseIndex> createBox(const BoxCreateParams& params)
 		{
 			return objectManager.createBox(params);
 		}
 
-		__forceinline std::optional<ObjectIndex> createPolygon(const PolygonCreateParams& params)
+		__forceinline std::optional<ObjectDenseIndex> createPolygon(const PolygonCreateParams& params)
 		{
 			return objectManager.createPolygon(params);
 		}
 
-		__forceinline std::optional<ObjectIndex> createCapsule(const CapsuleCreateParams& params)
+		__forceinline std::optional<ObjectDenseIndex> createCapsule(const CapsuleCreateParams& params)
 		{
 			return objectManager.createCapsule(params);
 		}
 
-		void destroyBody(ObjectIndex bodyIndex)
+		// Persistent handles. Valid across swap-and-pop; stale after destroy (generation bump).
+		// Dense indices are only stable until the next create/destroy; handles survive it.
+		Handle getBodyHandle(ObjectDenseIndex bodyIndex) const noexcept
 		{
-			// Hack. TODO: Integrate it into attachment system or constraint system or whatever!
-			{
-				if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == bodyIndex)
-					mainBodyHolderRelease();
+			return bodyIndex < objectManager.bodies.getCount() ? objectManager.bodies.handleAt(bodyIndex) : Handle{};
+		}
+		Handle getColliderHandle(ColliderDenseIndex colliderIndex) const noexcept
+		{
+			return colliderIndex < objectManager.colliders.getCount() ? objectManager.colliders.handleAt(colliderIndex) : Handle{};
+		}
 
-				const ObjectIndex oldBackIndex = static_cast<ObjectIndex>(objectManager.bodies.getCount() - 1);
-				if (mainBodyHolder.heldBody.has_value() && mainBodyHolder.heldBody.value() == oldBackIndex)
-					mainBodyHolder.heldBody = bodyIndex;
-			}
+		bool isBodyValid(Handle h) const noexcept { return objectManager.bodies.isValid(h); }
+		bool isColliderValid(Handle h) const noexcept { return objectManager.colliders.isValid(h); }
+
+		// Handle::kNull if stale.
+		uint32_t getBodyIndex(Handle h) const noexcept { return objectManager.bodies.indexOf(h); }
+		uint32_t getColliderIndex(Handle h) const noexcept { return objectManager.colliders.indexOf(h); }
+
+		// Hot path: no validation. Handle must be alive.
+		uint32_t getBodyIndexUnchecked(Handle h) const noexcept { return objectManager.bodies.indexOfUnchecked(h); }
+		uint32_t getColliderIndexUnchecked(Handle h) const noexcept { return objectManager.colliders.indexOfUnchecked(h); }
+
+		// Handle-returning creators. Dense-index versions above are unchanged.
+		std::optional<Handle> createBodyH(const BodyCreateParams& params) { return toBodyHandle(objectManager.createBody(params)); }
+		std::optional<Handle> createCircleH(const CircleCreateParams& params) { return toBodyHandle(objectManager.createCircle(params)); }
+		std::optional<Handle> createBoxH(const BoxCreateParams& params) { return toBodyHandle(objectManager.createBox(params)); }
+		std::optional<Handle> createPolygonH(const PolygonCreateParams& params) { return toBodyHandle(objectManager.createPolygon(params)); }
+		std::optional<Handle> createCapsuleH(const CapsuleCreateParams& params) { return toBodyHandle(objectManager.createCapsule(params)); }
+
+		// Collider creators taking a body handle (params.bodyIndex is ignored). nullopt if the handle is stale.
+		std::optional<Handle> createCircleColliderH(Handle body, CircleColliderCreateParams params)
+		{
+			const uint32_t b = getBodyIndex(body);
+			if (b == Handle::kNull) return std::nullopt;
+			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
+			return toColliderHandle(objectManager.createCircleCollider(params));
+		}
+		std::optional<Handle> createBoxColliderH(Handle body, BoxColliderCreateParams params)
+		{
+			const uint32_t b = getBodyIndex(body);
+			if (b == Handle::kNull) return std::nullopt;
+			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
+			return toColliderHandle(objectManager.createBoxCollider(params));
+		}
+		std::optional<Handle> createCapsuleColliderH(Handle body, CapsuleColliderCreateParams params)
+		{
+			const uint32_t b = getBodyIndex(body);
+			if (b == Handle::kNull) return std::nullopt;
+			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
+			return toColliderHandle(objectManager.createCapsuleCollider(params));
+		}
+		// Pieces are contiguous in dense order: use getColliderHandle(first + i) right after the call.
+		std::optional<PolygonColliderCreateResult> createPolygonColliderH(Handle body, PolygonColliderCreateParams params)
+		{
+			const uint32_t b = getBodyIndex(body);
+			if (b == Handle::kNull) return std::nullopt;
+			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
+			return objectManager.createPolygonCollider(params);
+		}
+
+		// Stale handle: no-op.
+		void destroyBody(Handle h)
+		{
+			const uint32_t i = getBodyIndex(h);
+			if (i != Handle::kNull) destroyBody(static_cast<ObjectDenseIndex>(i));
+		}
+		void destroyCollider(Handle h)
+		{
+			const uint32_t i = getColliderIndex(h);
+			if (i != Handle::kNull) destroyCollider(static_cast<ColliderDenseIndex>(i));
+		}
+
+		void destroyBody(ObjectDenseIndex bodyIndex)
+		{
 			objectManager.destroyBody(bodyIndex, constraintSystems);
 		}
 
-		__forceinline void destroyCollider(ColliderIndex colliderIndex)
+		__forceinline void destroyCollider(ColliderDenseIndex colliderIndex)
 		{
 			return objectManager.destroyCollider(colliderIndex, constraintSystems);
 		}
@@ -241,10 +304,10 @@ namespace PS_AGONY2D
 
 		// Id 0 clears the collider's callback (threshold ignored).
 		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
-		bool setColliderCollisionCallback(ColliderIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
+		bool setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
 
 		// TODO: Add more like that.
-		std::span<const ColliderIndex> getBodyColliders(ObjectIndex bodyIndex);
+		std::span<const ColliderDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex);
 
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();
@@ -304,5 +367,14 @@ namespace PS_AGONY2D
 		Real computeBodyTotalKineticEnergy();
 
 		void collectMemoryUsage(DebugData& data) const;
+
+		std::optional<Handle> toBodyHandle(std::optional<ObjectDenseIndex> index) const noexcept
+		{
+			return index ? std::optional<Handle>(objectManager.bodies.handleAt(*index)) : std::nullopt;
+		}
+		std::optional<Handle> toColliderHandle(std::optional<ColliderDenseIndex> index) const noexcept
+		{
+			return index ? std::optional<Handle>(objectManager.colliders.handleAt(*index)) : std::nullopt;
+		}
 	};
 }

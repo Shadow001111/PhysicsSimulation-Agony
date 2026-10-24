@@ -29,8 +29,8 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < springCount; i++)
         {
-            const ObjectIndex bodyIndexA = springs.bodyIndexA[i];
-            const ObjectIndex bodyIndexB = springs.bodyIndexB[i];
+            const ObjectDenseIndex bodyIndexA = springs.bodyIndexA[i];
+            const ObjectDenseIndex bodyIndexB = springs.bodyIndexB[i];
 
             const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
             const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);
@@ -112,8 +112,8 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < jointCount; i++)
         {
-            const ObjectIndex bodyIndexA = joints.bodyIndexA[i];
-            const ObjectIndex bodyIndexB = joints.bodyIndexB[i];
+            const ObjectDenseIndex bodyIndexA = joints.bodyIndexA[i];
+            const ObjectDenseIndex bodyIndexB = joints.bodyIndexB[i];
 
             const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
             const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);
@@ -191,8 +191,8 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < prismaticJointCount; i++)
         {
-            const ObjectIndex bodyIndexA = prismaticJoints.bodyIndexA[i];
-            const ObjectIndex bodyIndexB = prismaticJoints.bodyIndexB[i];
+            const ObjectDenseIndex bodyIndexA = prismaticJoints.bodyIndexA[i];
+            const ObjectDenseIndex bodyIndexB = prismaticJoints.bodyIndexB[i];
 
             const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
             const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);
@@ -280,8 +280,8 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < rodCount; i++)
         {
-            const ObjectIndex bodyIndexA = rods.bodyIndexA[i];
-            const ObjectIndex bodyIndexB = rods.bodyIndexB[i];
+            const ObjectDenseIndex bodyIndexA = rods.bodyIndexA[i];
+            const ObjectDenseIndex bodyIndexB = rods.bodyIndexB[i];
 
             const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
             const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);

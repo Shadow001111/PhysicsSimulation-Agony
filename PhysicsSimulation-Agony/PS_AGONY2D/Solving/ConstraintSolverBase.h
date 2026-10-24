@@ -232,13 +232,13 @@ namespace PS_AGONY2D
 	};
 
 	template<class Derived, class Viewer, class ConstraintData>
-	class SingleConstraintSolverBase : public ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectIndex>
+	class SingleConstraintSolverBase : public ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectDenseIndex>
 	{
 	protected:
-		using ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectIndex>::ConstraintSolverBase;
+		using ConstraintSolverBase<Derived, Viewer, ConstraintData, ObjectDenseIndex>::ConstraintSolverBase;
 
 	public:
-		ObjectIndex makeBodyRef(size_t i) const
+		ObjectDenseIndex makeBodyRef(size_t i) const
 		{
 			return this->viewer.bodyIndex[i];
 		}

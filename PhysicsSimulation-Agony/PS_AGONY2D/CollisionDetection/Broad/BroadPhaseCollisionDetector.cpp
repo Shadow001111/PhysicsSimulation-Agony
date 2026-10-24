@@ -24,14 +24,14 @@ namespace PS_AGONY2D
 		{
 			const BPI::BvhTreeView& dyn;
 			const BPI::BvhTreeView& stat;
-			const ObjectIndex* owner;
+			const ObjectDenseIndex* owner;
 			std::array<uint32_t, BvhNode::KD_LEAF_SIZE> masks;
 			BPI::PairPushBuffer pushBuffer;
 
 			LeafTester(
 				const BPI::BvhTreeView& dynIn,
 				const BPI::BvhTreeView& statIn,
-				const ObjectIndex* ownerIn,
+				const ObjectDenseIndex* ownerIn,
 				CacheLineAlignedVector<ObjectPair>& dest) noexcept :
 				dyn(dynIn), stat(statIn), owner(ownerIn), pushBuffer(dest)
 			{
@@ -59,7 +59,7 @@ namespace PS_AGONY2D
 		};
 	}
 
-	void BroadPhaseCollisionDetector::setDataViewers(const AABBSoAViewer& aabbs, const ObjectIndex* colliderBodyIndexIn)
+	void BroadPhaseCollisionDetector::setDataViewers(const AABBSoAViewer& aabbs, const ObjectDenseIndex* colliderBodyIndexIn)
 	{
 		collidersAABB = aabbs;
 		colliderBodyIndex = colliderBodyIndexIn;
@@ -76,8 +76,8 @@ namespace PS_AGONY2D
 	}
 
 	void BroadPhaseCollisionDetector::buildTrees(
-		std::span<const ColliderIndex> dynamicIds,
-		std::span<const ColliderIndex> staticIds,
+		std::span<const ColliderDenseIndex> dynamicIds,
+		std::span<const ColliderDenseIndex> staticIds,
 		StaticTreeUpdate staticUpdate)
 	{
 		TRACY_SCOPE_N("Build broad-phase trees");

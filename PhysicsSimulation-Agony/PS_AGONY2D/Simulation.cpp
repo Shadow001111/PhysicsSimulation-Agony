@@ -151,7 +151,7 @@ namespace PS_AGONY2D
         return true;
     }
 
-    bool Simulation::setColliderCollisionCallback(ColliderIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold)
+    bool Simulation::setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold)
     {
         ColliderSoA& colliders = objectManager.colliders;
         if (static_cast<size_t>(colliderIndex) >= colliders.getCount())
@@ -180,14 +180,14 @@ namespace PS_AGONY2D
         collisionCallbackManager.invoke(events);
     }
 
-    std::span<const ColliderIndex> Simulation::getBodyColliders(ObjectIndex bodyIndex)
+    std::span<const ColliderDenseIndex> Simulation::getBodyColliders(ObjectDenseIndex bodyIndex)
     {
         if (bodyIndex >= objectManager.bodies.getCount())
         {
             return {};
         }
 
-        std::span<const ColliderIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];
+        std::span<const ColliderDenseIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];
         return indicesSpan;
     }
 
@@ -218,8 +218,8 @@ namespace PS_AGONY2D
         if (narrowPhaseColliders.empty()) return;
 
         // Find closest body.
-        ObjectIndex closestCollider;
-        ObjectIndex closestBody;
+        ObjectDenseIndex closestCollider;
+        ObjectDenseIndex closestBody;
         Real minDistance = std::numeric_limits<Real>::max();
         for (const auto [colliderIndex, distance] : narrowPhaseColliders)
         {
@@ -232,7 +232,7 @@ namespace PS_AGONY2D
         closestBody = objectManager.colliders.bodyIndex[closestCollider];
 
         // Grab.
-        mainBodyHolder.heldBody = closestBody;
+        mainBodyHolder.heldBody = objectManager.bodies.handleAt(closestBody);
 
         // Grab vector in world space.
         const Vec2 worldGrabVec = grabPosition - Vec2(worldCenterXPtr[closestBody], worldCenterYPtr[closestBody]);
@@ -252,7 +252,7 @@ namespace PS_AGONY2D
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
-        const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
+        const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(mainBodyHolder.heldBody.value());
         if (bodyIndex >= objectManager.bodies.getCount()) return;
 
         mainBodyHolder.heldBody = std::nullopt;
@@ -262,7 +262,7 @@ namespace PS_AGONY2D
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
-        const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
+        const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(mainBodyHolder.heldBody.value());
         if (bodyIndex >= objectManager.bodies.getCount()) return;
 
         objectManager.bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
@@ -522,7 +522,7 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT bodyCosPtr = objectManager.bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT bodySinPtr = objectManager.bodies.rotationSin.data();
 
-        const ObjectIndex* ECSTASY_RESTRICT ownerPtr = objectManager.colliders.bodyIndex.data();
+        const ObjectDenseIndex* ECSTASY_RESTRICT ownerPtr = objectManager.colliders.bodyIndex.data();
         const Real* ECSTASY_RESTRICT localOffXPtr = objectManager.colliders.localOffsetX.data();
         const Real* ECSTASY_RESTRICT localOffYPtr = objectManager.colliders.localOffsetY.data();
 
@@ -535,7 +535,7 @@ namespace PS_AGONY2D
         const size_t colliderCount = objectManager.colliders.getCount();
         for (size_t i = 0; i < colliderCount; i++)
         {
-            const ObjectIndex body = ownerPtr[i];
+            const ObjectDenseIndex body = ownerPtr[i];
             const Real offX = localOffXPtr[i];
             const Real offY = localOffYPtr[i];
 
@@ -559,13 +559,13 @@ namespace PS_AGONY2D
         // worldRotation = bodyRotation + localRotation.
         {
             const Real* ECSTASY_RESTRICT bodyRotationPtr = objectManager.bodies.rotation.data();
-            const ObjectIndex* ECSTASY_RESTRICT ownerPtr = objectManager.colliders.bodyIndex.data();
+            const ObjectDenseIndex* ECSTASY_RESTRICT ownerPtr = objectManager.colliders.bodyIndex.data();
             const Real* ECSTASY_RESTRICT localRotationPtr = objectManager.colliders.localRotation.data();
             Real* ECSTASY_RESTRICT worldRotationPtr = objectManager.colliders.worldRotation.data();
 
             for (size_t i = 0; i < colliderCount; i++)
             {
-                const ObjectIndex body = ownerPtr[i];
+                const ObjectDenseIndex body = ownerPtr[i];
                 worldRotationPtr[i] = bodyRotationPtr[body] + localRotationPtr[i];
             }
         }
@@ -586,7 +586,7 @@ namespace PS_AGONY2D
     {
         if (!mainBodyHolder.heldBody.has_value()) return;
 
-        const ObjectIndex bodyIndex = mainBodyHolder.heldBody.value();
+        const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(mainBodyHolder.heldBody.value());
         if (bodyIndex >= objectManager.bodies.getCount()) return;
 
         const Real mass = objectManager.bodies.mass[bodyIndex];

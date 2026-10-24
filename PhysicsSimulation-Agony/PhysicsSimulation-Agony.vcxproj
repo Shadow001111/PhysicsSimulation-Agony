@@ -305,6 +305,7 @@
     <ClCompile Include="PS_AGONY2D\Solving\SpringSolver.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="PS_AGONY2D\HandleTable.h" />
     <ClInclude Include="PS_AGONY2D\Profiling\TracyProfiler.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\ColliderAABBBuilder.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\LeftOutFunctions.h" />

@@ -7,7 +7,7 @@ namespace PS_AGONY2D
 {
 	struct RodConstraintData
 	{
-		ObjectIndex bodyIndexA, bodyIndexB;
+		ObjectDenseIndex bodyIndexA, bodyIndexB;
 		Vec2 dir;
 		Vec2 rotatedAnchorA, rotatedAnchorB;
 		Real invEffectiveMass; // 1 / effectiveMass (no compliance - rod is rigid).

@@ -10,20 +10,19 @@ namespace PS_AGONY2D
 
 	// Can't be changed.
 
-	using ObjectIndex = uint32_t;
-	using ColliderIndex = ObjectIndex;
+	using ObjectDenseIndex = uint32_t;
+	using ColliderDenseIndex = ObjectDenseIndex;
 	using MaterialIndex = uint32_t;
-	using BodyTextureId = uint32_t;
 
 	struct ObjectPair
 	{
-		ObjectIndex a, b;
+		ObjectDenseIndex a, b;
 	};
 
 	struct ObjectDeletion
 	{
-		ObjectIndex deletedIndex;
-		ObjectIndex swappedFromIndex;
+		ObjectDenseIndex deletedIndex;
+		ObjectDenseIndex swappedFromIndex;
 	};
 
 	enum class BodyType : uint8_t
@@ -55,7 +54,7 @@ namespace PS_AGONY2D
 	struct BodyAttachment
 	{
 		ConstraintType type;
-		ObjectIndex objectIndex;
+		ObjectDenseIndex objectIndex;
 	};
 
 	// Glm.

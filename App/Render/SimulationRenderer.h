@@ -49,8 +49,8 @@ namespace PS_AGONY_RENDER
 	class SimulationRenderer
 	{
 		// Resources.
-		std::vector<ColliderIndex> foundColliders;
-		std::vector<ColliderIndex> foundColliderShapes[(size_t)BodyType::COUNT];
+		std::vector<ColliderDenseIndex> foundColliders;
+		std::vector<ColliderDenseIndex> foundColliderShapes[(size_t)BodyType::COUNT];
 
 		std::vector<AABB> queriedAABBs;
 
@@ -126,12 +126,12 @@ namespace PS_AGONY_RENDER
 		void renderBodyPositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 		void renderBodyTruePositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
-		void renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
-		void renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
-		void renderCapsuleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
-		void renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderCircleColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderBoxColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderCapsuleColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderPolygonColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 
-		void renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix);
+		void renderColliderAABBs(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix);
 		void renderLeafAABBs(std::span<const AABB> aabbs, const glm::vec3& color, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 

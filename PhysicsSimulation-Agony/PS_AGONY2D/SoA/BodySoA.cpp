@@ -5,7 +5,7 @@
 
 namespace PS_AGONY2D
 {
-	void BodySoA::append(
+	Handle BodySoA::append(
 		Vec2 pos, Vec2 vel, Real rot, Real anglVel,
 		Real mass, Real invMass, Real inertia, Real invInertia,
 		Vec2 localCenterOfMass
@@ -35,6 +35,7 @@ namespace PS_AGONY2D
 		this->isStatic.push_back(invMass == 0);
 		this->attachments.emplace_back();
 		this->colliderIndices.emplace_back();
+		return this->handles.push();
 	}
 
 	#define PS_AGONY_SWAP_WITH_BACK(vector, index) std::swap((vector)[(index)], (vector).back())
@@ -45,14 +46,15 @@ namespace PS_AGONY2D
 		{
 			return;
 		}
+		handles.swapWithBack(index);
 
 		#define SWAP_FIELD(name, type) PS_AGONY_SWAP_WITH_BACK(name, index);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
-		#undef SWAP_FIELD
+			#undef SWAP_FIELD
 
-		#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
-		PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
-		#undef SWAP_VECTOR_FIELD
+			#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
+			PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+			#undef SWAP_VECTOR_FIELD
 	}
 
 	void BodySoA::popBack()
@@ -61,14 +63,15 @@ namespace PS_AGONY2D
 		{
 			return;
 		}
+		handles.popBack();
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(POP_FIELD)
-		#undef POP_FIELD
+			#undef POP_FIELD
 
-		#define POP_VECTOR_FIELD(name, innerType) name.pop_back();
-		PS_AGONY_BODY_SOA_VECTOR_FIELDS(POP_VECTOR_FIELD)
-		#undef POP_VECTOR_FIELD
+			#define POP_VECTOR_FIELD(name, innerType) name.pop_back();
+			PS_AGONY_BODY_SOA_VECTOR_FIELDS(POP_VECTOR_FIELD)
+			#undef POP_VECTOR_FIELD
 	}
 
 	void BodySoA::addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
@@ -98,13 +101,13 @@ namespace PS_AGONY2D
 		}
 	}
 
-	void BodySoA::addCollider(size_t bodyIndex, ColliderIndex colliderIndex)
+	void BodySoA::addCollider(size_t bodyIndex, ColliderDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
 		colliderIndices[bodyIndex].push_back(colliderIndex);
 	}
 
-	void BodySoA::removeCollider(size_t bodyIndex, ColliderIndex colliderIndex)
+	void BodySoA::removeCollider(size_t bodyIndex, ColliderDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
 		auto& list = colliderIndices[bodyIndex];
@@ -121,20 +124,20 @@ namespace PS_AGONY2D
 
 	size_t BodySoA::getMemoryUsage() const noexcept
 	{
-		size_t total = 0;
+		size_t total = handles.getMemoryUsage();
 
 		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(MEM_FIELD)
-		#undef MEM_FIELD
+			#undef MEM_FIELD
 
-		#define MEM_VECTOR_FIELD(name, innerType) \
+			#define MEM_VECTOR_FIELD(name, innerType) \
 		total += getVectorMemoryUsage(name); \
 		for (const auto& innerVec : name) { total += getVectorMemoryUsage(innerVec); }
 
-		PS_AGONY_BODY_SOA_VECTOR_FIELDS(MEM_VECTOR_FIELD)
-		#undef MEM_VECTOR_FIELD
+			PS_AGONY_BODY_SOA_VECTOR_FIELDS(MEM_VECTOR_FIELD)
+			#undef MEM_VECTOR_FIELD
 
-		return total;
+			return total;
 	}
 
 	BodySoAViewer::BodySoAViewer(const BodySoA& data) noexcept :
@@ -142,7 +145,7 @@ namespace PS_AGONY2D
 	{
 		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)
-		PS_AGONY_BODY_SOA_VECTOR_FIELDS(INIT_VIEWER_FIELD)
-		#undef INIT_VIEWER_FIELD
+			PS_AGONY_BODY_SOA_VECTOR_FIELDS(INIT_VIEWER_FIELD)
+			#undef INIT_VIEWER_FIELD
 	}
 }

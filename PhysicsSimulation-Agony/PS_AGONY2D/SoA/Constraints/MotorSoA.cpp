@@ -5,41 +5,62 @@
 
 namespace PS_AGONY2D
 {
-	ObjectIndex MotorSoA::append(ObjectIndex index, Real speed, Real torqueLimit)
+	ObjectDenseIndex MotorSoA::append(ObjectDenseIndex index, Real speed, Real torqueLimit)
 	{
-		const ObjectIndex newIndex = this->bodyIndex.size();
+		const ObjectDenseIndex newIndex = this->bodyIndex.size();
 
 		this->bodyIndex.push_back(index);
 		this->targetSpeed.push_back(speed);
 		this->maxTorque.push_back(torqueLimit);
 		this->accumulatedImpulse.push_back(Real(0));
 
+		handles.push();
+
 		return newIndex;
 	}
 
-	size_t MotorSoA::swapRemove(size_t index)
+	void MotorSoA::swapWithBack(size_t index)
 	{
-		const size_t lastIndex = bodyIndex.size() - 1;
-
-		if (index != lastIndex)
+		if (index >= bodyIndex.size()) [[unlikely]]
 		{
-			#define SWAP_FIELD(name, type) std::swap(name[index], name[lastIndex]);
-			PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(SWAP_FIELD)
-			PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(SWAP_FIELD)
-			#undef SWAP_FIELD
+			return;
 		}
+		handles.swapWithBack(index);
+
+		#define SWAP_FIELD(name, type) std::swap(name[index], name.back());
+		PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(SWAP_FIELD)
+		PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(SWAP_FIELD)
+		#undef SWAP_FIELD
+	}
+
+	void MotorSoA::popBack()
+	{
+		if (bodyIndex.empty()) [[unlikely]]
+		{
+			return;
+		}
+		handles.popBack();
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(POP_FIELD)
 		PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(POP_FIELD)
 		#undef POP_FIELD
+	}
 
+	size_t MotorSoA::swapRemove(size_t index)
+	{
+		const size_t lastIndex = bodyIndex.size() - 1;
+		if (index != lastIndex)
+		{
+			swapWithBack(index);
+		}
+		popBack();
 		return lastIndex;
 	}
 
 	size_t MotorSoA::getMemoryUsage() const noexcept
 	{
-		size_t total = 0;
+		size_t total = handles.getMemoryUsage();
 
 		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
 		PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(MEM_FIELD)

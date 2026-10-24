@@ -17,8 +17,8 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
         const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
         const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength;
@@ -26,8 +26,8 @@ namespace PS_AGONY2D
 
         for (auto [indexA, indexB] : pairs)
         {
-            const ObjectIndex shapeA = shapeIndexPtr[indexA];
-            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectDenseIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectDenseIndex shapeB = shapeIndexPtr[indexB];
 
             // Polygon A, capsule B. The normal points from the polygon towards the capsule.
             const PolygonGeometry& geometry = polyGeometryPtr[shapeA];

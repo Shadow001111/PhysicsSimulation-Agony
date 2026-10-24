@@ -148,7 +148,7 @@ namespace PS_AGONY_RENDER
         shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCircleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderCircleColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
         const size_t count = givenColliders.size();
         if (count == 0) return;
@@ -162,8 +162,8 @@ namespace PS_AGONY_RENDER
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
 
-        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
         const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
@@ -174,10 +174,10 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = givenColliders[i];
+            const ColliderDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
             const BodyTransformSample body = transformContext.sample(bodyIndex);
 
@@ -202,7 +202,7 @@ namespace PS_AGONY_RENDER
         shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBoxColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderBoxColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
         const size_t count = givenColliders.size();
         if (count == 0) return;
@@ -216,8 +216,8 @@ namespace PS_AGONY_RENDER
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
 
-        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
         const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
@@ -229,10 +229,10 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = givenColliders[i];
+            const ColliderDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
             const BodyTransformSample body = transformContext.sample(bodyIndex);
 
@@ -258,7 +258,7 @@ namespace PS_AGONY_RENDER
         shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCapsuleColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderCapsuleColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
         const size_t count = givenColliders.size();
         if (count == 0) return;
@@ -272,8 +272,8 @@ namespace PS_AGONY_RENDER
         const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
 
-        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
         const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
@@ -285,10 +285,10 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = givenColliders[i];
+            const ColliderDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
             const BodyTransformSample body = transformContext.sample(bodyIndex);
 
@@ -315,7 +315,7 @@ namespace PS_AGONY_RENDER
         shapeRenderer.renderCapsuleShapes(boxInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderPolygonColliders(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderPolygonColliders(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
         const size_t count = givenColliders.size();
         if (count == 0) return;
@@ -327,8 +327,8 @@ namespace PS_AGONY_RENDER
         const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
 
         // Collider SoA pointers.
-        const ObjectIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
         const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
         const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
@@ -340,8 +340,8 @@ namespace PS_AGONY_RENDER
         size_t totalVertices = 0;
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = givenColliders[i];
-            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+            const ColliderDenseIndex colliderIndex = givenColliders[i];
+            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
             totalVertices += geometryPtr[shapeIndex].size();
         }
 
@@ -360,10 +360,10 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = givenColliders[i];
+            const ColliderDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
             const PolygonGeometry& geometry = geometryPtr[shapeIndex];
             const Vec2* ECSTASY_RESTRICT localVertsPtr = geometry.vertices();
@@ -403,7 +403,7 @@ namespace PS_AGONY_RENDER
         shapeRenderer.renderPolygonShapes(polygonVertexData, polygonInstanceData, polygonDrawCommands, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderColliderAABBs(const std::vector<ColliderIndex>& givenColliders, const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderColliderAABBs(const std::vector<ColliderDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix)
     {
         TRACY_SCOPE_N("Render collider AABBs");
 
@@ -423,7 +423,7 @@ namespace PS_AGONY_RENDER
 
         for (size_t i = 0; i < colliderCount; i++)
         {
-            ColliderIndex colliderIndex = givenColliders[i];
+            ColliderDenseIndex colliderIndex = givenColliders[i];
             renderDataPtr[i].minX = static_cast<float>(minXPtr[colliderIndex]);
             renderDataPtr[i].minY = static_cast<float>(minYPtr[colliderIndex]);
             renderDataPtr[i].maxX = static_cast<float>(maxXPtr[colliderIndex]);

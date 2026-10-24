@@ -551,11 +551,11 @@ namespace PS_AGONY2D
 
         // Static bodies are never written, so they neither own nor conflict: a constraint maps to the
         // group(s) of its dynamic bodies only, and constraints with no dynamic body are not scheduled.
-        const auto isStaticBody = [isStatic](ObjectIndex b) { return isStatic != nullptr && isStatic[b] != 0; };
+        const auto isStaticBody = [isStatic](ObjectDenseIndex b) { return isStatic != nullptr && isStatic[b] != 0; };
         const auto groupsOf = [&](const ObjectPair& c, size_t& ga, size_t& gb)
             {
-                const ObjectIndex da = isStaticBody(c.a) ? c.b : c.a;
-                const ObjectIndex db = isStaticBody(c.b) ? c.a : c.b;
+                const ObjectDenseIndex da = isStaticBody(c.a) ? c.b : c.a;
+                const ObjectDenseIndex db = isStaticBody(c.b) ? c.a : c.b;
                 ga = da / bodiesPerCacheLine;
                 gb = db / bodiesPerCacheLine;
             };
@@ -792,7 +792,7 @@ namespace PS_AGONY2D
         }
     }
 
-    void SolvingPlanner::planSingleStandardExecution(const std::vector<ObjectIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic)
+    void SolvingPlanner::planSingleStandardExecution(const std::vector<ObjectDenseIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic)
     {
         // A single-body constraint is a pair (b, b): same ownership/conflict rules apply.
         singlePairs.resize(objects.size());

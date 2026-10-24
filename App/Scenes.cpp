@@ -133,10 +133,10 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
         .size = { frameWidth, frameHeight }
         });
     if (!chassisOpt) return;
-    const PS_AGONY2D::ObjectIndex chassis = *chassisOpt;
+    const PS_AGONY2D::ObjectDenseIndex chassis = *chassisOpt;
 
     // === WHEEL FACTORY ===
-    auto createWheel = [&](float side) -> std::optional<PS_AGONY2D::ObjectIndex> {
+    auto createWheel = [&](float side) -> std::optional<PS_AGONY2D::ObjectDenseIndex> {
         return simulation.createCircle({
             .base.position = toWorld(side * wheelOffset, -suspensionDrop),
             .base.velocity = { 0.0f, 0.0f },
@@ -154,7 +154,7 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
 
     // === SUSPENSION FACTORY ===
     // side = -1 (left) or +1 (right)
-    auto createSuspension = [&](PS_AGONY2D::ObjectIndex wheel, float side)
+    auto createSuspension = [&](PS_AGONY2D::ObjectDenseIndex wheel, float side)
         {
             const float anchorX = side * wheelOffset;
             const float anchorY = -frameHeight * 0.5f;
@@ -509,8 +509,8 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
 
     if (!leftCliffOpt || !rightCliffOpt) return;
 
-    const PS_AGONY2D::ObjectIndex leftCliff = *leftCliffOpt;
-    const PS_AGONY2D::ObjectIndex rightCliff = *rightCliffOpt;
+    const PS_AGONY2D::ObjectDenseIndex leftCliff = *leftCliffOpt;
+    const PS_AGONY2D::ObjectDenseIndex rightCliff = *rightCliffOpt;
 
     const float spanStartX = -gapWidth * 0.5f;
 
@@ -523,7 +523,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
     // Each has the same signature (bodyA, bodyB, localA, localB, restLen), so buildBridge
     // below can stay a single generic lambda regardless of which constraint it's fed.
 
-    auto joinWithSpring = [&](PS_AGONY2D::ObjectIndex bodyA, PS_AGONY2D::ObjectIndex bodyB,
+    auto joinWithSpring = [&](PS_AGONY2D::ObjectDenseIndex bodyA, PS_AGONY2D::ObjectDenseIndex bodyB,
         PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
         {
             // Dual anchors (top/bottom offset) so the pair resists torsional flipping.
@@ -547,7 +547,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
                 });
         };
 
-    auto joinWithJoint = [&](PS_AGONY2D::ObjectIndex bodyA, PS_AGONY2D::ObjectIndex bodyB,
+    auto joinWithJoint = [&](PS_AGONY2D::ObjectDenseIndex bodyA, PS_AGONY2D::ObjectDenseIndex bodyB,
         PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float /*restLen*/)
         {
             // Point constraint - distance is implicit in the anchor placement, not a parameter.
@@ -561,7 +561,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
                 });
         };
 
-    auto joinWithRod = [&](PS_AGONY2D::ObjectIndex bodyA, PS_AGONY2D::ObjectIndex bodyB,
+    auto joinWithRod = [&](PS_AGONY2D::ObjectDenseIndex bodyA, PS_AGONY2D::ObjectDenseIndex bodyB,
         PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
         {
             // Rigid, inextensible - restLen becomes the rod's fixed length.
@@ -579,7 +579,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
     // its own inlined instantiation, so picking a constraint type costs nothing at runtime.
     auto buildBridge = [&](float bridgeY, auto&& joinPlanks)
         {
-            std::vector<PS_AGONY2D::ObjectIndex> planks;
+            std::vector<PS_AGONY2D::ObjectDenseIndex> planks;
             planks.reserve(plankCount);
 
             for (int i = 0; i < plankCount; ++i)
@@ -946,11 +946,11 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         .size = { hullWidth, hullHeight }
         });
     if (!hullOpt) return;
-    const PS_AGONY2D::ObjectIndex hull = *hullOpt;
+    const PS_AGONY2D::ObjectDenseIndex hull = *hullOpt;
 
     // === WHEEL FACTORY ===
     // Mass scales with area (radius^2), anchored to the road wheel.
-    auto createWheel = [&](float localX, float localY, float radius) -> std::optional<PS_AGONY2D::ObjectIndex>
+    auto createWheel = [&](float localX, float localY, float radius) -> std::optional<PS_AGONY2D::ObjectDenseIndex>
         {
             const float ratio = radius / roadWheelRadius;
             return simulation.createCircle({
@@ -1177,7 +1177,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         pivots[i] = pathPoint(perimeter * static_cast<float>(i) / static_cast<float>(linkCount));
 
     // === TRACK LINKS ===
-    std::vector<PS_AGONY2D::ObjectIndex> links(linkCount);
+    std::vector<PS_AGONY2D::ObjectDenseIndex> links(linkCount);
     std::vector<float> halfChord(linkCount);
     for (int i = 0; i < linkCount; ++i)
     {
@@ -1383,7 +1383,7 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
         if (!callback) return;
 
         // A concave polygon is decomposed into several colliders: set the callback on all of them.
-        for (const ColliderIndex collider : simulation.getBodyColliders(*starOpt))
+        for (const ColliderDenseIndex collider : simulation.getBodyColliders(*starOpt))
             simulation.setColliderCollisionCallback(collider, *callback, 20.0f);
     }
 }

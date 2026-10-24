@@ -7,7 +7,7 @@ namespace PS_AGONY2D
 {
 	struct MotorConstraintData
 	{
-		ObjectIndex bodyIndex;
+		ObjectDenseIndex bodyIndex;
 		size_t soaIndex;       // Original SoA index, for impulse write-back.
 		Real invInertia;       // 0 = skip.
 		Real inertia;          // Effective mass = 1 / invInertia, cached to avoid a divide.

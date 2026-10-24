@@ -5,16 +5,16 @@
 
 namespace PS_AGONY2D
 {
-	ColliderIndex ColliderSoA::append(
-		ObjectIndex bodyIndexIn,
+	ColliderDenseIndex ColliderSoA::append(
+		ObjectDenseIndex bodyIndexIn,
 		Vec2 localOffset,
 		Real localRotationIn,
 		MaterialIndex materialIndexIn,
 		BodyType shapeTypeIn,
-		ObjectIndex shapeIndexIn
+		ObjectDenseIndex shapeIndexIn
 	)
 	{
-		const ColliderIndex newIndex = static_cast<ColliderIndex>(bodyIndex.size());
+		const ColliderDenseIndex newIndex = static_cast<ColliderDenseIndex>(bodyIndex.size());
 
 		bodyIndex.push_back(bodyIndexIn);
 
@@ -44,6 +44,8 @@ namespace PS_AGONY2D
 		callbackId.push_back(0);
 		eventThreshold.push_back(NO_COLLISION_EVENT_THRESHOLD);
 
+		handles.push();
+
 		return newIndex;
 	}
 
@@ -53,6 +55,7 @@ namespace PS_AGONY2D
 		{
 			return;
 		}
+		handles.swapWithBack(index);
 
 		#define SWAP_FIELD(name, type) std::swap(name[index], name.back());
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(SWAP_FIELD)
@@ -65,6 +68,7 @@ namespace PS_AGONY2D
 		{
 			return;
 		}
+		handles.popBack();
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(POP_FIELD)
@@ -84,7 +88,7 @@ namespace PS_AGONY2D
 
 	size_t ColliderSoA::getMemoryUsage() const noexcept
 	{
-		size_t total = 0;
+		size_t total = handles.getMemoryUsage();
 
 		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(MEM_FIELD)

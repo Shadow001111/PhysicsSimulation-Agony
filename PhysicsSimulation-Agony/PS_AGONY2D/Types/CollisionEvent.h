@@ -15,8 +15,8 @@ namespace PS_AGONY2D
 	// One event per opted-in collider side, from that side's perspective.
 	struct CollisionEvent
 	{
-		ColliderIndex self, other;
-		ObjectIndex selfBody, otherBody;
+		ColliderDenseIndex self, other;
+		ObjectDenseIndex selfBody, otherBody;
 		Vec2 point;            // Average of the manifold's contact points.
 		Vec2 normal;           // Points from self towards other.
 		Real impulse;          // Impact impulse: max over contacts of (approach speed * normal effective mass), pre-solve.

@@ -4,7 +4,7 @@
 
 // Define all scalar SoA fields.
 #define PS_AGONY_CIRCLE_SOA_SCALAR_FIELDS(F) \
-	F(colliderIndices, ColliderIndex) \
+	F(colliderIndices, ColliderDenseIndex) \
 	F(radius, Real)
 
 namespace PS_AGONY2D
@@ -16,7 +16,7 @@ namespace PS_AGONY2D
 		#undef DECLARE_FIELD
 
 		void append(
-		ColliderIndex colliderIndex,
+		ColliderDenseIndex colliderIndex,
 		Real radius
 		);
 

@@ -19,8 +19,8 @@ namespace PS_AGONY2D
 
         const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
         const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
-        const ObjectIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
-        const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 
@@ -54,16 +54,16 @@ namespace PS_AGONY2D
                     const auto pair = pairs[i + j];
                     colliderPairsBatch[j] = pair;
 
-                    const ObjectIndex indexA = pair.a;
-                    const ObjectIndex indexB = pair.b;
+                    const ObjectDenseIndex indexA = pair.a;
+                    const ObjectDenseIndex indexB = pair.b;
 
                     positionAXBatch[j] = positionXPtr[indexA];
                     positionAYBatch[j] = positionYPtr[indexA];
                     positionBXBatch[j] = positionXPtr[indexB];
                     positionBYBatch[j] = positionYPtr[indexB];
 
-                    const ObjectIndex shapeA = shapeIndexPtr[indexA];
-                    const ObjectIndex shapeB = shapeIndexPtr[indexB];
+                    const ObjectDenseIndex shapeA = shapeIndexPtr[indexA];
+                    const ObjectDenseIndex shapeB = shapeIndexPtr[indexB];
 
                     radiusABatch[j] = radiusPtr[shapeA];
                     radiusBBatch[j] = radiusPtr[shapeB];
@@ -141,8 +141,8 @@ namespace PS_AGONY2D
             const Vec2 positionA = { positionXPtr[indexA], positionYPtr[indexA] };
             const Vec2 positionB = { positionXPtr[indexB], positionYPtr[indexB] };
 
-            const ObjectIndex shapeA = shapeIndexPtr[indexA];
-            const ObjectIndex shapeB = shapeIndexPtr[indexB];
+            const ObjectDenseIndex shapeA = shapeIndexPtr[indexA];
+            const ObjectDenseIndex shapeB = shapeIndexPtr[indexB];
 
             const Real radiusA = radiusPtr[shapeA];
             const Real radiusB = radiusPtr[shapeB];

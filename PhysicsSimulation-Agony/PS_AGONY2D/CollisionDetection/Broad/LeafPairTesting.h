@@ -55,7 +55,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		explicit PairPushBuffer(CacheLineAlignedVector<ObjectPair>& destIn) noexcept : dest(destIn) {}
 
-		inline void push(ObjectIndex a, ObjectIndex b) noexcept
+		inline void push(ObjectDenseIndex a, ObjectDenseIndex b) noexcept
 		{
 			buffer[size++] = { a, b };
 			if (size == PAIR_PUSH_BUFFER_CAPACITY) flush();
@@ -71,7 +71,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 	inline void testLeafSelfCross(
 		const BvhNode& node,
 		const BvhTreeView& tree,
-		const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
+		const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr,
 		uint32_t* ECSTASY_RESTRICT masks,
 		PairPushBuffer& pushBuffer)
 	{
@@ -80,7 +80,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const Real* ECSTASY_RESTRICT leafMaxX = tree.leafMaxX + srcIndex;
 		const Real* ECSTASY_RESTRICT leafMinY = tree.leafMinY + srcIndex;
 		const Real* ECSTASY_RESTRICT leafMaxY = tree.leafMaxY + srcIndex;
-		const ObjectIndex* ECSTASY_RESTRICT indicesPtr = tree.indices;
+		const ObjectDenseIndex* ECSTASY_RESTRICT indicesPtr = tree.indices;
 		const uint32_t count = node.end - node.start;
 
 		for (uint32_t i = 0; i < count; i++)
@@ -116,8 +116,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			{
 				const uint32_t lane = std::countr_zero(mask);
 				mask &= mask - 1;
-				const ObjectIndex idxA = indicesPtr[node.start + i];
-				const ObjectIndex idxB = indicesPtr[node.start + lane];
+				const ObjectDenseIndex idxA = indicesPtr[node.start + i];
+				const ObjectDenseIndex idxB = indicesPtr[node.start + lane];
 				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body.
 				pushBuffer.push(idxA, idxB);
 			}
@@ -134,7 +134,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const BvhTreeView& treeA,
 		const BvhNode& nodeB,
 		const BvhTreeView& treeB,
-		[[maybe_unused]] const ObjectIndex* ECSTASY_RESTRICT colliderOwnerPtr,
+		[[maybe_unused]] const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr,
 		uint32_t* ECSTASY_RESTRICT masks,
 		PairPushBuffer& pushBuffer)
 	{
@@ -182,8 +182,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			{
 				const uint32_t lane = std::countr_zero(mask);
 				mask &= mask - 1;
-				const ObjectIndex idxA = treeA.indices[nodeA.start + i];
-				const ObjectIndex idxB = treeB.indices[nodeB.start + lane];
+				const ObjectDenseIndex idxA = treeA.indices[nodeA.start + i];
+				const ObjectDenseIndex idxB = treeB.indices[nodeB.start + lane];
 				if constexpr (CheckSameBody)
 				{
 					if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue;

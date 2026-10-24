@@ -4,7 +4,7 @@
 namespace PS_AGONY2D
 {
 	void CircleSoA::append(
-		ColliderIndex colliderIndex,
+		ColliderDenseIndex colliderIndex,
 		Real radius
 	)
 	{

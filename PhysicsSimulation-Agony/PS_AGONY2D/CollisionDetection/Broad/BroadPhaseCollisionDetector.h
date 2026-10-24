@@ -109,7 +109,7 @@ namespace PS_AGONY2D
 		};
 
 		AABBSoAViewer collidersAABB;
-		const ObjectIndex* colliderBodyIndex = nullptr; // Collider -> owning body; rejects same-body pairs.
+		const ObjectDenseIndex* colliderBodyIndex = nullptr; // Collider -> owning body; rejects same-body pairs.
 
 		std::array<BroadPhaseInternal::BvhTree, 2> trees;
 
@@ -131,7 +131,7 @@ namespace PS_AGONY2D
 		// body index and is used to reject pairs of colliders that belong to the same body.
 		void setDataViewers(
 			const AABBSoAViewer& aabbs,
-			const ObjectIndex* colliderBodyIndexIn
+			const ObjectDenseIndex* colliderBodyIndexIn
 		);
 
 		// Clears both trees and cached pairs. Call when there are zero colliders so stale
@@ -142,8 +142,8 @@ namespace PS_AGONY2D
 		// also rebuilt if requestStaticRebuild() was called or its collider count differs from
 		// 'staticIds'. Spans hold COLLIDER indices; either may be empty.
 		void buildTrees(
-			std::span<const ColliderIndex> dynamicIds,
-			std::span<const ColliderIndex> staticIds,
+			std::span<const ColliderDenseIndex> dynamicIds,
+			std::span<const ColliderDenseIndex> staticIds,
 			StaticTreeUpdate staticUpdate
 		);
 
@@ -158,7 +158,7 @@ namespace PS_AGONY2D
 
 		// Returns COLLIDER indices (dynamic first, then static) whose AABB overlaps the query shape.
 		template <typename ShapeQuery>
-		void queryCollidersInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<ColliderIndex>& outColliders) const;
+		void queryCollidersInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<ColliderDenseIndex>& outColliders) const;
 
 		// Returns the AABBs of leaf nodes (of both trees) overlapping the query shape.
 		template <typename ShapeQuery>
@@ -174,7 +174,7 @@ namespace PS_AGONY2D
 	inline void BroadPhaseCollisionDetector::queryCollidersInShape(
 		const ShapeQuery& shape,
 		BroadPhaseInternal::BvhTreeTypeFlag flags,
-		std::vector<ColliderIndex>& outColliders
+		std::vector<ColliderDenseIndex>& outColliders
 	) const
 	{
 		uint32_t mask = static_cast<uint32_t>(flags);

@@ -76,7 +76,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		};
 	}
 
-	void BvhTree::build(const AABBSoAViewer& aabbs, std::span<const ColliderIndex> ids)
+	void BvhTree::build(const AABBSoAViewer& aabbs, std::span<const ColliderDenseIndex> ids)
 	{
 		TRACY_SCOPE_N("Build tree");
 
@@ -148,7 +148,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 	// Gathers 2*centroid (min + max) through 'ids' into contiguous arrays and returns the
 	// bounds of the gathered AABBs. This is the only indirected pass of the build.
-	BvhTree::Bounds BvhTree::gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ColliderIndex> ids)
+	BvhTree::Bounds BvhTree::gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ColliderDenseIndex> ids)
 	{
 		TRACY_SCOPE_N("Gather centroids");
 
@@ -160,7 +160,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const Real* ECSTASY_RESTRICT maxXPtr = aabbs.maxX;
 		const Real* ECSTASY_RESTRICT minYPtr = aabbs.minY;
 		const Real* ECSTASY_RESTRICT maxYPtr = aabbs.maxY;
-		const ColliderIndex* ECSTASY_RESTRICT idsPtr = ids.data();
+		const ColliderDenseIndex* ECSTASY_RESTRICT idsPtr = ids.data();
 
 		Real* ECSTASY_RESTRICT sumXPtr = centroidX.data();
 		Real* ECSTASY_RESTRICT sumYPtr = centroidY.data();
@@ -171,7 +171,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		for (size_t i = 0; i < count; i++)
 		{
-			const ColliderIndex id = idsPtr[i];
+			const ColliderDenseIndex id = idsPtr[i];
 			const Real minX = minXPtr[id];
 			const Real maxX = maxXPtr[id];
 			const Real minY = minYPtr[id];
@@ -264,7 +264,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		}
 	}
 
-	void BvhTree::sortByMortonCodes(std::span<const ColliderIndex> ids)
+	void BvhTree::sortByMortonCodes(std::span<const ColliderDenseIndex> ids)
 	{
 		TRACY_SCOPE_N("Sort indices by morton codes");
 
@@ -336,8 +336,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		}
 
 		// Write sorted collider indices and keys back.
-		ObjectIndex* ECSTASY_RESTRICT outIndexPtr = colliderIndices.data();
-		const ColliderIndex* ECSTASY_RESTRICT idsPtr = ids.data();
+		ObjectDenseIndex* ECSTASY_RESTRICT outIndexPtr = colliderIndices.data();
+		const ColliderDenseIndex* ECSTASY_RESTRICT idsPtr = ids.data();
 		for (uint32_t i = 0; i < count; i++)
 		{
 			const PackedIndex item = a[i];
@@ -436,7 +436,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		// 'Set' stores in reverse order.
 		const InternalRealSimd minMaxBlendMask = InternalUintSimd::set(-1, 0, -1, 0).as<InternalRealSimd>();
 
-		const ObjectIndex* ECSTASY_RESTRICT indicesPtr = colliderIndices.data();
+		const ObjectDenseIndex* ECSTASY_RESTRICT indicesPtr = colliderIndices.data();
 		const Real* ECSTASY_RESTRICT bodyMinXPtr = aabbs.minX;
 		const Real* ECSTASY_RESTRICT bodyMaxXPtr = aabbs.maxX;
 		const Real* ECSTASY_RESTRICT bodyMinYPtr = aabbs.minY;
@@ -503,7 +503,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 			for (uint32_t k = 0; k < nodeRange; k++)
 			{
-				const ObjectIndex colliderIndex = indicesPtr[nodeStart + k];
+				const ObjectDenseIndex colliderIndex = indicesPtr[nodeStart + k];
 
 				const Real bodyMinX = bodyMinXPtr[colliderIndex];
 				const Real bodyMaxX = bodyMaxXPtr[colliderIndex];

@@ -13,7 +13,7 @@ namespace PS_AGONY2D
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
-		const ObjectIndex* ECSTASY_RESTRICT bodyIndexPtr = viewer.bodyIndex;
+		const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = viewer.bodyIndex;
 		const Real* ECSTASY_RESTRICT targetSpeedPtr = viewer.targetSpeed;
 		const Real* ECSTASY_RESTRICT maxTorquePtr = viewer.maxTorque;
 		Real* ECSTASY_RESTRICT accumulatedImpulsePtr = const_cast<Real*>(viewer.accumulatedImpulse);
@@ -26,7 +26,7 @@ namespace PS_AGONY2D
 			const size_t i = indicesPtr[n];
 			MotorConstraintData& data = constraintContainer[outOffset + n];
 
-			const ObjectIndex bodyIndex = bodyIndexPtr[i];
+			const ObjectDenseIndex bodyIndex = bodyIndexPtr[i];
 			const Real invInertia = invInertiaPtr[bodyIndex];
 
 			data.bodyIndex = bodyIndex;

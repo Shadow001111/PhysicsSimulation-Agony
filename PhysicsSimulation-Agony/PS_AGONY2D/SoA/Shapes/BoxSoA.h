@@ -4,7 +4,7 @@
 
 // Define all scalar SoA fields.
 #define PS_AGONY_BOX_SOA_SCALAR_FIELDS(F) \
-	F(colliderIndices, ColliderIndex) \
+	F(colliderIndices, ColliderDenseIndex) \
 	F(halfWidth, Real) \
 	F(halfHeight, Real)
 
@@ -17,7 +17,7 @@ namespace PS_AGONY2D
 		#undef DECLARE_FIELD
 
 		void append(
-		ColliderIndex colliderIndex,
+		ColliderDenseIndex colliderIndex,
 		Real halfWidth,
 		Real halfHeight
 		);

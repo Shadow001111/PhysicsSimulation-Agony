@@ -15,7 +15,7 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
         const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
 
-        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = circles.colliderIndices.data();
+        const ColliderDenseIndex* ECSTASY_RESTRICT colliderIndexPtr = circles.colliderIndices.data();
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius.data();
 
         Real* ECSTASY_RESTRICT aabbMinXPtr = colliders.aabbMinX.data();
@@ -25,7 +25,7 @@ namespace PS_AGONY2D
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = colliderIndexPtr[i];
+            const ColliderDenseIndex colliderIndex = colliderIndexPtr[i];
             const Real radius = radiusPtr[i];
 
             const Real x = worldPosXPtr[colliderIndex];
@@ -50,7 +50,7 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT worldRotationCosPtr = colliders.worldRotationCos.data();
         const Real* ECSTASY_RESTRICT worldRotationSinPtr = colliders.worldRotationSin.data();
 
-        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = boxes.colliderIndices.data();
+        const ColliderDenseIndex* ECSTASY_RESTRICT colliderIndexPtr = boxes.colliderIndices.data();
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth.data();
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight.data();
 
@@ -61,7 +61,7 @@ namespace PS_AGONY2D
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = colliderIndexPtr[i];
+            const ColliderDenseIndex colliderIndex = colliderIndexPtr[i];
             const Real halfWidth = halfWidthPtr[i];
             const Real halfHeight = halfHeightPtr[i];
 
@@ -95,7 +95,7 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT worldRotationCosPtr = colliders.worldRotationCos.data();
         const Real* ECSTASY_RESTRICT worldRotationSinPtr = colliders.worldRotationSin.data();
 
-        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = polygons.colliderIndices.data();
+        const ColliderDenseIndex* ECSTASY_RESTRICT colliderIndexPtr = polygons.colliderIndices.data();
         const PolygonGeometry* ECSTASY_RESTRICT geometryPtr = polygons.geometry.data();
 
         Real* ECSTASY_RESTRICT aabbMinXPtr = colliders.aabbMinX.data();
@@ -105,7 +105,7 @@ namespace PS_AGONY2D
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = colliderIndexPtr[i];
+            const ColliderDenseIndex colliderIndex = colliderIndexPtr[i];
             const PolygonGeometry& geometry = geometryPtr[i];
             const Vec2* verticesPtr = geometry.vertices();
             const size_t vertexCount = geometry.size();
@@ -150,7 +150,7 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT worldRotationCosPtr = colliders.worldRotationCos.data();
         const Real* ECSTASY_RESTRICT worldRotationSinPtr = colliders.worldRotationSin.data();
 
-        const ColliderIndex* ECSTASY_RESTRICT colliderIndexPtr = capsules.colliderIndices.data();
+        const ColliderDenseIndex* ECSTASY_RESTRICT colliderIndexPtr = capsules.colliderIndices.data();
         const Real* ECSTASY_RESTRICT halfLengthPtr = capsules.halfLength.data();
         const Real* ECSTASY_RESTRICT radiusPtr = capsules.radius.data();
 
@@ -161,7 +161,7 @@ namespace PS_AGONY2D
 
         for (size_t i = 0; i < count; i++)
         {
-            const ColliderIndex colliderIndex = colliderIndexPtr[i];
+            const ColliderDenseIndex colliderIndex = colliderIndexPtr[i];
             const Real halfLength = halfLengthPtr[i];
             const Real radius = radiusPtr[i];
 

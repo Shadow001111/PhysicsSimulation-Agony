@@ -13,6 +13,6 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const Real* leafMaxX = nullptr;
 		const Real* leafMinY = nullptr;
 		const Real* leafMaxY = nullptr;
-		const ObjectIndex* indices = nullptr; // Collider indices sorted by Morton code.
+		const ObjectDenseIndex* indices = nullptr; // Collider indices sorted by Morton code.
 	};
 }

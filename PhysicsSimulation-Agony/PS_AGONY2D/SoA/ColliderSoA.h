@@ -1,5 +1,6 @@
 #pragma once
 #include "PS_AGONY2D/ContainerUtilities.h"
+#include "PS_AGONY2D/HandleTable.h"
 #include "PS_AGONY2D/Types/Types.h"
 #include "PS_AGONY2D/Types/CollisionEvent.h"
 
@@ -8,7 +9,7 @@
 // worldRotation: body.rotation + localRotation, re-wrapped every step.
 // callbackId: collision callback slot (0 = none). eventThreshold: impact impulse needed to fire it.
 #define PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(F) \
-	F(bodyIndex, ObjectIndex) \
+	F(bodyIndex, ObjectDenseIndex) \
 	F(localOffsetX, Real) \
 	F(localOffsetY, Real) \
 	F(localRotation, Real) \
@@ -19,7 +20,7 @@
 	F(worldRotationSin, Real) \
 	F(materialIndex, MaterialIndex) \
 	F(shapeType, BodyType) \
-	F(shapeIndex, ObjectIndex) \
+	F(shapeIndex, ObjectDenseIndex) \
 	F(aabbMinX, Real) \
 	F(aabbMinY, Real) \
 	F(aabbMaxX, Real) \
@@ -33,20 +34,27 @@ namespace PS_AGONY2D
 	{
 		#define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-			#undef DECLARE_FIELD
+		#undef DECLARE_FIELD
 
-			ColliderIndex append(
-				ObjectIndex bodyIndexIn,
-				Vec2 localOffset,
-				Real localRotationIn,
-				MaterialIndex materialIndexIn,
-				BodyType shapeTypeIn,
-				ObjectIndex shapeIndexIn
-			);
+		HandleTable handles;
+
+		ColliderDenseIndex append(
+			ObjectDenseIndex bodyIndexIn,
+			Vec2 localOffset,
+			Real localRotationIn,
+			MaterialIndex materialIndexIn,
+			BodyType shapeTypeIn,
+			ObjectDenseIndex shapeIndexIn
+		);
 
 		void swapWithBack(size_t index);
 		void popBack();
 		size_t swapRemove(size_t index);
+
+		bool isValid(Handle h) const noexcept { return handles.isValid(h); }
+		uint32_t indexOf(Handle h) const noexcept { return handles.indexOf(h); }
+		uint32_t indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
+		Handle handleAt(size_t index) const noexcept { return handles.handleAt(index); }
 
 		size_t getCount() const noexcept { return bodyIndex.size(); }
 		size_t getMemoryUsage() const noexcept;
@@ -58,9 +66,9 @@ namespace PS_AGONY2D
 	public:
 		#define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-			#undef DECLARE_VIEWER_FIELD
+		#undef DECLARE_VIEWER_FIELD
 
-			ColliderSoAViewer() = default;
+		ColliderSoAViewer() = default;
 		explicit ColliderSoAViewer(const ColliderSoA& data) noexcept;
 
 		size_t getCount() const noexcept { return count; }
