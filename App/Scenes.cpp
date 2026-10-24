@@ -1277,16 +1277,55 @@ void load_Tank(PS_AGONY2D::Simulation& simulation)
     load_ObjectCar(simulation, carX, kCarRestHeight * carScale, 0.0f, carScale);
 }
 
-static void onStarCollision(const PS_AGONY2D::CollisionEvent& event, void* userData)
+struct SplitContext
 {
-    (void)event; (void)userData;
-    std::cout << "[CollisionCallbackTest]: Star hit! Impulse: " << event.impulse << "\n";
+    PS_AGONY2D::Simulation* simulation;
+    PS_AGONY2D::MaterialIndex material;
+    PS_AGONY2D::CollisionCallbackIndex callback;
+    float minRadius; // Circles with radius/2 below this no longer split.
+};
+
+// Circle with mass == radius. Splittable circles get the callback (threshold = 4 * radius, i.e. approach speed ~4).
+static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Vec2 position, PS_AGONY2D::Vec2 velocity, float radius)
+{
+    const auto body = ctx.simulation->createCircle({
+        .base.position = position,
+        .base.velocity = velocity,
+        .base.mass = radius,
+        .base.materialIndex = ctx.material,
+        .radius = radius
+        });
+    if (!body) return;
+
+    if (radius * 0.5f < ctx.minRadius) return;
+    for (const PS_AGONY2D::ColliderDenseIndex collider : ctx.simulation->getBodyColliders(*body))
+        ctx.simulation->setColliderCollisionCallback(collider, ctx.callback, 16.0f * radius);
+}
+
+static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, void* userData)
+{
+    SplitContext& ctx = *static_cast<SplitContext*>(userData);
+    PS_AGONY2D::Simulation& simulation = *ctx.simulation;
+
+    const auto data = simulation.getBodyData(event.selfBody);
+    if (!data) return;
+
+    const float radius = float(data->mass); // Mass equals radius by construction.
+    const PS_AGONY2D::Vec2 pos = data->offset;
+    const PS_AGONY2D::Vec2 vel = data->velocity;
+
+    simulation.destroyBody(event.selfBody);
+
+    // Children (radius/2) sit inside the parent's footprint, side by side along the contact tangent: no overlap.
+    const float half = radius * 0.5f;
+    const PS_AGONY2D::Vec2 dir = { -event.normal.y, event.normal.x };
+    spawnSplitCircle(ctx, { pos.x + dir.x * half, pos.y + dir.y * half }, { vel.x + dir.x, vel.y + dir.y }, half);
+    spawnSplitCircle(ctx, { pos.x - dir.x * half, pos.y - dir.y * half }, { vel.x - dir.x, vel.y - dir.y }, half);
 }
 
 static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
 {
     using namespace PS_AGONY2D;
-    constexpr float pi = float(Constants::PI);
 
     const MaterialIndex mat = simulation.createMaterial({
         .elasticity = 0.3f,
@@ -1309,83 +1348,18 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
     wall(-21.0f, 0.0f, 2.0f, 32.0f);
     wall(21.0f, 0.0f, 2.0f, 32.0f);
 
-    // Same type, three sizes, mass proportional to area.
-    constexpr float sizes[3] = { 0.6f, 1.2f, 2.4f };
-    constexpr float sizeX[3] = { -12.0f, -6.0f, 0.0f };
+    // 5 splits: 3.2 -> 1.6 -> 0.8 -> 0.4 -> 0.2 -> 0.1 (powers of two, exact in float).
+    constexpr float startRadius = 3.2f;
+    static SplitContext ctx; // Static: referenced by the callback for the whole scene lifetime.
+    ctx.simulation = &simulation;
+    ctx.material = mat;
+    ctx.minRadius = 0.1f;
 
-    for (int i = 0; i < 3; ++i)
-    {
-        const float s = sizes[i];
+    const auto callback = simulation.createCollisionCallback(onCircleSplit, &ctx);
+    if (!callback) return;
+    ctx.callback = *callback;
 
-        const float radius = s * 0.5f;
-        simulation.createCircle({
-            .base.position = { sizeX[i], 10.0f },
-            .base.mass = pi * radius * radius,
-            .base.materialIndex = mat,
-            .radius = radius
-            });
-
-        simulation.createBox({
-            .base.position = { sizeX[i], 5.0f },
-            .base.mass = s * s,
-            .base.materialIndex = mat,
-            .size = { s, s }
-            });
-
-        const float capRadius = s * 0.25f;
-        const float capLength = s;
-        simulation.createCapsule({
-            .base.position = { sizeX[i], 0.0f },
-            .base.mass = (capLength * 2.0f + pi * capRadius) * capRadius,
-            .base.materialIndex = mat,
-            .radius = capRadius,
-            .length = capLength
-            });
-    }
-
-    // Single regular pentagon, CCW. Area = 2.378 r^2.
-    {
-        constexpr float r = 1.0f;
-        std::vector<Vec2> v;
-        for (int k = 0; k < 5; ++k)
-        {
-            const float a = 2.0f * pi * float(k) / 5.0f + 0.5f * pi;
-            v.push_back({ r * std::cos(a), r * std::sin(a) });
-        }
-        simulation.createPolygon({
-            .base.position = { 8.0f, 10.0f },
-            .base.mass = 2.378f * r * r,
-            .base.materialIndex = mat,
-            .localVertices = { v.data(), v.size() }
-            });
-    }
-
-    // Concave 5-point star with the collision callback. Area = 5 R r sin(36 deg).
-    {
-        constexpr float outer = 2.0f;
-        constexpr float inner = 0.8f;
-        std::vector<Vec2> v;
-        for (int k = 0; k < 10; ++k)
-        {
-            const float a = pi * float(k) / 5.0f + 0.5f * pi;
-            const float rad = (k & 1) ? inner : outer;
-            v.push_back({ rad * std::cos(a), rad * std::sin(a) });
-        }
-        const auto starOpt = simulation.createPolygon({
-            .base.position = { 12.0f, 5.0f },
-            .base.mass = 5.0f * outer * inner * 0.58778525f,
-            .base.materialIndex = mat,
-            .localVertices = { v.data(), v.size() }
-            });
-        if (!starOpt) return;
-
-        const auto callback = simulation.createCollisionCallback(onStarCollision);
-        if (!callback) return;
-
-        // A concave polygon is decomposed into several colliders: set the callback on all of them.
-        for (const ColliderDenseIndex collider : simulation.getBodyColliders(*starOpt))
-            simulation.setColliderCollisionCallback(collider, *callback, 20.0f);
-    }
+    spawnSplitCircle(ctx, { 0.0f, 8.0f }, { 0.0f, 0.0f }, startRadius);
 }
 
 void loadScene(PS_AGONY2D::Simulation& simulation, int scene)

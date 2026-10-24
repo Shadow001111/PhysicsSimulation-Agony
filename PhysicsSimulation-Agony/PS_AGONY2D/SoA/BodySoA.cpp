@@ -122,6 +122,24 @@ namespace PS_AGONY2D
 		}
 	}
 
+	std::optional<BodyData> BodySoA::getBodyData(size_t index) const noexcept
+	{
+		if (index >= offsetX.size()) [[unlikely]] return std::nullopt;
+		return BodyData
+		{
+			{ offsetX[index], offsetY[index] },
+			{ localCenterOfMassX[index], localCenterOfMassY[index] },
+			{ worldCenterX[index], worldCenterY[index] },
+			{ velocityX[index], velocityY[index] },
+			rotation[index], angularVelocity[index],
+			mass[index], invMass[index],
+			inertia[index], invInertia[index],
+			rotationCos[index], rotationSin[index],
+			isStatic[index] != 0,
+			handles.handleAt(index)
+		};
+	}
+
 	size_t BodySoA::getMemoryUsage() const noexcept
 	{
 		size_t total = handles.getMemoryUsage();

@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <optional>
 
 // Define all scalar SoA fields.
 #define PS_AGONY_BODY_SOA_SCALAR_FIELDS(F) \
@@ -37,17 +38,34 @@
 
 namespace PS_AGONY2D
 {
+    struct BodyData
+    {
+        Vec2 offset;
+        Vec2 localCenterOfMass;
+        Vec2 worldCenter;
+        Vec2 velocity;
+        Real rotation;
+        Real angularVelocity;
+        Real mass, invMass;
+        Real inertia, invInertia;
+        Real rotationCos, rotationSin;
+        bool isStatic;
+        Handle handle;
+        // TODO: If user will be able to change body data, rotation cache must be kept in sync with changes.
+        // We can compute sine and cosine everytime, but better only recompute when dirty on demand.
+    };
+
     struct BodySoA
     {
         #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-            #undef DECLARE_FIELD
+        #undef DECLARE_FIELD
 
-            #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
-            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
-            #undef DECLARE_VECTOR_FIELD
+        #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
+        #undef DECLARE_VECTOR_FIELD
 
-            HandleTable handles;
+        HandleTable handles;
 
         Handle append(
             Vec2 pos, Vec2 vel, Real rot, Real anglVel,
@@ -69,6 +87,8 @@ namespace PS_AGONY2D
         uint32_t indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
         Handle handleAt(size_t index) const noexcept { return handles.handleAt(index); }
 
+        std::optional<BodyData> getBodyData(size_t index) const noexcept;
+
         size_t getCount() const noexcept { return offsetX.size(); }
         size_t getMemoryUsage() const noexcept;
     };
@@ -79,13 +99,13 @@ namespace PS_AGONY2D
     public:
         #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-            #undef DECLARE_VIEWER_FIELD
+        #undef DECLARE_VIEWER_FIELD
 
-            #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
-            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
-            #undef DECLARE_VIEWER_VECTOR_FIELD
+        #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
+        #undef DECLARE_VIEWER_VECTOR_FIELD
 
-            BodySoAViewer() = default;
+        BodySoAViewer() = default;
         explicit BodySoAViewer(const BodySoA& data) noexcept;
 
         size_t getCount() const noexcept { return count; }

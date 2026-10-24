@@ -335,6 +335,11 @@ namespace PS_AGONY2D
 		SliderJointSoAViewer getSliderJoints() const noexcept { return sliderJointConstraintSystem.getViewer(); }
 		MotorSoAViewer getMotors() const noexcept { return motorConstraintSystem.getViewer(); }
 
+		std::optional<BodyData> getBodyData(ObjectDenseIndex index) const noexcept
+		{
+			return objectManager.bodies.getBodyData(index);
+		}
+
 		IConstraintSystem& getConstraintSystem(ConstraintType type) noexcept { return *constraintSystems[size_t(type)]; }
 		const IConstraintSystem& getConstraintSystem(ConstraintType type) const noexcept { return *constraintSystems[size_t(type)]; }
 
