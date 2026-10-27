@@ -75,12 +75,15 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		uint32_t* ECSTASY_RESTRICT masks,
 		PairPushBuffer& pushBuffer)
 	{
+		// Note: "jStart = (i + 1) & LANES_UPPER_MASK" slows everything down.
+		// But a damn branch is better? WHY?!
+
 		const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
 		const Real* ECSTASY_RESTRICT leafMinX = tree.leafMinX + srcIndex;
 		const Real* ECSTASY_RESTRICT leafMaxX = tree.leafMaxX + srcIndex;
 		const Real* ECSTASY_RESTRICT leafMinY = tree.leafMinY + srcIndex;
 		const Real* ECSTASY_RESTRICT leafMaxY = tree.leafMaxY + srcIndex;
-		const ObjectDenseIndex* ECSTASY_RESTRICT indicesPtr = tree.indices;
+		const ObjectDenseIndex* ECSTASY_RESTRICT nodeIndicesPtr = tree.indices + node.start;
 		const uint32_t count = node.end - node.start;
 
 		for (uint32_t i = 0; i < count; i++)
@@ -90,24 +93,27 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			const RealSimd vMinYi(leafMinY[i]);
 			const RealSimd vMaxYi(leafMaxY[i]);
 
-			// Note: "jStart = i & LANES_UPPER_MASK" slows everything down.
-			auto maskRow = leafSelfCrossMaskArray[i];
-			uint32_t mask = 0;
-			for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LEAF_TEST_LANES)
+			const uint32_t* maskRow = leafSelfCrossMaskArray[i].data();
+			uint32_t totalMask = 0;
+			for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE / LEAF_TEST_LANES; j++)
 			{
-				const RealSimd vMinXj = RealSimd::load(leafMinX + j);
-				const RealSimd vMaxXj = RealSimd::load(leafMaxX + j);
-				const RealSimd vMinYj = RealSimd::load(leafMinY + j);
-				const RealSimd vMaxYj = RealSimd::load(leafMaxY + j);
+				const uint32_t overlapMask = maskRow[j];
+				if (overlapMask == 0) [[unlikely]] continue;
+
+				const uint32_t bigJ = j << LEAF_TEST_LANES_LOG2;
+
+				const RealSimd vMinXj = RealSimd::load(leafMinX + bigJ);
+				const RealSimd vMaxXj = RealSimd::load(leafMaxX + bigJ);
+				const RealSimd vMinYj = RealSimd::load(leafMinY + bigJ);
+				const RealSimd vMaxYj = RealSimd::load(leafMaxY + bigJ);
 
 				const RealSimd overlap =
 					(vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
 					(vMinYi < vMaxYj) & (vMaxYi > vMinYj);
 
-				const uint32_t localMask = overlap.movemask() & maskRow[j >> LEAF_TEST_LANES_LOG2];
-				mask |= localMask << j;
+				totalMask |= (overlap.movemask() & overlapMask) << bigJ;
 			}
-			masks[i] = mask;
+			masks[i] = totalMask;
 		}
 		for (uint32_t i = 0; i < count; i++)
 		{
@@ -116,8 +122,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			{
 				const uint32_t lane = std::countr_zero(mask);
 				mask &= mask - 1;
-				const ObjectDenseIndex idxA = indicesPtr[node.start + i];
-				const ObjectDenseIndex idxB = indicesPtr[node.start + lane];
+				const ObjectDenseIndex idxA = nodeIndicesPtr[i];
+				const ObjectDenseIndex idxB = nodeIndicesPtr[lane];
 				if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue; // Same body.
 				pushBuffer.push(idxA, idxB);
 			}
@@ -152,6 +158,9 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const Real* ECSTASY_RESTRICT leafBMinY = treeB.leafMinY + srcIndexB;
 		const Real* ECSTASY_RESTRICT leafBMaxY = treeB.leafMaxY + srcIndexB;
 
+		const ObjectDenseIndex* ECSTASY_RESTRICT nodeAIndicesPtr = treeA.indices + nodeA.start;
+		const ObjectDenseIndex* ECSTASY_RESTRICT nodeBIndicesPtr = treeB.indices + nodeB.start;
+
 		for (uint32_t i = 0; i < countA; i++)
 		{
 			const RealSimd vMinXi(leafAMinX[i]);
@@ -159,7 +168,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			const RealSimd vMinYi(leafAMinY[i]);
 			const RealSimd vMaxYi(leafAMaxY[i]);
 
-			uint32_t mask = 0;
+			uint32_t totalMask = 0;
 			for (uint32_t j = 0; j < BvhNode::KD_LEAF_SIZE; j += LEAF_TEST_LANES)
 			{
 				const RealSimd vMinXj = RealSimd::load(leafBMinX + j);
@@ -171,9 +180,9 @@ namespace PS_AGONY2D::BroadPhaseInternal
 					(vMinXi < vMaxXj) & (vMaxXi > vMinXj) &
 					(vMinYi < vMaxYj) & (vMaxYi > vMinYj);
 
-				mask |= overlap.movemask() << j;
+				totalMask |= overlap.movemask() << j;
 			}
-			masks[i] = mask;
+			masks[i] = totalMask;
 		}
 		for (uint32_t i = 0; i < countA; i++)
 		{
@@ -182,8 +191,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			{
 				const uint32_t lane = std::countr_zero(mask);
 				mask &= mask - 1;
-				const ObjectDenseIndex idxA = treeA.indices[nodeA.start + i];
-				const ObjectDenseIndex idxB = treeB.indices[nodeB.start + lane];
+				const ObjectDenseIndex idxA = nodeAIndicesPtr[i];
+				const ObjectDenseIndex idxB = nodeBIndicesPtr[lane];
 				if constexpr (CheckSameBody)
 				{
 					if (colliderOwnerPtr[idxA] == colliderOwnerPtr[idxB]) continue;
