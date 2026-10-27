@@ -204,12 +204,12 @@ namespace PS_AGONY2D
 		bool isColliderValid(Handle h) const noexcept { return objectManager.colliders.isValid(h); }
 
 		// Handle::kNull if stale.
-		uint32_t getBodyIndex(Handle h) const noexcept { return objectManager.bodies.indexOf(h); }
-		uint32_t getColliderIndex(Handle h) const noexcept { return objectManager.colliders.indexOf(h); }
+		ObjectDenseIndex getBodyIndex(Handle h) const noexcept { return objectManager.bodies.indexOf(h); }
+		ObjectDenseIndex getColliderIndex(Handle h) const noexcept { return objectManager.colliders.indexOf(h); }
 
 		// Hot path: no validation. Handle must be alive.
-		uint32_t getBodyIndexUnchecked(Handle h) const noexcept { return objectManager.bodies.indexOfUnchecked(h); }
-		uint32_t getColliderIndexUnchecked(Handle h) const noexcept { return objectManager.colliders.indexOfUnchecked(h); }
+		ObjectDenseIndex getBodyIndexUnchecked(Handle h) const noexcept { return objectManager.bodies.indexOfUnchecked(h); }
+		ObjectDenseIndex getColliderIndexUnchecked(Handle h) const noexcept { return objectManager.colliders.indexOfUnchecked(h); }
 
 		// Handle-returning creators. Dense-index versions above are unchanged.
 		std::optional<Handle> createBodyH(const BodyCreateParams& params) { return toBodyHandle(objectManager.createBody(params)); }
@@ -252,8 +252,8 @@ namespace PS_AGONY2D
 		// Stale handle: no-op.
 		void destroyBody(Handle h)
 		{
-			const uint32_t i = getBodyIndex(h);
-			if (i != Handle::kNull) destroyBody(static_cast<ObjectDenseIndex>(i));
+			const ObjectDenseIndex i = getBodyIndex(h);
+			if (i != Handle::kNull) destroyBody(i);
 		}
 		void destroyCollider(Handle h)
 		{

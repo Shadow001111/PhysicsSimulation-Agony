@@ -73,21 +73,21 @@ namespace PS_AGONY2D
             Vec2 localCenterOfMass
         );
 
-        void swapWithBack(size_t index);
+        void swapWithBack(ObjectDenseIndex index);
         void popBack();
 
-        void addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex);
-        void removeAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex);
+        void addAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex);
+        void removeAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex);
 
-        void addCollider(size_t bodyIndex, ColliderDenseIndex colliderIndex);
-        void removeCollider(size_t bodyIndex, ColliderDenseIndex colliderIndex);
+        void addCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex);
+        void removeCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex);
 
         bool isValid(Handle h) const noexcept { return handles.isValid(h); }
-        uint32_t indexOf(Handle h) const noexcept { return handles.indexOf(h); }
-        uint32_t indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
-        Handle handleAt(size_t index) const noexcept { return handles.handleAt(index); }
+        ObjectDenseIndex indexOf(Handle h) const noexcept { return handles.indexOf(h); }
+        ObjectDenseIndex indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
+        Handle handleAt(ObjectDenseIndex index) const noexcept { return handles.handleAt(index); }
 
-        std::optional<BodyData> getBodyData(size_t index) const noexcept;
+        std::optional<BodyData> getBodyData(ObjectDenseIndex index) const noexcept;
 
         size_t getCount() const noexcept { return offsetX.size(); }
         size_t getMemoryUsage() const noexcept;

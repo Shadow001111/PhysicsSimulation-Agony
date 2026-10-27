@@ -3,15 +3,12 @@
 
 #include <cstdint>
 #include <queue>
-#include <vector>
 #include <span>
+#include <vector>
 
 namespace PS_AGONY2D
 {
-    // Result of a single planning call: the wave/worker schedule for one solver's
-    // constraint set. Owned by the solver (not the planner) so its buffers persist
-    // and keep their capacity across frames without being shared/clobbered by
-    // other solvers using the same SolvingPlanner.
+    // Wave and worker schedule for one solver's constraint set.
     struct SolvingPlan
     {
         struct Pass
@@ -27,41 +24,51 @@ namespace PS_AGONY2D
         void printExecutionPlan() const;
 
         [[nodiscard]] double computeEfficiency() const;
-        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount) const;
+        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, const uint8_t* isStatic) const;
         [[nodiscard]] size_t getMemoryUsage() const;
-        [[nodiscard]] size_t getWorkerCount() const noexcept { return workerCount; };
+        [[nodiscard]] size_t getWorkerCount() const noexcept { return workerCount; }
         [[nodiscard]] const auto& getFlatIndices() const noexcept { return flatIndices; }
         [[nodiscard]] const auto& getPassOffsets() const noexcept { return passOffsets; }
     };
 
-    // Stateless (besides scratch buffers) planning engine. Holds no results of its
-    // own: every plan* call writes into the caller-supplied SolvingPlan. Because of
-    // that, a single instance's scratch buffers can safely be reused across every
-    // solver in a simulation step; use threadLocal() to get one per thread rather
-    // than each solver owning its own copy of these buffers.
+    // Planning engine with reusable scratch buffers. Not reentrant on the same instance.
+    // The bodyCount parameter is the largest body index. The isStatic array must cover it.
+    // The hasStaticStaticPairs parameter allows skipping the static-static filtering when it is known to be unneeded.
     class SolvingPlanner
     {
     private:
-        std::vector<size_t> remainingIndices;
-        std::vector<size_t> delayedIndices;
-        std::vector<size_t> nextRemainingIndices;
-        std::vector<uint8_t> usedBodies;
-        std::vector<std::vector<size_t>> waveAssignments;
+        struct GroupPair
+        {
+            uint32_t a;
+            uint32_t b;
+        };
 
-        // Scratch shared across plan* variants (each variant only touches the subset it needs).
+        std::vector<size_t> pending;
+        std::vector<size_t> halfClaimed;
+        std::vector<size_t> nextPending;
+        std::vector<uint8_t> claimOwner;
+        std::vector<std::vector<size_t>> workerQueues;
+
         std::vector<size_t> workerLoad;
         std::vector<size_t> wavePool;
         std::vector<size_t> simdRetry;
 
+        std::vector<GroupPair> groupPairs;
         std::vector<std::vector<size_t>> adjacency;
-        std::vector<uint8_t> groupOwner;
-        std::vector<size_t> groupSizes;
+        std::vector<uint8_t> groupWorker;
+        std::vector<size_t> workerGroupCount;
         std::vector<size_t> seeds;
         std::queue<size_t> bfsQueue;
-        std::vector<uint8_t> waveOwner;
-        std::vector<size_t> interiorIndices;
-        std::vector<size_t> boundaryIndices;
+        std::vector<uint8_t> waveClaim;
+        std::vector<size_t> interiorPending;
+        std::vector<size_t> boundaryPending;
         std::vector<ObjectPair> singlePairs;
+
+        void buildSchedulable(std::span<const ObjectPair> collisions, const uint8_t* isStatic, bool hasStaticStaticPairs, uint32_t groupShift);
+        template <bool UseShift>
+        void planGreedy(SolvingPlan& outPlan, std::span<const ObjectPair> collisions, size_t bodyCount, const uint8_t* isStatic, bool hasStaticStaticPairs, size_t workerCount, uint32_t groupShift);
+        void partitionGroups(size_t groupCount, size_t workerCount);
+
     public:
         SolvingPlanner() = default;
         ~SolvingPlanner() = default;
@@ -71,34 +78,55 @@ namespace PS_AGONY2D
         SolvingPlanner(SolvingPlanner&&) = delete;
         SolvingPlanner& operator=(SolvingPlanner&&) = delete;
 
-        // Per-thread shared instance. Planning is not reentrant on the same
-        // instance, but is otherwise stateless between calls, so solvers on the
-        // same thread can plan one after another through this without paying for
-        // their own copy of the scratch buffers.
+        // Per-thread shared instance.
         static SolvingPlanner& threadLocal()
         {
             thread_local SolvingPlanner instance;
             return instance;
         }
 
-        void planStandardExecution(std::span<const ObjectPair> collisions, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan);
-        void planSimdAwareExecution(std::span<const ObjectPair> collisions, size_t bodyCount, size_t workerCount, size_t chunkSize, SolvingPlan& outPlan);
-        void planCacheLineAwareExecution(
-            std::span<const ObjectPair> collisions,
-            size_t bodyCount,
-            size_t workerCount,
-            size_t bodyStrideBytes,
-            size_t cacheLineBytes,
-            SolvingPlan& outPlan);
-        void planCacheSharingAwareExecution(
-            std::span<const ObjectPair> collisions,
-            size_t bodyCount,
-            size_t workerCount,
-            size_t bodyStrideBytes,
-            size_t cacheLineBytes,
+        void planStandardExecution(
             SolvingPlan& outPlan,
-            const uint8_t* isStatic = nullptr);
-        void planSingleStandardExecution(const std::vector<ObjectDenseIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic = nullptr);
+            std::span<const ObjectPair> collisions,
+            size_t bodyCount,
+            const uint8_t* isStatic,
+            bool hasStaticStaticPairs,
+            size_t workerCount);
+
+        void planSimdAwareExecution(
+            SolvingPlan& outPlan,
+            std::span<const ObjectPair> collisions,
+            size_t bodyCount,
+            const uint8_t* isStatic,
+            bool hasStaticStaticPairs,
+            size_t workerCount,
+            size_t chunkSize);
+
+        void planCacheLineAwareExecution(
+            SolvingPlan& outPlan,
+            std::span<const ObjectPair> collisions,
+            size_t bodyCount,
+            const uint8_t* isStatic,
+            bool hasStaticStaticPairs,
+            size_t workerCount,
+            size_t bodyStrideBytes);
+
+        void planCacheSharingAwareExecution(
+            SolvingPlan& outPlan,
+            std::span<const ObjectPair> collisions,
+            size_t bodyCount,
+            const uint8_t* isStatic,
+            bool hasStaticStaticPairs,
+            size_t workerCount,
+            size_t bodyStrideBytes);
+
+        void planSingleStandardExecution(
+            SolvingPlan& outPlan,
+            const std::vector<ObjectDenseIndex>& objects,
+            size_t bodyCount,
+            const uint8_t* isStatic,
+            bool hasStaticStaticPairs,
+            size_t workerCount);
 
         [[nodiscard]] size_t getMemoryUsage() const;
     };

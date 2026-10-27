@@ -74,23 +74,31 @@ namespace PS_AGONY2D
 		{
 			TRACY_SCOPE_NC("Plan execution", PS_AGONY2D::Profiling::Color::Blue);
 
-			SolvingPlanner::threadLocal().planStandardExecution(collidingBodyPairs, bodies->getCount(), workerCount, solvingPlan);
-
-			//// Rating: Sometimes results in faster execution, but I think it may have huge worst-case scenario dependent on body ordering.
-			//SolvingPlanner::threadLocal().planCacheLineAwareExecution(
-			//	collidingBodyPairs, bodies->getCount(), workerCount,
-			//	sizeof(Real),
-			//	std::hardware_destructive_interference_size,
-			//	solvingPlan
-			//);
-			//
-			//// Rating: Worse than upper method in planning time and speeding up solving.
-			//SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-			//	collidingBodyPairs, bodies->getCount(), workerCount,
-			//	sizeof(Real),
-			//	std::hardware_destructive_interference_size,
+			//SolvingPlanner::threadLocal().planStandardExecution(
 			//	solvingPlan,
-			//	bodies->isStatic.data()
+			//	collidingBodyPairs,
+			//	bodies->getCount(),
+			//	bodies->isStatic.data(),
+			//	false,
+			//	workerCount
+			//);
+
+			// Rating: Sometimes results in faster execution, but I think it may have huge worst-case scenario dependent on body ordering.
+			SolvingPlanner::threadLocal().planCacheLineAwareExecution(
+				solvingPlan,
+				collidingBodyPairs, bodies->getCount(),
+				bodies->isStatic.data(), false,
+				workerCount,
+				sizeof(Real)
+			);
+			
+			// Rating: Worse than upper method in planning time and speeding up solving.
+			//SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
+			//	solvingPlan,
+			//	collidingBodyPairs, bodies->getCount(),
+			//	bodies->isStatic.data(), false,
+			//	workerCount,
+			//	sizeof(Real)
 			//);
 		}
 

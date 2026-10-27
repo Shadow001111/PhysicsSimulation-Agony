@@ -1,810 +1,622 @@
 #include "SolvingPlanner.h"
 
-#include "PS_AGONY2D/ContainerUtilities.h"
+#include "Ecstasy/Core/Portablity.h"
 
+#include "PS_AGONY2D/ContainerUtilities.h"
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
 
-#include <numeric>
-#include <new>
-#include <iostream>
-#include <iomanip>
-#include <string>
 #include <algorithm>
+#include <bit>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <new>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
 
 namespace PS_AGONY2D
 {
     using Pass = SolvingPlan::Pass;
 
-    static inline size_t hashGroupPair(size_t lo, size_t hi)
+    namespace
     {
-        uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
-        key = (~key) + (key << 21);
-        key = key ^ (key >> 24);
-        key = (key + (key << 3)) + (key << 8);
-        key = key ^ (key >> 14);
-        key = (key + (key << 2)) + (key << 4);
-        key = key ^ (key >> 28);
-        return static_cast<size_t>(key);
-    }
+        constexpr uint8_t kUnowned = -1;
+        constexpr size_t kMaxWorkers = 255;
 
-    void SolvingPlanner::planStandardExecution(
-        std::span<const ObjectPair> collisions,
-        size_t bodyCount,
-        size_t workerCount,
-        SolvingPlan& outPlan
-    )
-    {
-        const ObjectPair* collisionsPtr = collisions.data();
-        const size_t collisionCount = collisions.size();
-
-        outPlan.workerCount = workerCount;
-        outPlan.flatIndices.clear();
-        outPlan.flatIndices.reserve(collisionCount);
-        outPlan.passOffsets.clear();
-
-        if (collisionCount == 0 || workerCount == 0)
-            return;
-
-        remainingIndices.resize(collisionCount);
-        std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
-
-        delayedIndices.clear();
-        nextRemainingIndices.clear();
-
-        usedBodies.assign(bodyCount, uint8_t(-1));
-
-        waveAssignments.resize(workerCount);
-
-        workerLoad.assign(workerCount, 0);
-
-        while (!remainingIndices.empty())
+        uint64_t hashGroupPair(uint32_t lo, uint32_t hi)
         {
-            const size_t waveStartPass = outPlan.passOffsets.size();
-            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+            uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+            key = (~key) + (key << 21);
+            key = key ^ (key >> 24);
+            key = (key + (key << 3)) + (key << 8);
+            key = key ^ (key >> 14);
+            key = (key + (key << 2)) + (key << 4);
+            key = key ^ (key >> 28);
+            return key;
+        }
 
-            std::fill(workerLoad.begin(), workerLoad.end(), 0);
+        void beginPlan(SolvingPlan& outPlan, size_t workerCount, size_t collisionCount)
+        {
+            if (workerCount > kMaxWorkers)
+                throw std::invalid_argument("SolvingPlanner: workerCount must not exceed 255.");
 
-            delayedIndices.clear();
-            nextRemainingIndices.clear();
+            outPlan.workerCount = workerCount;
+            outPlan.flatIndices.clear();
+            outPlan.flatIndices.reserve(collisionCount);
+            outPlan.passOffsets.clear();
+        }
 
-            std::fill(usedBodies.begin(), usedBodies.end(), uint8_t(-1));
-
-            for (auto& vec : waveAssignments)
-                vec.clear();
-
-            // Pass 1: Process unallocated or fully matching pairs.
+        void appendWave(SolvingPlan& outPlan, const std::vector<std::vector<size_t>>& queues, size_t workerCount, size_t waveStartPass)
+        {
+            TRACY_SCOPE_NC("Append to flatIndices", PS_AGONY2D::Profiling::Color::Magenta);
+            for (size_t w = 0; w < workerCount; w++)
             {
-                TRACY_SCOPE_NC("Pass1", PS_AGONY2D::Profiling::Color::Cyan);
-                for (size_t idx : remainingIndices)
+                Pass& pass = outPlan.passOffsets[waveStartPass + w];
+                pass.start = static_cast<uint32_t>(outPlan.flatIndices.size());
+                pass.size = static_cast<uint32_t>(queues[w].size());
+                outPlan.flatIndices.insert(outPlan.flatIndices.end(), queues[w].begin(), queues[w].end());
+            }
+        }
+
+        size_t leastLoadedWorker(const size_t* ECSTASY_RESTRICT load, size_t count)
+        {
+            size_t best = 0;
+            size_t bestLoad = load[0];
+            for (size_t i = 1; i < count; ++i)
+            {
+                const size_t current = load[i];
+                if (current < bestLoad)
                 {
-                    const ObjectPair& c = collisionsPtr[idx];
-                    const uint8_t ownerA = usedBodies[c.a];
-                    const uint8_t ownerB = usedBodies[c.b];
-
-                    size_t chosenWorker = -1;
-                    if (ownerA == ownerB)
-                    {
-                        if (ownerA == uint8_t(-1))
-                        {
-                            size_t minLoad = workerLoad[0];
-                            chosenWorker = 0;
-                            for (size_t i = 1; i < workerCount; i++)
-                            {
-                                size_t load = workerLoad[i];
-                                if (load < minLoad)
-                                {
-                                    minLoad = load;
-                                    chosenWorker = i;
-                                }
-                            }
-
-                            const uint8_t choosenWorkerU8 = static_cast<uint8_t>(chosenWorker);
-                            usedBodies[c.a] = choosenWorkerU8;
-                            usedBodies[c.b] = choosenWorkerU8;
-                        }
-                        else
-                        {
-                            chosenWorker = static_cast<size_t>(ownerA);
-                        }
-
-                        waveAssignments[chosenWorker].push_back(idx);
-                        workerLoad[chosenWorker]++;
-                    }
-                    else
-                    {
-                        const bool eitherIsUnassigned = ownerA == uint8_t(-1) || ownerB == uint8_t(-1);
-                        auto& vec = eitherIsUnassigned ? delayedIndices : nextRemainingIndices;
-                        vec.push_back(idx);
-                    }
+                    bestLoad = current;
+                    best = i;
                 }
             }
+            return best;
+        }
 
-            // Pass 2: Process the partially claimed pairs.
-            {
-                TRACY_SCOPE_NC("Pass2", PS_AGONY2D::Profiling::Color::Yellow);
-                for (size_t idx : delayedIndices)
-                {
-                    const ObjectPair& c = collisionsPtr[idx];
-                    const uint8_t ownerA = usedBodies[c.a];
-                    const uint8_t ownerB = usedBodies[c.b];
-
-                    if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
-                    {
-                        nextRemainingIndices.push_back(idx);
-                        continue;
-                    }
-
-                    const uint8_t chosenWorkerU8 = std::min(ownerA, ownerB);
-                    const size_t chosenWorker = static_cast<size_t>(chosenWorkerU8);
-
-                    waveAssignments[chosenWorker].push_back(idx);
-                    workerLoad[chosenWorker]++;
-
-                    usedBodies[c.a] = chosenWorkerU8;
-                    usedBodies[c.b] = chosenWorkerU8;
-                }
-            }
-
-            {
-                TRACY_SCOPE_NC("Append to flatIndices", PS_AGONY2D::Profiling::Color::Magenta);
-                for (size_t w = 0; w < workerCount; w++)
-                {
-                    const size_t passIndex = waveStartPass + w;
-                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
-                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
-
-                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
-                        waveAssignments[w].begin(),
-                        waveAssignments[w].end());
-                }
-            }
-
-            remainingIndices.swap(nextRemainingIndices);
+        uint32_t cacheGroupShift(size_t bodyStrideBytes, size_t cacheLineBytes)
+        {
+            const size_t bodiesPerLine = std::max<size_t>(1, cacheLineBytes / bodyStrideBytes);
+            return static_cast<uint32_t>(std::bit_width(bodiesPerLine - 1));
         }
     }
 
-    void SolvingPlanner::planSimdAwareExecution(
+    void SolvingPlanner::buildSchedulable(std::span<const ObjectPair> collisions, const uint8_t* isStatic, bool hasStaticStaticPairs, uint32_t groupShift)
+    {
+        const size_t collisionCount = collisions.size();
+        groupPairs.resize(collisionCount);
+        pending.clear();
+        pending.reserve(collisionCount);
+
+        const ObjectPair* ECSTASY_RESTRICT collisionsPtr = collisions.data();
+        const uint8_t* ECSTASY_RESTRICT staticPtr = isStatic;
+        GroupPair* ECSTASY_RESTRICT pairsPtr = groupPairs.data();
+
+        for (size_t i = 0; i < collisionCount; i++)
+        {
+            const ObjectPair& c = collisionsPtr[i];
+            const bool aStatic = staticPtr[c.a] != 0;
+            const bool bStatic = staticPtr[c.b] != 0;
+
+            if (hasStaticStaticPairs && aStatic && bStatic)
+                continue;
+
+            const size_t ownerA = static_cast<size_t>(aStatic ? c.b : c.a);
+            const size_t ownerB = static_cast<size_t>(bStatic ? c.a : c.b);
+            pairsPtr[i] = { static_cast<uint32_t>(ownerA >> groupShift), static_cast<uint32_t>(ownerB >> groupShift) };
+            pending.push_back(i);
+        }
+    }
+
+    template <bool UseShift>
+    void SolvingPlanner::planGreedy(
+        SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
         size_t bodyCount,
+        const uint8_t* ECSTASY_RESTRICT isStatic,
+        bool hasStaticStaticPairs,
         size_t workerCount,
-        size_t chunkSize,
-        SolvingPlan& outPlan
-    )
+        uint32_t groupShift)
     {
-        const ObjectPair* collisionsPtr = collisions.data();
-        const size_t collisionCount = collisions.size();
+        beginPlan(outPlan, workerCount, collisions.size());
 
-        outPlan.workerCount = workerCount;
-        outPlan.flatIndices.clear();
-        outPlan.flatIndices.reserve(collisionCount);
-        outPlan.passOffsets.clear();
-
-        if (collisionCount == 0 || workerCount == 0)
+        if (collisions.empty() || workerCount == 0)
             return;
 
-        remainingIndices.resize(collisionCount);
-        std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
+        const size_t collisionCount = collisions.size();
+        const size_t groupCount = (UseShift ? (bodyCount >> groupShift) : bodyCount) + 1;
 
-        delayedIndices.clear();
-        nextRemainingIndices.clear();
-
-        usedBodies.assign(bodyCount, uint8_t(-1));
-
-        waveAssignments.resize(workerCount);
-
+        groupPairs.resize(collisionCount);
+        claimOwner.assign(groupCount, kUnowned);
+        workerQueues.resize(workerCount);
         workerLoad.assign(workerCount, 0);
+        pending.clear();
 
-        wavePool.clear();
-        simdRetry.clear();
+        const ObjectPair* ECSTASY_RESTRICT collisionsPtr = collisions.data();
+        GroupPair* ECSTASY_RESTRICT pairsPtr = groupPairs.data();
+        uint8_t* ECSTASY_RESTRICT owners = claimOwner.data();
+        size_t* ECSTASY_RESTRICT loads = workerLoad.data();
 
-        while (!remainingIndices.empty())
+        const auto toGroup = [groupShift](size_t body) -> uint32_t
+            {
+                if constexpr (UseShift)
+                    return static_cast<uint32_t>(body >> groupShift);
+                else
+                    return static_cast<uint32_t>(body);
+            };
+
+        const auto pass1Item = [&](auto first, size_t idx, uint32_t ga, uint32_t gb)
+            {
+                const uint8_t ownerA = owners[ga];
+                const uint8_t ownerB = owners[gb];
+
+                if (ownerA == ownerB)
+                {
+                    size_t worker;
+                    if (ownerA == kUnowned)
+                    {
+                        worker = leastLoadedWorker(loads, workerCount);
+                        owners[ga] = static_cast<uint8_t>(worker);
+                        owners[gb] = static_cast<uint8_t>(worker);
+                    }
+                    else
+                    {
+                        worker = ownerA;
+                    }
+
+                    workerQueues[worker].push_back(idx);
+                    loads[worker]++;
+                }
+                else
+                {
+                    if constexpr (decltype(first)::value)
+                        pairsPtr[idx] = GroupPair{ ga, gb };
+
+                    auto& vec = (ownerA == kUnowned || ownerB == kUnowned) ? halfClaimed : nextPending;
+                    vec.push_back(idx);
+                }
+            };
+
+        for (bool first = true; first || !pending.empty(); first = false)
         {
             const size_t waveStartPass = outPlan.passOffsets.size();
             outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
-            std::fill(workerLoad.begin(), workerLoad.end(), 0);
+            std::fill_n(loads, workerCount, size_t(0));
+            std::fill_n(owners, groupCount, kUnowned);
+            halfClaimed.clear();
+            nextPending.clear();
 
-            nextRemainingIndices.clear();
+            for (auto& queue : workerQueues)
+                queue.clear();
 
-            std::fill(usedBodies.begin(), usedBodies.end(), uint8_t(-1));
+            {
+                TRACY_SCOPE_NC("Pass1", PS_AGONY2D::Profiling::Color::Cyan);
+                if (first)
+                {
+                    for (size_t i = 0; i < collisionCount; ++i)
+                    {
+                        const ObjectPair& c = collisionsPtr[i];
+                        const bool aStatic = isStatic[c.a] != 0;
+                        const bool bStatic = isStatic[c.b] != 0;
 
-            for (auto& vec : waveAssignments)
-                vec.clear();
+                        if (hasStaticStaticPairs && aStatic && bStatic)
+                            continue;
 
-            // The pool of items currently being evaluated for this wave.
-            wavePool = remainingIndices;
+                        const size_t bodyA = static_cast<size_t>(aStatic ? c.b : c.a);
+                        const size_t bodyB = static_cast<size_t>(bStatic ? c.a : c.b);
+                        pass1Item(std::true_type{}, i, toGroup(bodyA), toGroup(bodyB));
+                    }
+                }
+                else
+                {
+                    for (size_t idx : pending)
+                    {
+                        const GroupPair g = pairsPtr[idx];
+                        pass1Item(std::false_type{}, idx, g.a, g.b);
+                    }
+                }
+            }
+
+            {
+                TRACY_SCOPE_NC("Pass2", PS_AGONY2D::Profiling::Color::Yellow);
+                for (size_t idx : halfClaimed)
+                {
+                    const GroupPair g = pairsPtr[idx];
+                    const uint8_t ownerA = owners[g.a];
+                    const uint8_t ownerB = owners[g.b];
+
+                    if (ownerA != kUnowned && ownerB != kUnowned && ownerA != ownerB)
+                    {
+                        nextPending.push_back(idx);
+                        continue;
+                    }
+
+                    const uint8_t worker = std::min(ownerA, ownerB);
+                    workerQueues[worker].push_back(idx);
+                    loads[worker]++;
+                    owners[g.a] = worker;
+                    owners[g.b] = worker;
+                }
+            }
+
+            appendWave(outPlan, workerQueues, workerCount, waveStartPass);
+            pending.swap(nextPending);
+
+            if (first && outPlan.flatIndices.empty())
+                outPlan.passOffsets.clear();
+        }
+    }
+
+    void SolvingPlanner::planStandardExecution(
+        SolvingPlan& outPlan,
+        std::span<const ObjectPair> collisions,
+        size_t bodyCount,
+        const uint8_t* isStatic,
+        bool hasStaticStaticPairs,
+        size_t workerCount)
+    {
+        planGreedy<false>(outPlan, collisions, bodyCount, isStatic, hasStaticStaticPairs, workerCount, 0);
+    }
+
+    void SolvingPlanner::planCacheLineAwareExecution(
+        SolvingPlan& outPlan,
+        std::span<const ObjectPair> collisions,
+        size_t bodyCount,
+        const uint8_t* isStatic,
+        bool hasStaticStaticPairs,
+        size_t workerCount,
+        size_t bodyStrideBytes)
+    {
+        if (bodyStrideBytes == 0)
+        {
+            beginPlan(outPlan, workerCount, 0);
+            return;
+        }
+
+        planGreedy<true>(outPlan, collisions, bodyCount, isStatic, hasStaticStaticPairs, workerCount,
+            cacheGroupShift(bodyStrideBytes, std::hardware_destructive_interference_size));
+    }
+
+    void SolvingPlanner::planSimdAwareExecution(
+        SolvingPlan& outPlan,
+        std::span<const ObjectPair> collisions,
+        size_t bodyCount,
+        const uint8_t* ECSTASY_RESTRICT isStatic,
+        bool hasStaticStaticPairs,
+        size_t workerCount,
+        size_t chunkSize)
+    {
+        beginPlan(outPlan, workerCount, collisions.size());
+
+        if (chunkSize == 0)
+            throw std::invalid_argument("SolvingPlanner: chunkSize must not be zero.");
+
+        if (collisions.empty() || workerCount == 0)
+            return;
+
+        buildSchedulable(collisions, isStatic, hasStaticStaticPairs, 0);
+
+        claimOwner.assign(bodyCount + 1, kUnowned);
+        workerQueues.resize(workerCount);
+        workerLoad.assign(workerCount, 0);
+
+        const size_t bodySlots = bodyCount + 1;
+        const GroupPair* ECSTASY_RESTRICT pairsPtr = groupPairs.data();
+        uint8_t* ECSTASY_RESTRICT owners = claimOwner.data();
+        size_t* ECSTASY_RESTRICT loads = workerLoad.data();
+
+        const auto tryPlace = [&](size_t idx, size_t worker)
+            {
+                const GroupPair g = pairsPtr[idx];
+                auto& queue = workerQueues[worker];
+                const size_t size = queue.size();
+
+                for (size_t i = size - size % chunkSize; i < size; ++i)
+                {
+                    const GroupPair p = pairsPtr[queue[i]];
+                    if (g.a == p.a || g.a == p.b || g.b == p.a || g.b == p.b)
+                        return false;
+                }
+
+                queue.push_back(idx);
+                loads[worker]++;
+                owners[g.a] = static_cast<uint8_t>(worker);
+                owners[g.b] = static_cast<uint8_t>(worker);
+                return true;
+            };
+
+        while (!pending.empty())
+        {
+            const size_t waveStartPass = outPlan.passOffsets.size();
+            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+
+            std::fill_n(loads, workerCount, size_t(0));
+            std::fill_n(owners, bodySlots, kUnowned);
+            nextPending.clear();
+
+            for (auto& queue : workerQueues)
+                queue.clear();
+
+            wavePool.assign(pending.begin(), pending.end());
 
             while (true)
             {
                 bool placedAny = false;
-                delayedIndices.clear();
+                halfClaimed.clear();
                 simdRetry.clear();
 
-                // Pass 1: Process unallocated or fully matching pairs first.
                 {
                     TRACY_SCOPE_NC("Pass1", PS_AGONY2D::Profiling::Color::Cyan);
                     for (size_t idx : wavePool)
                     {
-                        const ObjectPair& c = collisionsPtr[idx];
-                        const uint8_t ownerA = usedBodies[c.a];
-                        const uint8_t ownerB = usedBodies[c.b];
+                        const GroupPair g = pairsPtr[idx];
+                        const uint8_t ownerA = owners[g.a];
+                        const uint8_t ownerB = owners[g.b];
 
-                        size_t chosenWorker = -1;
                         if (ownerA == ownerB)
                         {
-                            if (ownerA == uint8_t(-1))
-                            {
-                                size_t minLoad = workerLoad[0];
-                                chosenWorker = 0;
-                                for (size_t i = 1; i < workerCount; i++)
-                                {
-                                    size_t load = workerLoad[i];
-                                    if (load < minLoad)
-                                    {
-                                        minLoad = load;
-                                        chosenWorker = i;
-                                    }
-                                }
-                            }
+                            const size_t worker = ownerA == kUnowned ? leastLoadedWorker(loads, workerCount) : ownerA;
+                            if (tryPlace(idx, worker))
+                                placedAny = true;
                             else
-                            {
-                                chosenWorker = static_cast<size_t>(ownerA);
-                            }
-
-                            waveAssignments[chosenWorker].push_back(idx);
-                            workerLoad[chosenWorker]++;
+                                simdRetry.push_back(idx);
                         }
                         else
                         {
-                            const bool eitherIsUnassigned = ownerA == uint8_t(-1) || ownerB == uint8_t(-1);
-                            auto& vec = eitherIsUnassigned ? delayedIndices : nextRemainingIndices;
+                            auto& vec = (ownerA == kUnowned || ownerB == kUnowned) ? halfClaimed : nextPending;
                             vec.push_back(idx);
-                            continue;
-                        }
-
-                        // Evaluate intra-chunk SIMD safety constraints
-                        const size_t currSize = waveAssignments[chosenWorker].size();
-                        const size_t chunkRem = currSize % chunkSize;
-                        bool simdConflict = false;
-                        if (chunkRem > 0)
-                        {
-                            for (size_t i = currSize - chunkRem; i < currSize; ++i)
-                            {
-                                const size_t prevIdx = waveAssignments[chosenWorker][i];
-                                const ObjectPair& pc = collisionsPtr[prevIdx];
-                                if (c.a == pc.a || c.a == pc.b || c.b == pc.a || c.b == pc.b)
-                                {
-                                    simdConflict = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (simdConflict)
-                        {
-                            simdRetry.push_back(idx);
-                        }
-                        else
-                        {
-                            waveAssignments[chosenWorker].push_back(idx);
-                            workerLoad[chosenWorker]++;
-
-                            usedBodies[c.a] = static_cast<uint8_t>(chosenWorker);
-                            usedBodies[c.b] = static_cast<uint8_t>(chosenWorker);
-                            placedAny = true;
                         }
                     }
                 }
 
-                // Pass 2: Process the partially claimed pairs later in the loop.
                 {
                     TRACY_SCOPE_NC("Pass2", PS_AGONY2D::Profiling::Color::Yellow);
-                    for (size_t idx : delayedIndices)
+                    for (size_t idx : halfClaimed)
                     {
-                        const ObjectPair& c = collisionsPtr[idx];
-                        const uint8_t ownerA = usedBodies[c.a];
-                        const uint8_t ownerB = usedBodies[c.b];
+                        const GroupPair g = pairsPtr[idx];
+                        const uint8_t ownerA = owners[g.a];
+                        const uint8_t ownerB = owners[g.b];
 
-                        if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
+                        if (ownerA != kUnowned && ownerB != kUnowned && ownerA != ownerB)
                         {
-                            nextRemainingIndices.push_back(idx);
+                            nextPending.push_back(idx);
                             continue;
                         }
 
-                        const uint8_t chosenWorkerU8 = std::min(ownerA, ownerB);
-                        const size_t chosenWorker = static_cast<size_t>(chosenWorkerU8);
-
-                        // Evaluate intra-chunk SIMD safety constraints.
-                        const size_t currSize = waveAssignments[chosenWorker].size();
-                        const size_t chunkRem = currSize % chunkSize;
-                        bool simdConflict = false;
-                        if (chunkRem > 0)
-                        {
-                            for (size_t i = currSize - chunkRem; i < currSize; ++i)
-                            {
-                                const size_t prevIdx = waveAssignments[chosenWorker][i];
-                                const ObjectPair& pc = collisionsPtr[prevIdx];
-                                if (c.a == pc.a || c.a == pc.b || c.b == pc.a || c.b == pc.b)
-                                {
-                                    simdConflict = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (simdConflict)
-                        {
-                            simdRetry.push_back(idx);
-                        }
-                        else
-                        {
-                            waveAssignments[chosenWorker].push_back(idx);
-                            workerLoad[chosenWorker]++;
-
-                            usedBodies[c.a] = chosenWorkerU8;
-                            usedBodies[c.b] = chosenWorkerU8;
+                        if (tryPlace(idx, std::min(ownerA, ownerB)))
                             placedAny = true;
-                        }
+                        else
+                            simdRetry.push_back(idx);
                     }
                 }
 
-                // Convergence check: if we couldn't place anything new this loop iteration,
-                // any remaining simdRetry elements must wait for the next execution wave.
-                if (!placedAny)
+                if (!placedAny || simdRetry.empty())
                 {
-                    nextRemainingIndices.insert(nextRemainingIndices.end(), simdRetry.begin(), simdRetry.end());
+                    nextPending.insert(nextPending.end(), simdRetry.begin(), simdRetry.end());
                     break;
                 }
-                else
-                {
-                    // Retry the SIMD-deferred items because chunk boundaries have shifted!
-                    wavePool = simdRetry;
-                }
+
+                wavePool.swap(simdRetry);
             }
 
-            {
-                TRACY_SCOPE_NC("Append to flatIndices", PS_AGONY2D::Profiling::Color::Magenta);
-                for (size_t w = 0; w < workerCount; w++)
-                {
-                    const size_t passIndex = waveStartPass + w;
-                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
-                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
-
-                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
-                        waveAssignments[w].begin(),
-                        waveAssignments[w].end());
-                }
-            }
-
-            remainingIndices.swap(nextRemainingIndices);
+            appendWave(outPlan, workerQueues, workerCount, waveStartPass);
+            pending.swap(nextPending);
         }
     }
 
-    void SolvingPlanner::planCacheLineAwareExecution(
-        std::span<const ObjectPair> collisions,
-        size_t bodyCount,
-        size_t workerCount,
-        size_t bodyStrideBytes,
-        size_t cacheLineBytes,
-        SolvingPlan& outPlan)
+    void SolvingPlanner::partitionGroups(size_t groupCount, size_t workerCount)
     {
-        const ObjectPair* collisionsPtr = collisions.data();
-        const size_t collisionCount = collisions.size();
+        groupWorker.assign(groupCount, kUnowned);
+        workerGroupCount.assign(workerCount, 0);
 
-        outPlan.workerCount = workerCount;
-        outPlan.flatIndices.clear();
-        outPlan.flatIndices.reserve(collisionCount);
-        outPlan.passOffsets.clear();
-
-        if (collisionCount == 0 || workerCount == 0 || bodyStrideBytes == 0 || cacheLineBytes == 0)
-            return;
-
-        // How many bodies share a single cache line; workers must own whole groups
-        // of these so two workers never write adjacent bodies on the same line.
-        const size_t bodiesPerCacheLine = std::max<size_t>(1, cacheLineBytes / bodyStrideBytes);
-        const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
-
-        remainingIndices.resize(collisionCount);
-        std::iota(remainingIndices.begin(), remainingIndices.end(), size_t(0));
-
-        delayedIndices.clear();
-        nextRemainingIndices.clear();
-
-        // Ownership tracked per cache-line group, not per body.
-        usedBodies.assign(groupCount, uint8_t(-1));
-
-        waveAssignments.resize(workerCount);
-
-        workerLoad.assign(workerCount, 0);
-
-        while (!remainingIndices.empty())
+        if (workerCount == 1)
         {
-            const size_t waveStartPass = outPlan.passOffsets.size();
-            outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
+            std::fill(groupWorker.begin(), groupWorker.end(), uint8_t(0));
+            return;
+        }
 
-            std::fill(workerLoad.begin(), workerLoad.end(), 0);
+        seeds.resize(groupCount);
+        std::iota(seeds.begin(), seeds.end(), size_t(0));
 
-            delayedIndices.clear();
-            nextRemainingIndices.clear();
+        uint32_t seedRng = 1234;
+        for (size_t i = seeds.size() - 1; i > 0; --i)
+        {
+            seedRng = seedRng * 1664525u + 1013904223u;
+            std::swap(seeds[i], seeds[seedRng % (i + 1)]);
+        }
 
-            std::fill(usedBodies.begin(), usedBodies.end(), uint8_t(-1));
+        while (!bfsQueue.empty())
+            bfsQueue.pop();
 
-            for (auto& vec : waveAssignments)
-                vec.clear();
+        const size_t targetSize = std::max<size_t>(1, static_cast<size_t>(std::round(static_cast<double>(groupCount) / static_cast<double>(workerCount) * 1.15)));
 
-            // Pass 1: Process unallocated or fully matching cache-line groups.
+        for (size_t w = 0; w < workerCount && w < groupCount; ++w)
+        {
+            const size_t seedGroup = seeds[w];
+            groupWorker[seedGroup] = static_cast<uint8_t>(w);
+            workerGroupCount[w]++;
+            bfsQueue.push(seedGroup);
+        }
+
+        while (!bfsQueue.empty())
+        {
+            const size_t node = bfsQueue.front();
+            bfsQueue.pop();
+
+            const uint8_t w = groupWorker[node];
+            if (workerGroupCount[w] >= targetSize)
+                continue;
+
+            for (size_t neighbor : adjacency[node])
             {
-                TRACY_SCOPE_NC("Pass1", PS_AGONY2D::Profiling::Color::Cyan);
-                for (size_t idx : remainingIndices)
+                if (groupWorker[neighbor] == kUnowned)
                 {
-                    const ObjectPair& c = collisionsPtr[idx];
-                    const size_t groupA = c.a / bodiesPerCacheLine;
-                    const size_t groupB = c.b / bodiesPerCacheLine;
-
-                    const uint8_t ownerA = usedBodies[groupA];
-                    const uint8_t ownerB = usedBodies[groupB];
-
-                    size_t chosenWorker = -1;
-                    if (ownerA == ownerB)
-                    {
-                        if (ownerA == uint8_t(-1))
-                        {
-                            size_t minLoad = workerLoad[0];
-                            chosenWorker = 0;
-                            for (size_t i = 1; i < workerCount; i++)
-                            {
-                                size_t load = workerLoad[i];
-                                if (load < minLoad)
-                                {
-                                    minLoad = load;
-                                    chosenWorker = i;
-                                }
-                            }
-
-                            const uint8_t choosenWorkerU8 = static_cast<uint8_t>(chosenWorker);
-                            usedBodies[c.a] = choosenWorkerU8;
-                            usedBodies[c.b] = choosenWorkerU8;
-                        }
-                        else
-                        {
-                            chosenWorker = static_cast<size_t>(ownerA);
-                        }
-
-                        waveAssignments[chosenWorker].push_back(idx);
-                        workerLoad[chosenWorker]++;
-                    }
-                    else
-                    {
-                        const bool eitherIsUnassigned = ownerA == uint8_t(-1) || ownerB == uint8_t(-1);
-                        auto& vec = eitherIsUnassigned ? delayedIndices : nextRemainingIndices;
-                        vec.push_back(idx);
-                    }
+                    groupWorker[neighbor] = w;
+                    workerGroupCount[w]++;
+                    bfsQueue.push(neighbor);
                 }
             }
+        }
 
-            // Pass 2: Process the partially claimed groups.
-            {
-                TRACY_SCOPE_NC("Pass2", PS_AGONY2D::Profiling::Color::Yellow);
-                for (size_t idx : delayedIndices)
-                {
-                    const ObjectPair& c = collisionsPtr[idx];
-                    const uint8_t ownerA = usedBodies[c.a];
-                    const uint8_t ownerB = usedBodies[c.b];
+        for (size_t g = 0; g < groupCount; ++g)
+        {
+            if (groupWorker[g] != kUnowned)
+                continue;
 
-                    if (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB)
-                    {
-                        nextRemainingIndices.push_back(idx);
-                        continue;
-                    }
-
-                    const uint8_t chosenWorkerU8 = std::min(ownerA, ownerB);
-                    const size_t chosenWorker = static_cast<size_t>(chosenWorkerU8);
-
-                    waveAssignments[chosenWorker].push_back(idx);
-                    workerLoad[chosenWorker]++;
-
-                    usedBodies[c.a] = chosenWorkerU8;
-                    usedBodies[c.b] = chosenWorkerU8;
-                }
-            }
-
-            {
-                TRACY_SCOPE_NC("Append to flatIndices", PS_AGONY2D::Profiling::Color::Magenta);
-                for (size_t w = 0; w < workerCount; w++)
-                {
-                    const size_t passIndex = waveStartPass + w;
-                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
-                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
-
-                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
-                        waveAssignments[w].begin(),
-                        waveAssignments[w].end());
-                }
-            }
-
-            remainingIndices.swap(nextRemainingIndices);
+            const size_t smallest = leastLoadedWorker(workerGroupCount.data(), workerCount);
+            groupWorker[g] = static_cast<uint8_t>(smallest);
+            workerGroupCount[smallest]++;
         }
     }
 
     void SolvingPlanner::planCacheSharingAwareExecution(
+        SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
         size_t bodyCount,
+        const uint8_t* isStatic,
+        bool hasStaticStaticPairs,
         size_t workerCount,
-        size_t bodyStrideBytes,
-        size_t cacheLineBytes,
-        SolvingPlan& outPlan,
-        const uint8_t* isStatic)
+        size_t bodyStrideBytes)
     {
-        const ObjectPair* collisionsPtr = collisions.data();
-        const size_t collisionCount = collisions.size();
+        beginPlan(outPlan, workerCount, collisions.size());
 
-        outPlan.workerCount = workerCount;
-        outPlan.flatIndices.clear();
-        outPlan.flatIndices.reserve(collisionCount);
-        outPlan.passOffsets.clear();
-
-        if (collisionCount == 0 || workerCount == 0 || bodyStrideBytes == 0 || cacheLineBytes == 0)
+        if (collisions.empty() || workerCount == 0 || bodyStrideBytes == 0)
             return;
 
-        const size_t bodiesPerCacheLine = std::max<size_t>(1, cacheLineBytes / bodyStrideBytes);
-        const size_t groupCount = (bodyCount + bodiesPerCacheLine - 1) / bodiesPerCacheLine;
+        const uint32_t groupShift = cacheGroupShift(bodyStrideBytes, std::hardware_destructive_interference_size);
+        const size_t groupCount = (bodyCount >> groupShift) + 1;
 
-        // Static bodies are never written, so they neither own nor conflict: a constraint maps to the
-        // group(s) of its dynamic bodies only, and constraints with no dynamic body are not scheduled.
-        const auto isStaticBody = [isStatic](ObjectDenseIndex b) { return isStatic != nullptr && isStatic[b] != 0; };
-        const auto groupsOf = [&](const ObjectPair& c, size_t& ga, size_t& gb)
-            {
-                const ObjectDenseIndex da = isStaticBody(c.a) ? c.b : c.a;
-                const ObjectDenseIndex db = isStaticBody(c.b) ? c.a : c.b;
-                ga = da / bodiesPerCacheLine;
-                gb = db / bodiesPerCacheLine;
-            };
+        buildSchedulable(collisions, isStatic, hasStaticStaticPairs, groupShift);
 
-        // Build cache-line group adjacency graph.
         adjacency.resize(groupCount);
         for (auto& v : adjacency)
             v.clear();
 
-        for (const auto& c : collisions)
+        for (size_t idx : pending)
         {
-            if (isStaticBody(c.a) && isStaticBody(c.b)) continue;
-            size_t ga, gb;
-            groupsOf(c, ga, gb);
-            if (ga != gb)
+            const GroupPair g = groupPairs[idx];
+            if (g.a != g.b)
             {
-                adjacency[ga].push_back(gb);
-                adjacency[gb].push_back(ga);
+                adjacency[g.a].push_back(g.b);
+                adjacency[g.b].push_back(g.a);
             }
         }
 
-        // Deduplicate adjacency lists.
-        for (size_t g = 0; g < groupCount; g++)
+        for (auto& v : adjacency)
         {
-            std::sort(adjacency[g].begin(), adjacency[g].end());
-            adjacency[g].erase(std::unique(adjacency[g].begin(), adjacency[g].end()), adjacency[g].end());
+            std::sort(v.begin(), v.end());
+            v.erase(std::unique(v.begin(), v.end()), v.end());
         }
 
-        // Persistent partitioning via Multi-Source BFS.
-        groupOwner.assign(groupCount, uint8_t(-1));
-        groupSizes.assign(workerCount, 0);
+        partitionGroups(groupCount, workerCount);
 
-        if (workerCount == 1)
-        {
-            std::fill(groupOwner.begin(), groupOwner.end(), static_cast<uint8_t>(0));
-        }
-        else if (groupCount > 0)
-        {
-            seeds.resize(groupCount);
-            std::iota(seeds.begin(), seeds.end(), 0);
+        waveClaim.assign(groupCount, kUnowned);
+        workerQueues.resize(workerCount);
 
-            // Deterministic LCG shuffle for seed candidates.
-            uint32_t seedRng = 1234;
-            for (size_t i = seeds.size() - 1; i > 0; --i)
-            {
-                seedRng = seedRng * 1664525u + 1013904223u;
-                size_t j = seedRng % (i + 1);
-                std::swap(seeds[i], seeds[j]);
-            }
+        const GroupPair* ECSTASY_RESTRICT pairsPtr = groupPairs.data();
+        const uint8_t* ECSTASY_RESTRICT partition = groupWorker.data();
+        uint8_t* ECSTASY_RESTRICT claims = waveClaim.data();
 
-            while (!bfsQueue.empty())
-                bfsQueue.pop();
-
-            const size_t targetSize = std::max<size_t>(1, static_cast<size_t>(std::round(static_cast<double>(groupCount) / workerCount * 1.15)));
-
-            for (size_t w = 0; w < workerCount && w < groupCount; ++w)
-            {
-                size_t seedGroup = seeds[w];
-                if (groupOwner[seedGroup] == uint8_t(-1))
-                {
-                    groupOwner[seedGroup] = static_cast<uint8_t>(w);
-                    groupSizes[w]++;
-                    bfsQueue.push(seedGroup);
-                }
-            }
-
-            while (!bfsQueue.empty())
-            {
-                size_t node = bfsQueue.front();
-                bfsQueue.pop();
-
-                uint8_t w = groupOwner[node];
-                if (groupSizes[w] >= targetSize)
-                    continue;
-
-                for (size_t neighbor : adjacency[node])
-                {
-                    if (groupOwner[neighbor] == uint8_t(-1))
-                    {
-                        groupOwner[neighbor] = w;
-                        groupSizes[w]++;
-                        bfsQueue.push(neighbor);
-                    }
-                }
-            }
-
-            // Assign remaining unreached groups to the worker with the smallest region.
-            for (size_t g = 0; g < groupCount; ++g)
-            {
-                if (groupOwner[g] == uint8_t(-1))
-                {
-                    size_t minWorker = 0;
-                    size_t minSize = groupSizes[0];
-                    for (size_t w = 1; w < workerCount; ++w)
-                    {
-                        if (groupSizes[w] < minSize)
-                        {
-                            minSize = groupSizes[w];
-                            minWorker = w;
-                        }
-                    }
-                    groupOwner[g] = static_cast<uint8_t>(minWorker);
-                    groupSizes[minWorker]++;
-                }
-            }
-        }
-
-        // Multi-wave execution planner.
-        remainingIndices.clear();
-        for (size_t idx = 0; idx < collisionCount; idx++)
-        {
-            const ObjectPair& c = collisionsPtr[idx];
-            if (isStaticBody(c.a) && isStaticBody(c.b)) continue;
-            remainingIndices.push_back(idx);
-        }
-
-        waveOwner.assign(groupCount, uint8_t(-1));
-        waveAssignments.resize(workerCount);
-
-        interiorIndices.clear();
-        boundaryIndices.clear();
-
-        while (!remainingIndices.empty())
+        while (!pending.empty())
         {
             const size_t waveStartPass = outPlan.passOffsets.size();
             outPlan.passOffsets.resize(waveStartPass + workerCount, Pass{ 0, 0 });
 
-            nextRemainingIndices.clear();
-            std::fill(waveOwner.begin(), waveOwner.end(), uint8_t(-1));
+            nextPending.clear();
+            halfClaimed.clear();
+            interiorPending.clear();
+            boundaryPending.clear();
+            std::fill_n(claims, groupCount, kUnowned);
 
-            for (auto& vec : waveAssignments)
-                vec.clear();
+            for (auto& queue : workerQueues)
+                queue.clear();
 
-            interiorIndices.clear();
-            boundaryIndices.clear();
-
-            for (size_t idx : remainingIndices)
+            for (size_t idx : pending)
             {
-                const ObjectPair& c = collisionsPtr[idx];
-                size_t ga, gb;
-                groupsOf(c, ga, gb);
-
-                auto& vec = groupOwner[ga] == groupOwner[gb] ? interiorIndices : boundaryIndices;
+                const GroupPair g = pairsPtr[idx];
+                auto& vec = partition[g.a] == partition[g.b] ? interiorPending : boundaryPending;
                 vec.push_back(idx);
             }
 
-            // Phase 1: Interior collisions assigned to persistent owners.
-            for (size_t idx : interiorIndices)
+            for (size_t idx : interiorPending)
             {
-                const ObjectPair& c = collisionsPtr[idx];
-                size_t ga, gb;
-                groupsOf(c, ga, gb);
-                const uint8_t chosen = groupOwner[ga];
+                const GroupPair g = pairsPtr[idx];
+                const uint8_t chosen = partition[g.a];
 
-                waveAssignments[chosen].push_back(idx);
-                waveOwner[ga] = chosen;
-                waveOwner[gb] = chosen;
+                workerQueues[chosen].push_back(idx);
+                claims[g.a] = chosen;
+                claims[g.b] = chosen;
             }
 
-            // Phase 2 (Pass A): Boundary collisions (unclaimed groups resolved deterministically).
-            delayedIndices.clear();
-            for (size_t idx : boundaryIndices)
+            for (size_t idx : boundaryPending)
             {
-                const ObjectPair& c = collisionsPtr[idx];
-                size_t ga, gb;
-                groupsOf(c, ga, gb);
+                const GroupPair g = pairsPtr[idx];
+                const uint8_t ownerA = claims[g.a];
+                const uint8_t ownerB = claims[g.b];
 
-                const uint8_t ownerA = waveOwner[ga];
-                const uint8_t ownerB = waveOwner[gb];
-
-                uint8_t chosen = uint8_t(-1);
-
-                if (ownerA == ownerB && ownerA != uint8_t(-1))
+                uint8_t chosen;
+                if (ownerA == ownerB && ownerA != kUnowned)
                 {
                     chosen = ownerA;
                 }
-                else if (ownerA == uint8_t(-1) && ownerB == uint8_t(-1))
+                else if (ownerA == kUnowned && ownerB == kUnowned)
                 {
-                    size_t lo = std::min(ga, gb);
-                    size_t hi = std::max(ga, gb);
-                    chosen = ((hashGroupPair(lo, hi) & 1) == 0) ? groupOwner[lo] : groupOwner[hi];
+                    const uint32_t lo = std::min(g.a, g.b);
+                    const uint32_t hi = std::max(g.a, g.b);
+                    chosen = (hashGroupPair(lo, hi) & 1) == 0 ? partition[lo] : partition[hi];
                 }
                 else
                 {
-                    delayedIndices.push_back(idx);
+                    halfClaimed.push_back(idx);
                     continue;
                 }
 
-                waveAssignments[chosen].push_back(idx);
-                waveOwner[ga] = chosen;
-                waveOwner[gb] = chosen;
+                workerQueues[chosen].push_back(idx);
+                claims[g.a] = chosen;
+                claims[g.b] = chosen;
             }
 
-            // Phase 2 (Pass B): Boundary collisions (partially claimed groups inherit active worker).
-            for (size_t idx : delayedIndices)
+            for (size_t idx : halfClaimed)
             {
-                const ObjectPair& c = collisionsPtr[idx];
-                size_t ga, gb;
-                groupsOf(c, ga, gb);
+                const GroupPair g = pairsPtr[idx];
+                const uint8_t ownerA = claims[g.a];
+                const uint8_t ownerB = claims[g.b];
 
-                const uint8_t ownerA = waveOwner[ga];
-                const uint8_t ownerB = waveOwner[gb];
-
-                if ((ownerA == uint8_t(-1) && ownerB == uint8_t(-1)) ||
-                    (ownerA != uint8_t(-1) && ownerB != uint8_t(-1) && ownerA != ownerB))
+                if (ownerA != kUnowned && ownerB != kUnowned && ownerA != ownerB)
                 {
-                    nextRemainingIndices.push_back(idx);
+                    nextPending.push_back(idx);
                     continue;
                 }
 
-                // Branchless worker selection: min() picks whichever is a valid worker ID (< 255)
                 const uint8_t chosen = std::min(ownerA, ownerB);
-
-                waveAssignments[chosen].push_back(idx);
-                waveOwner[ga] = chosen;
-                waveOwner[gb] = chosen;
+                workerQueues[chosen].push_back(idx);
+                claims[g.a] = chosen;
+                claims[g.b] = chosen;
             }
 
-            {
-                TRACY_SCOPE_NC("Append to flatIndices", PS_AGONY2D::Profiling::Color::Magenta);
-                for (size_t w = 0; w < workerCount; w++)
-                {
-                    const size_t passIndex = waveStartPass + w;
-                    outPlan.passOffsets[passIndex].start = static_cast<uint32_t>(outPlan.flatIndices.size());
-                    outPlan.passOffsets[passIndex].size = static_cast<uint32_t>(waveAssignments[w].size());
-
-                    outPlan.flatIndices.insert(outPlan.flatIndices.end(),
-                        waveAssignments[w].begin(),
-                        waveAssignments[w].end());
-                }
-            }
-
-            remainingIndices.swap(nextRemainingIndices);
+            appendWave(outPlan, workerQueues, workerCount, waveStartPass);
+            pending.swap(nextPending);
         }
     }
 
-    void SolvingPlanner::planSingleStandardExecution(const std::vector<ObjectDenseIndex>& objects, size_t bodyCount, size_t workerCount, SolvingPlan& outPlan, const uint8_t* isStatic)
+    void SolvingPlanner::planSingleStandardExecution(
+        SolvingPlan& outPlan,
+        const std::vector<ObjectDenseIndex>& objects,
+        size_t bodyCount,
+        const uint8_t* isStatic,
+        bool hasStaticStaticPairs,
+        size_t workerCount)
     {
-        // A single-body constraint is a pair (b, b): same ownership/conflict rules apply.
         singlePairs.resize(objects.size());
         for (size_t i = 0; i < objects.size(); i++)
-        {
             singlePairs[i] = { objects[i], objects[i] };
-        }
 
         planCacheSharingAwareExecution(
-            singlePairs, bodyCount, workerCount,
-            sizeof(Real), std::hardware_destructive_interference_size,
-            outPlan, isStatic);
+            outPlan, singlePairs, bodyCount, isStatic, hasStaticStaticPairs, workerCount,
+            sizeof(Real));
     }
 
     void SolvingPlan::printExecutionPlan() const
@@ -812,19 +624,17 @@ namespace PS_AGONY2D
         const size_t numWaves = (passOffsets.empty() ? 0 : passOffsets.size() / workerCount);
         const int colWidth = 6;
 
-        // Header: wave IDs
         std::cout << std::setw(colWidth) << " ";
         for (size_t wave = 0; wave < numWaves; ++wave)
             std::cout << std::setw(colWidth) << ("Wv" + std::to_string(wave));
         std::cout << "\n";
 
-        // Rows: worker ID + pass sizes
         for (size_t worker = 0; worker < workerCount; ++worker)
         {
             std::cout << std::setw(colWidth - 1) << ("Wk" + std::to_string(worker)) << " ";
             for (size_t wave = 0; wave < numWaves; ++wave)
             {
-                size_t idx = wave * workerCount + worker;
+                const size_t idx = wave * workerCount + worker;
                 if (idx < passOffsets.size())
                     std::cout << std::setw(colWidth) << passOffsets[idx].size;
                 else
@@ -839,31 +649,31 @@ namespace PS_AGONY2D
         if (workerCount == 0 || flatIndices.empty())
             return 0.0;
 
-        std::vector<size_t> totalLoad(workerCount, 0);
-        for (size_t w = 0; w < workerCount; ++w)
+        const size_t numWaves = passOffsets.size() / workerCount;
+        size_t capacity = 0;
+
+        for (size_t wave = 0; wave < numWaves; ++wave)
         {
-            for (size_t wave = 0; wave < passOffsets.size() / workerCount; ++wave)
-            {
-                const Pass& p = passOffsets[wave * workerCount + w];
-                totalLoad[w] += p.size;
-            }
+            size_t waveMax = 0;
+            for (size_t w = 0; w < workerCount; ++w)
+                waveMax = std::max<size_t>(waveMax, passOffsets[wave * workerCount + w].size);
+            capacity += waveMax * workerCount;
         }
 
-        size_t maxLoad = *std::max_element(totalLoad.begin(), totalLoad.end());
-        size_t scheduled = flatIndices.size();
+        if (capacity == 0)
+            return 0.0;
 
-        if (maxLoad == 0) return 0.0;
-        return static_cast<double>(scheduled) / (static_cast<double>(workerCount) * maxLoad) * 100.0;
+        return static_cast<double>(flatIndices.size()) / static_cast<double>(capacity) * 100.0;
     }
 
-    bool SolvingPlan::validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount) const
+    bool SolvingPlan::validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, const uint8_t* isStatic) const
     {
-        if (workerCount == 0) return passOffsets.empty();
+        if (workerCount == 0)
+            return passOffsets.empty();
 
         const size_t numWaves = passOffsets.size() / workerCount;
-        std::vector<int32_t> bodyOwner(bodyCount, -1);
-
-        const ObjectPair* collisionsPtr = collisions.data();
+        std::vector<int32_t> bodyOwner(bodyCount + 1, -1);
+        std::vector<uint8_t> scheduled(collisions.size(), 0);
 
         for (size_t wave = 0; wave < numWaves; ++wave)
         {
@@ -871,25 +681,46 @@ namespace PS_AGONY2D
 
             for (size_t worker = 0; worker < workerCount; ++worker)
             {
-                const size_t passIdx = wave * workerCount + worker;
-                const Pass& pass = passOffsets[passIdx];
+                const int32_t workerId = static_cast<int32_t>(worker);
+                const Pass& pass = passOffsets[wave * workerCount + worker];
 
-                for (size_t i = 0; i < static_cast<size_t>(pass.size); ++i)
+                const auto claim = [&](ObjectDenseIndex body)
+                    {
+                        if (isStatic[body] != 0)
+                            return true;
+
+                        int32_t& owner = bodyOwner[body];
+                        if (owner != -1 && owner != workerId)
+                            return false;
+
+                        owner = workerId;
+                        return true;
+                    };
+
+                for (size_t i = 0; i < pass.size; ++i)
                 {
-                    size_t collisionIdx = flatIndices[static_cast<size_t>(pass.start) + i];
-                    const ObjectPair& c = collisionsPtr[collisionIdx];
-
-                    const int32_t workerId = static_cast<int32_t>(worker);
-                    if (bodyOwner[c.a] != -1 && bodyOwner[c.a] != workerId)
+                    const size_t idx = flatIndices[static_cast<size_t>(pass.start) + i];
+                    if (idx >= collisions.size() || scheduled[idx] != 0)
                         return false;
-                    if (bodyOwner[c.b] != -1 && bodyOwner[c.b] != workerId)
+                    scheduled[idx] = 1;
+
+                    const ObjectPair& c = collisions[idx];
+                    if (isStatic[c.a] != 0 && isStatic[c.b] != 0)
                         return false;
 
-                    bodyOwner[c.a] = workerId;
-                    bodyOwner[c.b] = workerId;
+                    if (!claim(c.a) || !claim(c.b))
+                        return false;
                 }
             }
         }
+
+        for (size_t i = 0; i < collisions.size(); ++i)
+        {
+            const ObjectPair& c = collisions[i];
+            if (scheduled[i] == 0 && !(isStatic[c.a] != 0 && isStatic[c.b] != 0))
+                return false;
+        }
+
         return true;
     }
 
@@ -904,36 +735,31 @@ namespace PS_AGONY2D
     size_t SolvingPlanner::getMemoryUsage() const
     {
         size_t total = 0;
-        total += getVectorMemoryUsage(remainingIndices);
-        total += getVectorMemoryUsage(delayedIndices);
-        total += getVectorMemoryUsage(nextRemainingIndices);
-        total += getVectorMemoryUsage(usedBodies);
+        total += getVectorMemoryUsage(pending);
+        total += getVectorMemoryUsage(halfClaimed);
+        total += getVectorMemoryUsage(nextPending);
+        total += getVectorMemoryUsage(claimOwner);
 
-        total += getVectorMemoryUsage(waveAssignments);
-        for (const auto& assignment : waveAssignments)
-        {
-            total += getVectorMemoryUsage(assignment);
-        }
+        total += getVectorMemoryUsage(workerQueues);
+        for (const auto& queue : workerQueues)
+            total += getVectorMemoryUsage(queue);
 
         total += getVectorMemoryUsage(workerLoad);
         total += getVectorMemoryUsage(wavePool);
         total += getVectorMemoryUsage(simdRetry);
+        total += getVectorMemoryUsage(groupPairs);
 
         total += getVectorMemoryUsage(adjacency);
         for (const auto& adj : adjacency)
-        {
             total += getVectorMemoryUsage(adj);
-        }
 
-        total += getVectorMemoryUsage(groupOwner);
-        total += getVectorMemoryUsage(groupSizes);
+        total += getVectorMemoryUsage(groupWorker);
+        total += getVectorMemoryUsage(workerGroupCount);
         total += getVectorMemoryUsage(seeds);
-        total += getVectorMemoryUsage(waveOwner);
-        total += getVectorMemoryUsage(interiorIndices);
-        total += getVectorMemoryUsage(boundaryIndices);
+        total += getVectorMemoryUsage(waveClaim);
+        total += getVectorMemoryUsage(interiorPending);
+        total += getVectorMemoryUsage(boundaryPending);
         total += getVectorMemoryUsage(singlePairs);
-        // bfsQueue intentionally excluded: std::queue<size_t> exposes no way to
-        // inspect its backing container's capacity.
 
         return total;
     }

@@ -40,7 +40,7 @@ namespace PS_AGONY2D
 
 	#define PS_AGONY_SWAP_WITH_BACK(vector, index) std::swap((vector)[(index)], (vector).back())
 
-	void BodySoA::swapWithBack(size_t index)
+	void BodySoA::swapWithBack(ObjectDenseIndex index)
 	{
 		if (index >= offsetX.size()) [[unlikely]]
 		{
@@ -50,11 +50,11 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) PS_AGONY_SWAP_WITH_BACK(name, index);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
-			#undef SWAP_FIELD
+		#undef SWAP_FIELD
 
-			#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
-			PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
-			#undef SWAP_VECTOR_FIELD
+		#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+		#undef SWAP_VECTOR_FIELD
 	}
 
 	void BodySoA::popBack()
@@ -74,7 +74,7 @@ namespace PS_AGONY2D
 			#undef POP_VECTOR_FIELD
 	}
 
-	void BodySoA::addAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
+	void BodySoA::addAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex)
 	{
 		if (bodyIndex >= attachments.size()) [[unlikely]]
 		{
@@ -83,7 +83,7 @@ namespace PS_AGONY2D
 		attachments[bodyIndex].push_back({ type, objectIndex });
 	}
 
-	void BodySoA::removeAttachment(size_t bodyIndex, ConstraintType type, uint32_t objectIndex)
+	void BodySoA::removeAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex)
 	{
 		if (bodyIndex >= attachments.size()) [[unlikely]]
 		{
@@ -101,13 +101,13 @@ namespace PS_AGONY2D
 		}
 	}
 
-	void BodySoA::addCollider(size_t bodyIndex, ColliderDenseIndex colliderIndex)
+	void BodySoA::addCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
 		colliderIndices[bodyIndex].push_back(colliderIndex);
 	}
 
-	void BodySoA::removeCollider(size_t bodyIndex, ColliderDenseIndex colliderIndex)
+	void BodySoA::removeCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
 		auto& list = colliderIndices[bodyIndex];
@@ -122,7 +122,7 @@ namespace PS_AGONY2D
 		}
 	}
 
-	std::optional<BodyData> BodySoA::getBodyData(size_t index) const noexcept
+	std::optional<BodyData> BodySoA::getBodyData(ObjectDenseIndex index) const noexcept
 	{
 		if (index >= offsetX.size()) [[unlikely]] return std::nullopt;
 		return BodyData

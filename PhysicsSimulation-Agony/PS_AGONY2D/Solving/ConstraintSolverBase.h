@@ -222,11 +222,11 @@ namespace PS_AGONY2D
 		void planExecution(size_t workerCount)
 		{
 			SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-				this->bodyRefs, this->bodies->getCount(), workerCount,
-				sizeof(Real),
-				std::hardware_destructive_interference_size,
-				this->solvingPlan,
-				this->bodies->isStatic.data()
+				solvingPlan,
+				this->bodyRefs, this->bodies->getCount(),
+				this->bodies->isStatic.data(), true,
+				workerCount,
+				sizeof(Real)
 			);
 		}
 	};
@@ -246,9 +246,10 @@ namespace PS_AGONY2D
 		void planExecution(size_t workerCount)
 		{
 			SolvingPlanner::threadLocal().planSingleStandardExecution(
-				this->bodyRefs, this->bodies->getCount(), workerCount,
-				this->solvingPlan,
-				this->bodies->isStatic.data()
+				solvingPlan,
+				this->bodyRefs, this->bodies->getCount(),
+				this->bodies->isStatic.data(), true,
+				workerCount
 			);
 		}
 	};

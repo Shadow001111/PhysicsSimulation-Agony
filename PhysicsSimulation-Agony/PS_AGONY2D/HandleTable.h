@@ -1,5 +1,4 @@
 #pragma once
-#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -22,13 +21,12 @@ namespace PS_AGONY2D
 	{
 		struct Slot
 		{
-			uint32_t index;      // alive: dense index. free: next free slot.
-			uint32_t generation; // bumped on destroy
+			uint32_t index; // alive: dense index. free: next free slot.
+			uint32_t generation;	// bumped on destroy
 		};
-		std::vector<Slot>     slots;       // sparse, indexed by Handle::slot
+		std::vector<Slot> slots;		   // sparse, indexed by Handle::slot
 		std::vector<uint32_t> denseToSlot; // dense -> slot
 		uint32_t freeHead = Handle::kNull;
-
 	public:
 		// Registers a new element at the back of the dense array.
 		Handle push()
@@ -50,7 +48,7 @@ namespace PS_AGONY2D
 		}
 
 		// Mirrors swapping dense[index] with dense[back].
-		void swapWithBack(size_t index) noexcept
+		void swapWithBack(uint32_t index) noexcept
 		{
 			if (index + 1 >= denseToSlot.size()) return; // out of range or already last
 			const size_t last = denseToSlot.size() - 1;
@@ -91,7 +89,7 @@ namespace PS_AGONY2D
 		}
 
 		// Dense index -> handle. Index must be in range.
-		Handle handleAt(size_t dense) const noexcept
+		Handle handleAt(uint32_t dense) const noexcept
 		{
 			const uint32_t s = denseToSlot[dense];
 			return { s, slots[s].generation };

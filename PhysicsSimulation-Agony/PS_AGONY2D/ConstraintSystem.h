@@ -70,14 +70,14 @@ namespace PS_AGONY2D
 		template<class... Args>
 		uint32_t createImpl(ObjectDenseIndex indexA, ObjectDenseIndex indexB, BodySoA& bodies, Args&&... args)
 		{
-			const uint32_t newIndex = static_cast<uint32_t>(soa.append(indexA, indexB, std::forward<Args>(args)...));
+			const ObjectDenseIndex newIndex = static_cast<uint32_t>(soa.append(indexA, indexB, std::forward<Args>(args)...));
 			bodies.addAttachment(indexA, Type, newIndex);
 			bodies.addAttachment(indexB, Type, newIndex);
 			wasSoAChanged = true;
 			return newIndex;
 		}
 	public:
-		void removeConstraint(uint32_t index, BodySoA& bodies) final
+		void removeConstraint(ObjectDenseIndex index, BodySoA& bodies) final
 		{
 			if (index >= soa.getCount()) [[unlikely]]
 			{
@@ -88,7 +88,7 @@ namespace PS_AGONY2D
 			{
 				bodies.removeAttachment(soa.bodyIndex[index], Type, index);
 
-				const uint32_t oldBackIndex = static_cast<uint32_t>(soa.swapRemove(index));
+				const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
 				if (oldBackIndex != index)
 				{
 					bodies.removeAttachment(soa.bodyIndex[index], Type, oldBackIndex);
