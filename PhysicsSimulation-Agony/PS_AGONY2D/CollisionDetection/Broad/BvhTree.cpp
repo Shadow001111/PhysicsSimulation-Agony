@@ -12,9 +12,6 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 	namespace
 	{
-		// Used by transformCentroids and fitNodes.
-		constexpr uint32_t LANES = RealSimd::lanes;
-
 		using MortonU32Simd = std::conditional_t<
 			std::is_same_v<Real, float>,
 			Ecstasy::Core::Simd<uint32_t>,
@@ -212,7 +209,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		Real* ECSTASY_RESTRICT cyPtr = centroidY.data();
 
 		size_t i = 0;
-		for (; i + LANES <= count; i += LANES)
+		for (; i + RealSimd::lanes <= count; i += RealSimd::lanes)
 		{
 			const RealSimd sx = RealSimd::load(cxPtr + i);
 			const RealSimd sy = RealSimd::load(cyPtr + i);
@@ -253,7 +250,6 @@ namespace PS_AGONY2D::BroadPhaseInternal
 				// Centroids are in range [0; 2^16].
 				const MortonU32Simd qx = RealSimd::load(cxPtr + i).to<MortonI32Simd>().as<MortonU32Simd>();
 				const MortonU32Simd qy = RealSimd::load(cyPtr + i).to<MortonI32Simd>().as<MortonU32Simd>();
-
 				morton2DSimd(qx, qy).store(mortonCodePtr + i);
 			}
 		}
@@ -460,7 +456,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			Real* maxXPtr = reinterpret_cast<Real*>(leafAABBs.maxX.data());
 			Real* minYPtr = reinterpret_cast<Real*>(leafAABBs.minY.data());
 			Real* maxYPtr = reinterpret_cast<Real*>(leafAABBs.maxY.data());
-			for (size_t i = 0; i < totalReals; i += LANES)
+			for (size_t i = 0; i < totalReals; i += RealSimd::lanes)
 			{
 				deadMinV.store(minXPtr + i);
 				deadMaxV.store(maxXPtr + i);

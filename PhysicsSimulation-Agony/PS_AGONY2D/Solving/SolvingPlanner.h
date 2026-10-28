@@ -21,7 +21,7 @@ namespace PS_AGONY2D
         std::vector<Pass> passOffsets;
         size_t workerCount = 0;
 
-        void printExecutionPlan() const;
+        void print() const;
 
         [[nodiscard]] double computeEfficiency() const;
         [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, const uint8_t* isStatic) const;

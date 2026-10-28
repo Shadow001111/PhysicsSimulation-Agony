@@ -141,7 +141,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			{
 				const uint32_t count = node.end - node.start;
 
-				const size_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
+				const uint32_t srcIndex = node.leafIndex * BvhNode::KD_LEAF_SIZE;
 				const Real* leafMinX = leafMinXPtr + srcIndex;
 				const Real* leafMaxX = leafMaxXPtr + srcIndex;
 				const Real* leafMinY = leafMinYPtr + srcIndex;

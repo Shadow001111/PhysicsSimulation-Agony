@@ -619,7 +619,7 @@ namespace PS_AGONY2D
             sizeof(Real));
     }
 
-    void SolvingPlan::printExecutionPlan() const
+    void SolvingPlan::print() const
     {
         const size_t numWaves = (passOffsets.empty() ? 0 : passOffsets.size() / workerCount);
         const int colWidth = 6;
