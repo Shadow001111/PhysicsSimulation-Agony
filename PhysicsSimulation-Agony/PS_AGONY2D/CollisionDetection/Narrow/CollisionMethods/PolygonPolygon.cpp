@@ -12,6 +12,9 @@ namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 
+    // Tried to compute 'axisFacing' before projection and compare it to 0, to cull and skip work.
+    //    Execution time grew by 20%. Probably because of branch mispredictions.
+
     void NarrowPhaseCollisionDetector::collisionPolygonPolygon(
         std::span<const ObjectPair> pairs,
         CacheLineAlignedVector<BodyCollisionData>& outCollisionData)

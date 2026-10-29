@@ -222,7 +222,7 @@ namespace PS_AGONY2D
 		void planExecution(size_t workerCount)
 		{
 			SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-				solvingPlan,
+				this->solvingPlan,
 				this->bodyRefs, this->bodies->getCount(),
 				this->bodies->isStatic.data(), true,
 				workerCount,
@@ -246,7 +246,7 @@ namespace PS_AGONY2D
 		void planExecution(size_t workerCount)
 		{
 			SolvingPlanner::threadLocal().planSingleStandardExecution(
-				solvingPlan,
+				this->solvingPlan,
 				this->bodyRefs, this->bodies->getCount(),
 				this->bodies->isStatic.data(), true,
 				workerCount
