@@ -272,6 +272,8 @@ namespace PS_AGONY2D
 
     void NarrowPhaseCollisionDetector::rebuildContactCache()
     {
+        using Real4Simd = Ecstasy::Core::Simd<Real, sizeof(Real) * 32>;
+
         const size_t n = previousCollisionData.size();
         contactCache.reset(n);
 
@@ -282,14 +284,11 @@ namespace PS_AGONY2D
             // Dead (deleted collider) or no contacts: nothing to warm-start.
             if (d.colliderA == INVALID_COLLIDER_INDEX || d.contactCount == 0) continue;
 
-            // TODO: Use SIMD.
             // Zero accumulators are identical to a lookup miss: don't store them.
-            bool any = false;
-            for (uint32_t k = 0; k < d.contactCount; k++)
-            {
-                any |= (d.persistentContactData[k].normalImpulseAccumulator != 0) |
-                       (d.persistentContactData[k].tangentImpulseAccumulator != 0);
-            }
+            const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(d.persistentContactData.data()));
+            uint32_t impulseMask = (impulsesV != Real4Simd::fillLanesWithZero()).movemask();
+            impulseMask &= (1u << (2u * d.contactCount)) - 1;
+            const bool any = impulseMask != 0;
             if (!any) continue;
 
             contactCache.insert(ContactCache::makeKey(d.colliderA, d.colliderB), uint32_t(i));
@@ -604,37 +603,42 @@ namespace PS_AGONY2D
         // Move persistent contact data from previous frame (read-only lookups, thread-safe).
         if (!contactCache.empty())
         {
-            TRACY_SCOPE_N("Move previous contact data");
+            movePreviousContactData(firstResult, out);
+        }
+    }
 
-            const BodyCollisionData* ECSTASY_RESTRICT prev = previousCollisionData.data();
-            BodyCollisionData* ECSTASY_RESTRICT res = out.data();
-            const size_t end = out.size();
+    void NarrowPhaseCollisionDetector::movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> out)
+    {
+        TRACY_SCOPE_N("Move previous contact data");
 
-            constexpr size_t LOOKAHEAD = 8;
-            for (size_t r = firstResult; r < std::min(firstResult + LOOKAHEAD, end); r++)
-                contactCache.prefetch(ContactCache::makeKey(res[r].colliderA, res[r].colliderB));
+        const BodyCollisionData* ECSTASY_RESTRICT prev = previousCollisionData.data();
+        BodyCollisionData* ECSTASY_RESTRICT resultPtr = out.data();
+        const size_t end = out.size();
 
-            for (size_t r = firstResult; r < end; r++)
+        constexpr size_t LOOKAHEAD = 8;
+        for (size_t r = firstResult; r < std::min(firstResult + LOOKAHEAD, end); r++)
+            contactCache.prefetch(ContactCache::makeKey(resultPtr[r].colliderA, resultPtr[r].colliderB));
+
+        for (size_t r = firstResult; r < end; r++)
+        {
+            if (r + LOOKAHEAD < end)
+                contactCache.prefetch(ContactCache::makeKey(resultPtr[r + LOOKAHEAD].colliderA, resultPtr[r + LOOKAHEAD].colliderB));
+
+            BodyCollisionData& cur = resultPtr[r];
+            const uint32_t idx = contactCache.find(ContactCache::makeKey(cur.colliderA, cur.colliderB));
+            if (idx == ContactCache::NONE) continue;
+
+            const BodyCollisionData& p = prev[idx];
+            const uint32_t pc = p.contactCount;
+
+            // Match current contacts with previous frame contacts using contactIds.
+            for (uint32_t i = 0; i < cur.contactCount; i++)
             {
-                if (r + LOOKAHEAD < end)
-                    contactCache.prefetch(ContactCache::makeKey(res[r + LOOKAHEAD].colliderA, res[r + LOOKAHEAD].colliderB));
-
-                BodyCollisionData& cur = res[r];
-                const uint32_t idx = contactCache.find(ContactCache::makeKey(cur.colliderA, cur.colliderB));
-                if (idx == ContactCache::NONE) continue;
-
-                const BodyCollisionData& p = prev[idx];
-                const uint32_t pc = p.contactCount;
-
-                // Match current contacts with previous frame contacts using contactIds.
-                for (uint32_t i = 0; i < cur.contactCount; i++)
-                {
-                    const uint32_t id = cur.contactIds[i];
-                    if (pc > 0 && id == p.contactIds[0])
-                        cur.persistentContactData[i] = p.persistentContactData[0];
-                    else if (pc > 1 && id == p.contactIds[1])
-                        cur.persistentContactData[i] = p.persistentContactData[1];
-                }
+                const uint32_t id = cur.contactIds[i];
+                if (pc > 0 && id == p.contactIds[0])
+                    cur.persistentContactData[i] = p.persistentContactData[0];
+                else if (pc > 1 && id == p.contactIds[1])
+                    cur.persistentContactData[i] = p.persistentContactData[1];
             }
         }
     }

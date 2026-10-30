@@ -145,7 +145,7 @@ namespace PS_AGONY2D
 			{
 				Slot* s = slots.data();
 				size_t i = slotOf(key);
-				for (;;)
+				while (true)
 				{
 					if (s[i].key == EMPTY || s[i].key == key) { s[i].key = key; s[i].val = val; return; }
 					i = (i + 1) & mask;
@@ -156,7 +156,7 @@ namespace PS_AGONY2D
 			{
 				const Slot* s = slots.data();
 				size_t i = slotOf(key);
-				for (;;)
+				while (true)
 				{
 					if (s[i].key == key) return s[i].val;
 					if (s[i].key == EMPTY) return NONE;
@@ -251,6 +251,8 @@ namespace PS_AGONY2D
 
 		// Appends results to 'out' and applies warm-starting to the appended range only.
 		void processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out);
+
+		void movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> out);
 
 		void collisionCircleCircle	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox		(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
