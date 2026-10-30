@@ -7,6 +7,10 @@
 #include <atomic>
 #include <array>
 #include <span>
+#include <bit>
+#include <cstring>
+#include <algorithm>
+#include <xmmintrin.h>
 #include <robin_hood.h>
 
 namespace PS_AGONY2D
@@ -98,34 +102,74 @@ namespace PS_AGONY2D
 			}
 		};
 
-		struct CachedContactPair
+		struct ContactCache
 		{
-			uint32_t contactIds[2] = { uint32_t(-1), uint32_t(-1) };
-			PersistentContactData contactData[2];
-		};
+			// Open-addressing table: uint64 collider-pair key -> index into previousCollisionData.
+			// Rebuilt once per frame, never erased from, load factor <= 0.5, linear probing.
+			static constexpr uint64_t EMPTY = ~0ull;
+			static constexpr uint32_t NONE = ~0u;
 
-		// Keyed by COLLIDER pair, not body pair: two bodies can now touch through more
-		// than one simultaneous collider pair, and warm-starting must not conflate them.
-		struct ColliderPairKey
-		{
-			ColliderDenseIndex colliderA;
-			ColliderDenseIndex colliderB;
+			struct Slot { uint64_t key; uint32_t val; uint32_t pad; };
 
-			bool operator==(const ColliderPairKey& other) const noexcept
+			CacheLineAlignedVector<Slot> slots;
+			size_t mask = 0;
+			uint32_t shift = 63;
+			size_t capacity = 0;
+
+			static uint64_t makeKey(ColliderDenseIndex a, ColliderDenseIndex b) noexcept
 			{
-				return colliderA == other.colliderA && colliderB == other.colliderB;
+				static_assert(sizeof(ColliderDenseIndex) <= 4);
+				return (uint64_t(a) << 32) | uint64_t(b);
 			}
-		};
 
-		struct ColliderPairKeyHasher
-		{
-			size_t operator()(const ColliderPairKey& key) const noexcept
+			size_t slotOf(uint64_t key) const noexcept
 			{
-				constexpr uint64_t addConst = 0x9e3779b97f4a7c15;
-				uint64_t h = (uint64_t)key.colliderA + addConst;
-				h ^= (uint64_t)key.colliderB + addConst + (h << 6) + (h >> 2);
-				return h;
+				return size_t((key * 0x9E3779B97F4A7C15ull) >> shift);
 			}
+
+			bool empty() const noexcept { return capacity == 0; }
+
+			void reset(size_t maxEntries)
+			{
+				if (maxEntries == 0) { capacity = 0; return; }
+				const size_t c = std::bit_ceil(std::max<size_t>(maxEntries * 2, 16));
+				if (slots.size() < c) slots.resize(c);
+				std::memset(slots.data(), 0xFF, c * sizeof(Slot));
+				capacity = c;
+				mask = c - 1;
+				shift = 64 - unsigned(std::countr_zero(c));
+			}
+
+			// Duplicate key: last write wins.
+			void insert(uint64_t key, uint32_t val) noexcept
+			{
+				Slot* s = slots.data();
+				size_t i = slotOf(key);
+				for (;;)
+				{
+					if (s[i].key == EMPTY || s[i].key == key) { s[i].key = key; s[i].val = val; return; }
+					i = (i + 1) & mask;
+				}
+			}
+
+			uint32_t find(uint64_t key) const noexcept
+			{
+				const Slot* s = slots.data();
+				size_t i = slotOf(key);
+				for (;;)
+				{
+					if (s[i].key == key) return s[i].val;
+					if (s[i].key == EMPTY) return NONE;
+					i = (i + 1) & mask;
+				}
+			}
+
+			void prefetch(uint64_t key) const noexcept
+			{
+				_mm_prefetch(reinterpret_cast<const char*>(slots.data() + slotOf(key)), _MM_HINT_T0);
+			}
+
+			size_t memoryUsage() const { return slots.capacity() * sizeof(Slot); }
 		};
 
 		using CollisionFunc = void(NarrowPhaseCollisionDetector::*)(
@@ -141,7 +185,9 @@ namespace PS_AGONY2D
 		CacheLineAlignedVector<BodyCollisionData> allCollisionData;
 		CacheLineAlignedVector<ChunkData> chunks;
 
-		robin_hood::unordered_flat_map<ColliderPairKey, CachedContactPair, ColliderPairKeyHasher> previousContactDataContainer;
+		// Previous frame's results (owner of warm-start data) + lookup table into them.
+		CacheLineAlignedVector<BodyCollisionData> previousCollisionData;
+		ContactCache contactCache;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
@@ -199,6 +245,7 @@ namespace PS_AGONY2D
 
 		size_t getMemoryUsage() const;
 	private:
+		void rebuildContactCache();
 		void findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs);
 		void findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount);
 

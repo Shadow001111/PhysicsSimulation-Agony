@@ -263,28 +263,42 @@ namespace PS_AGONY2D
     {
         TRACY_SCOPE_N("Update persistent contact data");
 
-        previousContactDataContainer.clear();
-        previousContactDataContainer.reserve(allCollisionData.size());
-        for (BodyCollisionData& collData : allCollisionData)
+        // The solved results (with accumulated impulses) become next frame's warm-start source.
+        // NOTE: allCollisionData is empty after this call.
+        std::swap(allCollisionData, previousCollisionData);
+        allCollisionData.clear();
+        rebuildContactCache();
+    }
+
+    void NarrowPhaseCollisionDetector::rebuildContactCache()
+    {
+        const size_t n = previousCollisionData.size();
+        contactCache.reset(n);
+
+        const BodyCollisionData* ECSTASY_RESTRICT prev = previousCollisionData.data();
+        for (size_t i = 0; i < n; i++)
         {
-            ColliderPairKey key{ collData.colliderA , collData.colliderB };
+            const BodyCollisionData& d = prev[i];
+            // Dead (deleted collider) or no contacts: nothing to warm-start.
+            if (d.colliderA == INVALID_COLLIDER_INDEX || d.contactCount == 0) continue;
 
-            // Default CachedContactPair already has invalid ids; reassign in case of a duplicate key.
-            CachedContactPair& data = previousContactDataContainer.try_emplace(key).first->second;
-            data = CachedContactPair{};
-
-            // Only cache valid active contacts.
-            for (uint32_t i = 0; i < collData.contactCount; i++)
+            // TODO: Use SIMD.
+            // Zero accumulators are identical to a lookup miss: don't store them.
+            bool any = false;
+            for (uint32_t k = 0; k < d.contactCount; k++)
             {
-                data.contactIds[i] = collData.contactIds[i];
-                data.contactData[i] = collData.persistentContactData[i];
+                any |= (d.persistentContactData[k].normalImpulseAccumulator != 0) |
+                       (d.persistentContactData[k].tangentImpulseAccumulator != 0);
             }
+            if (!any) continue;
+
+            contactCache.insert(ContactCache::makeKey(d.colliderA, d.colliderB), uint32_t(i));
         }
     }
 
     void NarrowPhaseCollisionDetector::remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders)
     {
-        if (deletedColliders.empty() || previousContactDataContainer.empty())
+        if (deletedColliders.empty() || previousCollisionData.empty())
         {
             return;
         }
@@ -335,46 +349,37 @@ namespace PS_AGONY2D
             if (entity != INVALID_COLLIDER_INDEX && entity != slot) remap[entity] = slot;
         }
 
-        // Update in place: only affected entries are extracted and re-inserted.
-        std::vector<std::pair<ColliderPairKey, CachedContactPair>> reinsert;
-
-        for (auto it = previousContactDataContainer.begin(); it != previousContactDataContainer.end();)
+        // Rewrite the keys stored in the previous results, then rebuild the table.
+        for (BodyCollisionData& d : previousCollisionData)
         {
-            ColliderDenseIndex a = it->first.colliderA;
-            ColliderDenseIndex b = it->first.colliderB;
+            ColliderDenseIndex a = d.colliderA;
+            ColliderDenseIndex b = d.colliderB;
 
             const auto ra = remap.find(a);
             const auto rb = remap.find(b);
-            if (ra == remap.end() && rb == remap.end())
-            {
-                ++it;
-                continue;
-            }
+            if (ra == remap.end() && rb == remap.end()) continue;
 
             if (ra != remap.end()) a = ra->second;
             if (rb != remap.end()) b = rb->second;
 
-            if (a != INVALID_COLLIDER_INDEX && b != INVALID_COLLIDER_INDEX)
+            if (a == INVALID_COLLIDER_INDEX || b == INVALID_COLLIDER_INDEX)
             {
-                // Re-sort the indices to preserve narrow-phase invariants.
-                const BodyType typeA = colliders.shapeType[a];
-                const BodyType typeB = colliders.shapeType[b];
-
-                if (typeA > typeB || (typeA == typeB && b > a))
-                {
-                    std::swap(a, b);
-                }
-
-                reinsert.emplace_back(ColliderPairKey{ a, b }, it->second);
+                d.colliderA = INVALID_COLLIDER_INDEX; // Dead: skipped by rebuildContactCache.
+                continue;
             }
 
-            it = previousContactDataContainer.erase(it);
+            // Re-sort the indices to preserve narrow-phase invariants.
+            const BodyType typeA = colliders.shapeType[a];
+            const BodyType typeB = colliders.shapeType[b];
+            if (typeA > typeB || (typeA == typeB && b > a))
+            {
+                std::swap(a, b);
+            }
+            d.colliderA = a;
+            d.colliderB = b;
         }
 
-        for (auto& [key, data] : reinsert)
-        {
-            previousContactDataContainer.insert_or_assign(key, data);
-        }
+        rebuildContactCache();
     }
 
     void NarrowPhaseCollisionDetector::clearData()
@@ -397,10 +402,8 @@ namespace PS_AGONY2D
             }
             total += PS_AGONY2D::getVectorMemoryUsage(chunkData.results);
         }
-        {
-            auto const numElementsWithBuffer = previousContactDataContainer.calcNumElementsWithBuffer(previousContactDataContainer.mask() + 1);
-            total += previousContactDataContainer.calcNumBytesTotal(numElementsWithBuffer);
-        }
+        total += PS_AGONY2D::getVectorMemoryUsage(previousCollisionData);
+        total += contactCache.memoryUsage();
         return total;
     }
 
@@ -598,31 +601,39 @@ namespace PS_AGONY2D
             }
         }
 
-        // Move persistent contact data from previous frame.
+        // Move persistent contact data from previous frame (read-only lookups, thread-safe).
+        if (!contactCache.empty())
         {
             TRACY_SCOPE_N("Move previous contact data");
-            for (size_t r = firstResult; r < out.size(); r++)
+
+            const BodyCollisionData* ECSTASY_RESTRICT prev = previousCollisionData.data();
+            BodyCollisionData* ECSTASY_RESTRICT res = out.data();
+            const size_t end = out.size();
+
+            constexpr size_t LOOKAHEAD = 8;
+            for (size_t r = firstResult; r < std::min(firstResult + LOOKAHEAD, end); r++)
+                contactCache.prefetch(ContactCache::makeKey(res[r].colliderA, res[r].colliderB));
+
+            for (size_t r = firstResult; r < end; r++)
             {
-                BodyCollisionData& collData = out[r];
-                ColliderPairKey key{ collData.colliderA , collData.colliderB };
+                if (r + LOOKAHEAD < end)
+                    contactCache.prefetch(ContactCache::makeKey(res[r + LOOKAHEAD].colliderA, res[r + LOOKAHEAD].colliderB));
 
-                // Check if pair existed in previous frame.
-                const auto it = previousContactDataContainer.find(key);
-                if (it == previousContactDataContainer.end()) continue;
+                BodyCollisionData& cur = res[r];
+                const uint32_t idx = contactCache.find(ContactCache::makeKey(cur.colliderA, cur.colliderB));
+                if (idx == ContactCache::NONE) continue;
 
-                const CachedContactPair& data = it->second;
+                const BodyCollisionData& p = prev[idx];
+                const uint32_t pc = p.contactCount;
 
                 // Match current contacts with previous frame contacts using contactIds.
-                for (uint32_t i = 0; i < collData.contactCount; i++)
+                for (uint32_t i = 0; i < cur.contactCount; i++)
                 {
-                    if (data.contactIds[0] != INVALID_CONTACT_ID && collData.contactIds[i] == data.contactIds[0])
-                    {
-                        collData.persistentContactData[i] = data.contactData[0];
-                    }
-                    else if (data.contactIds[1] != INVALID_CONTACT_ID && collData.contactIds[i] == data.contactIds[1])
-                    {
-                        collData.persistentContactData[i] = data.contactData[1];
-                    }
+                    const uint32_t id = cur.contactIds[i];
+                    if (pc > 0 && id == p.contactIds[0])
+                        cur.persistentContactData[i] = p.persistentContactData[0];
+                    else if (pc > 1 && id == p.contactIds[1])
+                        cur.persistentContactData[i] = p.persistentContactData[1];
                 }
             }
         }

@@ -3,6 +3,7 @@
 #include "../HelperMethods.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
+
 #include "Ecstasy/Core/Portablity.h"
 
 namespace PS_AGONY2D
@@ -62,7 +63,6 @@ namespace PS_AGONY2D
             Real maxSide = -std::numeric_limits<Real>::max();
             uint32_t minSideVertex = 0;
             uint32_t maxSideVertex = 0;
-            bool rejected = false;
 
             for (uint32_t i = 0; i < vertexCount; i++)
             {
@@ -70,11 +70,7 @@ namespace PS_AGONY2D
                 const Vec2 n = normalsPtr[i];
 
                 const Real separation = std::fmin(glm::dot(n, s0 - v), glm::dot(n, s1 - v));
-                if (separation >= radius)
-                {
-                    rejected = true;
-                    break;
-                }
+                if (separation >= radius) goto nextPair;
                 if (separation > faceSeparation)
                 {
                     faceSeparation = separation;
@@ -85,7 +81,6 @@ namespace PS_AGONY2D
                 if (side < minSide) { minSide = side; minSideVertex = i; }
                 if (side > maxSide) { maxSide = side; maxSideVertex = i; }
             }
-            if (rejected) continue;
 
             const Real sideOffset = glm::dot(sideAxis, centerLocal);
             const Real sidePlus = sideOffset - maxSide;   // Capsule on the +side of the polygon.
@@ -193,18 +188,12 @@ namespace PS_AGONY2D
                     }
                     contactCount++;
                 }
-                if (contactCount == 0) [[unlikely]]
-                {
-                    rejected = true;
-                    break;
-                }
+                if (contactCount == 0) [[unlikely]] goto nextPair;
 
                 normal = n;
                 depth = radius - std::fmin(e0, e1);
                 faceContact = true;
             } while (false);
-
-            if (rejected) [[unlikely]] continue;
 
             if (!faceContact)
             {
@@ -251,6 +240,7 @@ namespace PS_AGONY2D
                 id0,
                 id1
             );
+            nextPair:
         }
     }
 }

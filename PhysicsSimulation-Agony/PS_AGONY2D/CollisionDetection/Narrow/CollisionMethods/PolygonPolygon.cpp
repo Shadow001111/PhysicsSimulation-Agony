@@ -3,8 +3,8 @@
 #include "../HelperMethods.h"
 
 #include "PS_AGONY2D/Limits.h"
-
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
+
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 
@@ -55,8 +55,8 @@ namespace PS_AGONY2D
             const PolygonGeometry& localVertsAContainer = polyGeometryPtr[shapeA];
             const PolygonGeometry& localVertsBContainer = polyGeometryPtr[shapeB];
 
-            const size_t countA = localVertsAContainer.size();
-            const size_t countB = localVertsBContainer.size();
+            const uint32_t countA = localVertsAContainer.size();
+            const uint32_t countB = localVertsBContainer.size();
 
             const Vec2 rightA = { cosA, sinA };
             const Vec2 upA = { -sinA, cosA };
@@ -75,6 +75,7 @@ namespace PS_AGONY2D
             const Vec2* localVertsB = localVertsBContainer.vertices();
             const Vec2* normalsB = localVertsBContainer.normals();
 
+            // TODO: Hand written simd.
             for (size_t i = 0; i < countB; i++)
             {
                 const Vec2 v = localVertsB[i];
@@ -84,45 +85,18 @@ namespace PS_AGONY2D
                 };
             }
 
-            // Facing direction for SAT axis tie-breaking: A origin to B origin, in A-local space.
-            const Vec2 centerDeltaLocal = bodyDeltaLocal;
-
             Vec2 normalLocal;
             Real depth = std::numeric_limits<Real>::max();
             SATAxis bestAxisType = SATAxis::A_EDGE;
             uint32_t bestAxisIndex = 0;
             Real bestAxisFacing = std::numeric_limits<Real>::max();
 
-            // Face-separation SAT. For a face with outward unit normal n, the owning polygon's
-            // max extent along n is just dot(n, faceVertex), so only the OTHER polygon is projected
-            // (O(nA*nB) per direction instead of re-projecting both shapes on every axis).
-            // overlap = faceDist - min_other(dot(n, v)); negative => separating axis.
-            auto consider = [&](Real overlap, Vec2 axisLocal, SATAxis axisType, uint32_t axisIndex)
-                {
-                    if (overlap > depth) return;
-
-                    const Real facingSign = Real(axisType == SATAxis::B_EDGE) * Real(2) - Real(1);
-                    const Real axisFacing = facingSign * glm::dot(axisLocal, centerDeltaLocal);
-
-                    if (overlap < depth || axisFacing < bestAxisFacing)
-                    {
-                        depth = overlap;
-                        // axisLocal is that shape's own outward edge normal: A's points from A to B
-                        // already; B's must be negated to match.
-                        normalLocal = (axisType == SATAxis::A_EDGE) ? axisLocal : -axisLocal;
-
-                        bestAxisType = axisType;
-                        bestAxisIndex = axisIndex;
-                        bestAxisFacing = axisFacing;
-                    }
-                };
-
-            for (uint32_t i = 0; i < uint32_t(countA); i++)
+            for (uint32_t i = 0; i < countA; i++)
             {
                 const Vec2 axisLocal = normalsA[i];
 
                 Real minB = std::numeric_limits<Real>::max();
-                for (size_t j = 0; j < countB; j++)
+                for (uint32_t j = 0; j < countB; j++)
                 {
                     const Real p = glm::dot(vertsB_inA[j], axisLocal);
                     minB = std::fmin(minB, p);
@@ -130,17 +104,28 @@ namespace PS_AGONY2D
 
                 const Real overlap = glm::dot(localVertsA[i], axisLocal) - minB;
                 if (overlap < Real(0)) goto nextPair;
-                consider(overlap, axisLocal, SATAxis::A_EDGE, i);
+
+                const Real axisFacing = -glm::dot(axisLocal, bodyDeltaLocal);
+
+                if (overlap > depth) continue;
+                if (overlap < depth || axisFacing < bestAxisFacing)
+                {
+                    depth = overlap;
+                    normalLocal = axisLocal;
+                    bestAxisType = SATAxis::A_EDGE;
+                    bestAxisIndex = i;
+                    bestAxisFacing = axisFacing;
+                }
             }
 
-            for (uint32_t i = 0; i < uint32_t(countB); i++)
+            for (uint32_t i = 0; i < countB; i++)
             {
                 const Vec2 nB = normalsB[i];
                 const Vec2 axisLocal = { relCos * nB.x - relSin * nB.y, relSin * nB.x + relCos * nB.y };
                 normalsB_inA[i] = axisLocal;
 
                 Real minA = std::numeric_limits<Real>::max();
-                for (size_t j = 0; j < countA; j++)
+                for (uint32_t j = 0; j < countA; j++)
                 {
                     const Real p = glm::dot(localVertsA[j], axisLocal);
                     minA = std::fmin(minA, p);
@@ -148,7 +133,18 @@ namespace PS_AGONY2D
 
                 const Real overlap = glm::dot(vertsB_inA[i], axisLocal) - minA;
                 if (overlap < Real(0)) goto nextPair;
-                consider(overlap, axisLocal, SATAxis::B_EDGE, i);
+
+                const Real axisFacing = glm::dot(axisLocal, bodyDeltaLocal);
+
+                if (overlap > depth) continue;
+                if (overlap < depth || axisFacing < bestAxisFacing)
+                {
+                    depth = overlap;
+                    normalLocal = -axisLocal;
+                    bestAxisType = SATAxis::B_EDGE;
+                    bestAxisIndex = i;
+                    bestAxisFacing = axisFacing;
+                }
             }
 
             {

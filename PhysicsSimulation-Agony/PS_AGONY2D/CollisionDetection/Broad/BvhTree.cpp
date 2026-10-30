@@ -287,16 +287,13 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		alignas(64) uint32_t counts[4][RADIX_SIZE] = {};
 
 		// Note: Combining packing pass with counting pass worsens performance.
+		for (uint32_t i = 0; i < count; i++)
 		{
-			TRACY_SCOPE_N("Counting pass");
-			for (uint32_t i = 0; i < count; i++)
-			{
-				const uint32_t k = a[i].key;
-				counts[0][k & 0xFF]++;
-				counts[1][(k >> 8) & 0xFF]++;
-				counts[2][(k >> 16) & 0xFF]++;
-				counts[3][(k >> 24) & 0xFF]++;
-			}
+			const uint32_t k = a[i].key;
+			counts[0][k & 0xFF]++;
+			counts[1][(k >> 8) & 0xFF]++;
+			counts[2][(k >> 16) & 0xFF]++;
+			counts[3][(k >> 24) & 0xFF]++;
 		}
 
 		auto radixPass = [&](
@@ -322,14 +319,10 @@ namespace PS_AGONY2D::BroadPhaseInternal
 				}
 			};
 
-		{
-			TRACY_SCOPE_N("Sort");
-
-			radixPass(0, a, b, counts[0]);
-			radixPass(8, b, a, counts[1]);
-			radixPass(16, a, b, counts[2]);
-			radixPass(24, b, a, counts[3]);
-		}
+		radixPass(0, a, b, counts[0]);
+		radixPass(8, b, a, counts[1]);
+		radixPass(16, a, b, counts[2]);
+		radixPass(24, b, a, counts[3]);
 
 		// Write sorted collider indices and keys back.
 		ObjectDenseIndex* ECSTASY_RESTRICT outIndexPtr = colliderIndices.data();
@@ -355,7 +348,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		uint32_t stack[MAX_STACK_CAPACITY];
 		uint32_t stackSize = 0;
 
-		nodes.emplace_back(0u, count);
+		nodes.emplace_back(0u, count); // Insert root.
 		stack[stackSize++] = 0u;
 
 		while (stackSize > 0)
@@ -400,7 +393,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			}
 
 			const uint32_t leftIdx = static_cast<uint32_t>(nodes.size());
-			node.leftChildIndex = leftIdx; // Before emplace_back: 'node' may dangle after it.
+			node.leftChildIndex = leftIdx;
 
 			stack[stackSize++] = leftIdx + 1;
 			stack[stackSize++] = leftIdx;

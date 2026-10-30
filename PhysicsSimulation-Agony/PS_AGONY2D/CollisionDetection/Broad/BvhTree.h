@@ -92,7 +92,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		void fitNodes(const AABBSoAViewer& aabbs, bool isRebuild);
 
 		std::vector<BvhNode> nodes;
-		std::vector<ObjectDenseIndex> colliderIndices; // Collider indices, sorted by Morton code.
+		CacheLineAlignedVector<ObjectDenseIndex> colliderIndices; // Collider indices, sorted by Morton code.
 		LeafAABBSoA leafAABBs;
 
 		// Build scratch.
