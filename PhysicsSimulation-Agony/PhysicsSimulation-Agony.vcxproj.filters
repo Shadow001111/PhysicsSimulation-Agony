@@ -359,5 +359,8 @@
     <ClInclude Include="PS_AGONY2D\HandleTable.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\ContactCache.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
