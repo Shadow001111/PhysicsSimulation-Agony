@@ -5,8 +5,6 @@
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-#include <iostream>
-
 namespace PS_AGONY2D
 {
 	void BodyCollisionSolver::setDataViewers(
@@ -1011,10 +1009,17 @@ namespace PS_AGONY2D
 			const Vec2 correctionAVec = data.normal * correctionA;
 			const Vec2 correctionBVec = data.normal * correctionB;
 
-			positionXPtr[bodyIndexA] -= correctionAVec.x;
-			positionYPtr[bodyIndexA] -= correctionAVec.y;
-			positionXPtr[bodyIndexB] += correctionBVec.x;
-			positionYPtr[bodyIndexB] += correctionBVec.y;
+			// Store results.
+			if (invMassA > 0) [[likely]]
+			{
+				positionXPtr[bodyIndexA] -= correctionAVec.x;
+				positionYPtr[bodyIndexA] -= correctionAVec.y;
+			}
+			if (invMassB > 0) [[likely]]
+			{
+				positionXPtr[bodyIndexB] += correctionBVec.x;
+				positionYPtr[bodyIndexB] += correctionBVec.y;
+			}
 		}
 	}
 
