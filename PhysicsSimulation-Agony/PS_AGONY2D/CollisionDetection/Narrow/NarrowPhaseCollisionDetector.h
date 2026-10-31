@@ -172,8 +172,8 @@ namespace PS_AGONY2D
 
 		void clearData();
 
-		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return allCollisionData; }
-		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return allCollisionData; }
+		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionData; }
+		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return previousCollisionData; }
 
 		size_t getMemoryUsage() const;
 	private:
