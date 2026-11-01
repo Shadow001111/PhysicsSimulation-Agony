@@ -190,18 +190,28 @@ namespace PS_AGONY_EDITOR
 	// Does nothing for a static body or a busy holder.
 	void Editor::beginDrag(Simulation& sim, Handle body, Vec2 grabWorld)
 	{
+		constexpr bool kAllowSingleBodyRotation = true;
+
 		auto& holder = sim.getMainBodyHolder();
 		if (holder.isHolding()) return;
 
 		holder.teleport(grabWorld);
-		if (!holdBody(sim, body, grabWorld, grabWorld)) return;
+
+		ObjectAPI& api = sim.objects();
+		const BodySoAViewer bv = api.getBodies();
+		const ObjectDenseIndex primary = api.getBodyIndex(body);
+		if (primary == Handle::kNull) return;
+
+		const bool multiple = selected.size() > 1;
+		const Vec2 primaryAnchor = (multiple || !kAllowSingleBodyRotation)
+			? Vec2(bv.worldCenterX[primary], bv.worldCenterY[primary])
+			: grabWorld;
+
+		if (!holdBody(sim, body, primaryAnchor, grabWorld)) return;
 
 		dragBody = body;
 		dragMode = DragMode::Holder;
 
-		ObjectAPI& api = sim.objects();
-		const ObjectDenseIndex primary = api.getBodyIndex(body);
-		const BodySoAViewer bv = api.getBodies();
 		for (const Handle h : selected)
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
