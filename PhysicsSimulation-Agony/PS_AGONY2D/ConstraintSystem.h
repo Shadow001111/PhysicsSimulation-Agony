@@ -179,7 +179,7 @@ namespace PS_AGONY2D
 	};
 
 	class RevoluteJointConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::Joint, RevoluteJointSoA, RevoluteJointSolver, RevoluteJointSoAViewer>
+		public ConstraintSystemBase<ConstraintType::RevoluteJoint, RevoluteJointSoA, RevoluteJointSolver, RevoluteJointSoAViewer>
 	{
 	public:
 		struct CreateParams

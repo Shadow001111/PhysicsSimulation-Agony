@@ -43,7 +43,7 @@ namespace PS_AGONY2D
 	enum class ConstraintType : uint32_t
 	{
 		Spring,
-		Joint,
+		RevoluteJoint,
 		Rod,
 		Prismatic,
 		Slider,

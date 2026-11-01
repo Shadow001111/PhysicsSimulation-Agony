@@ -387,7 +387,8 @@ namespace PS_AGONY2D
     void Simulation::rebuildSpatialData()
     {
         computeBodyWorldCenters();
-        computeColliderWorldTransforms();
+        computeColliderWorldPositions();
+        computeColliderWorldRotations();
         buildColliderAABBs();
 
         // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
@@ -445,7 +446,8 @@ namespace PS_AGONY2D
 
         // That's for renderer to have actual information.
         computeBodyWorldCenters();
-        computeColliderWorldTransforms();
+        computeColliderWorldPositions();
+        computeColliderWorldRotations();
         buildColliderAABBs();
 
         broadPhaseCollisionDetector.refitTrees(BroadPhaseInternal::BvhTreeTypeFlag::Dynamic);
@@ -505,14 +507,6 @@ namespace PS_AGONY2D
             worldCenterXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
             worldCenterYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
         }
-    }
-
-    void Simulation::computeColliderWorldTransforms()
-    {
-        TRACY_SCOPE_NC("Compute collider world transforms", PS_AGONY2D::Profiling::Color::Magenta);
-
-        computeColliderWorldPositions();
-        computeColliderWorldRotations();
     }
 
     void Simulation::computeColliderWorldPositions()

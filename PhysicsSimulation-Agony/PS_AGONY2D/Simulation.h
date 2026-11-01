@@ -1,8 +1,6 @@
 #pragma once
 #include "ConstraintSystem.h"
 #include "Constants.h"
-#include "ObjectAPI.h"
-#include "ConstraintAPI.h"
 
 #include "Types/Material.h"
 #include "Types/Types.h"
@@ -21,6 +19,9 @@
 #include "SimulationImpl/CollisionCallbackManager.h"
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
+
+#include "SimulationAPIs/ObjectAPI.h"
+#include "SimulationAPIs/ConstraintAPI.h"
 
 #include <vector>
 #include <optional>
@@ -105,8 +106,7 @@ namespace PS_AGONY2D
 
 		// Non-owning facades. Must be declared after everything they reference.
 		ObjectAPI objectAPI{ objectManager, constraintSystems };
-		ConstraintAPI constraintAPI{ objectManager, springConstraintSystem, jointConstraintSystem, rodConstraintSystem,
-			prismaticJointConstraintSystem, sliderJointConstraintSystem, motorConstraintSystem };
+		ConstraintAPI constraintAPI{ objectManager, constraintSystems.data() };
 
 		// Settings.
 		SimulationSettings simulationSettings;
@@ -197,7 +197,6 @@ namespace PS_AGONY2D
 		void dispatchCollisionEvents();
 
 		void preUpdate();
-
 		void postUpdate();
 
 		// Rebuilds BVH trees for collider changes made outside physics steps (paused, or no step this frame).
@@ -208,7 +207,6 @@ namespace PS_AGONY2D
 
 		void computeBodyWorldCenters();
 
-		void computeColliderWorldTransforms();
 		void computeColliderWorldPositions();
 		void computeColliderWorldRotations();
 

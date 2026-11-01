@@ -1,9 +1,9 @@
 #pragma once
-#include "ConstraintSystem.h"
+#include "PS_AGONY2D/ConstraintSystem.h"
 
-#include "Types/Types.h"
+#include "PS_AGONY2D/Types/Types.h"
 
-#include "SimulationImpl/ObjectManager.h"
+#include "PS_AGONY2D/SimulationImpl/ObjectManager.h"
 
 #include <optional>
 #include <span>
