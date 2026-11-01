@@ -135,6 +135,37 @@ namespace PS_AGONY2D::PhysicsGeometry
         return rectInertia + capInertia + mass * deltaSquared;
     }
 
+    Real calculateCircleArea(Real radius)
+    {
+        return Constants::PI * radius * radius;
+    }
+
+    Real calculateBoxArea(Real width, Real height)
+    {
+        return width * height;
+    }
+
+    Real calculateCapsuleArea(Real length, Real radius)
+    {
+        return length * Real(2) * radius + Constants::PI * radius * radius;
+    }
+
+    Real calculatePolygonArea(std::span<const Vec2> vertices)
+    {
+        const size_t count = vertices.size();
+        if (count < 3) return Real(0);
+
+        const Vec2* v = vertices.data();
+        Real twiceArea = Real(0);
+        for (size_t i = 0; i < count; i++)
+        {
+            const Vec2& p0 = v[i];
+            const Vec2& p1 = v[(i + 1 == count) ? 0 : i + 1];
+            twiceArea += p0.x * p1.y - p1.x * p0.y;
+        }
+        return std::fmax(Real(0), twiceArea * Real(0.5));
+    }
+
     std::optional<std::vector<Vec2>> preparePolygonOutline(std::span<const Vec2> vertices)
     {
         std::vector<Vec2> out = filterDuplicateVertices(vertices);
