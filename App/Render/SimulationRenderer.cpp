@@ -28,12 +28,12 @@ namespace PS_AGONY_RENDER
         TRACY_SCOPE_N("Render simulation");
 
         // Set references.
-        bodies = simulation.getBodies();
-        colliders = simulation.getColliders();
-        circles = simulation.getCircles();
-        boxes = simulation.getBoxes();
-        capsules = simulation.getCapsules();
-        polygons = simulation.getPolygons();
+        bodies = simulation.objects().getBodies();
+        colliders = simulation.objects().getColliders();
+        circles = simulation.objects().getCircles();
+        boxes = simulation.objects().getBoxes();
+        capsules = simulation.objects().getCapsules();
+        polygons = simulation.objects().getPolygons();
 
         // Camera.
         const Mat4 viewMatrix = camera.getViewMatrix();

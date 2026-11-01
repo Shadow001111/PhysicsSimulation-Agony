@@ -1,6 +1,8 @@
 #pragma once
 #include "ConstraintSystem.h"
 #include "Constants.h"
+#include "ObjectAPI.h"
+#include "ConstraintAPI.h"
 
 #include "Types/Material.h"
 #include "Types/Types.h"
@@ -101,6 +103,11 @@ namespace PS_AGONY2D
 		ConstraintScheduler constraintScheduler;
 		ConstraintSystemArray constraintSystems{}; // Indexed by ConstraintType, which is also the solving order.
 
+		// Non-owning facades. Must be declared after everything they reference.
+		ObjectAPI objectAPI{ objectManager, constraintSystems };
+		ConstraintAPI constraintAPI{ objectManager, springConstraintSystem, jointConstraintSystem, rodConstraintSystem,
+			prismaticJointConstraintSystem, sliderJointConstraintSystem, motorConstraintSystem };
+
 		// Settings.
 		SimulationSettings simulationSettings;
 
@@ -144,151 +151,6 @@ namespace PS_AGONY2D
 		void setPause(bool pause) noexcept { paused = pause; }
 		bool isPaused() const noexcept { return paused; }
 
-		__forceinline std::optional<ObjectDenseIndex> createBody(const BodyCreateParams& params)
-		{
-			return objectManager.createBody(params);
-		}
-
-		__forceinline std::optional<ColliderDenseIndex> createCircleCollider(const CircleColliderCreateParams& params)
-		{
-			return objectManager.createCircleCollider(params);
-		}
-
-		__forceinline std::optional<ColliderDenseIndex> createBoxCollider(const BoxColliderCreateParams& params)
-		{
-			return objectManager.createBoxCollider(params);
-		}
-
-		__forceinline std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params)
-		{
-			return objectManager.createPolygonCollider(params);
-		}
-
-		__forceinline std::optional<ColliderDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params)
-		{
-			return objectManager.createCapsuleCollider(params);
-		}
-
-		__forceinline std::optional<ObjectDenseIndex> createCircle(const CircleCreateParams& params)
-		{
-			return objectManager.createCircle(params);
-		}
-
-		__forceinline std::optional<ObjectDenseIndex> createBox(const BoxCreateParams& params)
-		{
-			return objectManager.createBox(params);
-		}
-
-		__forceinline std::optional<ObjectDenseIndex> createPolygon(const PolygonCreateParams& params)
-		{
-			return objectManager.createPolygon(params);
-		}
-
-		__forceinline std::optional<ObjectDenseIndex> createCapsule(const CapsuleCreateParams& params)
-		{
-			return objectManager.createCapsule(params);
-		}
-
-		// Persistent handles. Valid across swap-and-pop; stale after destroy (generation bump).
-		// Dense indices are only stable until the next create/destroy; handles survive it.
-		Handle getBodyHandle(ObjectDenseIndex bodyIndex) const noexcept
-		{
-			return bodyIndex < objectManager.bodies.getCount() ? objectManager.bodies.handleAt(bodyIndex) : Handle{};
-		}
-		Handle getColliderHandle(ColliderDenseIndex colliderIndex) const noexcept
-		{
-			return colliderIndex < objectManager.colliders.getCount() ? objectManager.colliders.handleAt(colliderIndex) : Handle{};
-		}
-
-		bool isBodyValid(Handle h) const noexcept { return objectManager.bodies.isValid(h); }
-		bool isColliderValid(Handle h) const noexcept { return objectManager.colliders.isValid(h); }
-
-		// Handle::kNull if stale.
-		ObjectDenseIndex getBodyIndex(Handle h) const noexcept { return objectManager.bodies.indexOf(h); }
-		ObjectDenseIndex getColliderIndex(Handle h) const noexcept { return objectManager.colliders.indexOf(h); }
-
-		// Hot path: no validation. Handle must be alive.
-		ObjectDenseIndex getBodyIndexUnchecked(Handle h) const noexcept { return objectManager.bodies.indexOfUnchecked(h); }
-		ObjectDenseIndex getColliderIndexUnchecked(Handle h) const noexcept { return objectManager.colliders.indexOfUnchecked(h); }
-
-		// Handle-returning creators. Dense-index versions above are unchanged.
-		std::optional<Handle> createBodyH(const BodyCreateParams& params) { return toBodyHandle(objectManager.createBody(params)); }
-		std::optional<Handle> createCircleH(const CircleCreateParams& params) { return toBodyHandle(objectManager.createCircle(params)); }
-		std::optional<Handle> createBoxH(const BoxCreateParams& params) { return toBodyHandle(objectManager.createBox(params)); }
-		std::optional<Handle> createPolygonH(const PolygonCreateParams& params) { return toBodyHandle(objectManager.createPolygon(params)); }
-		std::optional<Handle> createCapsuleH(const CapsuleCreateParams& params) { return toBodyHandle(objectManager.createCapsule(params)); }
-
-		// Collider creators taking a body handle (params.bodyIndex is ignored). nullopt if the handle is stale.
-		std::optional<Handle> createCircleColliderH(Handle body, CircleColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return toColliderHandle(objectManager.createCircleCollider(params));
-		}
-		std::optional<Handle> createBoxColliderH(Handle body, BoxColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return toColliderHandle(objectManager.createBoxCollider(params));
-		}
-		std::optional<Handle> createCapsuleColliderH(Handle body, CapsuleColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return toColliderHandle(objectManager.createCapsuleCollider(params));
-		}
-		// Pieces are contiguous in dense order: use getColliderHandle(first + i) right after the call.
-		std::optional<PolygonColliderCreateResult> createPolygonColliderH(Handle body, PolygonColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return objectManager.createPolygonCollider(params);
-		}
-
-		// Stale handle: no-op.
-		void destroyBody(Handle h)
-		{
-			const ObjectDenseIndex i = getBodyIndex(h);
-			if (i != Handle::kNull) destroyBody(i);
-		}
-		void destroyCollider(Handle h)
-		{
-			const uint32_t i = getColliderIndex(h);
-			if (i != Handle::kNull) destroyCollider(static_cast<ColliderDenseIndex>(i));
-		}
-
-		void destroyBody(ObjectDenseIndex bodyIndex)
-		{
-			objectManager.destroyBody(bodyIndex, constraintSystems);
-		}
-
-		__forceinline void destroyCollider(ColliderDenseIndex colliderIndex)
-		{
-			return objectManager.destroyCollider(colliderIndex, constraintSystems);
-		}
-
-		void createSpring(const SpringConstraintSystem::CreateParams& params) { springConstraintSystem.create(params, objectManager.bodies); }
-		void destroySpring(uint32_t index) { springConstraintSystem.removeConstraint(index, objectManager.bodies); }
-
-		void createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& params) { jointConstraintSystem.create(params, objectManager.bodies); }
-		void destroyRevoluteJoint(uint32_t index) { jointConstraintSystem.removeConstraint(index, objectManager.bodies); }
-
-		void createRod(const RodConstraintSystem::CreateParams& params) { rodConstraintSystem.create(params, objectManager.bodies); }
-		void destroyRod(uint32_t index) { rodConstraintSystem.removeConstraint(index, objectManager.bodies); }
-
-		void createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& params) { prismaticJointConstraintSystem.create(params, objectManager.bodies); }
-		void destroyPrismaticJoint(uint32_t index) { prismaticJointConstraintSystem.removeConstraint(index, objectManager.bodies); }
-
-		void createSliderJoint(const SliderJointConstraintSystem::CreateParams& params) { sliderJointConstraintSystem.create(params, objectManager.bodies); }
-		void destroySliderJoint(uint32_t index) { sliderJointConstraintSystem.removeConstraint(index, objectManager.bodies); }
-
-		void createMotor(const MotorConstraintSystem::CreateParams& params) { motorConstraintSystem.create(params, objectManager.bodies); }
-		void destroySliderMotor(uint32_t index) { motorConstraintSystem.removeConstraint(index, objectManager.bodies); }
-
 		MaterialIndex createMaterial(const Material& material);
 
 		// Colliders using this material fall back to the default material (0). Returns false if not destroyable.
@@ -306,30 +168,6 @@ namespace PS_AGONY2D
 		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
 		bool setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
 
-		// Deferred modifications. Queued here and applied at the start of update() and after every physics step,
-		// so they are safe to call from collision callbacks. Stale handles are dropped. Semantics: see ObjectManager.h.
-		void setBodyPosition(Handle body, Vec2 position) { objectManager.queueBodyPosition(body, position); }
-		void setBodyRotation(Handle body, Real rotation) { objectManager.queueBodyRotation(body, rotation); }
-		void setBodyVelocity(Handle body, Vec2 velocity) { objectManager.queueBodyVelocity(body, velocity); }
-		void setBodyAngularVelocity(Handle body, Real angularVelocity) { objectManager.queueBodyAngularVelocity(body, angularVelocity); }
-		void setBodyMass(Handle body, Real mass) { objectManager.queueBodyMass(body, mass); }
-		void setBodyInertia(Handle body, Real inertia) { objectManager.queueBodyInertia(body, inertia); }
-		void setBodyLocalCenterOfMass(Handle body, Vec2 localCenterOfMass) { objectManager.queueBodyLocalCenterOfMass(body, localCenterOfMass); }
-		void recomputeBodyInertia(Handle body) { objectManager.queueRecomputeBodyInertia(body); }
-		void setBodyMassFromDensity(Handle body, Real density) { objectManager.queueBodyMassFromDensity(body, density); }
-
-		void setColliderLocalOffset(Handle collider, Vec2 localOffset) { objectManager.queueColliderLocalOffset(collider, localOffset); }
-		void setColliderLocalRotation(Handle collider, Real localRotation) { objectManager.queueColliderLocalRotation(collider, localRotation); }
-		void setColliderMaterial(Handle collider, MaterialIndex materialIndex) { objectManager.queueColliderMaterial(collider, materialIndex); }
-		void setCircleRadius(Handle collider, Real radius) { objectManager.queueCircleRadius(collider, radius); }
-		void setBoxSize(Handle collider, Vec2 size) { objectManager.queueBoxSize(collider, size); }
-		void setCapsuleShape(Handle collider, Real length, Real radius) { objectManager.queueCapsuleShape(collider, length, radius); }
-		// False (nothing queued) if the polygon is invalid or not convex.
-		bool setPolygonShape(Handle collider, std::span<const Vec2> localVertices) { return objectManager.queueColliderPolygon(collider, localVertices); }
-
-		// TODO: Add more like that.
-		std::span<const ColliderDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex);
-
 		void mainBodyHolderGrabAt(Vec2 grabPosition);
 		void mainBodyHolderRelease();
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
@@ -342,43 +180,17 @@ namespace PS_AGONY2D
 		SimulationSettings& getSimulationSettings() noexcept { return simulationSettings; }
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
 
-		BodySoAViewer getBodies() const noexcept { return BodySoAViewer(objectManager.bodies); }
-		ColliderSoAViewer getColliders() const noexcept { return ColliderSoAViewer(objectManager.colliders); }
-		CircleSoAViewer getCircles() const noexcept { return CircleSoAViewer(objectManager.circles); }
-		BoxSoAViewer getBoxes() const noexcept { return BoxSoAViewer(objectManager.boxes); }
-		PolygonSoAViewer getPolygons() const noexcept { return PolygonSoAViewer(objectManager.polygons); }
-		CapsuleSoAViewer getCapsules() const noexcept { return CapsuleSoAViewer(objectManager.capsules); }
-
-		SpringSoAViewer getSprings() const noexcept { return springConstraintSystem.getViewer(); }
-		RevoluteJointSoAViewer getJoints() const noexcept { return jointConstraintSystem.getViewer(); }
-		RodSoAViewer getRods() const noexcept { return rodConstraintSystem.getViewer(); }
-		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return prismaticJointConstraintSystem.getViewer(); }
-		SliderJointSoAViewer getSliderJoints() const noexcept { return sliderJointConstraintSystem.getViewer(); }
-		MotorSoAViewer getMotors() const noexcept { return motorConstraintSystem.getViewer(); }
-
-		std::optional<BodyData> getBodyData(ObjectDenseIndex index) const noexcept
-		{
-			return objectManager.bodies.getBodyData(index);
-		}
-
-		// Instant reads of current stored state (not the queue); nullopt if the handle is stale.
-		std::optional<BodyData> getBodyDataH(Handle body) const noexcept
-		{
-			const uint32_t i = objectManager.bodies.indexOf(body);
-			return i == Handle::kNull ? std::nullopt : objectManager.bodies.getBodyData(static_cast<ObjectDenseIndex>(i));
-		}
-		std::optional<ColliderData> getColliderDataH(Handle collider) const noexcept
-		{
-			const uint32_t i = objectManager.colliders.indexOf(collider);
-			return i == Handle::kNull ? std::nullopt : objectManager.getColliderData(static_cast<ColliderDenseIndex>(i));
-		}
-
 		IConstraintSystem& getConstraintSystem(ConstraintType type) noexcept { return *constraintSystems[size_t(type)]; }
 		const IConstraintSystem& getConstraintSystem(ConstraintType type) const noexcept { return *constraintSystems[size_t(type)]; }
 
 		Interactivity::BodyHolder& getMainBodyHolder() noexcept { return mainBodyHolder; }
 
 		Real getRenderAlpha() const noexcept { return renderAlpha; }
+
+		ObjectAPI& objects() noexcept { return objectAPI; }
+		const ObjectAPI& objects() const noexcept { return objectAPI; }
+		ConstraintAPI& constraints() noexcept { return constraintAPI; }
+		const ConstraintAPI& constraints() const noexcept { return constraintAPI; }
 	private:
 		void physicsStep(Real deltaTime);
 
@@ -405,14 +217,5 @@ namespace PS_AGONY2D
 		Real computeBodyTotalKineticEnergy();
 
 		void collectMemoryUsage(DebugData& data) const;
-
-		std::optional<Handle> toBodyHandle(std::optional<ObjectDenseIndex> index) const noexcept
-		{
-			return index ? std::optional<Handle>(objectManager.bodies.handleAt(*index)) : std::nullopt;
-		}
-		std::optional<Handle> toColliderHandle(std::optional<ColliderDenseIndex> index) const noexcept
-		{
-			return index ? std::optional<Handle>(objectManager.colliders.handleAt(*index)) : std::nullopt;
-		}
 	};
 }

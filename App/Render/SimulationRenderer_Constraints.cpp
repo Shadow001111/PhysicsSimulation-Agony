@@ -15,7 +15,7 @@ namespace PS_AGONY_RENDER
     {
         TRACY_SCOPE_N("Render springs");
 
-        const auto& springs = simulation.getSprings();
+        const auto& springs = simulation.constraints().getSprings();
         const size_t springCount = springs.getCount();
         if (springCount == 0) return;
 
@@ -97,7 +97,7 @@ namespace PS_AGONY_RENDER
     {
         TRACY_SCOPE_N("Render joints");
 
-        const auto& joints = simulation.getJoints();
+        const auto& joints = simulation.constraints().getJoints();
         const size_t jointCount = joints.getCount();
         if (jointCount == 0) return;
 
@@ -173,7 +173,7 @@ namespace PS_AGONY_RENDER
     {
         TRACY_SCOPE_N("Render prismatic joints");
 
-        const auto& prismaticJoints = simulation.getPrismaticJoints();
+        const auto& prismaticJoints = simulation.constraints().getPrismaticJoints();
         const size_t prismaticJointCount = prismaticJoints.getCount();
         if (prismaticJointCount == 0) return;
 
@@ -266,7 +266,7 @@ namespace PS_AGONY_RENDER
     {
         TRACY_SCOPE_N("Render rods");
 
-        const auto& rods = simulation.getRods();
+        const auto& rods = simulation.constraints().getRods();
         const size_t rodCount = rods.getCount();
         if (rodCount == 0) return;
 

@@ -82,6 +82,8 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
     float rotation,
     float scale = 1.0f)
 {
+    auto& objects = simulation.objects();
+    auto& constraints = simulation.constraints();
     // Scaling: lengths x s, mass x s^2 (constant density), stiffness x s, damping x s^1.5
     // (keeps sag and damping ratio proportional to size).
     const float s = scale;
@@ -123,7 +125,7 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
         };
 
     // === CHASSIS ===
-    auto chassisOpt = simulation.createBox({
+    auto chassisOpt = objects.createBox({
         .base.position = { positionX, positionY },
         .base.velocity = { 0.0f, 0.0f },
         .base.rotation = rotation,
@@ -137,7 +139,7 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
 
     // === WHEEL FACTORY ===
     auto createWheel = [&](float side) -> std::optional<PS_AGONY2D::ObjectDenseIndex> {
-        return simulation.createCircle({
+        return objects.createCircle({
             .base.position = toWorld(side * wheelOffset, -suspensionDrop),
             .base.velocity = { 0.0f, 0.0f },
             .base.rotation = rotation,
@@ -167,7 +169,7 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
 
             for (float spread : { -anchorSpread, +anchorSpread })
             {
-                simulation.createSpring({
+                constraints.createSpring({
                     .bodyIndexA   = chassis,
                     .bodyIndexB   = wheel,
                     .localAnchorA = { anchorX + spread, anchorY },
@@ -180,7 +182,7 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
             ------------------------------------------------------------ */
 
             // NEW: one spring along the suspension axis...
-            simulation.createSpring({
+            constraints.createSpring({
                 .bodyIndexA = chassis,
                 .bodyIndexB = wheel,
                 .localAnchorA = { anchorX, anchorY },
@@ -191,7 +193,7 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
                 });
 
             // ...plus a prismatic joint that restricts the wheel to that axis.
-            simulation.createSliderJoint({
+            constraints.createSliderJoint({
                 .bodyIndexA = chassis,
                 .bodyIndexB = wheel,
                 .localAnchorA = { anchorX, anchorY },
@@ -217,6 +219,7 @@ void load_LargeWorld(
     const int bodyCountPerType
 )
 {
+    auto& objects = simulation.objects();
     // === CONFIGURATION VARIABLES ===
     constexpr float worldWidth = 125.0f;
     constexpr float terrainSegmentWidth = 16.0f;
@@ -234,7 +237,7 @@ void load_LargeWorld(
 
     // === 2. HIGH BOUNDS (SIDE WALLS) ===
     // Left Bounding Wall
-    simulation.createBox({
+    objects.createBox({
         .base.position = { -worldWidth * 0.5f - wallThickness * 0.5f + sceneOrientation.offsetX, wallHeight * 0.5f + terrainBaseY + sceneOrientation.offsetY },
         .base.mass = 0, // Static
         .base.materialIndex = materialIdx,
@@ -242,7 +245,7 @@ void load_LargeWorld(
         });
 
     // Right Bounding Wall
-    simulation.createBox({
+    objects.createBox({
         .base.position = { worldWidth * 0.5f + wallThickness * 0.5f + sceneOrientation.offsetX, wallHeight * 0.5f + terrainBaseY + sceneOrientation.offsetY },
         .base.mass = 0, // Static
         .base.materialIndex = materialIdx,
@@ -280,7 +283,7 @@ void load_LargeWorld(
             { -halfSegmentWidth, y1 - terrainBaseY }  // Top-Left
         };
 
-        simulation.createPolygon({
+        objects.createPolygon({
             .base.position = { posX + sceneOrientation.offsetX, posY + sceneOrientation.offsetY },
             .base.mass = 0,
             .base.materialIndex = materialIdx,
@@ -302,7 +305,7 @@ void load_LargeWorld(
         float r = rvg.real<float>(0.15f, 0.5f);
         float mass = 3.14159f * r * r;
 
-        simulation.createCircle({
+        objects.createCircle({
             .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = 0.0f,
@@ -324,7 +327,7 @@ void load_LargeWorld(
         float height = rvg.real<float>(0.3f, 0.8f);
         float mass = width * height;
 
-        simulation.createBox({
+        objects.createBox({
             .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = rotation,
@@ -348,7 +351,7 @@ void load_LargeWorld(
         size_t verticesCount = rvg.integer<size_t>(3, maxVerticesCount);
         auto localVertices = makeConvexPolygon(rvg, verticesCount, radius);
 
-        simulation.createPolygon({
+        objects.createPolygon({
             .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = rotation,
@@ -369,7 +372,7 @@ void load_LargeWorld(
         float radius = rvg.real<float>(0.3f, 0.8f);
         float mass = (length * 2.0f + float(PS_AGONY2D::Constants::PI) * radius) * radius;
 
-        simulation.createCapsule({
+        objects.createCapsule({
             .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = rotation,
@@ -383,6 +386,7 @@ void load_LargeWorld(
 
 void load_StackedPyramid(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
+    auto& objects = simulation.objects();
     // === CONFIGURATION VARIABLES ===
     constexpr int pyramidRows = 60;
     constexpr float boxWidth = 0.5f;
@@ -402,7 +406,7 @@ void load_StackedPyramid(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Rand
     PS_AGONY2D::MaterialIndex materialIdx = simulation.createMaterial(pyramidMaterial);
 
     // === 2. STATIC FLOOR ===
-    simulation.createBox({
+    objects.createBox({
         .base.position = { 0.0f, -floorThickness * 0.5f },
         .base.mass = 0, // Static
         .base.materialIndex = materialIdx,
@@ -425,7 +429,7 @@ void load_StackedPyramid(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Rand
         {
             float x = startX + col * boxWidth;
 
-            simulation.createBox({
+            objects.createBox({
                 .base.position = { x, y },
                 .base.velocity = { 0.0f, 0.0f },
                 .base.rotation = 0.0f,
@@ -439,7 +443,7 @@ void load_StackedPyramid(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Rand
 
     {
         constexpr float ballRadius = 1.0f;
-        simulation.createCircle({
+        objects.createCircle({
             .base.position = { -floorWidth * 0.5f + 2.0f, ballRadius },
             .base.velocity = { 0.0f, 0.0f },
             .base.rotation = 0.0f,
@@ -453,6 +457,8 @@ void load_StackedPyramid(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Rand
 
 void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
+    auto& objects = simulation.objects();
+    auto& constraints = simulation.constraints();
     // === 1. CONFIGURATION AND MATERIALS ===
     constexpr float cliffWidth = 25.0f;
     constexpr float cliffHeight = 60.0f;
@@ -492,7 +498,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
 
     // === 2. CREATE TERRAIN CLIFFS ===
     const float leftCliffX = -(gapWidth * 0.5f + cliffWidth * 0.5f);
-    auto leftCliffOpt = simulation.createBox({
+    auto leftCliffOpt = objects.createBox({
         .base.position = { leftCliffX, cliffY },
         .base.mass = 0, // Static Anchor
         .base.materialIndex = materialIdx,
@@ -500,7 +506,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
         });
 
     const float rightCliffX = (gapWidth * 0.5f + cliffWidth * 0.5f);
-    auto rightCliffOpt = simulation.createBox({
+    auto rightCliffOpt = objects.createBox({
         .base.position = { rightCliffX, cliffY },
         .base.mass = 0, // Static Anchor
         .base.materialIndex = materialIdx,
@@ -527,7 +533,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
         PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
         {
             // Dual anchors (top/bottom offset) so the pair resists torsional flipping.
-            simulation.createSpring({
+            constraints.createSpring({
                 .bodyIndexA = bodyA,
                 .bodyIndexB = bodyB,
                 .localAnchorA = { localA.x, localA.y + verticalOffset },
@@ -536,7 +542,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
                 .stiffness = springK,
                 .damping = springD
                 });
-            simulation.createSpring({
+            constraints.createSpring({
                 .bodyIndexA = bodyA,
                 .bodyIndexB = bodyB,
                 .localAnchorA = { localA.x, localA.y - verticalOffset },
@@ -551,7 +557,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
         PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float /*restLen*/)
         {
             // Point constraint - distance is implicit in the anchor placement, not a parameter.
-            simulation.createRevoluteJoint({
+            constraints.createRevoluteJoint({
                 .bodyIndexA = bodyA,
                 .bodyIndexB = bodyB,
                 .localAnchorA = localA,
@@ -565,7 +571,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
         PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
         {
             // Rigid, inextensible - restLen becomes the rod's fixed length.
-            simulation.createRod({
+            constraints.createRod({
                 .bodyIndexA = bodyA,
                 .bodyIndexB = bodyB,
                 .localAnchorA = localA,
@@ -586,7 +592,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
             {
                 const float plankX = spanStartX + plankStep * (static_cast<float>(i) + 0.5f);
 
-                auto plankOpt = simulation.createBox({
+                auto plankOpt = objects.createBox({
                     .base.position = { plankX, bridgeY - plankHeight * 0.5f },
                     .base.velocity = { 0.0f, 0.0f },
                     .base.rotation = 0.0f,
@@ -629,7 +635,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
         float radius = rvg.real<float>(0.6f, 1.2f);
         float mass = 3.14159f * radius * radius * 2.0f;
 
-        simulation.createCircle({
+        objects.createCircle({
             .base.position = { rx, ry },
             .base.velocity = { 0.0f, -2.0f },
             .base.rotation = 0.0f,
@@ -643,6 +649,7 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
 
 void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Generator& rvg)
 {
+    auto& objects = simulation.objects();
     // Set up physical properties for the environment.
     PS_AGONY2D::Material envMaterial = {
         .elasticity = 0.05f,
@@ -712,7 +719,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
         rightVertices.push_back({ -it->x, it->y });
     }
 
-    simulation.createPolygon({
+    objects.createPolygon({
         .base.position = { 0.0f, 0.0f },
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
@@ -720,7 +727,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
         .concaveDecompositionMethod = PS_AGONY2D::PhysicsGeometry::ConcaveDecompositionMethod::ReflexAngleBisector
         });
 
-    simulation.createPolygon({
+    objects.createPolygon({
         .base.position = { 0.0f, 0.0f },
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
@@ -729,7 +736,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
         });
 
     // Create the central flat ground runout area centered at zero.
-    simulation.createBox({
+    objects.createBox({
         .base.position = { 0.0f, flatGroundY - 2.0f },
         .base.mass = 0,
         .base.materialIndex = envMatIdx,
@@ -768,7 +775,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
         {
             if (c == 0)
             {
-                simulation.createBox({
+                objects.createBox({
                     .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
                     .base.velocity = { 0.0f, 0.0f },
                     .base.rotation = 0.0f,
@@ -779,7 +786,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
             }
             else if (c == 1)
             {
-                simulation.createCircle({
+                objects.createCircle({
                     .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
                     .base.velocity = { 0.0f, 0.0f },
                     .base.rotation = 0.0f,
@@ -790,7 +797,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
             }
             else if (c == 2)
             {
-                simulation.createPolygon({
+                objects.createPolygon({
                     .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) },
                     .base.velocity = { 0.0f, 0.0f },
                     .base.rotation = 0.0f,
@@ -801,7 +808,7 @@ void load_CarRamp(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::Random::Gen
             }
             else if (c == 3 && (r & 1) == 0)
             {
-                simulation.createCapsule({
+                objects.createCapsule({
                     .base.position = { targetStartX + (c * boxSize), targetStartY + (r * boxSize) + (boxSize * 0.5f) },
                     .base.velocity = { 0.0f, 0.0f },
                     .base.rotation = 90.0f,
@@ -837,6 +844,8 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
     float rotation,
     float scale = 1.0f)
 {
+    auto& objects = simulation.objects();
+    auto& constraints = simulation.constraints();
     // Scaling: lengths x s, mass x s^2 (constant density), stiffness x s, damping x s^1.5.
     const float s = scale;
     const float massScale = s * s;
@@ -938,7 +947,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         };
 
     // === HULL ===
-    auto hullOpt = simulation.createBox({
+    auto hullOpt = objects.createBox({
         .base.position = { positionX, positionY },
         .base.rotation = rotation,
         .base.mass = hullMass,
@@ -953,7 +962,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
     auto createWheel = [&](float localX, float localY, float radius) -> std::optional<PS_AGONY2D::ObjectDenseIndex>
         {
             const float ratio = radius / roadWheelRadius;
-            return simulation.createCircle({
+            return objects.createCircle({
                 .base.position = toWorld(localX, localY),
                 .base.rotation = rotation,
                 .base.mass = roadWheelMass * ratio * ratio,
@@ -968,7 +977,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         auto wheelOpt = createWheel(sprocketX, endLocalY, endWheelRadius);
         if (!wheelOpt) return;
 
-        simulation.createRevoluteJoint({
+        constraints.createRevoluteJoint({
             .bodyIndexA = hull,
             .bodyIndexB = *wheelOpt,
             .localAnchorA = { sprocketX, endLocalY },
@@ -976,7 +985,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
             .stiffness = axleStiffness,
             .damping = axleDamping
             });
-        simulation.createMotor({
+        constraints.createMotor({
             .bodyIndex = *wheelOpt,
             .targetSpeed = -driveSpeed / beltRadius(endWheelRadius),
             .maxTorque = driveTorque
@@ -990,7 +999,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         if (!wheelOpt) return;
 
         const float tensionerX = idlerX - tensionerLen;
-        simulation.createSpring({
+        constraints.createSpring({
             .bodyIndexA = hull,
             .bodyIndexB = *wheelOpt,
             .localAnchorA = { tensionerX, endLocalY },
@@ -999,7 +1008,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
             .stiffness = tensionerK,
             .damping = tensionerD
             });
-        simulation.createSliderJoint({
+        constraints.createSliderJoint({
             .bodyIndexA = hull,
             .bodyIndexB = *wheelOpt,
             .localAnchorA = { tensionerX, endLocalY },
@@ -1023,7 +1032,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         auto wheelOpt = createWheel(localX, axleLocalY, roadWheelRadius);
         if (!wheelOpt) return;
 
-        simulation.createSpring({
+        constraints.createSpring({
             .bodyIndexA = hull,
             .bodyIndexB = *wheelOpt,
             .localAnchorA = { localX, anchorY },
@@ -1033,7 +1042,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
             .damping = suspensionD
             });
 
-        simulation.createSliderJoint({
+        constraints.createSliderJoint({
             .bodyIndexA = hull,
             .bodyIndexB = *wheelOpt,
             .localAnchorA = { localX, anchorY },
@@ -1055,7 +1064,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         auto wheelOpt = createWheel(localX, rollerLocalY, rollerRadius);
         if (!wheelOpt) return;
 
-        simulation.createRevoluteJoint({
+        constraints.createRevoluteJoint({
             .bodyIndexA = hull,
             .bodyIndexB = *wheelOpt,
             .localAnchorA = { localX, rollerLocalY },
@@ -1188,7 +1197,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
         const float chord = std::sqrt(dx * dx + dy * dy);
         halfChord[i] = 0.5f * chord;
 
-        auto linkOpt = simulation.createBox({
+        auto linkOpt = objects.createBox({
             .base.position = toWorld(0.5f * (a.x + b.x), 0.5f * (a.y + b.y)),
             .base.rotation = rotation + std::atan2(dy, dx),
             .base.mass = linkMass,
@@ -1204,7 +1213,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
     for (int i = 0; i < linkCount; ++i)
     {
         const int next = (i + 1) % linkCount;
-        simulation.createRevoluteJoint({
+        constraints.createRevoluteJoint({
             .bodyIndexA = links[i],
             .bodyIndexB = links[next],
             .localAnchorA = { +halfChord[i], 0.0f },
@@ -1218,6 +1227,7 @@ void load_ObjectTank(PS_AGONY2D::Simulation& simulation,
 // Scene: flat ground with configurable obstacles, a tank (scale 2) and a car (scale 1) in front of it.
 void load_Tank(PS_AGONY2D::Simulation& simulation)
 {
+    auto& objects = simulation.objects();
     // === CONFIGURATION ===
     constexpr float groundWidth = 400.0f;
     constexpr float groundThickness = 4.0f;
@@ -1250,7 +1260,7 @@ void load_Tank(PS_AGONY2D::Simulation& simulation)
     // === TERRAIN ===
     auto addBlock = [&](float x0, float x1, float topY)
         {
-            simulation.createBox({
+            objects.createBox({
                 .base.position = { 0.5f * (x0 + x1), topY - groundThickness * 0.5f },
                 .base.mass = 0.0f,
                 .base.materialIndex = groundMat,
@@ -1288,7 +1298,8 @@ struct SplitContext
 // Circle with mass == radius. Splittable circles get the callback (threshold = 4 * radius, i.e. approach speed ~4).
 static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Vec2 position, PS_AGONY2D::Vec2 velocity, float radius)
 {
-    const auto body = ctx.simulation->createCircle({
+    auto& objects = ctx.simulation->objects();
+    const auto body = objects.createCircle({
         .base.position = position,
         .base.velocity = velocity,
         .base.mass = radius,
@@ -1298,23 +1309,23 @@ static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Vec2 position, PS_AG
     if (!body) return;
 
     if (radius * 0.5f < ctx.minRadius) return;
-    for (const PS_AGONY2D::ColliderDenseIndex collider : ctx.simulation->getBodyColliders(*body))
+    for (const PS_AGONY2D::ColliderDenseIndex collider : objects.getBodyColliders(*body))
         ctx.simulation->setColliderCollisionCallback(collider, ctx.callback, 16.0f * radius);
 }
 
 static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, void* userData)
 {
     SplitContext& ctx = *static_cast<SplitContext*>(userData);
-    PS_AGONY2D::Simulation& simulation = *ctx.simulation;
+    auto& objects = ctx.simulation->objects();
 
-    const auto data = simulation.getBodyData(event.selfBody);
+    const auto data = objects.getBodyData(event.selfBody);
     if (!data) return;
 
     const float radius = float(data->mass); // Mass equals radius by construction.
     const PS_AGONY2D::Vec2 pos = data->offset;
     const PS_AGONY2D::Vec2 vel = data->velocity;
 
-    simulation.destroyBody(event.selfBody);
+    objects.destroyBody(event.selfBody);
 
     // Children (radius/2) sit inside the parent's footprint, side by side along the contact tangent: no overlap.
     const float half = radius * 0.5f;
@@ -1325,6 +1336,7 @@ static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, void* userDat
 
 static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
 {
+    auto& objects = simulation.objects();
     using namespace PS_AGONY2D;
 
     const MaterialIndex mat = simulation.createMaterial({
@@ -1336,7 +1348,7 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
     // Closed static room: interior x in [-20, 20], y in [-14, 14].
     auto wall = [&](float x, float y, float w, float h)
         {
-            simulation.createBox({
+            objects.createBox({
                 .base.position = { x, y },
                 .base.mass = 0,
                 .base.materialIndex = mat,
@@ -1355,7 +1367,7 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
     ctx.material = mat;
     ctx.minRadius = 0.1f;
 
-    const auto callback = simulation.createCollisionCallback(onCircleSplit, &ctx);
+    const auto callback = simulation .createCollisionCallback(onCircleSplit, &ctx);
     if (!callback) return;
     ctx.callback = *callback;
 

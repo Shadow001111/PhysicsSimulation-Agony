@@ -184,17 +184,6 @@ namespace PS_AGONY2D
         collisionCallbackManager.invoke(events);
     }
 
-    std::span<const ColliderDenseIndex> Simulation::getBodyColliders(ObjectDenseIndex bodyIndex)
-    {
-        if (bodyIndex >= objectManager.bodies.getCount())
-        {
-            return {};
-        }
-
-        std::span<const ColliderDenseIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];
-        return indicesSpan;
-    }
-
     void Simulation::mainBodyHolderGrabAt(Vec2 grabPosition)
     {
         if (mainBodyHolder.heldBody.has_value()) return;

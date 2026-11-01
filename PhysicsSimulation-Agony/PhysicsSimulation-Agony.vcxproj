@@ -306,7 +306,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\ContactCache.h" />
+    <ClInclude Include="PS_AGONY2D\ConstraintAPI.h" />
     <ClInclude Include="PS_AGONY2D\HandleTable.h" />
+    <ClInclude Include="PS_AGONY2D\ObjectAPI.h" />
     <ClInclude Include="PS_AGONY2D\Profiling\TracyProfiler.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\ColliderAABBBuilder.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\LeftOutFunctions.h" />

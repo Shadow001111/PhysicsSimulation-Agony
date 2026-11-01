@@ -382,7 +382,7 @@ static ObjectCreatorState renderObjectCreatorUI(
             PS_AGONY2D::CircleCreateParams params;
             params.base = buildBaseParams();
             params.radius = static_cast<PS_AGONY2D::Real>(circleRadius);
-            simulation.createCircle(params);
+            simulation.objects().createCircle(params);
         }
 
         state.bodyType = PS_AGONY2D::BodyType::Circle;
@@ -403,7 +403,7 @@ static ObjectCreatorState renderObjectCreatorUI(
             PS_AGONY2D::BoxCreateParams params;
             params.base = buildBaseParams();
             params.size = { static_cast<PS_AGONY2D::Real>(boxWidth), static_cast<PS_AGONY2D::Real>(boxHeight) };
-            simulation.createBox(params);
+            simulation.objects().createBox(params);
         }
 
         state.bodyType = PS_AGONY2D::BodyType::Box;
@@ -525,7 +525,7 @@ static ObjectCreatorState renderObjectCreatorUI(
             PS_AGONY2D::PolygonCreateParams params;
             params.base = buildBaseParams();
             params.localVertices = polyVertices;
-            simulation.createPolygon(params);
+            simulation.objects().createPolygon(params);
         }
         ImGui::EndDisabled();
 
@@ -777,7 +777,7 @@ static int gameFunc()
 
                 if (windowInputManager.isKeyJustPressed(GLFW_KEY_SPACE))
                 {
-                    simulation.destroyBody(mainBodyHolder.heldBody.value());
+                    simulation.objects().destroyBody(mainBodyHolder.heldBody.value());
                     mainBodyHolder.heldBody.reset();
                 }
             }
