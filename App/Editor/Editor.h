@@ -108,7 +108,6 @@ namespace PS_AGONY_EDITOR
 		void rebuildGhost();
 		void spawn(Simulation& sim);
 		void spawnFreePolygon(Simulation& sim);
-		void duplicateSelected(Simulation& sim);
 		void deleteSelected(Simulation& sim);
 		void createConstraintStub(Simulation& sim, Handle a, Vec2 localA, Handle b, Vec2 localB);
 

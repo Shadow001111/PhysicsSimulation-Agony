@@ -521,78 +521,6 @@ namespace PS_AGONY_EDITOR
 		hasFirstAnchor = false;
 	}
 
-	// Copies selected bodies with their colliders (offset by 0.5, 0.5) and selects the copies.
-	// Polygon colliders are skipped.
-	void Editor::duplicateSelected(Simulation& sim)
-	{
-		ObjectAPI& api = sim.objects();
-		const std::vector<Handle> sources = selected; // Creation invalidates dense indices, handles stay valid.
-		std::vector<Handle> copies;
-		bool skippedPolygon = false;
-
-		for (const Handle src : sources)
-		{
-			const auto bd = api.getBodyDataH(src);
-			if (!bd) continue;
-
-			BodyCreateParams bp;
-			bp.position = Vec2(bd->offset.x + 0.5, bd->offset.y + 0.5);
-			bp.velocity = bd->velocity;
-			bp.rotation = bd->rotation;
-			bp.angularVelocity = bd->angularVelocity;
-			bp.mass = bd->mass;
-			bp.inertia = bd->inertia;
-			bp.centerOfMass = bd->localCenterOfMass;
-
-			const auto copy = api.createBodyH(bp);
-			if (!copy) continue;
-			copies.push_back(*copy);
-
-			colliderScratch.clear();
-			for (const ColliderDenseIndex ci : api.getBodyColliders(api.getBodyIndex(src))) colliderScratch.push_back(ci);
-
-			for (const ColliderDenseIndex ci : colliderScratch)
-			{
-				const auto cd = api.getColliderDataH(api.getColliderHandle(ci));
-				if (!cd) continue;
-
-				switch (cd->shapeType)
-				{
-				case BodyType::Circle:
-				{
-					CircleColliderCreateParams p{};
-					p.localOffset = cd->localOffset; p.localRotation = cd->localRotation;
-					p.materialIndex = cd->materialIndex; p.radius = cd->radius;
-					api.createCircleColliderH(*copy, p);
-					break;
-				}
-				case BodyType::Box:
-				{
-					BoxColliderCreateParams p{};
-					p.localOffset = cd->localOffset; p.localRotation = cd->localRotation;
-					p.materialIndex = cd->materialIndex; p.size = Vec2(cd->halfExtents.x * 2, cd->halfExtents.y * 2);
-					api.createBoxColliderH(*copy, p);
-					break;
-				}
-				case BodyType::Capsule:
-				{
-					CapsuleColliderCreateParams p{};
-					p.localOffset = cd->localOffset; p.localRotation = cd->localRotation;
-					p.materialIndex = cd->materialIndex; p.radius = cd->radius; p.length = cd->halfLength * 2;
-					api.createCapsuleColliderH(*copy, p);
-					break;
-				}
-				default:
-					skippedPolygon = true; // TODO: copy PolygonGeometry vertices once the layout is known.
-					break;
-				}
-			}
-		}
-
-		selected = copies;
-		if (skippedPolygon) setStatus("Polygon colliders were not duplicated.");
-	}
-
 	// Per-frame input pass. Drops stale handles, updates mouse/camera cache, camera pan and zoom,
 	// hotkeys, then runs the active tool.
 	void Editor::update(Simulation& sim, PS_AGONY_RENDER::SimulationRenderer& renderer, Real deltaTime)
@@ -647,7 +575,6 @@ namespace PS_AGONY_EDITOR
 			if (ImGui::IsKeyPressed(ImGuiKey_3, false)) tool = Tool::Constraint;
 			if (ImGui::IsKeyPressed(ImGuiKey_G, false)) snapEnabled = !snapEnabled;
 			if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && dragMode == DragMode::None) deleteSelected(sim);
-			if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) duplicateSelected(sim);
 			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && tool == Tool::Select) selected.clear();
 		}
 
@@ -719,8 +646,6 @@ namespace PS_AGONY_EDITOR
 		ImGui::SameLine();
 		// TODO(future API): if (ImGui::Button("Step")) sim.stepOnce();
 		ImGui::BeginDisabled(selected.empty());
-		if (ImGui::Button("Duplicate")) duplicateSelected(sim);
-		ImGui::SameLine();
 		if (ImGui::Button("Delete")) deleteSelected(sim);
 		ImGui::EndDisabled();
 
@@ -728,7 +653,7 @@ namespace PS_AGONY_EDITOR
 		hintRow("Pan: RMB/MMB | Zoom: wheel | Tools: 1/2/3 | Snap: G");
 		if (tool == Tool::Select)
 		{
-			hintRow("Select: LMB, Shift+LMB toggles, drag on empty space = box select. Del = delete, Ctrl+D = duplicate, Esc = clear.");
+			hintRow("Select: LMB, Shift+LMB toggles, drag on empty space = box select. Del = delete, Esc = clear.");
 			hintRow("Grab: hold LMB on a body. All selected bodies are dragged together.");
 			hintRow("Rotate grabbed body: wheel while holding LMB (the wheel does not zoom during a grab).");
 		}
