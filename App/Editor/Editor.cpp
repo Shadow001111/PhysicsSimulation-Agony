@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <optional>
 
 namespace PS_AGONY_EDITOR
 {
@@ -14,12 +15,13 @@ namespace PS_AGONY_EDITOR
 		constexpr ImU32 kGhostColor = IM_COL32(60, 255, 90, 255);
 		constexpr ImU32 kHintColor = IM_COL32(255, 255, 255, 200);
 
-		const char* const kConstraintNames = "Spring\0Revolute joint\0PrismaticJoint joint\0SliderJoint joint\0Motor\0";
+		// Order must match ConstraintType.
+		const char* const kConstraintNames = "Spring\0Revolute joint\0Prismatic joint\0Slider joint\0Motor\0";
 
 		// TODO: express the pixel thresholds below as fractions of the screen resolution.
 		constexpr Real kPickTolerancePx = 3;
 		constexpr Real kMinDragPx = 4; // Dead zone for box select and launch.
-		constexpr int kMotorKind = 5;  // Index of "Motor" in kConstraintNames.
+		constexpr int kMotorKind = static_cast<int>(ConstraintType::Motor);
 
 		// Wrapped, dimmed help row.
 		void hintRow(const char* text)
@@ -27,6 +29,39 @@ namespace PS_AGONY_EDITOR
 			ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
 			ImGui::TextWrapped("%s", text);
 			ImGui::PopStyleColor();
+		}
+
+		// Body-local (center of mass) <-> world helpers.
+		template<class BV>
+		Vec2 localToWorld(const BV& bv, ObjectDenseIndex bi, Vec2 l)
+		{
+			const Real c = bv.rotationCos[bi];
+			const Real s = bv.rotationSin[bi];
+			return Vec2(bv.worldCenterX[bi] + l.x * c - l.y * s, bv.worldCenterY[bi] + l.x * s + l.y * c);
+		}
+
+		template<class BV>
+		Vec2 worldDirToLocal(const BV& bv, ObjectDenseIndex bi, Vec2 d)
+		{
+			const Real c = bv.rotationCos[bi];
+			const Real s = bv.rotationSin[bi];
+			return Vec2(d.x * c + d.y * s, -d.x * s + d.y * c);
+		}
+
+		bool dragVec2(const char* label, Vec2 v, Vec2& out, float speed = 0.01f)
+		{
+			float f[2] = { static_cast<float>(v.x), static_cast<float>(v.y) };
+			if (!ImGui::DragFloat2(label, f, speed)) return false;
+			out = Vec2(f[0], f[1]);
+			return true;
+		}
+
+		bool dragReal(const char* label, Real v, Real& out, float speed, float lo, float hi)
+		{
+			float f = static_cast<float>(v);
+			if (!ImGui::DragFloat(label, &f, speed, lo, hi)) return false;
+			out = static_cast<Real>(f);
+			return true;
 		}
 	}
 
@@ -474,7 +509,7 @@ namespace PS_AGONY_EDITOR
 
 		if (constraintKind == kMotorKind)
 		{
-			createConstraintStub(sim, body, local, body, local);
+			createConstraint(sim, body, local, body, local);
 			hasFirstAnchor = false;
 			return;
 		}
@@ -486,28 +521,85 @@ namespace PS_AGONY_EDITOR
 			firstLocalAnchor = local;
 			return;
 		}
-		createConstraintStub(sim, firstBody, firstLocalAnchor, body, local);
+		createConstraint(sim, firstBody, firstLocalAnchor, body, local);
 		hasFirstAnchor = false;
 	}
 
-	// Placeholder for constraint creation, only reports status. Anchors are local to each body's center of mass.
-	void Editor::createConstraintStub(Simulation& sim, Handle a, Vec2 localA, Handle b, Vec2 localB)
+	// Creates the constraint of type constraintKind. Anchors are local to each body's center of mass.
+	// Motor uses body a only. Spring rest length = current anchor distance. Axis = A->B anchor direction.
+	void Editor::createConstraint(Simulation& sim, Handle a, Vec2 localA, Handle b, Vec2 localB)
 	{
-		(void)sim; (void)a; (void)localA; (void)b; (void)localB;
-		// TODO(future API): needs the CreateParams of each constraint system.
-		//
-		// ObjectAPI& api = sim.objects();
-		// const ObjectDenseIndex ia = api.getBodyIndex(a), ib = api.getBodyIndex(b);
-		// switch (constraintKind)
-		// {
-		// case 0: { SpringConstraintSystem::CreateParams p; p.bodyA = ia; p.bodyB = ib; p.localAnchorA = localA; p.localAnchorB = localB; sim.constraints().createSpring(p); break; }
-		// case 1: ... createRevoluteJoint
-		// case 2: ... createRod
-		// case 3: ... createPrismaticJoint
-		// case 4: ... createSliderJoint
-		// case 5: ... createMotor (single body: a / localA only)
-		// }
-		setStatus("Constraint creation not wired yet (see createConstraintStub).");
+		ConstraintAPI& cs = sim.constraints();
+		const ConstraintType type = static_cast<ConstraintType>(constraintKind);
+		std::optional<Handle> res;
+
+		if (type == ConstraintType::Motor)
+		{
+			MotorConstraintSystem::CreateParams p{};
+			p.targetSpeed = static_cast<Real>(motorSpeed);
+			p.maxTorque = static_cast<Real>(motorTorque);
+			res = cs.createMotorH(a, p);
+		}
+		else
+		{
+			ObjectAPI& api = sim.objects();
+			const ObjectDenseIndex ia = api.getBodyIndex(a), ib = api.getBodyIndex(b);
+			if (ia == Handle::kNull || ib == Handle::kNull) { setStatus("Body no longer exists."); return; }
+			if (ia == ib) { setStatus("Pick two different bodies."); return; }
+
+			const BodySoAViewer bv = api.getBodies();
+			const Vec2 d = localToWorld(bv, ib, localB) - localToWorld(bv, ia, localA);
+			const Real len = std::sqrt(d.x * d.x + d.y * d.y);
+			const Vec2 axis = len > Real(1e-6) ? worldDirToLocal(bv, ia, d / len) : Vec2(1, 0);
+
+			const Real jk = static_cast<Real>(jointStiffness), jd = static_cast<Real>(jointDamping);
+			const Real lo = static_cast<Real>(std::fmin(limitLower, limitUpper));
+			const Real hi = static_cast<Real>(std::fmax(limitLower, limitUpper));
+
+			switch (type)
+			{
+			case ConstraintType::Spring:
+			{
+				SpringConstraintSystem::CreateParams p{};
+				p.localAnchorA = localA; p.localAnchorB = localB;
+				p.restLength = len;
+				p.stiffness = static_cast<Real>(springStiffness);
+				p.damping = static_cast<Real>(springDamping);
+				res = cs.createSpringH(a, b, p);
+				break;
+			}
+			case ConstraintType::RevoluteJoint:
+			{
+				RevoluteJointConstraintSystem::CreateParams p{};
+				p.localAnchorA = localA; p.localAnchorB = localB;
+				p.stiffness = jk; p.damping = jd;
+				res = cs.createRevoluteJointH(a, b, p);
+				break;
+			}
+			case ConstraintType::PrismaticJoint:
+			{
+				PrismaticJointConstraintSystem::CreateParams p{};
+				p.localAnchorA = localA; p.localAnchorB = localB;
+				p.localAxisA = axis;
+				p.stiffness = jk; p.damping = jd;
+				p.lowerLimit = lo; p.upperLimit = hi; p.enableLimit = limitEnabled;
+				res = cs.createPrismaticJointH(a, b, p);
+				break;
+			}
+			case ConstraintType::SliderJoint:
+			{
+				SliderJointConstraintSystem::CreateParams p{};
+				p.localAnchorA = localA; p.localAnchorB = localB;
+				p.localAxisA = axis;
+				p.stiffness = jk; p.damping = jd;
+				p.lowerLimit = lo; p.upperLimit = hi; p.enableLimit = limitEnabled;
+				res = cs.createSliderJointH(a, b, p);
+				break;
+			}
+			default: break;
+			}
+		}
+		setStatus(res ? "Constraint created." : "Constraint creation failed (stale body).");
 	}
 
 	// Destroys all selected bodies. Ends any drag first.
@@ -867,17 +959,179 @@ namespace PS_AGONY_EDITOR
 		if (ImGui::CollapsingHeader("Attachments"))
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
-			ImGui::Text("Constraints attached: %zu", api.getBodies().attachments[bi].size());
-			// TODO(future API): list each attachment (type, other body), edit params, destroy:
-			// for (const BodyAttachment& at : api.getBodies().attachments[bi]) { ... sim.constraints().destroyX(at.index); }
+			ConstraintAPI& cs = sim.constraints();
+
+			// Snapshot as handles: destroying swaps dense indices.
+			attachScratch.clear();
+			for (const BodyAttachment& at : api.getBodies().attachments[bi])
+			{
+				Handle ch{};
+				switch (at.type)
+				{
+				case ConstraintType::Spring: ch = cs.getSpringHandle(at.objectIndex); break;
+				case ConstraintType::RevoluteJoint: ch = cs.getRevoluteJointHandle(at.objectIndex); break;
+				case ConstraintType::PrismaticJoint: ch = cs.getPrismaticJointHandle(at.objectIndex); break;
+				case ConstraintType::SliderJoint: ch = cs.getSliderJointHandle(at.objectIndex); break;
+				case ConstraintType::Motor: ch = cs.getMotorHandle(at.objectIndex); break;
+				default: continue;
+				}
+				attachScratch.push_back({ at.type, ch });
+			}
+
+			ImGui::Text("Constraints attached: %zu", attachScratch.size());
+
+			ConstraintRef toDestroy{ ConstraintType::COUNT, Handle{} };
+			for (size_t i = 0; i < attachScratch.size(); ++i)
+			{
+				const ConstraintRef ref = attachScratch[i];
+				ImGui::PushID(static_cast<int>(i));
+				static constexpr const char* kNames[] = { "Spring", "Revolute joint", "Prismatic joint", "Slider joint", "Motor" };
+				if (ImGui::TreeNodeEx("##k", ImGuiTreeNodeFlags_DefaultOpen, "%s", kNames[static_cast<size_t>(ref.type)]))
+				{
+					drawConstraintEditor(sim, ref.type, ref.handle);
+					if (ImGui::Button("Destroy")) toDestroy = ref;
+					ImGui::TreePop();
+				}
+				ImGui::PopID();
+			}
+
+			switch (toDestroy.type)
+			{
+			case ConstraintType::Spring: cs.destroySpring(toDestroy.handle); break;
+			case ConstraintType::RevoluteJoint: cs.destroyRevoluteJoint(toDestroy.handle); break;
+			case ConstraintType::PrismaticJoint: cs.destroyPrismaticJoint(toDestroy.handle); break;
+			case ConstraintType::SliderJoint: cs.destroySliderJoint(toDestroy.handle); break;
+			case ConstraintType::Motor: cs.destroyMotor(toDestroy.handle); break;
+			default: break;
+			}
 		}
 	}
 
-	// Constraint type selection and click hint.
+	// Edits one constraint through the deferred setters. Reads stored state each frame.
+	void Editor::drawConstraintEditor(Simulation& sim, ConstraintType type, Handle h)
+	{
+		ConstraintAPI& cs = sim.constraints();
+		ObjectAPI& api = sim.objects();
+		Vec2 v{};
+		Real r{};
+
+		auto bodies = [&](Handle a, Handle b)
+			{
+				ImGui::Text("Bodies: #%u - #%u", static_cast<unsigned>(api.getBodyIndex(a)), static_cast<unsigned>(api.getBodyIndex(b)));
+			};
+		auto limits = [&](auto& d, auto setLimits, auto setEnable)
+			{
+				bool en = d.enableLimit;
+				if (ImGui::Checkbox("Limit", &en)) setEnable(en);
+				float lim[2] = { static_cast<float>(d.lowerLimit), static_cast<float>(d.upperLimit) };
+				if (ImGui::DragFloat2("Lower / upper", lim, 0.01f)) setLimits(static_cast<Real>(lim[0]), static_cast<Real>(lim[1]));
+			};
+
+		switch (type)
+		{
+		case ConstraintType::Spring:
+		{
+			const auto d = cs.getSpringDataH(h);
+			if (!d) return;
+			bodies(d->bodyHandleA, d->bodyHandleB);
+			if (dragVec2("Anchor A", d->localAnchorA, v)) cs.setSpringLocalAnchorA(h, v);
+			if (dragVec2("Anchor B", d->localAnchorB, v)) cs.setSpringLocalAnchorB(h, v);
+			if (dragReal("Rest length", d->restLength, r, 0.01f, 0.0f, 1e4f)) cs.setSpringRestLength(h, r);
+			if (dragReal("Stiffness", d->stiffness, r, 0.5f, 0.0f, 1e8f)) cs.setSpringStiffness(h, r);
+			if (dragReal("Damping", d->damping, r, 0.05f, 0.0f, 1e6f)) cs.setSpringDamping(h, r);
+			break;
+		}
+		case ConstraintType::RevoluteJoint:
+		{
+			const auto d = cs.getRevoluteJointDataH(h);
+			if (!d) return;
+			bodies(d->bodyHandleA, d->bodyHandleB);
+			if (dragVec2("Anchor A", d->localAnchorA, v)) cs.setRevoluteJointLocalAnchorA(h, v);
+			if (dragVec2("Anchor B", d->localAnchorB, v)) cs.setRevoluteJointLocalAnchorB(h, v);
+			if (dragReal("Stiffness", d->stiffness, r, 0.5f, 0.0f, 1e8f)) cs.setRevoluteJointStiffness(h, r);
+			if (dragReal("Damping", d->damping, r, 0.05f, 0.0f, 1e6f)) cs.setRevoluteJointDamping(h, r);
+			break;
+		}
+		case ConstraintType::PrismaticJoint:
+		{
+			const auto d = cs.getPrismaticJointDataH(h);
+			if (!d) return;
+			bodies(d->bodyHandleA, d->bodyHandleB);
+			if (dragVec2("Anchor A", d->localAnchorA, v)) cs.setPrismaticJointLocalAnchorA(h, v);
+			if (dragVec2("Anchor B", d->localAnchorB, v)) cs.setPrismaticJointLocalAnchorB(h, v);
+			if (dragVec2("Axis A", d->localAxisA, v, 0.005f)) cs.setPrismaticJointLocalAxisA(h, v);
+			if (dragReal("Stiffness", d->stiffness, r, 0.5f, 0.0f, 1e8f)) cs.setPrismaticJointStiffness(h, r);
+			if (dragReal("Damping", d->damping, r, 0.05f, 0.0f, 1e6f)) cs.setPrismaticJointDamping(h, r);
+			limits(*d,
+				[&](Real lo, Real hi) { cs.setPrismaticJointLimits(h, lo, hi); },
+				[&](bool en) { cs.setPrismaticJointEnableLimit(h, en); });
+			if (ImGui::Button("Reset reference angle")) cs.resetPrismaticJointReferenceAngle(h);
+			break;
+		}
+		case ConstraintType::SliderJoint:
+		{
+			const auto d = cs.getSliderJointDataH(h);
+			if (!d) return;
+			bodies(d->bodyHandleA, d->bodyHandleB);
+			if (dragVec2("Anchor A", d->localAnchorA, v)) cs.setSliderJointLocalAnchorA(h, v);
+			if (dragVec2("Anchor B", d->localAnchorB, v)) cs.setSliderJointLocalAnchorB(h, v);
+			if (dragVec2("Axis A", d->localAxisA, v, 0.005f)) cs.setSliderJointLocalAxisA(h, v);
+			if (dragReal("Stiffness", d->stiffness, r, 0.5f, 0.0f, 1e8f)) cs.setSliderJointStiffness(h, r);
+			if (dragReal("Damping", d->damping, r, 0.05f, 0.0f, 1e6f)) cs.setSliderJointDamping(h, r);
+			limits(*d,
+				[&](Real lo, Real hi) { cs.setSliderJointLimits(h, lo, hi); },
+				[&](bool en) { cs.setSliderJointEnableLimit(h, en); });
+			break;
+		}
+		case ConstraintType::Motor:
+		{
+			const auto d = cs.getMotorDataH(h);
+			if (!d) return;
+			if (dragReal("Target speed", d->targetSpeed, r, 0.05f, -1e4f, 1e4f)) cs.setMotorTargetSpeed(h, r);
+			if (dragReal("Max torque", d->maxTorque, r, 0.5f, 0.0f, 1e8f)) cs.setMotorMaxTorque(h, r);
+			ImGui::Text("Impulse: %.3f", static_cast<double>(d->accumulatedImpulse));
+			break;
+		}
+		default: break;
+		}
+	}
+
+	// Constraint type selection, default parameters and click hint.
 	void Editor::drawConstraintPanel(Simulation& sim)
 	{
 		(void)sim;
 		if (ImGui::Combo("Type", &constraintKind, kConstraintNames)) hasFirstAnchor = false;
+
+		const ConstraintType type = static_cast<ConstraintType>(constraintKind);
+		switch (type)
+		{
+		case ConstraintType::Spring:
+			ImGui::DragFloat("Stiffness", &springStiffness, 0.5f, 0.0f, 1e8f);
+			ImGui::DragFloat("Damping", &springDamping, 0.05f, 0.0f, 1e6f);
+			ImGui::TextDisabled("Rest length = distance between the clicked points.");
+			break;
+		case ConstraintType::RevoluteJoint:
+			ImGui::DragFloat("Stiffness", &jointStiffness, 0.5f, 0.0f, 1e8f);
+			ImGui::DragFloat("Damping", &jointDamping, 0.05f, 0.0f, 1e6f);
+			break;
+		case ConstraintType::PrismaticJoint:
+		case ConstraintType::SliderJoint:
+			ImGui::DragFloat("Stiffness", &jointStiffness, 0.5f, 0.0f, 1e8f);
+			ImGui::DragFloat("Damping", &jointDamping, 0.05f, 0.0f, 1e6f);
+			ImGui::Checkbox("Limit", &limitEnabled);
+			ImGui::BeginDisabled(!limitEnabled);
+			ImGui::DragFloat("Lower", &limitLower, 0.01f);
+			ImGui::DragFloat("Upper", &limitUpper, 0.01f);
+			ImGui::EndDisabled();
+			ImGui::TextDisabled("Axis = direction from the first to the second point.");
+			break;
+		case ConstraintType::Motor:
+			ImGui::DragFloat("Target speed", &motorSpeed, 0.05f);
+			ImGui::DragFloat("Max torque", &motorTorque, 0.5f, 0.0f, 1e8f);
+			break;
+		default: break;
+		}
+
 		if (constraintKind == kMotorKind) ImGui::TextUnformatted("Click the body.");
 		else if (hasFirstAnchor) ImGui::TextUnformatted("Click the second body (Esc cancels).");
 		else ImGui::TextUnformatted("Click the first body.");
@@ -908,6 +1162,53 @@ namespace PS_AGONY_EDITOR
 			const ImVec2 c = toScreen(Vec2(bv.worldCenterX[bi], bv.worldCenterY[bi]));
 			dl->AddLine(ImVec2(c.x - 5, c.y), ImVec2(c.x + 5, c.y), kSelectColor, 1.5f);
 			dl->AddLine(ImVec2(c.x, c.y - 5), ImVec2(c.x, c.y + 5), kSelectColor, 1.5f);
+		}
+
+		// Constraints of selected bodies: anchors and links.
+		{
+			ConstraintAPI& cs = sim.constraints();
+			constexpr ImU32 kConstraintColor = IM_COL32(80, 200, 255, 255);
+
+			auto link = [&](Handle ha, Vec2 la, Handle hb, Vec2 lb)
+				{
+					const ObjectDenseIndex ia = api.getBodyIndex(ha), ib = api.getBodyIndex(hb);
+					if (ia == Handle::kNull || ib == Handle::kNull) return;
+					const ImVec2 p = toScreen(localToWorld(bv, ia, la));
+					const ImVec2 q = toScreen(localToWorld(bv, ib, lb));
+					dl->AddLine(p, q, kConstraintColor, 1.5f);
+					dl->AddCircleFilled(p, 3.5f, kConstraintColor);
+					dl->AddCircleFilled(q, 3.5f, kConstraintColor);
+				};
+
+			for (const Handle h : selected)
+			{
+				const ObjectDenseIndex bi = api.getBodyIndex(h);
+				if (bi == Handle::kNull) continue;
+
+				for (const BodyAttachment& at : bv.attachments[bi])
+				{
+					const uint32_t i = at.objectIndex;
+					switch (at.type)
+					{
+					case ConstraintType::Spring:
+						if (const auto d = cs.getSpringData(i)) link(d->bodyHandleA, d->localAnchorA, d->bodyHandleB, d->localAnchorB);
+						break;
+					case ConstraintType::RevoluteJoint:
+						if (const auto d = cs.getRevoluteJointData(i)) link(d->bodyHandleA, d->localAnchorA, d->bodyHandleB, d->localAnchorB);
+						break;
+					case ConstraintType::PrismaticJoint:
+						if (const auto d = cs.getPrismaticJointData(i)) link(d->bodyHandleA, d->localAnchorA, d->bodyHandleB, d->localAnchorB);
+						break;
+					case ConstraintType::SliderJoint:
+						if (const auto d = cs.getSliderJointData(i)) link(d->bodyHandleA, d->localAnchorA, d->bodyHandleB, d->localAnchorB);
+						break;
+					case ConstraintType::Motor:
+						dl->AddCircle(toScreen(Vec2(bv.worldCenterX[bi], bv.worldCenterY[bi])), 9.0f, kConstraintColor, 16, 1.5f);
+						break;
+					default: break;
+					}
+				}
+			}
 		}
 
 		// Grab lines: from each held anchor to its holder target.

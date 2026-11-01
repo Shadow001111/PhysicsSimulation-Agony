@@ -39,6 +39,10 @@ namespace PS_AGONY2D
 
         // Apply queued modifications before anything reads the data.
         objectManager.flushCommands();
+        for (auto* constraintSystem : constraintSystems)
+        {
+            constraintSystem->flushCommands(objectManager.bodies);
+        }
 
         // Paused: only keep the spatial structures valid for newly created/destroyed colliders.
         if (paused)
@@ -59,6 +63,10 @@ namespace PS_AGONY2D
             {
                 physicsStep(fixedDeltaTime);
                 objectManager.flushCommands(); // Safe point: collision events are already dispatched.
+                for (auto* constraintSystem : constraintSystems)
+                {
+                    constraintSystem->flushCommands(objectManager.bodies);
+                }
             }
             postUpdate();
         }

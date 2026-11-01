@@ -1,5 +1,6 @@
 #pragma once
 #include "PS_AGONY2D/Simulation.h"
+#include "PS_AGONY2D/Types/Types.h"
 
 #include "Render/SimulationRenderer.h"
 
@@ -78,6 +79,19 @@ namespace PS_AGONY_EDITOR
 		bool hasFirstAnchor = false;
 		Handle firstBody{};
 		Vec2 firstLocalAnchor{ 0, 0 };
+		// Defaults for new constraints. Kind index == ConstraintType.
+		float springStiffness = 100.0f;
+		float springDamping = 1.0f;
+		float jointStiffness = 0.0f;
+		float jointDamping = 0.0f;
+		float motorSpeed = 1.0f;
+		float motorTorque = 100.0f;
+		bool limitEnabled = false;
+		float limitLower = -1.0f;
+		float limitUpper = 1.0f;
+
+		struct ConstraintRef { ConstraintType type; Handle handle; };
+		std::vector<ConstraintRef> attachScratch;
 
 		// Inspector.
 		float lastDynamicMass = 1.0f;
@@ -109,7 +123,8 @@ namespace PS_AGONY_EDITOR
 		void spawn(Simulation& sim);
 		void spawnFreePolygon(Simulation& sim);
 		void deleteSelected(Simulation& sim);
-		void createConstraintStub(Simulation& sim, Handle a, Vec2 localA, Handle b, Vec2 localB);
+		void createConstraint(Simulation& sim, Handle a, Vec2 localA, Handle b, Vec2 localB);
+		void drawConstraintEditor(Simulation& sim, ConstraintType type, Handle h);
 
 		void drawToolbar(Simulation& sim);
 		void drawCreatePanel();

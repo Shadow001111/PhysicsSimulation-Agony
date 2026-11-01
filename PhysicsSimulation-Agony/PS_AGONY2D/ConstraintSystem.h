@@ -201,6 +201,11 @@ namespace PS_AGONY2D
 
 		Viewer getViewer() const noexcept { return Viewer(soa); }
 
+		// Handle lookup. indexOf returns Handle::kNull if stale.
+		bool isValid(Handle h) const noexcept { return soa.indexOf(h) != Handle::kNull; }
+		uint32_t indexOf(Handle h) const noexcept { return soa.indexOf(h); }
+		Handle handleAt(uint32_t index) const noexcept { return soa.handleAt(index); }
+
 		size_t getCount() const noexcept final { return soa.getCount(); }
 		size_t getMemoryUsage() const noexcept final { return soa.getMemoryUsage(); }
 		size_t getSolverMemoryUsage() const noexcept final { return solver.getMemoryUsage(); }
