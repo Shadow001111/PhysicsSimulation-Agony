@@ -306,6 +306,27 @@ namespace PS_AGONY2D
 		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
 		bool setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
 
+		// Deferred modifications. Queued here and applied at the start of update() and after every physics step,
+		// so they are safe to call from collision callbacks. Stale handles are dropped. Semantics: see ObjectManager.h.
+		void setBodyPosition(Handle body, Vec2 position) { objectManager.queueBodyPosition(body, position); }
+		void setBodyRotation(Handle body, Real rotation) { objectManager.queueBodyRotation(body, rotation); }
+		void setBodyVelocity(Handle body, Vec2 velocity) { objectManager.queueBodyVelocity(body, velocity); }
+		void setBodyAngularVelocity(Handle body, Real angularVelocity) { objectManager.queueBodyAngularVelocity(body, angularVelocity); }
+		void setBodyMass(Handle body, Real mass) { objectManager.queueBodyMass(body, mass); }
+		void setBodyInertia(Handle body, Real inertia) { objectManager.queueBodyInertia(body, inertia); }
+		void setBodyLocalCenterOfMass(Handle body, Vec2 localCenterOfMass) { objectManager.queueBodyLocalCenterOfMass(body, localCenterOfMass); }
+		void recomputeBodyInertia(Handle body) { objectManager.queueRecomputeBodyInertia(body); }
+		void setBodyMassFromDensity(Handle body, Real density) { objectManager.queueBodyMassFromDensity(body, density); }
+
+		void setColliderLocalOffset(Handle collider, Vec2 localOffset) { objectManager.queueColliderLocalOffset(collider, localOffset); }
+		void setColliderLocalRotation(Handle collider, Real localRotation) { objectManager.queueColliderLocalRotation(collider, localRotation); }
+		void setColliderMaterial(Handle collider, MaterialIndex materialIndex) { objectManager.queueColliderMaterial(collider, materialIndex); }
+		void setCircleRadius(Handle collider, Real radius) { objectManager.queueCircleRadius(collider, radius); }
+		void setBoxSize(Handle collider, Vec2 size) { objectManager.queueBoxSize(collider, size); }
+		void setCapsuleShape(Handle collider, Real length, Real radius) { objectManager.queueCapsuleShape(collider, length, radius); }
+		// False (nothing queued) if the polygon is invalid or not convex.
+		bool setPolygonShape(Handle collider, std::span<const Vec2> localVertices) { return objectManager.queueColliderPolygon(collider, localVertices); }
+
 		// TODO: Add more like that.
 		std::span<const ColliderDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex);
 
@@ -338,6 +359,18 @@ namespace PS_AGONY2D
 		std::optional<BodyData> getBodyData(ObjectDenseIndex index) const noexcept
 		{
 			return objectManager.bodies.getBodyData(index);
+		}
+
+		// Instant reads of current stored state (not the queue); nullopt if the handle is stale.
+		std::optional<BodyData> getBodyDataH(Handle body) const noexcept
+		{
+			const uint32_t i = objectManager.bodies.indexOf(body);
+			return i == Handle::kNull ? std::nullopt : objectManager.bodies.getBodyData(static_cast<ObjectDenseIndex>(i));
+		}
+		std::optional<ColliderData> getColliderDataH(Handle collider) const noexcept
+		{
+			const uint32_t i = objectManager.colliders.indexOf(collider);
+			return i == Handle::kNull ? std::nullopt : objectManager.getColliderData(static_cast<ColliderDenseIndex>(i));
 		}
 
 		IConstraintSystem& getConstraintSystem(ConstraintType type) noexcept { return *constraintSystems[size_t(type)]; }

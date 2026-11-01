@@ -3,6 +3,7 @@
 #include "PolygonBuild.h"
 
 #include "PS_AGONY2D/Limits.h"
+#include "PS_AGONY2D/Constants.h"
 
 #include <cmath>
 #include <iostream>
@@ -520,5 +521,353 @@ namespace PS_AGONY2D
         }
 
         colliderSlot.pop_back();
+    }
+
+    namespace
+    {
+        Real colliderArea(const ObjectManager& om, ColliderDenseIndex c)
+        {
+            const ObjectDenseIndex s = om.colliders.shapeIndex[c];
+            switch (om.colliders.shapeType[c])
+            {
+            case BodyType::Circle:
+                return PhysicsGeometry::calculateCircleArea(om.circles.radius[s]);
+            case BodyType::Box:
+                return PhysicsGeometry::calculateBoxArea(om.boxes.halfWidth[s] * Real(2), om.boxes.halfHeight[s] * Real(2));
+            case BodyType::Capsule:
+                return PhysicsGeometry::calculateCapsuleArea(om.capsules.halfLength[s] * Real(2), om.capsules.radius[s]);
+            case BodyType::Polygon:
+            {
+                const PolygonGeometry& g = om.polygons.geometry[s];
+                return PhysicsGeometry::calculatePolygonArea({ g.vertices(), g.size() });
+            }
+            default:
+                return Real(0);
+            }
+        }
+
+        Real wrapAngle(Real angle)
+        {
+            Real wrapped = std::fmod(angle, Constants::TWO_PI);
+            if (wrapped < Real(0)) wrapped += Constants::TWO_PI;
+            return wrapped;
+        }
+    }
+
+    bool ObjectManager::queueColliderPolygon(Handle collider, std::span<const Vec2> localVertices)
+    {
+        if (localVertices.size() < 3) return false;
+
+        std::optional<std::vector<Vec2>> outline = PhysicsGeometry::preparePolygonOutline(localVertices);
+        if (!outline) return false;
+        if (outline->size() > MAX_POLYGON_VERTEX_COUNT) return false;
+        if (!PhysicsGeometry::isConvexPolygon(*outline)) return false;
+
+        const uint32_t slot = static_cast<uint32_t>(pendingPolygons.size());
+        pendingPolygons.emplace_back(std::move(*outline));
+        pushCommand(ObjectCommandType::SetPolygonGeometry, collider, 0, 0, slot);
+        return true;
+    }
+
+    void ObjectManager::flushCommands()
+    {
+        if (commands.empty()) return;
+
+        for (const ObjectCommand& command : commands)
+        {
+            applyCommand(command);
+        }
+        commands.clear();
+        pendingPolygons.clear();
+    }
+
+    void ObjectManager::applyCommand(const ObjectCommand& c)
+    {
+        using T = ObjectCommandType;
+
+        if (c.type < T::SetColliderLocalOffset)
+        {
+            const uint32_t resolved = bodies.indexOf(c.handle);
+            if (resolved == Handle::kNull) return;
+            const ObjectDenseIndex b = static_cast<ObjectDenseIndex>(resolved);
+
+            switch (c.type)
+            {
+            case T::SetBodyPosition:
+                bodies.offsetX[b] = c.a;
+                bodies.offsetY[b] = c.b;
+                bodies.renderOldOffsetX[b] = c.a; // Teleport: no render interpolation.
+                bodies.renderOldOffsetY[b] = c.b;
+                spatialDirty = true;
+                break;
+
+            case T::SetBodyRotation:
+            {
+                const Real r = wrapAngle(c.a);
+                bodies.rotation[b] = r;
+                bodies.rotationCos[b] = std::cos(r);
+                bodies.rotationSin[b] = std::sin(r);
+                bodies.renderOldRotation[b] = r;
+                bodies.renderRotationWrapCount[b] = Real(0);
+                spatialDirty = true;
+                break;
+            }
+
+            case T::SetBodyVelocity:
+                bodies.velocityX[b] = c.a;
+                bodies.velocityY[b] = c.b;
+                break;
+
+            case T::SetBodyAngularVelocity:
+                bodies.angularVelocity[b] = c.a;
+                break;
+
+            case T::SetBodyMass:
+                applyBodyMass(b, c.a);
+                break;
+
+            case T::SetBodyInertia:
+            {
+                if (bodies.isStatic[b]) break;
+                const Real inertia = std::fmax(Real(0), c.a);
+                bodies.inertia[b] = inertia;
+                bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
+                break;
+            }
+
+            case T::SetBodyLocalCenterOfMass:
+                bodies.localCenterOfMassX[b] = c.a;
+                bodies.localCenterOfMassY[b] = c.b;
+                spatialDirty = true; // World center depends on it.
+                break;
+
+            case T::RecomputeBodyInertia:
+                recomputeBodyInertia(b);
+                break;
+
+            case T::SetBodyMassFromDensity:
+                applyBodyMassFromDensity(b, c.a);
+                break;
+
+            default:
+                break;
+            }
+            return;
+        }
+
+        const uint32_t resolved = colliders.indexOf(c.handle);
+        if (resolved == Handle::kNull) return;
+        const ColliderDenseIndex ci = static_cast<ColliderDenseIndex>(resolved);
+        const ObjectDenseIndex s = colliders.shapeIndex[ci];
+        const BodyType shapeType = colliders.shapeType[ci];
+
+        switch (c.type)
+        {
+        case T::SetColliderLocalOffset:
+            colliders.localOffsetX[ci] = c.a;
+            colliders.localOffsetY[ci] = c.b;
+            spatialDirty = true;
+            break;
+
+        case T::SetColliderLocalRotation:
+            colliders.localRotation[ci] = wrapAngle(c.a);
+            spatialDirty = true;
+            break;
+
+        case T::SetColliderMaterial:
+            colliders.materialIndex[ci] = c.index < materials.size() ? static_cast<MaterialIndex>(c.index) : MaterialIndex(0);
+            break;
+
+        case T::SetCircleRadius:
+            if (shapeType != BodyType::Circle) break;
+            circles.radius[s] = std::fmax(Real(0), c.a);
+            spatialDirty = true;
+            break;
+
+        case T::SetBoxSize:
+            if (shapeType != BodyType::Box) break;
+            boxes.halfWidth[s] = std::fmax(Real(0), c.a) * Real(0.5);
+            boxes.halfHeight[s] = std::fmax(Real(0), c.b) * Real(0.5);
+            spatialDirty = true;
+            break;
+
+        case T::SetCapsuleShape:
+            if (shapeType != BodyType::Capsule) break;
+            capsules.halfLength[s] = std::fmax(Real(0), c.a) * Real(0.5);
+            capsules.radius[s] = std::fmax(Real(0), c.b);
+            spatialDirty = true;
+            break;
+
+        case T::SetPolygonGeometry:
+            if (shapeType != BodyType::Polygon) break;
+            polygons.geometry[s] = std::move(pendingPolygons[c.index]);
+            spatialDirty = true;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    void ObjectManager::applyBodyMass(ObjectDenseIndex b, Real newMass)
+    {
+        newMass = std::fmax(Real(0), newMass);
+        const Real oldMass = bodies.mass[b];
+        const bool wasStatic = bodies.isStatic[b] != 0;
+
+        if (newMass > Real(0))
+        {
+            Real inertia = bodies.inertia[b];
+            if (oldMass > Real(0)) inertia *= newMass / oldMass;
+
+            bodies.mass[b] = newMass;
+            bodies.invMass[b] = Real(1) / newMass;
+            bodies.inertia[b] = inertia;
+            bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
+            bodies.isStatic[b] = 0;
+        }
+        else
+        {
+            bodies.mass[b] = Real(0);
+            bodies.invMass[b] = Real(0);
+            bodies.inertia[b] = Real(0);
+            bodies.invInertia[b] = Real(0);
+            bodies.velocityX[b] = Real(0);
+            bodies.velocityY[b] = Real(0);
+            bodies.angularVelocity[b] = Real(0);
+            bodies.isStatic[b] = 1;
+        }
+
+        const bool isStaticNow = bodies.isStatic[b] != 0;
+        if (wasStatic != isStaticNow) moveBodyColliders(b, isStaticNow);
+    }
+
+    void ObjectManager::applyBodyMassFromDensity(ObjectDenseIndex b, Real density)
+    {
+        Real totalArea = Real(0);
+        for (const ColliderDenseIndex ci : bodies.colliderIndices[b])
+            totalArea += colliderArea(*this, ci);
+        if (totalArea <= Real(0)) return;
+
+        applyBodyMass(b, std::fmax(Real(0), density) * totalArea);
+    }
+
+    void ObjectManager::recomputeBodyInertia(ObjectDenseIndex b)
+    {
+        const Real mass = bodies.mass[b];
+        if (mass <= Real(0)) return;
+
+        const std::vector<ColliderDenseIndex>& list = bodies.colliderIndices[b];
+
+        Real totalArea = Real(0);
+        for (const ColliderDenseIndex ci : list)
+            totalArea += colliderArea(*this, ci);
+        if (totalArea <= Real(0)) return;
+
+        const Vec2 com(bodies.localCenterOfMassX[b], bodies.localCenterOfMassY[b]);
+        const Real massPerArea = mass / totalArea;
+
+        // Sum of each collider's inertia about its own centroid plus parallel-axis shift to the body COM.
+        Real inertia = Real(0);
+        for (const ColliderDenseIndex ci : list)
+        {
+            const Real area = colliderArea(*this, ci);
+            if (area <= Real(0)) continue;
+
+            const Real m = massPerArea * area;
+            const ObjectDenseIndex s = colliders.shapeIndex[ci];
+            Vec2 centroid(colliders.localOffsetX[ci], colliders.localOffsetY[ci]);
+            Real own = Real(0);
+
+            switch (colliders.shapeType[ci])
+            {
+            case BodyType::Circle:
+                own = PhysicsGeometry::calculateCircleInertia(m, circles.radius[s], Vec2(0));
+                break;
+            case BodyType::Box:
+                own = PhysicsGeometry::calculateBoxInertia(m, boxes.halfWidth[s] * Real(2), boxes.halfHeight[s] * Real(2), Vec2(0));
+                break;
+            case BodyType::Capsule:
+                own = PhysicsGeometry::calculateCapsuleInertia(m, capsules.halfLength[s] * Real(2), capsules.radius[s], Vec2(0));
+                break;
+            case BodyType::Polygon:
+            {
+                const PolygonGeometry& g = polygons.geometry[s];
+                const auto [polyInertia, polyCentroid] = PhysicsGeometry::calculatePolygonInertia(m, { g.vertices(), g.size() }, std::nullopt);
+                own = polyInertia;
+
+                // Polygon vertices live in the collider frame, rotated by the collider's local rotation.
+                const Real cr = std::cos(colliders.localRotation[ci]);
+                const Real sr = std::sin(colliders.localRotation[ci]);
+                centroid += Vec2(cr * polyCentroid.x - sr * polyCentroid.y, sr * polyCentroid.x + cr * polyCentroid.y);
+                break;
+            }
+            default:
+                break;
+            }
+
+            const Vec2 d = centroid - com;
+            inertia += own + m * (d.x * d.x + d.y * d.y);
+        }
+
+        bodies.inertia[b] = inertia;
+        bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
+    }
+
+    void ObjectManager::moveBodyColliders(ObjectDenseIndex b, bool toStatic)
+    {
+        std::vector<ObjectDenseIndex>& from = toStatic ? dynamicColliderIDs : staticColliderIDs;
+        std::vector<ObjectDenseIndex>& to = toStatic ? staticColliderIDs : dynamicColliderIDs;
+
+        for (const ColliderDenseIndex ci : bodies.colliderIndices[b])
+        {
+            // O(1) swap-remove from the old list.
+            const uint32_t slot = colliderSlot[ci];
+            const ObjectDenseIndex lastID = from.back();
+            from[slot] = lastID;
+            colliderSlot[lastID] = slot;
+            from.pop_back();
+
+            colliderSlot[ci] = static_cast<uint32_t>(to.size());
+            to.push_back(static_cast<ObjectDenseIndex>(ci));
+        }
+        spatialDirty = true;
+    }
+
+    std::optional<ColliderData> ObjectManager::getColliderData(ColliderDenseIndex i) const noexcept
+    {
+        if (i >= colliders.getCount()) return std::nullopt;
+
+        ColliderData d;
+        d.bodyHandle = bodies.handleAt(colliders.bodyIndex[i]);
+        d.localOffset = Vec2(colliders.localOffsetX[i], colliders.localOffsetY[i]);
+        d.localRotation = colliders.localRotation[i];
+        d.worldPosition = Vec2(colliders.worldPosX[i], colliders.worldPosY[i]);
+        d.worldRotation = colliders.worldRotation[i];
+        d.materialIndex = colliders.materialIndex[i];
+        d.shapeType = colliders.shapeType[i];
+        d.callbackId = colliders.callbackId[i];
+        d.eventThreshold = colliders.eventThreshold[i];
+
+        const ObjectDenseIndex s = colliders.shapeIndex[i];
+        switch (d.shapeType)
+        {
+        case BodyType::Circle:
+            d.radius = circles.radius[s];
+            break;
+        case BodyType::Box:
+            d.halfExtents = Vec2(boxes.halfWidth[s], boxes.halfHeight[s]);
+            break;
+        case BodyType::Capsule:
+            d.halfLength = capsules.halfLength[s];
+            d.radius = capsules.radius[s];
+            break;
+        case BodyType::Polygon:
+            d.polygon = &polygons.geometry[s];
+            break;
+        default:
+            break;
+        }
+        return d;
     }
 }

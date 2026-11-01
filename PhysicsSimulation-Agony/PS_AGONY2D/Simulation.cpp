@@ -38,6 +38,9 @@ namespace PS_AGONY2D
         // Delta time check.
         if (deltaTime <= 0) return;
 
+        // Apply queued modifications before anything reads the data.
+        objectManager.flushCommands();
+
         // Paused: only keep the spatial structures valid for newly created/destroyed colliders.
         if (paused)
         {
@@ -56,6 +59,7 @@ namespace PS_AGONY2D
             for (uint32_t i = 0; i < stepCount; ++i)
             {
                 physicsStep(fixedDeltaTime);
+                objectManager.flushCommands(); // Safe point: collision events are already dispatched.
             }
             postUpdate();
         }
@@ -443,6 +447,13 @@ namespace PS_AGONY2D
 
     void Simulation::postUpdate()
     {
+        // Commands flushed after the last step may have changed collider lists/shapes: full rebuild, not a dynamic refit.
+        if (objectManager.spatialDirty)
+        {
+            rebuildSpatialData();
+            return;
+        }
+
         // That's for renderer to have actual information.
         computeBodyWorldCenters();
         computeColliderWorldTransforms();
