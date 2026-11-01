@@ -184,81 +184,15 @@ namespace PS_AGONY2D
         collisionCallbackManager.invoke(events);
     }
 
-    void Simulation::mainBodyHolderGrabAt(Vec2 grabPosition)
-    {
-        if (mainBodyHolder.heldBody.has_value()) return;
-
-        TRACY_SCOPE_N("Try grab body");
-
-        constexpr Real MAX_GRAB_DISTANCE = 1.0;
-
-        const Real* ECSTASY_RESTRICT worldCenterXPtr = objectManager.bodies.worldCenterX.data();
-        const Real* ECSTASY_RESTRICT worldCenterYPtr = objectManager.bodies.worldCenterY.data();
-
-        // Broad-phase.
-        broadPhaseColliders.clear();
-        broadPhaseColliders.reserve(128);
-        broadPhaseCollisionDetector.queryCollidersInShape(
-            BroadPhaseInternal::CircleQuery(grabPosition, MAX_GRAB_DISTANCE),
-            BroadPhaseInternal::BvhTreeTypeFlag::Dynamic,
-            broadPhaseColliders);
-        if (broadPhaseColliders.empty()) return;
-
-        // Narrow phase.
-        narrowPhaseColliders.clear();
-        narrowPhaseColliders.reserve(broadPhaseColliders.size());
-        narrowPhaseCollisionDetector.findCollisionsInCircle(broadPhaseColliders, grabPosition, MAX_GRAB_DISTANCE, narrowPhaseColliders);
-        if (narrowPhaseColliders.empty()) return;
-
-        // Find closest body.
-        ObjectDenseIndex closestCollider;
-        ObjectDenseIndex closestBody;
-        Real minDistance = std::numeric_limits<Real>::max();
-        for (const auto [colliderIndex, distance] : narrowPhaseColliders)
-        {
-            if (distance < minDistance)
-            {
-                minDistance = distance;
-                closestCollider = colliderIndex;
-            }
-        }
-        closestBody = objectManager.colliders.bodyIndex[closestCollider];
-
-        // Grab.
-        mainBodyHolder.heldBody = objectManager.bodies.handleAt(closestBody);
-
-        // Grab vector in world space.
-        const Vec2 worldGrabVec = grabPosition - Vec2(worldCenterXPtr[closestBody], worldCenterYPtr[closestBody]);
-
-        // Rotate grab vector into the body's local space.
-        const Real cosRot = objectManager.bodies.rotationCos[closestBody];
-        const Real sinRot = objectManager.bodies.rotationSin[closestBody];
-
-        // Inverse rotation.
-        mainBodyHolder.localBodyOffset = Vec2(
-            worldGrabVec.x * cosRot + worldGrabVec.y * sinRot,
-            -worldGrabVec.x * sinRot + worldGrabVec.y * cosRot
-        );
-    }
-
-    void Simulation::mainBodyHolderRelease()
-    {
-        if (!mainBodyHolder.heldBody.has_value()) return;
-
-        const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(mainBodyHolder.heldBody.value());
-        if (bodyIndex >= objectManager.bodies.getCount()) return;
-
-        mainBodyHolder.heldBody = std::nullopt;
-    }
-
     void Simulation::mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp)
     {
-        if (!mainBodyHolder.heldBody.has_value()) return;
+        for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
+        {
+            const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
+            if (bodyIndex >= objectManager.bodies.getCount()) continue;
 
-        const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(mainBodyHolder.heldBody.value());
-        if (bodyIndex >= objectManager.bodies.getCount()) return;
-
-        objectManager.bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
+            objectManager.bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
+        }
     }
 
     void Simulation::physicsStep(Real deltaTime)
@@ -319,7 +253,7 @@ namespace PS_AGONY2D
             Integrator::dampAngularVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
 
             // Solve constraints.
-            applyBodyHolderConstraint(deltaTime);
+            applyBodyHolderConstraint(deltaTime, mainBodyHolder);
             constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
 
             // Integration second phase.
@@ -578,52 +512,13 @@ namespace PS_AGONY2D
         );
     }
 
-    void Simulation::applyBodyHolderConstraint(Real deltaTime)
+    void Simulation::applyBodyHolderConstraint(Real deltaTime, const Interactivity::BodyHolder& holder)
     {
-        if (!mainBodyHolder.heldBody.has_value()) return;
+        if (!holder.isHolding()) return;
 
-        const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(mainBodyHolder.heldBody.value());
-        if (bodyIndex >= objectManager.bodies.getCount()) return;
-
-        const Real mass = objectManager.bodies.mass[bodyIndex];
-        if (mass == 0.0) return; // Static objects can't be dragged.
-
-        const Real invMass = objectManager.bodies.invMass[bodyIndex];
-        const Real invInertia = objectManager.bodies.invInertia[bodyIndex];
-
-        const Real cosRot = objectManager.bodies.rotationCos[bodyIndex];
-        const Real sinRot = objectManager.bodies.rotationSin[bodyIndex];
-
-        // Calculate current world position of the grab point.
-        const Vec2 worldCenter = { objectManager.bodies.worldCenterX[bodyIndex], objectManager.bodies.worldCenterY[bodyIndex] };
-        const Vec2 localOffset = mainBodyHolder.localBodyOffset;
-
-        const Vec2 rotatedOffset = Vec2(
-            localOffset.x * cosRot - localOffset.y * sinRot,
-            localOffset.x * sinRot + localOffset.y * cosRot
-        );
-        const Vec2 worldGrabPoint = worldCenter + rotatedOffset;
-
-        // Calculate vector (worldR) from the World COM to the world Grab Point.
-        const Vec2 localCenterOfMass = { objectManager.bodies.localCenterOfMassX[bodyIndex], objectManager.bodies.localCenterOfMassY[bodyIndex] };
-        const Vec2 localR = localOffset - localCenterOfMass;
-
-        const Vec2 worldR = Vec2(
-            localR.x * cosRot - localR.y * sinRot,
-            localR.x * sinRot + localR.y * cosRot
-        );
-
-        // Target position and velocity.
-        const Vec2 targetPosition = mainBodyHolder.getPosition();
-        const Vec2 targetVelocity = mainBodyHolder.getVelocity();
-
-        // Calculate grab point velocity on the rotating body.
-        const Vec2 linearVelocity = { objectManager.bodies.velocityX[bodyIndex], objectManager.bodies.velocityY[bodyIndex] };
-        const Real angularVelocity = objectManager.bodies.angularVelocity[bodyIndex];
-        const Vec2 grabPointVelocity = Vec2(
-            linearVelocity.x - angularVelocity * worldR.y,
-            linearVelocity.y + angularVelocity * worldR.x
-        );
+        // Shared by all held bodies.
+        const Vec2 holderPosition = holder.getPosition();
+        const Vec2 targetVelocity = holder.getVelocity();
 
         // PD Controller for target acceleration at the grab point.
         // Scale frequency down dynamically to maintain explicit Euler stability (freq < 0.5 / deltaTime).
@@ -633,42 +528,88 @@ namespace PS_AGONY2D
 
         const Real stiffness = frequency * frequency;
         const Real damping = Real(2.0) * frequency;
+        const Real angularDamping = std::pow(Real(0.1), deltaTime);
 
-        const Vec2 positionError = targetPosition - worldGrabPoint;
-        const Vec2 velocityError = targetVelocity - grabPointVelocity;
-        const Vec2 desiredAccel = (stiffness * positionError) + (damping * velocityError);
-
-        // Compute K matrix.
-        const Real k00 = invMass + (worldR.y * worldR.y) * invInertia;
-        const Real k11 = invMass + (worldR.x * worldR.x) * invInertia;
-        const Real k01 = -worldR.x * worldR.y * invInertia;
-
-        const Real det = k00 * k11 - k01 * k01;
-        Vec2 force(0.0);
-        if (det > 0.0)
+        for (const Interactivity::BodyHolder::HeldBody& held : holder.heldBodies)
         {
-            const Real invDet = 1.0 / det;
-            const Real mEff00 = k11 * invDet;
-            const Real mEff11 = k00 * invDet;
-            const Real mEff01 = -k01 * invDet;
+            const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
+            if (bodyIndex >= objectManager.bodies.getCount()) continue;
 
-            force.x = mEff00 * desiredAccel.x + mEff01 * desiredAccel.y;
-            force.y = mEff01 * desiredAccel.x + mEff11 * desiredAccel.y;
+            const Real mass = objectManager.bodies.mass[bodyIndex];
+            if (mass == 0.0) continue; // Static objects can't be dragged.
+
+            const Real invMass = objectManager.bodies.invMass[bodyIndex];
+            const Real invInertia = objectManager.bodies.invInertia[bodyIndex];
+
+            const Real cosRot = objectManager.bodies.rotationCos[bodyIndex];
+            const Real sinRot = objectManager.bodies.rotationSin[bodyIndex];
+
+            // Calculate current world position of the grab point.
+            const Vec2 worldCenter = { objectManager.bodies.worldCenterX[bodyIndex], objectManager.bodies.worldCenterY[bodyIndex] };
+            const Vec2 localOffset = held.localOffset;
+
+            const Vec2 rotatedOffset = Vec2(
+                localOffset.x * cosRot - localOffset.y * sinRot,
+                localOffset.x * sinRot + localOffset.y * cosRot
+            );
+            const Vec2 worldGrabPoint = worldCenter + rotatedOffset;
+
+            // Calculate vector (worldR) from the World COM to the world Grab Point.
+            const Vec2 localCenterOfMass = { objectManager.bodies.localCenterOfMassX[bodyIndex], objectManager.bodies.localCenterOfMassY[bodyIndex] };
+            const Vec2 localR = localOffset - localCenterOfMass;
+
+            const Vec2 worldR = Vec2(
+                localR.x * cosRot - localR.y * sinRot,
+                localR.x * sinRot + localR.y * cosRot
+            );
+
+            // Target position of this body's anchor.
+            const Vec2 targetPosition = holderPosition + held.targetOffset;
+
+            // Calculate grab point velocity on the rotating body.
+            const Vec2 linearVelocity = { objectManager.bodies.velocityX[bodyIndex], objectManager.bodies.velocityY[bodyIndex] };
+            const Real angularVelocity = objectManager.bodies.angularVelocity[bodyIndex];
+            const Vec2 grabPointVelocity = Vec2(
+                linearVelocity.x - angularVelocity * worldR.y,
+                linearVelocity.y + angularVelocity * worldR.x
+            );
+
+            const Vec2 positionError = targetPosition - worldGrabPoint;
+            const Vec2 velocityError = targetVelocity - grabPointVelocity;
+            const Vec2 desiredAccel = (stiffness * positionError) + (damping * velocityError);
+
+            // Compute K matrix.
+            const Real k00 = invMass + (worldR.y * worldR.y) * invInertia;
+            const Real k11 = invMass + (worldR.x * worldR.x) * invInertia;
+            const Real k01 = -worldR.x * worldR.y * invInertia;
+
+            const Real det = k00 * k11 - k01 * k01;
+            Vec2 force(0.0);
+            if (det > 0.0)
+            {
+                const Real invDet = 1.0 / det;
+                const Real mEff00 = k11 * invDet;
+                const Real mEff11 = k00 * invDet;
+                const Real mEff01 = -k01 * invDet;
+
+                force.x = mEff00 * desiredAccel.x + mEff01 * desiredAccel.y;
+                force.y = mEff01 * desiredAccel.x + mEff11 * desiredAccel.y;
+            }
+
+            // Apply linear force.
+            objectManager.bodies.velocityX[bodyIndex] += force.x * invMass * deltaTime;
+            objectManager.bodies.velocityY[bodyIndex] += force.y * invMass * deltaTime;
+
+            // Apply torque.
+            if (invInertia > 0.0)
+            {
+                const Real torque = worldR.x * force.y - worldR.y * force.x;
+                objectManager.bodies.angularVelocity[bodyIndex] += (torque * invInertia) * deltaTime;
+            }
+
+            // Apply strong angular velocity damping.
+            objectManager.bodies.angularVelocity[bodyIndex] *= angularDamping;
         }
-
-        // Apply linear force.
-        objectManager.bodies.velocityX[bodyIndex] += force.x * invMass * deltaTime;
-        objectManager.bodies.velocityY[bodyIndex] += force.y * invMass * deltaTime;
-
-        // Apply torque.
-        if (invInertia > 0.0)
-        {
-            const Real torque = worldR.x * force.y - worldR.y * force.x;
-            objectManager.bodies.angularVelocity[bodyIndex] += (torque * invInertia) * deltaTime;
-        }
-
-        // Apply strong angular velocity damping.
-        objectManager.bodies.angularVelocity[bodyIndex] *= std::pow(Real(0.1), deltaTime);
     }
 
     Real Simulation::computeBodyTotalKineticEnergy()

@@ -3,6 +3,8 @@
 
 #include "PS_AGONY2D/Simulation.h"
 
+#include "Editor/Editor.h"
+
 #include "Render/SimulationRenderer.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
@@ -65,16 +67,6 @@ struct DebugData
 
     PS_AGONY2D::Simulation::DebugData simulationDebugData;
 };
-
-struct ObjectCreatorState
-{
-    bool isFocused = false;
-    PS_AGONY2D::BodyType bodyType;
-    PS_AGONY2D::CircleCreateParams circleParams;
-    PS_AGONY2D::BoxCreateParams boxParams;
-    PS_AGONY2D::PolygonCreateParams polygonParams;
-};
-
 
 static void renderGUI(
     PS_AGONY2D::Simulation& simulation,
@@ -313,231 +305,6 @@ static void renderGUI(
     ImGui::End();
 }
 
-static ObjectCreatorState renderObjectCreatorUI(
-    PS_AGONY2D::Simulation& simulation,
-    const PS_AGONY2D::Camera2D camera
-)
-{
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, 20.0f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
-
-    ImGui::Begin("Object Creator");
-
-    bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-
-    static int selectedShape = 0;
-
-    static float vel[2] = { 0.0f, 0.0f };
-    static float rotation = 0.0f;
-    static float angularVelocity = 0.0f;
-    static float mass = 1.0f;
-    static int materialIndex = 0;
-
-    static float circleRadius = 1.0f;
-    static float boxWidth = 1.0f, boxHeight = 1.0f;
-
-    static std::vector<PS_AGONY2D::Vec2> polyVertices = {
-        { -1.0f, -1.0f },
-        {  1.0f, -1.0f },
-        {  0.0f,  1.0f }
-    };
-
-    ImGui::Combo("Shape Type", &selectedShape, "Circle\0Box\0Polygon\0");
-    ImGui::Separator();
-
-    if (ImGui::CollapsingHeader("Common Physics Parameters", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::DragFloat2("Initial Velocity", vel, 0.1f);
-        ImGui::DragFloat("Rotation (rad)", &rotation, 0.05f);
-        ImGui::DragFloat("Angular Velocity", &angularVelocity, 0.05f);
-        ImGui::DragFloat("Mass", &mass, 0.1f, 0.0f, 1000.0f, "%.3f");
-        ImGui::InputInt("Material ID", &materialIndex);
-    }
-    ImGui::Separator();
-
-    auto buildBaseParams = [&]() {
-        PS_AGONY2D::BodyCreateParams base;
-        base.position = camera.screenToWorldSpace({ 0.0, 0.0 });
-        base.velocity = { static_cast<PS_AGONY2D::Real>(vel[0]), static_cast<PS_AGONY2D::Real>(vel[1]) };
-        base.rotation = static_cast<PS_AGONY2D::Real>(rotation);
-        base.angularVelocity = static_cast<PS_AGONY2D::Real>(angularVelocity);
-        base.mass = static_cast<PS_AGONY2D::Real>(mass);
-        base.materialIndex = static_cast<PS_AGONY2D::MaterialIndex>(materialIndex);
-        return base;
-        };
-
-    ObjectCreatorState state;
-    state.isFocused = isFocused;
-
-    if (selectedShape == 0)
-    {
-        if (ImGui::CollapsingHeader("Circle Parameters", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::DragFloat("Radius", &circleRadius, 0.05f, 0.01f, 100.0f);
-        }
-
-        ImGui::Spacing();
-        if (ImGui::Button("Spawn Circle", ImVec2(-1, 30)))
-        {
-            PS_AGONY2D::CircleCreateParams params;
-            params.base = buildBaseParams();
-            params.radius = static_cast<PS_AGONY2D::Real>(circleRadius);
-            simulation.objects().createCircle(params);
-        }
-
-        state.bodyType = PS_AGONY2D::BodyType::Circle;
-        state.circleParams.base = buildBaseParams();
-        state.circleParams.radius = static_cast<PS_AGONY2D::Real>(circleRadius);
-    }
-    else if (selectedShape == 1)
-    {
-        if (ImGui::CollapsingHeader("Box Parameters", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::DragFloat("Width", &boxWidth, 0.05f, 0.01f, 100.0f);
-            ImGui::DragFloat("Height", &boxHeight, 0.05f, 0.01f, 100.0f);
-        }
-
-        ImGui::Spacing();
-        if (ImGui::Button("Spawn Box", ImVec2(-1, 30)))
-        {
-            PS_AGONY2D::BoxCreateParams params;
-            params.base = buildBaseParams();
-            params.size = { static_cast<PS_AGONY2D::Real>(boxWidth), static_cast<PS_AGONY2D::Real>(boxHeight) };
-            simulation.objects().createBox(params);
-        }
-
-        state.bodyType = PS_AGONY2D::BodyType::Box;
-        state.boxParams.base = buildBaseParams();
-        state.boxParams.size = { static_cast<PS_AGONY2D::Real>(boxWidth), static_cast<PS_AGONY2D::Real>(boxHeight) };
-    }
-    else if (selectedShape == 2)
-    {
-        if (ImGui::CollapsingHeader("Polygon Interactive Canvas", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::TextWrapped("Click Grid: Add Point | Left-Drag: Move Point | Right-Click: Delete Point");
-
-            ImDrawList* draw_list = ImGui::GetWindowDrawList();
-            ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-            ImVec2 canvas_sz(260.0f, 260.0f);
-
-            draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_sz.x, canvas_pos.y + canvas_sz.y), IM_COL32(25, 25, 30, 255));
-            draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_sz.x, canvas_pos.y + canvas_sz.y), IM_COL32(80, 80, 90, 255));
-
-            ImGui::InvisibleButton("poly_canvas", canvas_sz);
-            const bool is_hovered = ImGui::IsItemHovered();
-            const bool is_active = ImGui::IsItemActive();
-
-            ImVec2 center(canvas_pos.x + canvas_sz.x * 0.5f, canvas_pos.y + canvas_sz.y * 0.5f);
-            const float grid_scale = canvas_sz.x / 10.0f;
-
-            draw_list->AddLine(ImVec2(canvas_pos.x, center.y), ImVec2(canvas_pos.x + canvas_sz.x, center.y), IM_COL32(60, 60, 70, 255));
-            draw_list->AddLine(ImVec2(center.x, canvas_pos.y), ImVec2(center.x, canvas_pos.y + canvas_sz.y), IM_COL32(60, 60, 70, 255));
-
-            static int dragging_node_idx = -1;
-            ImVec2 mouse_pos = ImGui::GetIO().MousePos;
-
-            PS_AGONY2D::Vec2 mouse_local{
-                 (mouse_pos.x - center.x) / grid_scale,
-                -(mouse_pos.y - center.y) / grid_scale
-            };
-
-            if (mouse_local.x < -5.0f) mouse_local.x = -5.0f;
-            if (mouse_local.x > 5.0f) mouse_local.x = 5.0f;
-            if (mouse_local.y < -5.0f) mouse_local.y = -5.0f;
-            if (mouse_local.y > 5.0f) mouse_local.y = 5.0f;
-
-            if (is_hovered && ImGui::IsMouseClicked(0))
-            {
-                dragging_node_idx = -1;
-                for (int i = 0; i < (int)polyVertices.size(); i++)
-                {
-                    float vx = center.x + static_cast<float>(polyVertices[i].x) * grid_scale;
-                    float vy = center.y - static_cast<float>(polyVertices[i].y) * grid_scale;
-                    float dx = mouse_pos.x - vx;
-                    float dy = mouse_pos.y - vy;
-                    if (dx * dx + dy * dy < 64.0f)
-                    {
-                        dragging_node_idx = i;
-                        break;
-                    }
-                }
-
-                if (dragging_node_idx == -1)
-                {
-                    polyVertices.push_back(mouse_local);
-                }
-            }
-
-            if (is_active && dragging_node_idx != -1 && ImGui::IsMouseDragging(0))
-            {
-                polyVertices[dragging_node_idx] = mouse_local;
-            }
-
-            if (ImGui::IsMouseReleased(0))
-            {
-                dragging_node_idx = -1;
-            }
-
-            if (is_hovered && ImGui::IsMouseClicked(1))
-            {
-                for (int i = 0; i < (int)polyVertices.size(); i++)
-                {
-                    float vx = center.x + static_cast<float>(polyVertices[i].x) * grid_scale;
-                    float vy = center.y - static_cast<float>(polyVertices[i].y) * grid_scale;
-                    float dx = mouse_pos.x - vx;
-                    float dy = mouse_pos.y - vy;
-                    if (dx * dx + dy * dy < 64.0f)
-                    {
-                        polyVertices.erase(polyVertices.begin() + i);
-                        break;
-                    }
-                }
-            }
-
-            if (polyVertices.size() >= 2)
-            {
-                for (size_t i = 0; i < polyVertices.size(); i++)
-                {
-                    size_t next = (i + 1) % polyVertices.size();
-                    ImVec2 p1(center.x + static_cast<float>(polyVertices[i].x) * grid_scale, center.y - static_cast<float>(polyVertices[i].y) * grid_scale);
-                    ImVec2 p2(center.x + static_cast<float>(polyVertices[next].x) * grid_scale, center.y - static_cast<float>(polyVertices[next].y) * grid_scale);
-                    draw_list->AddLine(p1, p2, IM_COL32(0, 255, 0, 255), 2.0f);
-                }
-            }
-
-            for (size_t i = 0; i < polyVertices.size(); i++)
-            {
-                ImVec2 p(center.x + static_cast<float>(polyVertices[i].x) * grid_scale, center.y - static_cast<float>(polyVertices[i].y) * grid_scale);
-                ImU32 node_color = (dragging_node_idx == (int)i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(0, 190, 255, 255);
-                draw_list->AddCircleFilled(p, 4.0f, node_color);
-            }
-        }
-
-        ImGui::Spacing();
-        if (polyVertices.size() < 3)
-        {
-            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Polygons require at least 3 vertices!");
-        }
-
-        ImGui::BeginDisabled(polyVertices.size() < 3);
-        if (ImGui::Button("Spawn Polygon", ImVec2(-1, 30)))
-        {
-            PS_AGONY2D::PolygonCreateParams params;
-            params.base = buildBaseParams();
-            params.localVertices = polyVertices;
-            simulation.objects().createPolygon(params);
-        }
-        ImGui::EndDisabled();
-
-        state.bodyType = PS_AGONY2D::BodyType::Polygon;
-        state.polygonParams.base = buildBaseParams();
-        state.polygonParams.localVertices = polyVertices;
-    }
-
-    ImGui::End();
-    return state;
-}
-
 static bool createFramebuffer(
     Ecstasy::Graphics::WindowManager& wnd,
     Ecstasy::OpenGL::FrameBuffer& framebuffer
@@ -673,9 +440,9 @@ static int gameFunc()
     PS_AGONY2D::Simulation simulation{};
     //simulation.getSimulationSettings().clockSettings.updateInterval = 1.0 / 40.0;
 
-    auto& mainBodyHolder = simulation.getMainBodyHolder();
+    PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 2);
+    loadScene(simulation, 1);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;
@@ -742,46 +509,9 @@ static int gameFunc()
             if (windowInputManager.isKeyJustPressed(GLFW_KEY_P))
                 simulation.setPause(!simulation.isPaused());
         }
-        const bool isHoldingBody = mainBodyHolder.heldBody.has_value();
-        if (!io.WantCaptureMouse || isHoldingBody)
-        {
-            PS_AGONY2D::Vec2 mouseWorldPosition;
-            {
-                const glm::dvec2 mousePosition = windowInputManager.getMousePosition();
 
-                const glm::dvec2 wndSize = { wnd.getWidth(), wnd.getHeight() };
-
-                glm::dvec2 positionNDC = (mousePosition / wndSize) * 2.0 - 1.0;
-                positionNDC.y = -positionNDC.y;
-
-                mouseWorldPosition = camera.screenToWorldSpace(positionNDC);
-            }
-
-            mainBodyHolder.setPosition(mouseWorldPosition, deltaTime);
-
-            if (windowInputManager.isMouseButtonJustReleased(0))
-            {
-                simulation.mainBodyHolderRelease();
-            }
-            else if (windowInputManager.isMouseButtonJustPressed(0) && !io.WantCaptureMouse)
-            {
-                simulation.mainBodyHolderGrabAt(mouseWorldPosition);
-            }
-
-            if (isHoldingBody)
-            {
-                if (windowInputManager.isMouseButtonPressed(1))
-                {
-                    simulation.mainBodyHolderIncreaseAngularVelocity(-30.0 * deltaTime);
-                }
-
-                if (windowInputManager.isKeyJustPressed(GLFW_KEY_SPACE))
-                {
-                    simulation.objects().destroyBody(mainBodyHolder.heldBody.value());
-                    mainBodyHolder.heldBody.reset();
-                }
-            }
-        }
+        // Editor: picking, dragging, creation, camera pan/zoom.
+        editor.update(simulation, simulationRenderer, deltaTime);
 
         // Simulation.
         simulation.update(deltaTime);
@@ -833,41 +563,14 @@ static int gameFunc()
 
             // Build GUI window commands.
             renderGUI(simulation, simulationRenderer, renderOptions, debugData);
-            ObjectCreatorState creatorState = renderObjectCreatorUI(simulation, camera);
+            editor.drawUI(simulation, simulationRenderer);
 
             // Render simulation to FBO.
             renderOptions.interpolation = deltaTime < simulation.getSimulationSettings().clockSettings.updateInterval;
             const GLuint idTex = framebuffer.getTexture("id").value()->getID();
             simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions, idTex);
 
-            if (creatorState.isFocused)
-            {
-                const void* previewParams = nullptr;
-                if (creatorState.bodyType == PS_AGONY2D::BodyType::Circle)
-                {
-                    previewParams = &creatorState.circleParams;
-                }
-                else if (creatorState.bodyType == PS_AGONY2D::BodyType::Box)
-                {
-                    previewParams = &creatorState.boxParams;
-                }
-                else if (creatorState.bodyType == PS_AGONY2D::BodyType::Polygon)
-                {
-                    previewParams = &creatorState.polygonParams;
-                }
-
-                if (const char* previewError = simulationRenderer.renderObjectPreview(previewParams, creatorState.bodyType))
-                {
-                    const ImVec2 mouse = ImGui::GetIO().MousePos;
-                    ImGui::SetNextWindowPos(ImVec2(mouse.x + 16.0f, mouse.y + 16.0f));
-                    ImGui::SetNextWindowBgAlpha(0.75f);
-                    ImGui::Begin("##PreviewError", nullptr,
-                        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
-                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Polygon: %s", previewError);
-                    ImGui::End();
-                }
-            }
+            editor.renderPreview(simulationRenderer);
 
             // Blit scene color attachment.
             framebuffer.blitToDefaultFramebuffer(wnd.getWidth(), wnd.getHeight());

@@ -168,8 +168,6 @@ namespace PS_AGONY2D
 		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
 		bool setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
 
-		void mainBodyHolderGrabAt(Vec2 grabPosition);
-		void mainBodyHolderRelease();
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
 
 		const BroadPhaseCollisionDetector& getBroadPhaseCollisionDetector() const noexcept { return broadPhaseCollisionDetector; };
@@ -210,7 +208,7 @@ namespace PS_AGONY2D
 		void computeColliderWorldPositions();
 		void computeColliderWorldRotations();
 
-		void applyBodyHolderConstraint(Real deltaTime);
+		void applyBodyHolderConstraint(Real deltaTime, const Interactivity::BodyHolder& holder);
 
 		Real computeBodyTotalKineticEnergy();
 
