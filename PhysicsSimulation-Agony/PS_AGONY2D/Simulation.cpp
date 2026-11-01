@@ -25,7 +25,6 @@ namespace PS_AGONY2D
         const auto registerSystem = [this](IConstraintSystem& system) { constraintSystems[size_t(system.getType())] = &system; };
         registerSystem(springConstraintSystem);
         registerSystem(jointConstraintSystem);
-        registerSystem(rodConstraintSystem);
         registerSystem(prismaticJointConstraintSystem);
         registerSystem(sliderJointConstraintSystem);
         registerSystem(motorConstraintSystem);

@@ -44,9 +44,8 @@ namespace PS_AGONY2D
 	{
 		Spring,
 		RevoluteJoint,
-		Rod,
-		Prismatic,
-		Slider,
+		PrismaticJoint,
+		SliderJoint,
 		Motor,
 		COUNT
 	};

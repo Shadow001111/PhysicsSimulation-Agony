@@ -66,9 +66,6 @@
     <ClCompile Include="PS_AGONY2D\SimulationImpl\FixedClock.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="PS_AGONY2D\Solving\RodSolver.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="PS_AGONY2D\Solving\PrismaticJointSolver.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -115,9 +112,6 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\RevoluteJointSoA.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="PS_AGONY2D\SoA\Constraints\RodSoA.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\SliderJointSoA.cpp">
@@ -258,12 +252,6 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="PS_AGONY2D\SimulationImpl\FixedClock.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="PS_AGONY2D\SoA\Constraints\RodSoA.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="PS_AGONY2D\Solving\RodSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="PS_AGONY2D\SoA\Constraints\PrismaticJointSoA.h">

@@ -31,9 +31,6 @@ namespace PS_AGONY2D
 		void createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& params) { revoluteJoints().create(params, objectManager.bodies); }
 		void destroyRevoluteJoint(uint32_t index) { revoluteJoints().removeConstraint(index, objectManager.bodies); }
 
-		void createRod(const RodConstraintSystem::CreateParams& params) { rods().create(params, objectManager.bodies); }
-		void destroyRod(uint32_t index) { rods().removeConstraint(index, objectManager.bodies); }
-
 		void createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& params) { prismaticJoints().create(params, objectManager.bodies); }
 		void destroyPrismaticJoint(uint32_t index) { prismaticJoints().removeConstraint(index, objectManager.bodies); }
 
@@ -45,7 +42,6 @@ namespace PS_AGONY2D
 
 		SpringSoAViewer getSprings() const noexcept { return springs().getViewer(); }
 		RevoluteJointSoAViewer getJoints() const noexcept { return revoluteJoints().getViewer(); }
-		RodSoAViewer getRods() const noexcept { return rods().getViewer(); }
 		PrismaticJointSoAViewer getPrismaticJoints() const noexcept { return prismaticJoints().getViewer(); }
 		SliderJointSoAViewer getSliderJoints() const noexcept { return sliderJoints().getViewer(); }
 		MotorSoAViewer getMotors() const noexcept { return motors().getViewer(); }
@@ -64,25 +60,18 @@ namespace PS_AGONY2D
 			return static_cast<const RevoluteJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::RevoluteJoint)]);
 		}
 
-		RodConstraintSystem& rods() noexcept {
-			return static_cast<RodConstraintSystem&>(*systemsArray[size_t(ConstraintType::Rod)]);
-		}
-		const RodConstraintSystem& rods() const noexcept {
-			return static_cast<const RodConstraintSystem&>(*systemsArray[size_t(ConstraintType::Rod)]);
-		}
-
 		PrismaticJointConstraintSystem& prismaticJoints() noexcept {
-			return static_cast<PrismaticJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::Prismatic)]);
+			return static_cast<PrismaticJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::PrismaticJoint)]);
 		}
 		const PrismaticJointConstraintSystem& prismaticJoints() const noexcept {
-			return static_cast<const PrismaticJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::Prismatic)]);
+			return static_cast<const PrismaticJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::PrismaticJoint)]);
 		}
 
 		SliderJointConstraintSystem& sliderJoints() noexcept {
-			return static_cast<SliderJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::Slider)]);
+			return static_cast<SliderJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::SliderJoint)]);
 		}
 		const SliderJointConstraintSystem& sliderJoints() const noexcept {
-			return static_cast<const SliderJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::Slider)]);
+			return static_cast<const SliderJointConstraintSystem&>(*systemsArray[size_t(ConstraintType::SliderJoint)]);
 		}
 
 		MotorConstraintSystem& motors() noexcept {

@@ -96,7 +96,6 @@ namespace PS_AGONY2D
 		// Constraints. Each system owns its SoA and solver.
 		SpringConstraintSystem springConstraintSystem;
 		RevoluteJointConstraintSystem jointConstraintSystem;
-		RodConstraintSystem rodConstraintSystem;
 		PrismaticJointConstraintSystem prismaticJointConstraintSystem;
 		SliderJointConstraintSystem sliderJointConstraintSystem;
 		MotorConstraintSystem motorConstraintSystem;

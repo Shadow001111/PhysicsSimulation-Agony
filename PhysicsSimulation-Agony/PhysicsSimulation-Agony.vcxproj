@@ -274,7 +274,6 @@
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\MotorSoA.cpp" />
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\PrismaticJointSoA.cpp" />
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\RevoluteJointSoA.cpp" />
-    <ClCompile Include="PS_AGONY2D\SoA\Constraints\RodSoA.cpp" />
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\SliderJointSoA.cpp" />
     <ClCompile Include="PS_AGONY2D\SoA\Constraints\SpringSoA.cpp" />
     <ClCompile Include="PS_AGONY2D\SoA\Shapes\BoxSoA.cpp" />
@@ -300,7 +299,6 @@
     <ClCompile Include="PS_AGONY2D\SimulationImpl\PolygonDecomposition.cpp" />
     <ClCompile Include="PS_AGONY2D\Solving\WaveRunner.cpp" />
     <ClCompile Include="PS_AGONY2D\Threading.cpp" />
-    <ClCompile Include="PS_AGONY2D\Solving\RodSolver.cpp" />
     <ClCompile Include="PS_AGONY2D\Solving\SolverBase.cpp" />
     <ClCompile Include="PS_AGONY2D\Solving\SpringSolver.cpp" />
   </ItemGroup>
@@ -330,7 +328,6 @@
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\LeafPairTesting.h" />
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\Math.h" />
     <ClInclude Include="PS_AGONY2D\Types\ExecutionPolicy.h" />
-    <ClInclude Include="PS_AGONY2D\SoA\Constraints\RodSoA.h" />
     <ClInclude Include="PS_AGONY2D\SoA\Constraints\SliderJointSoA.h" />
     <ClInclude Include="PS_AGONY2D\Solving\MotorSolver.h" />
     <ClInclude Include="PS_AGONY2D\Solving\RevoluteJointSolver.h" />
@@ -369,7 +366,6 @@
     <ClInclude Include="PS_AGONY2D\Solving\PrismaticJointSolver.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\PolygonDecomposition.h" />
     <ClInclude Include="PS_AGONY2D\Solving\WaveRunner.h" />
-    <ClInclude Include="PS_AGONY2D\Solving\RodSolver.h" />
     <ClInclude Include="PS_AGONY2D\Solving\SolverBase.h" />
     <ClInclude Include="PS_AGONY2D\Solving\SpringSolver.h" />
   </ItemGroup>

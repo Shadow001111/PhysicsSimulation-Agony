@@ -14,7 +14,7 @@ namespace PS_AGONY_EDITOR
 		constexpr ImU32 kGhostColor = IM_COL32(60, 255, 90, 255);
 		constexpr ImU32 kHintColor = IM_COL32(255, 255, 255, 200);
 
-		const char* const kConstraintNames = "Spring\0Revolute joint\0Rod\0Prismatic joint\0Slider joint\0Motor\0";
+		const char* const kConstraintNames = "Spring\0Revolute joint\0PrismaticJoint joint\0SliderJoint joint\0Motor\0";
 
 		// TODO: express the pixel thresholds below as fractions of the screen resolution.
 		constexpr Real kPickTolerancePx = 3;

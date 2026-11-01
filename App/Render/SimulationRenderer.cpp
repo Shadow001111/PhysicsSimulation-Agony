@@ -63,7 +63,6 @@ namespace PS_AGONY_RENDER
         renderSprings(simulation, viewProjectionMatrix, transformContext, cameraAABB);
         renderJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);
         renderPrismaticJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);
-        renderRods(simulation, viewProjectionMatrix, transformContext, cameraAABB);
 
         if (renderOptions.colliderAABBs)
         {

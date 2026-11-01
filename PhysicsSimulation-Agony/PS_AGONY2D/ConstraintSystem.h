@@ -2,14 +2,12 @@
 #include "SoA/BodySoA.h"
 #include "SoA/Constraints/SpringSoA.h"
 #include "SoA/Constraints/RevoluteJointSoA.h"
-#include "SoA/Constraints/RodSoA.h"
 #include "SoA/Constraints/PrismaticJointSoA.h"
 #include "SoA/Constraints/SliderJointSoA.h"
 #include "SoA/Constraints/MotorSoA.h"
 
 #include "Solving/SpringSolver.h"
 #include "Solving/RevoluteJointSolver.h"
-#include "Solving/RodSolver.h"
 #include "Solving/PrismaticJointSolver.h"
 #include "Solving/SliderJointSolver.h"
 #include "Solving/MotorSolver.h"
@@ -200,29 +198,8 @@ namespace PS_AGONY2D
 		const char* getName() const noexcept override { return "RevoluteJoint"; }
 	};
 
-	class RodConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::Rod, RodSoA, RodSolver, RodSoAViewer>
-	{
-	public:
-		struct CreateParams
-		{
-			ObjectDenseIndex bodyIndexA;
-			ObjectDenseIndex bodyIndexB;
-			Vec2 localAnchorA;
-			Vec2 localAnchorB;
-			Real length;
-		};
-
-		void create(const CreateParams& p, BodySoA& bodies)
-		{
-			createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.length);
-		}
-
-		const char* getName() const noexcept override { return "Rod"; }
-	};
-
 	class PrismaticJointConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::Prismatic, PrismaticJointSoA, PrismaticJointSolver, PrismaticJointSoAViewer>
+		public ConstraintSystemBase<ConstraintType::PrismaticJoint, PrismaticJointSoA, PrismaticJointSolver, PrismaticJointSoAViewer>
 	{
 	public:
 		struct CreateParams
@@ -263,7 +240,7 @@ namespace PS_AGONY2D
 	};
 
 	class SliderJointConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::Slider, SliderJointSoA, SliderJointSolver, SliderJointSoAViewer>
+		public ConstraintSystemBase<ConstraintType::SliderJoint, SliderJointSoA, SliderJointSolver, SliderJointSoAViewer>
 	{
 	public:
 		struct CreateParams

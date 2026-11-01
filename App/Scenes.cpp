@@ -567,19 +567,6 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
                 });
         };
 
-    auto joinWithRod = [&](PS_AGONY2D::ObjectDenseIndex bodyA, PS_AGONY2D::ObjectDenseIndex bodyB,
-        PS_AGONY2D::Vec2 localA, PS_AGONY2D::Vec2 localB, float restLen)
-        {
-            // Rigid, inextensible - restLen becomes the rod's fixed length.
-            constraints.createRod({
-                .bodyIndexA = bodyA,
-                .bodyIndexB = bodyB,
-                .localAnchorA = localA,
-                .localAnchorB = localB,
-                .length = restLen
-                });
-        };
-
     // === 4. GENERIC BRIDGE BUILDER ===
     // joinPlanks is a template (auto) parameter, not std::function - each call below gets
     // its own inlined instantiation, so picking a constraint type costs nothing at runtime.
@@ -625,7 +612,6 @@ void load_ConstraintBridges(PS_AGONY2D::Simulation& simulation, Ecstasy::Core::R
     // === 5. BUILD THE THREE BRIDGES ===
     buildBridge(springBridgeY, joinWithSpring);
     buildBridge(jointBridgeY, joinWithJoint);
-    buildBridge(rodBridgeY, joinWithRod);
 
     // === 6. SPAWN INTERACTIONS (DECORATIVE INTERACTION BALLS) ===
     for (int i = 0; i < 5; ++i)
