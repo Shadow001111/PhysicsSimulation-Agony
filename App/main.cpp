@@ -130,8 +130,6 @@ static void renderGUI(
             settings.collisionPositionSolvingIterations = static_cast<uint32_t>(posIter);
         }
 
-        ImGui::Checkbox("Collision Events", &settings.collisionEventsEnabled);
-
         for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
         {
             auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
@@ -143,6 +141,29 @@ static void renderGUI(
                 system.iterations = static_cast<uint32_t>(iters);
             }
         }
+
+        ImGui::Checkbox("Collision Events", &settings.collisionEventsEnabled);
+
+        auto integratorType = settings.integratorSettings.integratorType;
+        const char* previewValue = PS_AGONY2D::Integrator::integratorTypeToString(integratorType);
+        if (ImGui::BeginCombo("Integrator type", previewValue))
+        {
+            // Loop through all values of the enum.
+            for (int i = 0; i < static_cast<int>(PS_AGONY2D::Integrator::IntegratorType::COUNT); i++)
+            {
+                auto enumValue = PS_AGONY2D::Integrator::IntegratorType(i);
+                bool isSelected = (integratorType == enumValue);
+
+                // Draw the selectable item.
+                if (ImGui::Selectable(PS_AGONY2D::Integrator::integratorTypeToString(enumValue), isSelected))
+                {
+                    integratorType = enumValue;
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+        settings.integratorSettings.integratorType = integratorType;
     }
 
     // Render options.

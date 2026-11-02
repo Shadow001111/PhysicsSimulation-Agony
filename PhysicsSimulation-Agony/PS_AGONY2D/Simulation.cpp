@@ -253,36 +253,35 @@ namespace PS_AGONY2D
         objectManager.deletedColliders.clear();
         objectManager.deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
-        // Semi-implicit integration + constraint solving + more computing.
+        if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::SemiImplicit)
         {
             // Integration first phase.
             Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
             Integrator::dampAngularVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-
+        
             // Solve constraints.
             applyBodyHolderConstraint(deltaTime, mainBodyHolder);
             constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-
+        
             // Integration second phase.
             Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
         }
-
-        // Velocity-verlet integration + constraint solving + more computing.
-        //{
-        //    const Real halfDT = deltaTime * Real(0.5);
-        //
-        //    // Integration first phase.
-        //    Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-        //    Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
-        //
-        //    // Solve constraints.
-        //    applyBodyHolderConstraint(deltaTime);
-        //    constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-        //
-        //    // Integration second phase.
-        //    Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-        //    Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
-        //}
+        else if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::VelocityVerlet)
+        {
+            const Real halfDT = deltaTime * Real(0.5);
+        
+            // Integration first phase.
+            Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
+        
+            // Solve constraints.
+            applyBodyHolderConstraint(deltaTime, mainBodyHolder);
+            constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
+        
+            // Integration second phase.
+            Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
+        }
 
         // Computing important data.
         wrapBodyRotations(objectManager.bodies);

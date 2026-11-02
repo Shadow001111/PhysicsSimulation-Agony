@@ -4,10 +4,18 @@
 
 namespace PS_AGONY2D::Integrator
 {
+	enum class IntegratorType : uint8_t
+	{
+		SemiImplicit,
+		VelocityVerlet,
+		COUNT
+	};
+
 	struct IntegrationSettings
 	{
 		Vec2 gravity{ 0.0, -9.81 };
 		Real angularVelocityDamping = 1.0; // Per second.
+		IntegratorType integratorType = IntegratorType::SemiImplicit;
 	};
 
 	void integrateVelocities_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
@@ -19,5 +27,14 @@ namespace PS_AGONY2D::Integrator
 	void dampAngularVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
 
 	void computeRotationCosSin(BodySoA& bodies);
+
+	inline const char* integratorTypeToString(IntegratorType d)
+	{
+		switch (d)
+		{
+		case IntegratorType::SemiImplicit:   return "SemiImplicit";
+		case IntegratorType::VelocityVerlet: return "VelocityVerlet";
+		}
+	}
 }
 
