@@ -7,12 +7,8 @@
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
-#include <iostream>
+//#include <iostream>
 #include <cmath>
-
-// TODO: Deferred command queue. Handlers must not destroy bodies/colliders mid-drain (destroyBody swaps with back,
-// so pending events would hold stale indices). Queue create/destroy calls issued from handlers, run them after the
-// drain (creates first, then destroys), and report success/failure through callbacks. Maybe stable global ids later.
 
 namespace PS_AGONY2D
 {
@@ -34,15 +30,10 @@ namespace PS_AGONY2D
     {
         TRACY_SCOPE_NC("Simulation update", PS_AGONY2D::Profiling::Color::Wheat);
 
-        // Delta time check.
         if (deltaTime <= 0) return;
 
         // Apply queued modifications before anything reads the data.
-        objectManager.flushCommands();
-        for (auto* constraintSystem : constraintSystems)
-        {
-            constraintSystem->flushCommands(objectManager.bodies);
-        }
+        flushCommands();
 
         // Paused: only keep the spatial structures valid for newly created/destroyed colliders.
         if (paused)
@@ -59,14 +50,10 @@ namespace PS_AGONY2D
             const Real fixedDeltaTime = clock.getFixedDeltaTime();
 
             preUpdate();
-            for (uint32_t i = 0; i < stepCount; ++i)
+            for (uint32_t i = 0; i < stepCount; i++)
             {
                 physicsStep(fixedDeltaTime);
-                objectManager.flushCommands(); // Safe point: collision events are already dispatched.
-                for (auto* constraintSystem : constraintSystems)
-                {
-                    constraintSystem->flushCommands(objectManager.bodies);
-                }
+                flushCommands();
             }
             postUpdate();
         }
@@ -77,46 +64,7 @@ namespace PS_AGONY2D
 
         renderAlpha = clock.getRenderAlpha();
 
-        // Debug data.
-        {
-            constexpr Real DEBUG_DATA_SWITCH_INTERVAL = 0.25;
-
-            debugDataResetTimeAccumulator += deltaTime;
-            if (debugDataResetTimeAccumulator > DEBUG_DATA_SWITCH_INTERVAL)
-            {
-                debugDataSnaphot = runtimeDebugData;
-
-                debugDataResetTimeAccumulator = 0.0;
-
-                runtimeDebugData.updatesHappened = 0;
-
-                collectMemoryUsage(debugDataSnaphot);
-            }
-
-            runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
-            runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.clockSettings.updateInterval);
-
-            // Track body penetration.
-            {
-                Vec2 errors{ 0 };
-                if (simulationSettings.trackBodyCollisionSolverConstraintErrors)
-                {
-                    errors = bodyCollisionSolver.computeConstraintErrors();
-                }
-                runtimeDebugData.bodyCollisionSolverVelocityError = errors.x;
-                runtimeDebugData.bodyCollisionSolverPositionError = errors.y;
-            }
-
-            // Track body kinetic energy.
-            if (simulationSettings.trackBodyKineticEnergySum)
-            {
-                runtimeDebugData.bodyKineticEnergySum = computeBodyTotalKineticEnergy();
-            }
-            else
-            {
-                runtimeDebugData.bodyKineticEnergySum = 0;
-            }
-        }
+        updateDebugData(deltaTime, stepCount);
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)
@@ -321,6 +269,46 @@ namespace PS_AGONY2D
 
             // Collision events (only exist if collisions were solved).
             dispatchCollisionEvents();
+        }
+    }
+
+    void Simulation::flushCommands()
+    {
+        objectManager.flushCommands();
+        for (auto* constraintSystem : constraintSystems)
+        {
+            constraintSystem->flushCommands(objectManager.bodies);
+        }
+    }
+
+    void Simulation::updateDebugData(Real deltaTime, uint32_t stepCount)
+    {
+        constexpr Real DEBUG_DATA_SWITCH_INTERVAL = 0.25;
+
+        debugDataResetTimeAccumulator += deltaTime;
+        if (debugDataResetTimeAccumulator > DEBUG_DATA_SWITCH_INTERVAL)
+        {
+            debugDataSnaphot = runtimeDebugData;
+
+            debugDataResetTimeAccumulator = 0.0;
+
+            runtimeDebugData.updatesHappened = 0;
+
+            collectMemoryUsage(debugDataSnaphot);
+        }
+
+        runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
+        runtimeDebugData.updatesSupposedToHappen = std::floor(Real(1.0) / simulationSettings.clockSettings.updateInterval);
+
+        // Track body penetration.
+        {
+            Vec2 errors{ 0 };
+            if (simulationSettings.trackBodyCollisionSolverConstraintErrors)
+            {
+                errors = bodyCollisionSolver.computeConstraintErrors();
+            }
+            runtimeDebugData.bodyCollisionSolverVelocityError = errors.x;
+            runtimeDebugData.bodyCollisionSolverPositionError = errors.y;
         }
     }
 
@@ -541,10 +529,9 @@ namespace PS_AGONY2D
             const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
             if (bodyIndex >= objectManager.bodies.getCount()) continue;
 
-            const Real mass = objectManager.bodies.mass[bodyIndex];
-            if (mass == 0.0) continue; // Static objects can't be dragged.
-
             const Real invMass = objectManager.bodies.invMass[bodyIndex];
+            if (invMass == 0.0) continue; // Static objects can't be dragged.
+
             const Real invInertia = objectManager.bodies.invInertia[bodyIndex];
 
             const Real cosRot = objectManager.bodies.rotationCos[bodyIndex];
@@ -594,12 +581,8 @@ namespace PS_AGONY2D
             if (det > 0.0)
             {
                 const Real invDet = 1.0 / det;
-                const Real mEff00 = k11 * invDet;
-                const Real mEff11 = k00 * invDet;
-                const Real mEff01 = -k01 * invDet;
-
-                force.x = mEff00 * desiredAccel.x + mEff01 * desiredAccel.y;
-                force.y = mEff01 * desiredAccel.x + mEff11 * desiredAccel.y;
+                force.x = (k11 * desiredAccel.x - k01 * desiredAccel.y) * invDet;
+                force.y = (k00 * desiredAccel.y - k01 * desiredAccel.x) * invDet;
             }
 
             // Apply linear force.
@@ -616,61 +599,6 @@ namespace PS_AGONY2D
             // Apply strong angular velocity damping.
             objectManager.bodies.angularVelocity[bodyIndex] *= angularDamping;
         }
-    }
-
-    Real Simulation::computeBodyTotalKineticEnergy()
-    {
-        TRACY_SCOPE_N("Compute body total kinetic energy");
-
-        const Real* ECSTASY_RESTRICT velocityXPtr = objectManager.bodies.velocityX.data();
-        const Real* ECSTASY_RESTRICT velocityYPtr = objectManager.bodies.velocityY.data();
-        const Real* ECSTASY_RESTRICT angularVelocityPtr = objectManager.bodies.angularVelocity.data();
-
-        const Real* ECSTASY_RESTRICT massPtr = objectManager.bodies.mass.data();
-        const Real* ECSTASY_RESTRICT inertiaPtr = objectManager.bodies.inertia.data();
-
-        const size_t bodyCount = objectManager.bodies.getCount();
-
-        Real totalKineticEnergy = 0;
-
-        size_t i = 0;
-        if (bodyCount >= RealSimd::lanes)
-        {
-            const RealSimd half{ 0.5 };
-            RealSimd totalKineticEnergyV{ 0 };
-            for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
-            {
-                const RealSimd velocityX = RealSimd::load(velocityXPtr + i);
-                const RealSimd velocityY = RealSimd::load(velocityYPtr + i);
-                const RealSimd angularVelocity = RealSimd::load(angularVelocityPtr + i);
-
-                const RealSimd mass = RealSimd::load(massPtr + i);
-                const RealSimd inertia = RealSimd::load(inertiaPtr + i);
-
-                const RealSimd linearVelocitySquared = RealSimd::mulAdd(velocityX, velocityX, velocityY * velocityY);
-                const RealSimd angularVelocitySquared = angularVelocity * angularVelocity;
-
-                const RealSimd kineticEnergy = RealSimd::mulAdd(linearVelocitySquared, mass, angularVelocitySquared * inertia) * half;
-                totalKineticEnergyV += kineticEnergy;
-            }
-            totalKineticEnergy += RealSimd::horizontalAdd(totalKineticEnergyV);
-        }
-        for (; i < bodyCount; i++)
-        {
-            const Real velocityX = velocityXPtr[i];
-            const Real velocityY = velocityYPtr[i];
-            const Real angularVelocity = angularVelocityPtr[i];
-
-            const Real mass = massPtr[i];
-            const Real inertia = inertiaPtr[i];
-
-            const Real linearVelocitySquared = std::fma(velocityX, velocityX, velocityY * velocityY);
-            const Real angularVelocitySquared = angularVelocity * angularVelocity;
-
-            const Real kineticEnergy = std::fma(linearVelocitySquared, mass, angularVelocitySquared * inertia) * Real(0.5);
-            totalKineticEnergy += kineticEnergy;
-        }
-        return totalKineticEnergy;
     }
 
     void Simulation::collectMemoryUsage(DebugData& data) const

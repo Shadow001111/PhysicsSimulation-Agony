@@ -187,18 +187,8 @@ static void renderGUI(
         ImGui::Checkbox("Track body collision solver constraint errors", &settings.trackBodyCollisionSolverConstraintErrors);
         if (settings.trackBodyCollisionSolverConstraintErrors)
         {
-            ImGui::Text("Total velocity constraint error: %.4f", simulationData.bodyCollisionSolverVelocityError);
-            ImGui::Text("Total position constraint error: %.4f", simulationData.bodyCollisionSolverPositionError);
-        }
-        else
-        {
-            ImGui::TextDisabled("Disabled.");
-        }
-
-        ImGui::Checkbox("Track Kinetic Energy", &settings.trackBodyKineticEnergySum);
-        if (settings.trackBodyKineticEnergySum)
-        {
-            ImGui::Text("Total kinetic knergy: %.4f", simulationData.bodyKineticEnergySum);
+            ImGui::Text("Velocity E: %.4f", simulationData.bodyCollisionSolverVelocityError);
+            ImGui::Text("Position E: %.4f", simulationData.bodyCollisionSolverPositionError);
         }
         else
         {

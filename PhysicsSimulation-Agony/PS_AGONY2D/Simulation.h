@@ -58,11 +58,9 @@ namespace PS_AGONY2D
 
 			size_t solvingPlannerMemoryUsage = 0;
 
-			// Debug.
+			// Solving errors.
 			Real bodyCollisionSolverVelocityError = 0;
 			Real bodyCollisionSolverPositionError = 0;
-
-			Real bodyKineticEnergySum = 0;
 		};
 
 		struct SimulationSettings
@@ -82,7 +80,6 @@ namespace PS_AGONY2D
 
 			// Debug.
 			bool trackBodyCollisionSolverConstraintErrors = false;
-			bool trackBodyKineticEnergySum = false;
 		};
 	private:
 		// Materials. Declared before objectManager, which references its storage.
@@ -191,6 +188,10 @@ namespace PS_AGONY2D
 	private:
 		void physicsStep(Real deltaTime);
 
+		void flushCommands();
+
+		void updateDebugData(Real deltaTime, uint32_t stepCount);
+
 		void dispatchCollisionEvents();
 
 		void preUpdate();
@@ -208,8 +209,6 @@ namespace PS_AGONY2D
 		void computeColliderWorldRotations();
 
 		void applyBodyHolderConstraint(Real deltaTime, const Interactivity::BodyHolder& holder);
-
-		Real computeBodyTotalKineticEnergy();
 
 		void collectMemoryUsage(DebugData& data) const;
 	};

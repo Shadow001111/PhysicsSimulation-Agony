@@ -15,7 +15,7 @@ namespace PS_AGONY2D::Integrator
 	{
 		Vec2 gravity{ 0.0, -9.81 };
 		Real angularVelocityDamping = 1.0; // Per second.
-		IntegratorType integratorType = IntegratorType::SemiImplicit;
+		IntegratorType integratorType = IntegratorType::VelocityVerlet;
 	};
 
 	void integrateVelocities_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings);
@@ -34,6 +34,7 @@ namespace PS_AGONY2D::Integrator
 		{
 		case IntegratorType::SemiImplicit:   return "SemiImplicit";
 		case IntegratorType::VelocityVerlet: return "VelocityVerlet";
+		default:							 return nullptr;
 		}
 	}
 }
