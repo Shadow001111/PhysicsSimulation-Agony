@@ -6,7 +6,7 @@ namespace PS_AGONY2D
 {
 	struct Handle
 	{
-		static constexpr uint32_t kNull = 0xFFFFFFFFu;
+		static constexpr uint32_t kNull = -1;
 		uint32_t slot = kNull;
 		uint32_t generation = 0;
 		friend constexpr bool operator==(const Handle& a, const Handle& b) noexcept

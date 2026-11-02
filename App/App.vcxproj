@@ -243,7 +243,13 @@
     <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Editor\Editor.cpp" />
+    <ClCompile Include="Editor\Editor_Constraint.cpp" />
+    <ClCompile Include="Editor\Editor_Core.cpp" />
+    <ClCompile Include="Editor\Editor_Create.cpp" />
+    <ClCompile Include="Editor\Editor_Inspector.cpp" />
+    <ClCompile Include="Editor\Editor_Overlay.cpp" />
+    <ClCompile Include="Editor\Editor_Select.cpp" />
+    <ClCompile Include="Editor\Editor_UI.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Render\ShapeRenderer.cpp" />
     <ClCompile Include="Render\SimulationRenderer.cpp" />
@@ -263,6 +269,7 @@
     <ClInclude Include="..\thirdparty\imgui\imstb_truetype.h" />
     <ClInclude Include="EcstasyThreadingBackend.h" />
     <ClInclude Include="Editor\Editor.h" />
+    <ClInclude Include="Editor\Editor_Internal.h" />
     <ClInclude Include="Render\ShapeRenderer.h" />
     <ClInclude Include="Render\SimulationRenderer.h" />
     <ClInclude Include="Render\SimulationRenderer_Internal.h" />

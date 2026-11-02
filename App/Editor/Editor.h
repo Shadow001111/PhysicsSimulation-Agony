@@ -97,6 +97,11 @@ namespace PS_AGONY_EDITOR
 		float lastDynamicMass = 1.0f;
 		float density = 1.0f;
 
+		// Constraint system names, cached once from the simulation.
+		std::string constraintNames[static_cast<size_t>(ConstraintType::COUNT)];
+		std::string constraintCombo; // Null-separated, for ImGui::Combo.
+		bool namesCached = false;
+
 		// Feedback.
 		std::string status;
 		float statusTimer = 0.0f;
@@ -104,6 +109,7 @@ namespace PS_AGONY_EDITOR
 		// Helpers.
 		Vec2 snap(Vec2 p) const noexcept;
 		void setStatus(const char* text);
+		void cacheConstraintNames(Simulation& sim);
 		Vec2 screenToWorld(PS_AGONY2D::Camera2D& cam, float px, float py) const;
 		ImVec2 toScreen(Vec2 world) const;
 		int findSelected(const ObjectAPI& api, Handle body) const;

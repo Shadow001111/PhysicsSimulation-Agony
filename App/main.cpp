@@ -166,21 +166,6 @@ static void renderGUI(
         settings.integratorSettings.integratorType = integratorType;
     }
 
-    // Render options.
-    if (ImGui::CollapsingHeader("Render Options", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
-        ImGui::Checkbox("Broad-Phase Dynamic AABBs", &renderOptions.broadPhaseDynamicAABBs);
-        ImGui::Checkbox("Broad-Phase Static AABBs", &renderOptions.broadPhaseStaticAABBs);
-        ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
-        ImGui::Checkbox("Outline Colliders", &renderOptions.outlineColliders);
-        if (renderOptions.outlineColliders)
-        {
-            ImGui::ColorPicker3("Outline Color", &renderOptions.outlineColor.x,
-                ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoSidePreview);
-        }
-    }
-
     // Physics diagnostics.
     if (ImGui::CollapsingHeader("Physics Diagnostics", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -193,6 +178,21 @@ static void renderGUI(
         else
         {
             ImGui::TextDisabled("Disabled.");
+        }
+    }
+
+    // Render options.
+    if (ImGui::CollapsingHeader("Render Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
+        ImGui::Checkbox("Broad-Phase Dynamic AABBs", &renderOptions.broadPhaseDynamicAABBs);
+        ImGui::Checkbox("Broad-Phase Static AABBs", &renderOptions.broadPhaseStaticAABBs);
+        ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
+        ImGui::Checkbox("Outline Colliders", &renderOptions.outlineColliders);
+        if (renderOptions.outlineColliders)
+        {
+            ImGui::ColorPicker3("Outline Color", &renderOptions.outlineColor.x,
+                ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoSidePreview);
         }
     }
 
