@@ -2,7 +2,7 @@
 
 namespace PS_AGONY_EDITOR
 {
-	// Draws selection AABBs and centers, grab line, box select rectangle, create ghost helpers
+	// Draws selection AABBs and centers, box select rectangle, create ghost helpers
 	// and the pending constraint anchor on the background draw list.
 	void Editor::drawOverlay(Simulation& sim)
 	{
@@ -73,26 +73,6 @@ namespace PS_AGONY_EDITOR
 					default: break;
 					}
 				}
-			}
-		}
-
-		// Grab lines: from each held anchor to its holder target.
-		if (dragMode == DragMode::Holder)
-		{
-			const auto& holder = sim.getMainBodyHolder();
-			for (const auto& held : holder.heldBodies)
-			{
-				const ObjectDenseIndex bi = api.getBodyIndex(held.body);
-				if (bi == Handle::kNull) continue;
-
-				const Real c = bv.rotationCos[bi];
-				const Real s = bv.rotationSin[bi];
-				const Vec2 o = held.localOffset;
-				const Vec2 grab(
-					bv.worldCenterX[bi] + o.x * c - o.y * s,
-					bv.worldCenterY[bi] + o.x * s + o.y * c);
-				const Vec2 target(holder.getPosition().x + held.targetOffset.x, holder.getPosition().y + held.targetOffset.y);
-				dl->AddLine(toScreen(grab), toScreen(target), kHintColor, 1.5f);
 			}
 		}
 
