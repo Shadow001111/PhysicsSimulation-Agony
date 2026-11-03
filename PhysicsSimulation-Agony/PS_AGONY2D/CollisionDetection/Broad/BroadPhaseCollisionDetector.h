@@ -27,6 +27,14 @@ namespace PS_AGONY2D
 		Rebuild
 	};
 
+	// Cross-tree query pairs, ordered (first, second). Add a line here to enable another pair.
+	struct TreePair { BroadPhaseInternal::BvhTreeType first, second; };
+	inline constexpr std::array CROSS_TREE_PAIRS{
+		TreePair{ BroadPhaseInternal::BvhTreeType::Dynamic, BroadPhaseInternal::BvhTreeType::Static },
+		TreePair{ BroadPhaseInternal::BvhTreeType::Dynamic, BroadPhaseInternal::BvhTreeType::Sleeping }
+	};
+	inline constexpr size_t CROSS_PAIR_COUNT = CROSS_TREE_PAIRS.size();
+
 	struct TreesUpdateParams
 	{
 		std::array<TreeUpdate, 3> types{};
@@ -46,8 +54,8 @@ namespace PS_AGONY2D
 			CacheLineAlignedVector<BvhNodePair> selfNodePairs;
 			CacheLineAlignedVector<BvhNodePair> selfLeafPairs;
 			CacheLineAlignedVector<uint32_t> selfLeaves;
-			CacheLineAlignedVector<BvhNodePair> crossNodePairs;
-			CacheLineAlignedVector<BvhNodePair> crossLeafPairs;
+			std::array<CacheLineAlignedVector<BvhNodePair>, CROSS_PAIR_COUNT> crossNodePairs;
+			std::array<CacheLineAlignedVector<BvhNodePair>, CROSS_PAIR_COUNT> crossLeafPairs;
 		};
 
 		struct QueryPairsThreadedResources
@@ -93,13 +101,13 @@ namespace PS_AGONY2D
 				SelfLeaves,    // Range of queryResources.selfLeaves, ascending.
 				SelfLeafPairs, // Range of queryResources.selfLeafPairs, ascending.
 				SelfNodes,     // Range of queryResources.selfNodePairs, processed DESCENDING (stack order).
-				CrossNodes     // Range of queryResources.crossNodePairs, ascending (already DFS-ordered).
+				CrossNodes     // Range of queryResources.crossNodePairs[pair], ascending (already DFS-ordered).
 			};
 
 			struct Task
 			{
 				TaskKind kind;
-				uint32_t begin, end;
+				uint32_t pair, begin, end; // 'pair' indexes CROSS_TREE_PAIRS (CrossNodes only).
 			};
 
 			// Where a task's pairs live: workerData[worker].collisionData[begin, end).
@@ -111,7 +119,7 @@ namespace PS_AGONY2D
 			std::vector<WorkerData> workerData;
 			std::vector<Task> tasks;
 			std::vector<TaskOutput> taskOutputs;
-			CacheLineAlignedVector<BvhNodePair> crossScratch;
+			std::array<CacheLineAlignedVector<BvhNodePair>, CROSS_PAIR_COUNT> crossScratch;
 		};
 
 		AABBSoAViewer collidersAABB;

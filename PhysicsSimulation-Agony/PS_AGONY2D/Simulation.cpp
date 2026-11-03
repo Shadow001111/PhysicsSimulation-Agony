@@ -326,6 +326,7 @@ namespace PS_AGONY2D
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Dynamic )] = TreeUpdate::Rebuild;
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Static  )] = TreeUpdate::Refit;
         // TODO: Set to none when sleeping bodies didn't change. Rebuild only when changed.
+        //       Or just have generation int.
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = TreeUpdate::Rebuild;
 
         params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic )] = objectManager.getDynamicColliderIDs();
