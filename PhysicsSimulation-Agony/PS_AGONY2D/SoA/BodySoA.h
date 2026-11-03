@@ -67,7 +67,7 @@ namespace PS_AGONY2D
 
         HandleTable handles;
 
-        Handle append(
+        ObjectDenseIndex append(
             Vec2 pos, Vec2 vel, Real rot, Real anglVel,
             Real mass, Real invMass, Real inertia, Real invInertia,
             Vec2 localCenterOfMass

@@ -39,8 +39,8 @@ namespace PS_AGONY2D
 
 		virtual ~IConstraintSystem() = default;
 
-		virtual void removeConstraint(uint32_t index, BodySoA& bodies) = 0;
-		virtual void remapBodyIndex(uint32_t index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) = 0;
+		virtual void removeConstraint(ObjectDenseIndex index, BodySoA& bodies) = 0;
+		virtual void remapBodyIndex(ObjectDenseIndex index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) = 0;
 
 		// Applies and clears the queued modification commands. Call right after ObjectManager::flushCommands(),
 		// never during solving. Stale handles are dropped; values are sanitized on apply. Never replans.
@@ -94,7 +94,7 @@ namespace PS_AGONY2D
 			for (const ConstraintCommand& command : commands)
 			{
 				const uint32_t resolved = soa.indexOf(command.handle);
-				if (resolved == Handle::kNull) continue;
+				if (resolved == Handle::NULL_DENSE_INDEX) continue;
 				apply(command, resolved);
 			}
 			commands.clear();
@@ -157,7 +157,7 @@ namespace PS_AGONY2D
 				bodies.removeAttachment(soa.bodyIndexA[index], Type, index);
 				bodies.removeAttachment(soa.bodyIndexB[index], Type, index);
 
-				const uint32_t oldBackIndex = static_cast<uint32_t>(soa.swapRemove(index));
+				const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
 
 				// If a constraint got swapped into 'index', relink it there.
 				if (oldBackIndex != index)
@@ -172,7 +172,7 @@ namespace PS_AGONY2D
 			}
 		}
 
-		void remapBodyIndex(uint32_t index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) final
+		void remapBodyIndex(ObjectDenseIndex index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) final
 		{
 			if (index >= soa.getCount()) [[unlikely]]
 			{
@@ -202,9 +202,9 @@ namespace PS_AGONY2D
 		Viewer getViewer() const noexcept { return Viewer(soa); }
 
 		// Handle lookup. indexOf returns Handle::kNull if stale.
-		bool isValid(Handle h) const noexcept { return soa.indexOf(h) != Handle::kNull; }
-		uint32_t indexOf(Handle h) const noexcept { return soa.indexOf(h); }
-		Handle handleAt(uint32_t index) const noexcept { return soa.handleAt(index); }
+		bool isValid(Handle h) const noexcept { return soa.indexOf(h) != Handle::NULL_DENSE_INDEX; }
+		ObjectDenseIndex indexOf(Handle h) const noexcept { return soa.indexOf(h); }
+		Handle handleAt(ObjectDenseIndex index) const noexcept { return soa.handleAt(index); }
 
 		size_t getCount() const noexcept final { return soa.getCount(); }
 		size_t getMemoryUsage() const noexcept final { return soa.getMemoryUsage(); }
@@ -245,7 +245,7 @@ namespace PS_AGONY2D
 			return createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.restLength, p.stiffness, p.damping);
 		}
 
-		// ---- Deferred modification commands (applied by flushCommands) ----
+		// Deferred modification commands.
 		void queueLocalAnchorA(Handle h, Vec2 v) { pushCommand(Cmd::LocalAnchorA, h, v.x, v.y); }
 		void queueLocalAnchorB(Handle h, Vec2 v) { pushCommand(Cmd::LocalAnchorB, h, v.x, v.y); }
 		void queueRestLength(Handle h, Real v) { pushCommand(Cmd::RestLength, h, v); }
@@ -254,7 +254,7 @@ namespace PS_AGONY2D
 
 		void flushCommands(const BodySoA&) override
 		{
-			flushImpl([this](const ConstraintCommand& c, uint32_t i)
+			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{
@@ -267,15 +267,15 @@ namespace PS_AGONY2D
 				});
 		}
 
-		// ---- Instant reads (no queue). nullopt if stale / out of range. ----
+		// Instant reads (no queue). nullopt if stale / out of range.
 		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
 		{
-			const uint32_t i = soa.indexOf(h);
-			if (i == Handle::kNull) return std::nullopt;
+			const ObjectDenseIndex i = soa.indexOf(h);
+			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			return getDataAt(i, bodies);
 		}
 
-		std::optional<Data> getDataAt(uint32_t i, const BodySoA& bodies) const noexcept
+		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;
@@ -331,7 +331,7 @@ namespace PS_AGONY2D
 
 		void flushCommands(const BodySoA&) override
 		{
-			flushImpl([this](const ConstraintCommand& c, uint32_t i)
+			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{
@@ -345,12 +345,12 @@ namespace PS_AGONY2D
 
 		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
 		{
-			const uint32_t i = soa.indexOf(h);
-			if (i == Handle::kNull) return std::nullopt;
+			const ObjectDenseIndex i = soa.indexOf(h);
+			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			return getDataAt(i, bodies);
 		}
 
-		std::optional<Data> getDataAt(uint32_t i, const BodySoA& bodies) const noexcept
+		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;
@@ -429,7 +429,7 @@ namespace PS_AGONY2D
 
 		void flushCommands(const BodySoA& bodies) override
 		{
-			flushImpl([this, &bodies](const ConstraintCommand& c, uint32_t i)
+			flushImpl([this, &bodies](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{
@@ -457,12 +457,12 @@ namespace PS_AGONY2D
 
 		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
 		{
-			const uint32_t i = soa.indexOf(h);
-			if (i == Handle::kNull) return std::nullopt;
+			const ObjectDenseIndex i = soa.indexOf(h);
+			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			return getDataAt(i, bodies);
 		}
 
-		std::optional<Data> getDataAt(uint32_t i, const BodySoA& bodies) const noexcept
+		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;
@@ -553,7 +553,7 @@ namespace PS_AGONY2D
 
 		void flushCommands(const BodySoA&) override
 		{
-			flushImpl([this](const ConstraintCommand& c, uint32_t i)
+			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{
@@ -578,12 +578,12 @@ namespace PS_AGONY2D
 
 		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
 		{
-			const uint32_t i = soa.indexOf(h);
-			if (i == Handle::kNull) return std::nullopt;
+			const ObjectDenseIndex i = soa.indexOf(h);
+			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			return getDataAt(i, bodies);
 		}
 
-		std::optional<Data> getDataAt(uint32_t i, const BodySoA& bodies) const noexcept
+		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;
@@ -636,7 +636,7 @@ namespace PS_AGONY2D
 
 		void flushCommands(const BodySoA&) override
 		{
-			flushImpl([this](const ConstraintCommand& c, uint32_t i)
+			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{
@@ -648,12 +648,12 @@ namespace PS_AGONY2D
 
 		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
 		{
-			const uint32_t i = soa.indexOf(h);
-			if (i == Handle::kNull) return std::nullopt;
+			const ObjectDenseIndex i = soa.indexOf(h);
+			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			return getDataAt(i, bodies);
 		}
 
-		std::optional<Data> getDataAt(uint32_t i, const BodySoA& bodies) const noexcept
+		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;

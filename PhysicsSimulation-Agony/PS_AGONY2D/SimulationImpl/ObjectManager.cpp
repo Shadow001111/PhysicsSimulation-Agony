@@ -347,7 +347,7 @@ namespace PS_AGONY2D
             destroyColliderInternal(bodyIndex, colliderIdx);
         }
 
-        // --- Body removal (unchanged below this point, minus bodyType/shapeIndex shape-swap block) ---
+        // Body removal.
         if (bodyIndex != bodyCount - 1)
         {
             const ObjectDenseIndex oldBackIndex = static_cast<ObjectDenseIndex>(bodyCount - 1);
@@ -486,7 +486,7 @@ namespace PS_AGONY2D
 
         // Remove from ColliderSoA itself.
         bodies.removeCollider(bodyIndex, colliderIdx);
-        const size_t oldBackCollider = colliders.swapRemove(colliderIdx);
+        const ObjectDenseIndex oldBackCollider = colliders.swapRemove(colliderIdx);
         if (oldBackCollider != colliderIdx)
         {
             const ObjectDenseIndex swappedOwner = colliders.bodyIndex[colliderIdx];
@@ -588,7 +588,7 @@ namespace PS_AGONY2D
         if (c.type < T::SetColliderLocalOffset)
         {
             const uint32_t resolved = bodies.indexOf(c.handle);
-            if (resolved == Handle::kNull) return;
+            if (resolved == Handle::NULL_DENSE_INDEX) return;
             const ObjectDenseIndex b = static_cast<ObjectDenseIndex>(resolved);
 
             switch (c.type)
@@ -656,7 +656,7 @@ namespace PS_AGONY2D
         }
 
         const uint32_t resolved = colliders.indexOf(c.handle);
-        if (resolved == Handle::kNull) return;
+        if (resolved == Handle::NULL_DENSE_INDEX) return;
         const ObjectDenseIndex ci = static_cast<ObjectDenseIndex>(resolved);
         const ObjectDenseIndex s = colliders.shapeIndex[ci];
         const BodyType shapeType = colliders.shapeType[ci];

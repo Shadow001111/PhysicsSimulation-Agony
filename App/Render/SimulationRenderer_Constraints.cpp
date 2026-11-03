@@ -97,7 +97,7 @@ namespace PS_AGONY_RENDER
     {
         TRACY_SCOPE_N("Render joints");
 
-        const auto& joints = simulation.constraints().getJoints();
+        const auto& joints = simulation.constraints().getRevoluteJoints();
         const size_t jointCount = joints.getCount();
         if (jointCount == 0) return;
 

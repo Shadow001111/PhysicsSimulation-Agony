@@ -6,9 +6,11 @@ namespace PS_AGONY2D
 {
 	struct Handle
 	{
-		static constexpr uint32_t kNull = -1;
-		uint32_t slot = kNull;
+		static constexpr uint32_t NULL_DENSE_INDEX = -1;
+
+		uint32_t slot = NULL_DENSE_INDEX;
 		uint32_t generation = 0;
+
 		friend constexpr bool operator==(const Handle& a, const Handle& b) noexcept
 		{
 			return a.slot == b.slot && a.generation == b.generation;
@@ -16,23 +18,22 @@ namespace PS_AGONY2D
 	};
 
 	// Tracks stable handles for an external dense array that uses swap-and-pop.
-	// Mirror every push / swapWithBack / popBack of the array here.
 	class HandleTable
 	{
 		struct Slot
 		{
-			uint32_t index; // alive: dense index. free: next free slot.
-			uint32_t generation;	// bumped on destroy
+			uint32_t index;
+			uint32_t generation;
 		};
-		std::vector<Slot> slots;		   // sparse, indexed by Handle::slot
-		std::vector<uint32_t> denseToSlot; // dense -> slot
-		uint32_t freeHead = Handle::kNull;
+		std::vector<Slot> slots; // Sparse, indexed by Handle::slot.
+		std::vector<uint32_t> denseToSlot;
+		uint32_t freeHead = Handle::NULL_DENSE_INDEX;
 	public:
 		// Registers a new element at the back of the dense array.
 		Handle push()
 		{
 			uint32_t s;
-			if (freeHead != Handle::kNull)
+			if (freeHead != Handle::NULL_DENSE_INDEX)
 			{
 				s = freeHead;
 				freeHead = slots[s].index;
@@ -50,7 +51,7 @@ namespace PS_AGONY2D
 		// Mirrors swapping dense[index] with dense[back].
 		void swapWithBack(uint32_t index) noexcept
 		{
-			if (index + 1 >= denseToSlot.size()) return; // out of range or already last
+			if (index + 1 >= denseToSlot.size()) return; // Out of range or already last.
 			const size_t last = denseToSlot.size() - 1;
 			const uint32_t a = denseToSlot[index];
 			const uint32_t b = denseToSlot[last];
@@ -76,10 +77,10 @@ namespace PS_AGONY2D
 			return h.slot < slots.size() && slots[h.slot].generation == h.generation;
 		}
 
-		// Handle -> dense index (Handle::kNull if invalid).
+		// Handle -> dense index (Handle::NULL_DENSE_INDEX if invalid).
 		uint32_t indexOf(Handle h) const noexcept
 		{
-			return isValid(h) ? slots[h.slot].index : Handle::kNull;
+			return isValid(h) ? slots[h.slot].index : Handle::NULL_DENSE_INDEX;
 		}
 
 		// Handle -> dense index with no validation. Caller guarantees the handle is alive.

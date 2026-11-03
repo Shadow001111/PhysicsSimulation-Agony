@@ -74,7 +74,7 @@ namespace PS_AGONY_EDITOR
 	{
 		ObjectAPI& api = sim.objects();
 		const ObjectDenseIndex bi = api.getBodyIndex(body);
-		if (bi == Handle::kNull) return false;
+		if (bi == Handle::NULL_DENSE_INDEX) return false;
 
 		const BodySoAViewer bv = api.getBodies();
 		if (bv.isStatic[bi] != 0) return false;
@@ -107,7 +107,7 @@ namespace PS_AGONY_EDITOR
 		ObjectAPI& api = sim.objects();
 		const BodySoAViewer bv = api.getBodies();
 		const ObjectDenseIndex primary = api.getBodyIndex(body);
-		if (primary == Handle::kNull) return;
+		if (primary == Handle::NULL_DENSE_INDEX) return;
 
 		const bool multiple = selected.size() > 1;
 		const Vec2 primaryAnchor = (multiple || !kAllowSingleBodyRotation)
@@ -122,7 +122,7 @@ namespace PS_AGONY_EDITOR
 		for (const Handle h : selected)
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
-			if (bi == Handle::kNull || bi == primary) continue;
+			if (bi == Handle::NULL_DENSE_INDEX || bi == primary) continue;
 			holdBody(sim, h, Vec2(bv.worldCenterX[bi], bv.worldCenterY[bi]), grabWorld);
 		}
 	}

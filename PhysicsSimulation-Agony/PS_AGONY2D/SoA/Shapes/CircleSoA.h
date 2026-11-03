@@ -16,11 +16,11 @@ namespace PS_AGONY2D
 		#undef DECLARE_FIELD
 
 		void append(
-		ObjectDenseIndex colliderIndex,
-		Real radius
+			ObjectDenseIndex colliderIndex,
+			Real radius
 		);
 
-		void swapWithBack(size_t index);
+		void swapWithBack(ObjectDenseIndex index);
 		void popBack();
 
 		size_t getCount() const noexcept { return colliderIndices.size(); }

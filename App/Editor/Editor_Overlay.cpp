@@ -15,7 +15,7 @@ namespace PS_AGONY_EDITOR
 		for (const Handle h : selected)
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
-			if (bi == Handle::kNull) continue;
+			if (bi == Handle::NULL_DENSE_INDEX) continue;
 
 			for (const ObjectDenseIndex ci : api.getBodyColliders(bi))
 			{
@@ -37,7 +37,7 @@ namespace PS_AGONY_EDITOR
 			auto link = [&](Handle ha, Vec2 la, Handle hb, Vec2 lb)
 				{
 					const ObjectDenseIndex ia = api.getBodyIndex(ha), ib = api.getBodyIndex(hb);
-					if (ia == Handle::kNull || ib == Handle::kNull) return;
+					if (ia == Handle::NULL_DENSE_INDEX || ib == Handle::NULL_DENSE_INDEX) return;
 					const ImVec2 p = toScreen(localToWorld(bv, ia, la));
 					const ImVec2 q = toScreen(localToWorld(bv, ib, lb));
 					dl->AddLine(p, q, kConstraintColor, 1.5f);
@@ -48,7 +48,7 @@ namespace PS_AGONY_EDITOR
 			for (const Handle h : selected)
 			{
 				const ObjectDenseIndex bi = api.getBodyIndex(h);
-				if (bi == Handle::kNull) continue;
+				if (bi == Handle::NULL_DENSE_INDEX) continue;
 
 				for (const BodyAttachment& at : bv.attachments[bi])
 				{
@@ -123,7 +123,7 @@ namespace PS_AGONY_EDITOR
 		if (tool == Tool::Constraint && hasFirstAnchor)
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(firstBody);
-			if (bi != Handle::kNull)
+			if (bi != Handle::NULL_DENSE_INDEX)
 			{
 				const Real c = bv.rotationCos[bi];
 				const Real s = bv.rotationSin[bi];

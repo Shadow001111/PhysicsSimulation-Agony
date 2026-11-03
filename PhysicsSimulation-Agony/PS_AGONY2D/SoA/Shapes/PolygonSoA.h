@@ -58,7 +58,7 @@ namespace PS_AGONY2D
 			PolygonGeometry&& polygonGeometry
 		);
 
-		void swapWithBack(size_t index);
+		void swapWithBack(ObjectDenseIndex index);
 		void popBack();
 
 		size_t getCount() const noexcept { return colliderIndices.size(); }

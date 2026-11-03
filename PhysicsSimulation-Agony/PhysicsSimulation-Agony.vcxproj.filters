@@ -209,9 +209,6 @@
     <ClInclude Include="PS_AGONY2D\Solving\SpringSolver.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="PS_AGONY2D\SoA\AABBSoA.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="PS_AGONY2D\SoA\BodySoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>

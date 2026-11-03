@@ -64,7 +64,7 @@ namespace PS_AGONY2D
 		this->geometry.emplace_back(std::move(polygonGeometry));
 	}
 
-	void PolygonSoA::swapWithBack(size_t index)
+	void PolygonSoA::swapWithBack(ObjectDenseIndex index)
 	{
 		if (index >= colliderIndices.size()) [[unlikely]]
 		{

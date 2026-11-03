@@ -49,7 +49,6 @@ namespace PS_AGONY2D
 		bool isBodyValid(Handle h) const noexcept { return objectManager.bodies.isValid(h); }
 		bool isColliderValid(Handle h) const noexcept { return objectManager.colliders.isValid(h); }
 
-		// Handle::kNull if stale.
 		ObjectDenseIndex getBodyIndex(Handle h) const noexcept { return objectManager.bodies.indexOf(h); }
 		ObjectDenseIndex getColliderIndex(Handle h) const noexcept { return objectManager.colliders.indexOf(h); }
 
@@ -68,21 +67,21 @@ namespace PS_AGONY2D
 		std::optional<Handle> createCircleColliderH(Handle body, CircleColliderCreateParams params)
 		{
 			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
+			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
 			return toColliderHandle(objectManager.createCircleCollider(params));
 		}
 		std::optional<Handle> createBoxColliderH(Handle body, BoxColliderCreateParams params)
 		{
 			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
+			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
 			return toColliderHandle(objectManager.createBoxCollider(params));
 		}
 		std::optional<Handle> createCapsuleColliderH(Handle body, CapsuleColliderCreateParams params)
 		{
 			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
+			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
 			return toColliderHandle(objectManager.createCapsuleCollider(params));
 		}
@@ -90,7 +89,7 @@ namespace PS_AGONY2D
 		std::optional<PolygonColliderCreateResult> createPolygonColliderH(Handle body, PolygonColliderCreateParams params)
 		{
 			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::kNull) return std::nullopt;
+			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
 			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
 			return objectManager.createPolygonCollider(params);
 		}
@@ -99,19 +98,18 @@ namespace PS_AGONY2D
 		void destroyBody(Handle h)
 		{
 			const ObjectDenseIndex i = getBodyIndex(h);
-			if (i != Handle::kNull) destroyBody(i);
+			if (i != Handle::NULL_DENSE_INDEX) destroyBody(i);
 		}
 		void destroyCollider(Handle h)
 		{
 			const uint32_t i = getColliderIndex(h);
-			if (i != Handle::kNull) destroyCollider(static_cast<ObjectDenseIndex>(i));
+			if (i != Handle::NULL_DENSE_INDEX) destroyCollider(static_cast<ObjectDenseIndex>(i));
 		}
 
 		void destroyBody(ObjectDenseIndex bodyIndex) { objectManager.destroyBody(bodyIndex, constraintSystems); }
 		void destroyCollider(ObjectDenseIndex colliderIndex) { objectManager.destroyCollider(colliderIndex, constraintSystems); }
 
-		// Deferred modifications. Queued and applied at the start of Simulation::update() and after every physics step,
-		// so they are safe to call from collision callbacks. Stale handles are dropped. Semantics: see ObjectManager.h.
+		// Deferred modifications.
 		void setBodyPosition(Handle body, Vec2 position) { objectManager.queueBodyPosition(body, position); }
 		void setBodyRotation(Handle body, Real rotation) { objectManager.queueBodyRotation(body, rotation); }
 		void setBodyVelocity(Handle body, Vec2 velocity) { objectManager.queueBodyVelocity(body, velocity); }
@@ -147,17 +145,17 @@ namespace PS_AGONY2D
 		// Instant reads of current stored state (not the queue); nullopt if the handle is stale.
 		std::optional<BodyData> getBodyDataH(Handle body) const noexcept
 		{
-			const uint32_t i = objectManager.bodies.indexOf(body);
-			return i == Handle::kNull ? std::nullopt : objectManager.bodies.getBodyData(static_cast<ObjectDenseIndex>(i));
+			const ObjectDenseIndex i = objectManager.bodies.indexOf(body);
+			return i == Handle::NULL_DENSE_INDEX ? std::nullopt : objectManager.bodies.getBodyData(i);
 		}
 		std::optional<ColliderData> getColliderDataH(Handle collider) const noexcept
 		{
-			const uint32_t i = objectManager.colliders.indexOf(collider);
-			return i == Handle::kNull ? std::nullopt : objectManager.getColliderData(static_cast<ObjectDenseIndex>(i));
+			const ObjectDenseIndex i = objectManager.colliders.indexOf(collider);
+			return i == Handle::NULL_DENSE_INDEX ? std::nullopt : objectManager.getColliderData(i);
 		}
 
 		//
-		std::span<const ObjectDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex)
+		std::span<const ObjectDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex) const
 		{
 			if (bodyIndex >= objectManager.bodies.getCount()) { return {}; }
 			std::span<const ObjectDenseIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];

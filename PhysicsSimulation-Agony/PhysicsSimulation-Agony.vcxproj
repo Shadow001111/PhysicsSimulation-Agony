@@ -340,7 +340,6 @@
     <ClInclude Include="PS_AGONY2D\Types\Camera2D.h" />
     <ClInclude Include="PS_AGONY2D\ConstraintSystem.h" />
     <ClInclude Include="PS_AGONY2D\SoA\ColliderSoA.h" />
-    <ClInclude Include="PS_AGONY2D\SoA\AABBSoA.h" />
     <ClInclude Include="PS_AGONY2D\SoA\BodySoA.h" />
     <ClInclude Include="PS_AGONY2D\SoA\Constraints\RevoluteJointSoA.h" />
     <ClInclude Include="PS_AGONY2D\SoA\Constraints\SpringSoA.h" />

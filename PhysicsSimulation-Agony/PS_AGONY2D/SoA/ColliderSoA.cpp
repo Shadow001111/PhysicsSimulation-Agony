@@ -1,7 +1,6 @@
 #include "ColliderSoA.h"
 #include "PS_AGONY2D/Constants.h"
 #include <cmath>
-#include <utility>
 
 namespace PS_AGONY2D
 {
@@ -14,42 +13,41 @@ namespace PS_AGONY2D
 		ObjectDenseIndex shapeIndexIn
 	)
 	{
-		const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(bodyIndex.size());
+		const ObjectDenseIndex newIndex = getCount();
 
-		bodyIndex.push_back(bodyIndexIn);
+		this->bodyIndex.push_back(bodyIndexIn);
 
-		localOffsetX.push_back(localOffset.x);
-		localOffsetY.push_back(localOffset.y);
+		this->localOffsetX.push_back(localOffset.x);
+		this->localOffsetY.push_back(localOffset.y);
 
-		// Wrap once here; local rotation is rigid and never changes afterward.
 		Real wrappedLocal = std::fmod(localRotationIn, Constants::TWO_PI);
 		if (wrappedLocal < Real(0)) wrappedLocal += Constants::TWO_PI;
-		localRotation.push_back(wrappedLocal);
+		this->localRotation.push_back(wrappedLocal);
 
-		worldPosX.push_back(0);
-		worldPosY.push_back(0);
-		worldRotation.push_back(wrappedLocal);
-		worldRotationCos.push_back(std::cos(wrappedLocal));
-		worldRotationSin.push_back(std::sin(wrappedLocal));
+		this->worldPosX.push_back(0);
+		this->worldPosY.push_back(0);
+		this->worldRotation.push_back(wrappedLocal);
+		this->worldRotationCos.push_back(std::cos(wrappedLocal)); // TODO: Use fast cos/sin.
+		this->worldRotationSin.push_back(std::sin(wrappedLocal));
 
-		materialIndex.push_back(materialIndexIn);
-		shapeType.push_back(shapeTypeIn);
-		shapeIndex.push_back(shapeIndexIn);
+		this->materialIndex.push_back(materialIndexIn);
+		this->shapeType.push_back(shapeTypeIn);
+		this->shapeIndex.push_back(shapeIndexIn);
 
-		aabbMinX.push_back(0);
-		aabbMinY.push_back(0);
-		aabbMaxX.push_back(0);
-		aabbMaxY.push_back(0);
+		this->aabbMinX.push_back(0);
+		this->aabbMinY.push_back(0);
+		this->aabbMaxX.push_back(0);
+		this->aabbMaxY.push_back(0);
 
-		callbackId.push_back(0);
-		eventThreshold.push_back(NO_COLLISION_EVENT_THRESHOLD);
+		this->callbackId.push_back(0);
+		this->eventThreshold.push_back(NO_COLLISION_EVENT_THRESHOLD);
 
-		handles.push();
+		this->handles.push();
 
 		return newIndex;
 	}
 
-	void ColliderSoA::swapWithBack(size_t index)
+	void ColliderSoA::swapWithBack(ObjectDenseIndex index)
 	{
 		if (index >= bodyIndex.size()) [[unlikely]]
 		{
@@ -59,7 +57,7 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) std::swap(name[index], name.back());
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(SWAP_FIELD)
-			#undef SWAP_FIELD
+		#undef SWAP_FIELD
 	}
 
 	void ColliderSoA::popBack()
@@ -72,12 +70,12 @@ namespace PS_AGONY2D
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(POP_FIELD)
-			#undef POP_FIELD
+		#undef POP_FIELD
 	}
 
-	size_t ColliderSoA::swapRemove(size_t index)
+	ObjectDenseIndex ColliderSoA::swapRemove(ObjectDenseIndex index)
 	{
-		const size_t lastIndex = bodyIndex.size() - 1;
+		const ObjectDenseIndex lastIndex = bodyIndex.size() - 1;
 		if (index != lastIndex)
 		{
 			swapWithBack(index);

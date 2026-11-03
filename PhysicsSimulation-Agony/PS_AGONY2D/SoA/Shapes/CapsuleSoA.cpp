@@ -14,7 +14,7 @@ namespace PS_AGONY2D
 		this->radius.push_back(radius);
 	}
 
-	void CapsuleSoA::swapWithBack(size_t index)
+	void CapsuleSoA::swapWithBack(ObjectDenseIndex index)
 	{
 		if (index >= colliderIndices.size()) [[unlikely]]
 		{

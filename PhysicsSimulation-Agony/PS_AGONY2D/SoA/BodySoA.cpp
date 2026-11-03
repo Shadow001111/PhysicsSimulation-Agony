@@ -1,16 +1,16 @@
 #include "BodySoA.h"
 #include <cmath>
-#include <utility>
-
 
 namespace PS_AGONY2D
 {
-	Handle BodySoA::append(
+	ObjectDenseIndex BodySoA::append(
 		Vec2 pos, Vec2 vel, Real rot, Real anglVel,
 		Real mass, Real invMass, Real inertia, Real invInertia,
 		Vec2 localCenterOfMass
 	)
 	{
+		const ObjectDenseIndex newIndex = getCount();
+
 		this->renderOldOffsetX.push_back(pos.x);
 		this->renderOldOffsetY.push_back(pos.y);
 		this->renderOldRotation.push_back(rot);
@@ -30,12 +30,13 @@ namespace PS_AGONY2D
 		this->invMass.push_back(invMass);
 		this->inertia.push_back(inertia);
 		this->invInertia.push_back(invInertia);
-		this->rotationCos.push_back(std::cos(rot));
+		this->rotationCos.push_back(std::cos(rot)); // TODO: Use fast cos/sin.
 		this->rotationSin.push_back(std::sin(rot));
 		this->isStatic.push_back(invMass == 0);
 		this->attachments.emplace_back();
 		this->colliderIndices.emplace_back();
-		return this->handles.push();
+		this->handles.push();
+		return newIndex;
 	}
 
 	#define PS_AGONY_SWAP_WITH_BACK(vector, index) std::swap((vector)[(index)], (vector).back())

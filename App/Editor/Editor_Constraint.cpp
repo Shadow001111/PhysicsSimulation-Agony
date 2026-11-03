@@ -59,7 +59,7 @@ namespace PS_AGONY_EDITOR
 		{
 			ObjectAPI& api = sim.objects();
 			const ObjectDenseIndex ia = api.getBodyIndex(a), ib = api.getBodyIndex(b);
-			if (ia == Handle::kNull || ib == Handle::kNull) { setStatus("Body no longer exists."); return; }
+			if (ia == Handle::NULL_DENSE_INDEX || ib == Handle::NULL_DENSE_INDEX) { setStatus("Body no longer exists."); return; }
 			if (ia == ib) { setStatus("Pick two different bodies."); return; }
 
 			const BodySoAViewer bv = api.getBodies();

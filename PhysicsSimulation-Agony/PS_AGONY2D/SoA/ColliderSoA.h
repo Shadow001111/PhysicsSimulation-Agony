@@ -44,14 +44,14 @@ namespace PS_AGONY2D
 			ObjectDenseIndex shapeIndexIn
 		);
 
-		void swapWithBack(size_t index);
+		void swapWithBack(ObjectDenseIndex index);
 		void popBack();
-		size_t swapRemove(size_t index);
+		ObjectDenseIndex swapRemove(ObjectDenseIndex index);
 
 		bool isValid(Handle h) const noexcept { return handles.isValid(h); }
-		uint32_t indexOf(Handle h) const noexcept { return handles.indexOf(h); }
-		uint32_t indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
-		Handle handleAt(size_t index) const noexcept { return handles.handleAt(index); }
+		ObjectDenseIndex indexOf(Handle h) const noexcept { return handles.indexOf(h); }
+		ObjectDenseIndex indexOfUnchecked(Handle h) const noexcept { return handles.indexOfUnchecked(h); }
+		Handle handleAt(ObjectDenseIndex index) const noexcept { return handles.handleAt(index); }
 
 		size_t getCount() const noexcept { return bodyIndex.size(); }
 		size_t getMemoryUsage() const noexcept;

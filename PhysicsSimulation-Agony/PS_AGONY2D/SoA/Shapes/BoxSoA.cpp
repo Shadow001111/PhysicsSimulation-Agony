@@ -1,5 +1,4 @@
 #include "BoxSoA.h"
-#include <utility>
 
 namespace PS_AGONY2D
 {
@@ -14,7 +13,7 @@ namespace PS_AGONY2D
 		this->halfHeight.push_back(halfHeight);
 	}
 
-	void BoxSoA::swapWithBack(size_t index)
+	void BoxSoA::swapWithBack(ObjectDenseIndex index)
 	{
 		if (index >= colliderIndices.size()) [[unlikely]]
 		{
