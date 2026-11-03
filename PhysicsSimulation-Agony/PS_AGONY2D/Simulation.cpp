@@ -16,7 +16,7 @@ namespace PS_AGONY2D
 
 
     Simulation::Simulation() :
-        objectManager(materialManager.getMaterials())
+        objectManager(materialManager.getMaterials(), constraintSystems)
     {
         const auto registerSystem = [this](IConstraintSystem& system) { constraintSystems[size_t(system.getType())] = &system; };
         registerSystem(springConstraintSystem);

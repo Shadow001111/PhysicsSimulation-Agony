@@ -15,10 +15,10 @@ namespace PS_AGONY2D
 	{
 	private:
 		ObjectManager& objectManager;
-		ConstraintSystemArray& constraintSystems;
 	public:
 		ObjectAPI(ObjectManager& objectManager, ConstraintSystemArray& constraintSystems) noexcept
-			: objectManager(objectManager), constraintSystems(constraintSystems) {}
+			: objectManager(objectManager)
+		{}
 
 		ObjectAPI(const ObjectAPI&) = delete;
 		ObjectAPI& operator=(const ObjectAPI&) = delete;
@@ -95,19 +95,8 @@ namespace PS_AGONY2D
 		}
 
 		// Stale handle: no-op.
-		void destroyBody(Handle h)
-		{
-			const ObjectDenseIndex i = getBodyIndex(h);
-			if (i != Handle::NULL_DENSE_INDEX) destroyBody(i);
-		}
-		void destroyCollider(Handle h)
-		{
-			const uint32_t i = getColliderIndex(h);
-			if (i != Handle::NULL_DENSE_INDEX) destroyCollider(static_cast<ObjectDenseIndex>(i));
-		}
-
-		void destroyBody(ObjectDenseIndex bodyIndex) { objectManager.destroyBody(bodyIndex, constraintSystems); }
-		void destroyCollider(ObjectDenseIndex colliderIndex) { objectManager.destroyCollider(colliderIndex, constraintSystems); }
+		void destroyBody(Handle h) { objectManager.destroyBody(h); }
+		void destroyCollider(Handle h) { objectManager.destroyCollider(h); }
 
 		// Deferred modifications.
 		void setBodyPosition(Handle body, Vec2 position) { objectManager.queueBodyPosition(body, position); }

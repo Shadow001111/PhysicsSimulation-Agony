@@ -131,6 +131,7 @@ namespace PS_AGONY2D
 	// Body commands must stay before SetColliderLocalOffset (used to route resolution).
 	enum class ObjectCommandType : uint8_t
 	{
+		DestroyBody,
 		SetBodyPosition,
 		SetBodyRotation,
 		SetBodyVelocity,
@@ -141,6 +142,7 @@ namespace PS_AGONY2D
 		RecomputeBodyInertia,
 		SetBodyMassFromDensity,
 
+		DestroyCollider,
 		SetColliderLocalOffset,
 		SetColliderLocalRotation,
 		SetColliderMaterial,
@@ -173,22 +175,24 @@ namespace PS_AGONY2D
 		std::vector<ObjectDeletion> deletedColliders;
 
 		const std::vector<Material>& materials;
+		ConstraintSystemArray& constraintSystems;
 
 		// Set when a collider is created/destroyed. Cleared by Simulation once the BVH trees are rebuilt.
 		bool spatialDirty = false;
-
 	private:
 		// Persistent collider ID lists (maintained in O(1) on create/destroy; never rebuilt per frame).
 		// A collider lives in exactly one list, chosen by its body's isStatic flag (moved when mass toggles 0 <-> nonzero).
 		std::vector<ObjectDenseIndex> dynamicColliderIDs;
 		std::vector<ObjectDenseIndex> staticColliderIDs;
 		std::vector<uint32_t> colliderSlot; // colliderIndex -> position inside its list.
-
 	public:
 		std::span<const ObjectDenseIndex> getDynamicColliderIDs() const noexcept { return dynamicColliderIDs; }
 		std::span<const ObjectDenseIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
 
-		explicit ObjectManager(const std::vector<Material>& materials);
+		explicit ObjectManager(
+			const std::vector<Material>& materials,
+			ConstraintSystemArray& constraintSystems
+		);
 
 		// Creates a body with NO colliders attached. Mass/inertia are taken directly
 		// from params; since there's no shape yet, inertia is not auto-derived and
@@ -208,12 +212,17 @@ namespace PS_AGONY2D
 		std::optional<ObjectDenseIndex> createCapsule(const CapsuleCreateParams& params);
 
 		// Destroys a body and cascade-deletes every collider/spring attached to it.
-		void destroyBody(ObjectDenseIndex bodyIndex, ConstraintSystemArray& constraintSystems);
+		// Not safe for callbacks.
+		void destroyBodyImmediate(ObjectDenseIndex bodyIndex);
 
 		// Destroys a single collider without touching its owning body.
-		void destroyCollider(ObjectDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems);
+		// Not safe for callbacks.
+		void destroyColliderImmediate(ObjectDenseIndex colliderIndex);
 
-		// ---- Deferred modification commands ----
+		void destroyBody(Handle handle) { pushCommand(ObjectCommandType::DestroyBody, handle); }
+		void destroyCollider(Handle handle) { pushCommand(ObjectCommandType::DestroyCollider, handle); }
+
+		// Deferred modification commands.
 		// Queued in call order, applied by flushCommands(). Stale handles and shape-type mismatches are dropped.
 		// Values are sanitized on apply (negatives clamped, angles wrapped, material index validated).
 		// Body position is the body origin offset (BodyData::offset), not the world center of mass.

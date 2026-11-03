@@ -1311,7 +1311,7 @@ static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, PS_AGONY2D::S
     const PS_AGONY2D::Vec2 pos = data->offset;
     const PS_AGONY2D::Vec2 vel = data->velocity;
 
-    objects.destroyBody(event.selfBody);
+    objects.destroyBody(objects.getBodyHandle(event.selfBody));
 
     // Children (radius/2) sit inside the parent's footprint, side by side along the contact tangent: no overlap.
     const float half = radius * 0.5f;

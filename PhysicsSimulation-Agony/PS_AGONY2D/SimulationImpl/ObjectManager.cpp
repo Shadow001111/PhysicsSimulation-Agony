@@ -10,8 +10,12 @@
 
 namespace PS_AGONY2D
 {
-    ObjectManager::ObjectManager(const std::vector<Material>& materials) :
-        materials(materials)
+    ObjectManager::ObjectManager(
+        const std::vector<Material>& materials,
+        ConstraintSystemArray& constraintSystems
+    ) :
+        materials(materials),
+        constraintSystems(constraintSystems)
     {
     }
 
@@ -328,7 +332,7 @@ namespace PS_AGONY2D
         return newBodyIndex;
     }
 
-    void ObjectManager::destroyBody(ObjectDenseIndex bodyIndex, ConstraintSystemArray& constraintSystems)
+    void ObjectManager::destroyBodyImmediate(ObjectDenseIndex bodyIndex)
     {
         const size_t bodyCount = bodies.getCount();
         if (bodyIndex >= bodyCount) return;
@@ -371,7 +375,7 @@ namespace PS_AGONY2D
         bodies.popBack();
     }
 
-    void ObjectManager::destroyCollider(ObjectDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems)
+    void ObjectManager::destroyColliderImmediate(ObjectDenseIndex colliderIndex)
     {
         if (colliderIndex >= colliders.getCount()) return;
 
@@ -585,68 +589,70 @@ namespace PS_AGONY2D
     {
         using T = ObjectCommandType;
 
-        if (c.type < T::SetColliderLocalOffset)
+        if (c.type < T::DestroyCollider)
         {
-            const uint32_t resolved = bodies.indexOf(c.handle);
-            if (resolved == Handle::NULL_DENSE_INDEX) return;
-            const ObjectDenseIndex b = static_cast<ObjectDenseIndex>(resolved);
+            const ObjectDenseIndex bodyIndex = bodies.indexOf(c.handle);
+            if (bodyIndex == Handle::NULL_DENSE_INDEX) return;
 
             switch (c.type)
             {
+            case T::DestroyBody:
+                destroyBodyImmediate(bodyIndex);
+                break;
             case T::SetBodyPosition:
-                bodies.offsetX[b] = c.a;
-                bodies.offsetY[b] = c.b;
-                bodies.renderOldOffsetX[b] = c.a; // Teleport: no render interpolation.
-                bodies.renderOldOffsetY[b] = c.b;
+                bodies.offsetX[bodyIndex] = c.a;
+                bodies.offsetY[bodyIndex] = c.b;
+                bodies.renderOldOffsetX[bodyIndex] = c.a; // Teleport: no render interpolation.
+                bodies.renderOldOffsetY[bodyIndex] = c.b;
                 spatialDirty = true;
                 break;
 
             case T::SetBodyRotation:
             {
                 const Real r = wrapAngle(c.a);
-                bodies.rotation[b] = r;
-                bodies.rotationCos[b] = std::cos(r);
-                bodies.rotationSin[b] = std::sin(r);
-                bodies.renderOldRotation[b] = r;
-                bodies.renderRotationWrapCount[b] = Real(0);
+                bodies.rotation[bodyIndex] = r;
+                bodies.rotationCos[bodyIndex] = std::cos(r);
+                bodies.rotationSin[bodyIndex] = std::sin(r);
+                bodies.renderOldRotation[bodyIndex] = r;
+                bodies.renderRotationWrapCount[bodyIndex] = Real(0);
                 spatialDirty = true;
                 break;
             }
 
             case T::SetBodyVelocity:
-                bodies.velocityX[b] = c.a;
-                bodies.velocityY[b] = c.b;
+                bodies.velocityX[bodyIndex] = c.a;
+                bodies.velocityY[bodyIndex] = c.b;
                 break;
 
             case T::SetBodyAngularVelocity:
-                bodies.angularVelocity[b] = c.a;
+                bodies.angularVelocity[bodyIndex] = c.a;
                 break;
 
             case T::SetBodyMass:
-                applyBodyMass(b, c.a);
+                applyBodyMass(bodyIndex, c.a);
                 break;
 
             case T::SetBodyInertia:
             {
-                if (bodies.isStatic[b]) break;
+                if (bodies.isStatic[bodyIndex]) break;
                 const Real inertia = std::fmax(Real(0), c.a);
-                bodies.inertia[b] = inertia;
-                bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
+                bodies.inertia[bodyIndex] = inertia;
+                bodies.invInertia[bodyIndex] = inertia > Real(0) ? Real(1) / inertia : Real(0);
                 break;
             }
 
             case T::SetBodyLocalCenterOfMass:
-                bodies.localCenterOfMassX[b] = c.a;
-                bodies.localCenterOfMassY[b] = c.b;
+                bodies.localCenterOfMassX[bodyIndex] = c.a;
+                bodies.localCenterOfMassY[bodyIndex] = c.b;
                 spatialDirty = true; // World center depends on it.
                 break;
 
             case T::RecomputeBodyInertia:
-                recomputeBodyInertia(b);
+                recomputeBodyInertia(bodyIndex);
                 break;
 
             case T::SetBodyMassFromDensity:
-                applyBodyMassFromDensity(b, c.a);
+                applyBodyMassFromDensity(bodyIndex, c.a);
                 break;
 
             default:
@@ -655,52 +661,54 @@ namespace PS_AGONY2D
             return;
         }
 
-        const uint32_t resolved = colliders.indexOf(c.handle);
-        if (resolved == Handle::NULL_DENSE_INDEX) return;
-        const ObjectDenseIndex ci = static_cast<ObjectDenseIndex>(resolved);
-        const ObjectDenseIndex s = colliders.shapeIndex[ci];
-        const BodyType shapeType = colliders.shapeType[ci];
+        const ObjectDenseIndex colliderIndex = colliders.indexOf(c.handle);
+        if (colliderIndex == Handle::NULL_DENSE_INDEX) return;
+        const ObjectDenseIndex shapeIndex = colliders.shapeIndex[colliderIndex];
+        const BodyType shapeType = colliders.shapeType[colliderIndex];
 
         switch (c.type)
         {
+        case T::DestroyCollider:
+            destroyColliderImmediate(colliderIndex);
+            break;
         case T::SetColliderLocalOffset:
-            colliders.localOffsetX[ci] = c.a;
-            colliders.localOffsetY[ci] = c.b;
+            colliders.localOffsetX[colliderIndex] = c.a;
+            colliders.localOffsetY[colliderIndex] = c.b;
             spatialDirty = true;
             break;
 
         case T::SetColliderLocalRotation:
-            colliders.localRotation[ci] = wrapAngle(c.a);
+            colliders.localRotation[colliderIndex] = wrapAngle(c.a);
             spatialDirty = true;
             break;
 
         case T::SetColliderMaterial:
-            colliders.materialIndex[ci] = c.index < materials.size() ? static_cast<MaterialIndex>(c.index) : MaterialIndex(0);
+            colliders.materialIndex[colliderIndex] = c.index < materials.size() ? static_cast<MaterialIndex>(c.index) : MaterialIndex(0);
             break;
 
         case T::SetCircleRadius:
             if (shapeType != BodyType::Circle) break;
-            circles.radius[s] = std::fmax(Real(0), c.a);
+            circles.radius[shapeIndex] = std::fmax(Real(0), c.a);
             spatialDirty = true;
             break;
 
         case T::SetBoxSize:
             if (shapeType != BodyType::Box) break;
-            boxes.halfWidth[s] = std::fmax(Real(0), c.a) * Real(0.5);
-            boxes.halfHeight[s] = std::fmax(Real(0), c.b) * Real(0.5);
+            boxes.halfWidth[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
+            boxes.halfHeight[shapeIndex] = std::fmax(Real(0), c.b) * Real(0.5);
             spatialDirty = true;
             break;
 
         case T::SetCapsuleShape:
             if (shapeType != BodyType::Capsule) break;
-            capsules.halfLength[s] = std::fmax(Real(0), c.a) * Real(0.5);
-            capsules.radius[s] = std::fmax(Real(0), c.b);
+            capsules.halfLength[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
+            capsules.radius[shapeIndex] = std::fmax(Real(0), c.b);
             spatialDirty = true;
             break;
 
         case T::SetPolygonGeometry:
             if (shapeType != BodyType::Polygon) break;
-            polygons.geometry[s] = std::move(pendingPolygons[c.index]);
+            polygons.geometry[shapeIndex] = std::move(pendingPolygons[c.index]);
             spatialDirty = true;
             break;
 
