@@ -246,7 +246,7 @@ namespace PS_AGONY_RENDER
                 vec.clear();
             }
 
-            for (ColliderDenseIndex collider : foundColliders)
+            for (ObjectDenseIndex collider : foundColliders)
             {
                 BodyType shape = colliders.shapeType[collider];
                 foundColliderShapes[(size_t)shape].push_back(collider);

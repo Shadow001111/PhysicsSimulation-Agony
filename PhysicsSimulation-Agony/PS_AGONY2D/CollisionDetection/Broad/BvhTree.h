@@ -34,7 +34,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 	{
 	public:
 		// Rebuilds the tree over 'ids' (collider indices into 'aabbs').
-		void build(const AABBSoAViewer& aabbs, std::span<const ColliderDenseIndex> ids);
+		void build(const AABBSoAViewer& aabbs, std::span<const ObjectDenseIndex> ids);
 
 		// Refits to the current AABBs. Membership must match the last build().
 		void refit(const AABBSoAViewer& aabbs);
@@ -50,7 +50,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		void getLeafNodeAABBs(std::vector<AABB>& outAABBs) const;
 
 		template <typename ShapeQuery>
-		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderDenseIndex>& outColliders) const;
+		void queryCollidersInShape(const ShapeQuery& shape, std::vector<ObjectDenseIndex>& outColliders) const;
 
 		template <typename ShapeQuery>
 		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const;
@@ -84,10 +84,10 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
 
-		Bounds gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ColliderDenseIndex> ids);
+		Bounds gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ObjectDenseIndex> ids);
 		void transformCentroids(uint32_t count, const Bounds& bounds);
 		void computeMortonCodes(uint32_t count);
-		void sortByMortonCodes(std::span<const ColliderDenseIndex> ids);
+		void sortByMortonCodes(std::span<const ObjectDenseIndex> ids);
 		uint32_t buildNodes(uint32_t count); // Returns leaf count.
 		void fitNodes(const AABBSoAViewer& aabbs, bool isRebuild);
 
@@ -104,7 +104,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 	};
 
 	template <typename ShapeQuery>
-	inline void BvhTree::queryCollidersInShape(const ShapeQuery& shape, std::vector<ColliderDenseIndex>& outColliders) const
+	inline void BvhTree::queryCollidersInShape(const ShapeQuery& shape, std::vector<ObjectDenseIndex>& outColliders) const
 	{
 		using RealSimd = Ecstasy::Core::Simd<Real>;
 

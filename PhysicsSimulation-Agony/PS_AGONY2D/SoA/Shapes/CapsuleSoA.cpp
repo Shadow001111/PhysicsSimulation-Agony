@@ -4,7 +4,7 @@
 namespace PS_AGONY2D
 {
 	void CapsuleSoA::append(
-		ColliderDenseIndex colliderIndex,
+		ObjectDenseIndex colliderIndex,
 		Real halfLength,
 		Real radius
 	)

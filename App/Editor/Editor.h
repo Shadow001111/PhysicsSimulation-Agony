@@ -32,8 +32,8 @@ namespace PS_AGONY_EDITOR
 		Vec2 mouseWorld{ 0, 0 };
 		Real worldPerPixel = 0.01;
 		Mat4 viewProjection{};
-		std::vector<ColliderDenseIndex> foundScratch;
-		std::vector<ColliderDenseIndex> colliderScratch;
+		std::vector<ObjectDenseIndex> foundScratch;
+		std::vector<ObjectDenseIndex> colliderScratch;
 
 		// Snap.
 		bool snapEnabled = false;
@@ -115,7 +115,7 @@ namespace PS_AGONY_EDITOR
 		int findSelected(const ObjectAPI& api, Handle body) const;
 		void select(const ObjectAPI& api, Handle body, bool additive);
 
-		bool pickCollider(Simulation& sim, Vec2 p, ColliderDenseIndex& out);
+		bool pickCollider(Simulation& sim, Vec2 p, ObjectDenseIndex& out);
 		void beginDrag(Simulation& sim, Handle body, Vec2 grabWorld);
 		void updateDrag(Simulation& sim, Real dt);
 		void endDrag(Simulation& sim);

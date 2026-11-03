@@ -20,9 +20,9 @@ namespace PS_AGONY2D
 		uint32_t shift = 63;
 		size_t capacity = 0;
 
-		static uint64_t makeKey(ColliderDenseIndex a, ColliderDenseIndex b) noexcept
+		static uint64_t makeKey(ObjectDenseIndex a, ObjectDenseIndex b) noexcept
 		{
-			static_assert(sizeof(ColliderDenseIndex) <= 4);
+			static_assert(sizeof(ObjectDenseIndex) <= 4);
 			return (uint64_t(a) << 32) | uint64_t(b);
 		}
 

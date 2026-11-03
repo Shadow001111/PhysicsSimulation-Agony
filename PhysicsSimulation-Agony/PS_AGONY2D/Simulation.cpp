@@ -110,7 +110,7 @@ namespace PS_AGONY2D
         return true;
     }
 
-    bool Simulation::setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold)
+    bool Simulation::setColliderCollisionCallback(ObjectDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold)
     {
         ColliderSoA& colliders = objectManager.colliders;
         if (static_cast<size_t>(colliderIndex) >= colliders.getCount())

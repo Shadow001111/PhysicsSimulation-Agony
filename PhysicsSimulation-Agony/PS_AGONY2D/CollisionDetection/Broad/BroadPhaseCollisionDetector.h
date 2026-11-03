@@ -142,8 +142,8 @@ namespace PS_AGONY2D
 		// also rebuilt if requestStaticRebuild() was called or its collider count differs from
 		// 'staticIds'. Spans hold COLLIDER indices; either may be empty.
 		void buildTrees(
-			std::span<const ColliderDenseIndex> dynamicIds,
-			std::span<const ColliderDenseIndex> staticIds,
+			std::span<const ObjectDenseIndex> dynamicIds,
+			std::span<const ObjectDenseIndex> staticIds,
 			StaticTreeUpdate staticUpdate
 		);
 
@@ -160,7 +160,7 @@ namespace PS_AGONY2D
 
 		// Returns COLLIDER indices (dynamic first, then static) whose AABB overlaps the query shape.
 		template <typename ShapeQuery>
-		void queryCollidersInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<ColliderDenseIndex>& outColliders) const;
+		void queryCollidersInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<ObjectDenseIndex>& outColliders) const;
 
 		// Returns the AABBs of leaf nodes (of both trees) overlapping the query shape.
 		template <typename ShapeQuery>
@@ -176,7 +176,7 @@ namespace PS_AGONY2D
 	inline void BroadPhaseCollisionDetector::queryCollidersInShape(
 		const ShapeQuery& shape,
 		BroadPhaseInternal::BvhTreeTypeFlag flags,
-		std::vector<ColliderDenseIndex>& outColliders
+		std::vector<ObjectDenseIndex>& outColliders
 	) const
 	{
 		uint32_t mask = static_cast<uint32_t>(flags);

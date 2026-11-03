@@ -76,8 +76,8 @@ namespace PS_AGONY2D
 	}
 
 	void BroadPhaseCollisionDetector::buildTrees(
-		std::span<const ColliderDenseIndex> dynamicIds,
-		std::span<const ColliderDenseIndex> staticIds,
+		std::span<const ObjectDenseIndex> dynamicIds,
+		std::span<const ObjectDenseIndex> staticIds,
 		StaticTreeUpdate staticUpdate)
 	{
 		TRACY_SCOPE_N("Build broad-phase trees");

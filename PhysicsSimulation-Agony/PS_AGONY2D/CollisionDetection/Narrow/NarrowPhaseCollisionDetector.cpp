@@ -308,12 +308,12 @@ namespace PS_AGONY2D
         // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot,
         // or INVALID_COLLIDER_INDEX if the slot holds a collider created after the cache was built
         // (or was vacated). Slots never touched are identity.
-        robin_hood::unordered_flat_map<ColliderDenseIndex, ColliderDenseIndex> slotToEntity;
-        robin_hood::unordered_flat_set<ColliderDenseIndex> dead;
+        robin_hood::unordered_flat_map<ObjectDenseIndex, ObjectDenseIndex> slotToEntity;
+        robin_hood::unordered_flat_set<ObjectDenseIndex> dead;
         slotToEntity.reserve(deletedColliders.size() * 2);
         dead.reserve(deletedColliders.size());
 
-        auto entityAt = [&](ColliderDenseIndex slot) -> ColliderDenseIndex
+        auto entityAt = [&](ObjectDenseIndex slot) -> ObjectDenseIndex
             {
                 const auto it = slotToEntity.find(slot);
                 return it == slotToEntity.end() ? slot : it->second;
@@ -321,15 +321,15 @@ namespace PS_AGONY2D
 
         for (const auto& deletion : deletedColliders)
         {
-            const ColliderDenseIndex d = deletion.deletedIndex;
-            const ColliderDenseIndex s = deletion.swappedFromIndex;
+            const ObjectDenseIndex d = deletion.deletedIndex;
+            const ObjectDenseIndex s = deletion.swappedFromIndex;
 
-            const ColliderDenseIndex victim = entityAt(d);
+            const ObjectDenseIndex victim = entityAt(d);
             if (victim != INVALID_COLLIDER_INDEX) dead.insert(victim);
 
             if (s != INVALID_COLLIDER_INDEX && s != d)
             {
-                const ColliderDenseIndex moved = entityAt(s);
+                const ObjectDenseIndex moved = entityAt(s);
                 slotToEntity[d] = moved;
                 slotToEntity[s] = INVALID_COLLIDER_INDEX; // Vacated; a later create may reuse it.
             }
@@ -340,9 +340,9 @@ namespace PS_AGONY2D
         }
 
         // original index -> final index (INVALID_COLLIDER_INDEX if deleted). Untouched indices are absent.
-        robin_hood::unordered_flat_map<ColliderDenseIndex, ColliderDenseIndex> remap;
+        robin_hood::unordered_flat_map<ObjectDenseIndex, ObjectDenseIndex> remap;
         remap.reserve(dead.size() + slotToEntity.size());
-        for (const ColliderDenseIndex e : dead) remap[e] = INVALID_COLLIDER_INDEX;
+        for (const ObjectDenseIndex e : dead) remap[e] = INVALID_COLLIDER_INDEX;
         for (const auto& [slot, entity] : slotToEntity)
         {
             if (entity != INVALID_COLLIDER_INDEX && entity != slot) remap[entity] = slot;
@@ -351,8 +351,8 @@ namespace PS_AGONY2D
         // Rewrite the keys stored in the previous results, then rebuild the table.
         for (BodyCollisionData& d : previousCollisionData)
         {
-            ColliderDenseIndex a = d.colliderA;
-            ColliderDenseIndex b = d.colliderB;
+            ObjectDenseIndex a = d.colliderA;
+            ObjectDenseIndex b = d.colliderB;
 
             const auto ra = remap.find(a);
             const auto rb = remap.find(b);

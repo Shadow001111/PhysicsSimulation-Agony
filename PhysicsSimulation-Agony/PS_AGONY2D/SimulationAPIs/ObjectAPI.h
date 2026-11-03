@@ -25,10 +25,10 @@ namespace PS_AGONY2D
 
 		// Creation (dense indices).
 		std::optional<ObjectDenseIndex> createBody(const BodyCreateParams& params) { return objectManager.createBody(params); }
-		std::optional<ColliderDenseIndex> createCircleCollider(const CircleColliderCreateParams& params) { return objectManager.createCircleCollider(params); }
-		std::optional<ColliderDenseIndex> createBoxCollider(const BoxColliderCreateParams& params) { return objectManager.createBoxCollider(params); }
+		std::optional<ObjectDenseIndex> createCircleCollider(const CircleColliderCreateParams& params) { return objectManager.createCircleCollider(params); }
+		std::optional<ObjectDenseIndex> createBoxCollider(const BoxColliderCreateParams& params) { return objectManager.createBoxCollider(params); }
 		std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params) { return objectManager.createPolygonCollider(params); }
-		std::optional<ColliderDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params) { return objectManager.createCapsuleCollider(params); }
+		std::optional<ObjectDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params) { return objectManager.createCapsuleCollider(params); }
 
 		std::optional<ObjectDenseIndex> createCircle(const CircleCreateParams& params) { return objectManager.createCircle(params); }
 		std::optional<ObjectDenseIndex> createBox(const BoxCreateParams& params) { return objectManager.createBox(params); }
@@ -41,7 +41,7 @@ namespace PS_AGONY2D
 		{
 			return bodyIndex < objectManager.bodies.getCount() ? objectManager.bodies.handleAt(bodyIndex) : Handle{};
 		}
-		Handle getColliderHandle(ColliderDenseIndex colliderIndex) const noexcept
+		Handle getColliderHandle(ObjectDenseIndex colliderIndex) const noexcept
 		{
 			return colliderIndex < objectManager.colliders.getCount() ? objectManager.colliders.handleAt(colliderIndex) : Handle{};
 		}
@@ -104,11 +104,11 @@ namespace PS_AGONY2D
 		void destroyCollider(Handle h)
 		{
 			const uint32_t i = getColliderIndex(h);
-			if (i != Handle::kNull) destroyCollider(static_cast<ColliderDenseIndex>(i));
+			if (i != Handle::kNull) destroyCollider(static_cast<ObjectDenseIndex>(i));
 		}
 
 		void destroyBody(ObjectDenseIndex bodyIndex) { objectManager.destroyBody(bodyIndex, constraintSystems); }
-		void destroyCollider(ColliderDenseIndex colliderIndex) { objectManager.destroyCollider(colliderIndex, constraintSystems); }
+		void destroyCollider(ObjectDenseIndex colliderIndex) { objectManager.destroyCollider(colliderIndex, constraintSystems); }
 
 		// Deferred modifications. Queued and applied at the start of Simulation::update() and after every physics step,
 		// so they are safe to call from collision callbacks. Stale handles are dropped. Semantics: see ObjectManager.h.
@@ -153,14 +153,14 @@ namespace PS_AGONY2D
 		std::optional<ColliderData> getColliderDataH(Handle collider) const noexcept
 		{
 			const uint32_t i = objectManager.colliders.indexOf(collider);
-			return i == Handle::kNull ? std::nullopt : objectManager.getColliderData(static_cast<ColliderDenseIndex>(i));
+			return i == Handle::kNull ? std::nullopt : objectManager.getColliderData(static_cast<ObjectDenseIndex>(i));
 		}
 
 		//
-		std::span<const ColliderDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex)
+		std::span<const ObjectDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex)
 		{
 			if (bodyIndex >= objectManager.bodies.getCount()) { return {}; }
-			std::span<const ColliderDenseIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];
+			std::span<const ObjectDenseIndex> indicesSpan = objectManager.bodies.colliderIndices[bodyIndex];
 			return indicesSpan;
 		}
 	private:
@@ -168,7 +168,7 @@ namespace PS_AGONY2D
 		{
 			return index ? std::optional<Handle>(objectManager.bodies.handleAt(*index)) : std::nullopt;
 		}
-		std::optional<Handle> toColliderHandle(std::optional<ColliderDenseIndex> index) const noexcept
+		std::optional<Handle> toColliderHandle(std::optional<ObjectDenseIndex> index) const noexcept
 		{
 			return index ? std::optional<Handle>(objectManager.colliders.handleAt(*index)) : std::nullopt;
 		}

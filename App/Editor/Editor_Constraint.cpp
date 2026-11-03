@@ -10,7 +10,7 @@ namespace PS_AGONY_EDITOR
 		if (overUI || !ImGui::IsMouseClicked(0)) return;
 
 		ObjectAPI& api = sim.objects();
-		ColliderDenseIndex ci;
+		ObjectDenseIndex ci;
 		if (!pickCollider(sim, mouseWorld, ci)) { hasFirstAnchor = false; return; }
 
 		const ObjectDenseIndex bi = api.getColliders().bodyIndex[ci];

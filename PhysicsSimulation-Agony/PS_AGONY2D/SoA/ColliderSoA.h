@@ -5,9 +5,6 @@
 #include "PS_AGONY2D/Types/CollisionEvent.h"
 
 // Define all scalar SoA fields.
-// localRotation: rigid local angle; wrapped to [0, 2pi) once, at creation.
-// worldRotation: body.rotation + localRotation, re-wrapped every step.
-// callbackId: collision callback slot (0 = none). eventThreshold: impact impulse needed to fire it.
 #define PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(F) \
 	F(bodyIndex, ObjectDenseIndex) \
 	F(localOffsetX, Real) \
@@ -38,7 +35,7 @@ namespace PS_AGONY2D
 
 		HandleTable handles;
 
-		ColliderDenseIndex append(
+		ObjectDenseIndex append(
 			ObjectDenseIndex bodyIndexIn,
 			Vec2 localOffset,
 			Real localRotationIn,

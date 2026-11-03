@@ -75,7 +75,7 @@ namespace PS_AGONY2D
 	// [firstColliderIndex, firstColliderIndex + colliderCount).
 	struct PolygonColliderCreateResult
 	{
-		ColliderDenseIndex firstColliderIndex{ 0 };
+		ObjectDenseIndex firstColliderIndex{ 0 };
 		size_t colliderCount{ 0 };
 	};
 
@@ -197,10 +197,10 @@ namespace PS_AGONY2D
 
 		// Attaches a new collider of the given shape to an EXISTING body immediately.
 		// Returns std::nullopt if bodyIndex is invalid.
-		std::optional<ColliderDenseIndex> createCircleCollider(const CircleColliderCreateParams& params);
-		std::optional<ColliderDenseIndex> createBoxCollider(const BoxColliderCreateParams& params);
+		std::optional<ObjectDenseIndex> createCircleCollider(const CircleColliderCreateParams& params);
+		std::optional<ObjectDenseIndex> createBoxCollider(const BoxColliderCreateParams& params);
 		std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params);
-		std::optional<ColliderDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params);
+		std::optional<ObjectDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params);
 
 		std::optional<ObjectDenseIndex> createCircle(const CircleCreateParams& params);
 		std::optional<ObjectDenseIndex> createBox(const BoxCreateParams& params);
@@ -211,7 +211,7 @@ namespace PS_AGONY2D
 		void destroyBody(ObjectDenseIndex bodyIndex, ConstraintSystemArray& constraintSystems);
 
 		// Destroys a single collider without touching its owning body.
-		void destroyCollider(ColliderDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems);
+		void destroyCollider(ObjectDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems);
 
 		// ---- Deferred modification commands ----
 		// Queued in call order, applied by flushCommands(). Stale handles and shape-type mismatches are dropped.
@@ -255,7 +255,7 @@ namespace PS_AGONY2D
 		void flushCommands();
 
 		// Instant reads (no queue). nullopt if index is out of range.
-		std::optional<ColliderData> getColliderData(ColliderDenseIndex colliderIndex) const noexcept;
+		std::optional<ColliderData> getColliderData(ObjectDenseIndex colliderIndex) const noexcept;
 	private:
 		std::vector<ObjectCommand> commands;
 		std::vector<PolygonGeometry> pendingPolygons;
@@ -278,7 +278,7 @@ namespace PS_AGONY2D
 		void moveBodyColliders(ObjectDenseIndex bodyIndex, bool toStatic);
 
 		//
-		ColliderDenseIndex createColliderInternal(
+		ObjectDenseIndex createColliderInternal(
 			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
 			MaterialIndex materialIndex, BodyType shapeType, ObjectDenseIndex shapeIndex
 		);
@@ -286,13 +286,13 @@ namespace PS_AGONY2D
 		// Appends a single convex-polygon collider (assumed already convex, CCW, >=3 vertices -
 		// no validation is performed here) to bodyIndex. Shared by createPolygon() and
 		// createPolygonCollider() so the collider/shape-SoA wiring is written once.
-		ColliderDenseIndex createConvexPolygonColliderInternal(
+		ObjectDenseIndex createConvexPolygonColliderInternal(
 			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
 			MaterialIndex materialIndex, std::vector<Vec2> convexVertices
 		);
 
 		// Removes a single collider (and its underlying shape-SoA entry) from bodyIndex's
 		// owned list. Shared by destroyCollider() and destroyBody()'s cascade loop.
-		void destroyColliderInternal(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex);
+		void destroyColliderInternal(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex);
 	};
 }

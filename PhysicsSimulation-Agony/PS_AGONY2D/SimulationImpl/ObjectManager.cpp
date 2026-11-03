@@ -38,7 +38,7 @@ namespace PS_AGONY2D
         return newBodyIndex;
     }
 
-    std::optional<ColliderDenseIndex> ObjectManager::createCircleCollider(const CircleColliderCreateParams& params)
+    std::optional<ObjectDenseIndex> ObjectManager::createCircleCollider(const CircleColliderCreateParams& params)
     {
         if (params.bodyIndex >= bodies.getCount())
         {
@@ -50,7 +50,7 @@ namespace PS_AGONY2D
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(circles.getCount());
 
-        const ColliderDenseIndex newCollider = createColliderInternal(
+        const ObjectDenseIndex newCollider = createColliderInternal(
             params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Circle, newShapeIndex
         );
         circles.append(newCollider, radius);
@@ -58,7 +58,7 @@ namespace PS_AGONY2D
         return newCollider;
     }
 
-    std::optional<ColliderDenseIndex> ObjectManager::createBoxCollider(const BoxColliderCreateParams& params)
+    std::optional<ObjectDenseIndex> ObjectManager::createBoxCollider(const BoxColliderCreateParams& params)
     {
         if (params.bodyIndex >= bodies.getCount())
         {
@@ -71,7 +71,7 @@ namespace PS_AGONY2D
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(boxes.getCount());
 
-        const ColliderDenseIndex newCollider = createColliderInternal(
+        const ObjectDenseIndex newCollider = createColliderInternal(
             params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Box, newShapeIndex
         );
         boxes.append(newCollider, width * Real(0.5), height * Real(0.5));
@@ -120,7 +120,7 @@ namespace PS_AGONY2D
             return std::nullopt;
         }
 
-        const ColliderDenseIndex firstCollider = createConvexPolygonColliderInternal(
+        const ObjectDenseIndex firstCollider = createConvexPolygonColliderInternal(
             params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
         );
         for (size_t i = 1; i < convexPieces.size(); ++i)
@@ -133,7 +133,7 @@ namespace PS_AGONY2D
         return PolygonColliderCreateResult{ firstCollider, convexPieces.size() };
     }
 
-    std::optional<ColliderDenseIndex> ObjectManager::createCapsuleCollider(const CapsuleColliderCreateParams& params)
+    std::optional<ObjectDenseIndex> ObjectManager::createCapsuleCollider(const CapsuleColliderCreateParams& params)
     {
         if (params.bodyIndex >= bodies.getCount())
         {
@@ -157,7 +157,7 @@ namespace PS_AGONY2D
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(capsules.getCount());
 
-        const ColliderDenseIndex newCollider = createColliderInternal(
+        const ObjectDenseIndex newCollider = createColliderInternal(
             params.bodyIndex, localOffset, localRotation, materialIndex, BodyType::Capsule, newShapeIndex
         );
         capsules.append(newCollider, length * Real(0.5), radius);
@@ -343,7 +343,7 @@ namespace PS_AGONY2D
         // Cascade-delete every collider owned by this body.
         while (!bodies.colliderIndices[bodyIndex].empty())
         {
-            const ColliderDenseIndex colliderIdx = bodies.colliderIndices[bodyIndex].back();
+            const ObjectDenseIndex colliderIdx = bodies.colliderIndices[bodyIndex].back();
             destroyColliderInternal(bodyIndex, colliderIdx);
         }
 
@@ -355,7 +355,7 @@ namespace PS_AGONY2D
             bodies.swapWithBack(bodyIndex);
 
             // Fix up colliders owned by the body that got swapped into bodyIndex.
-            for (ColliderDenseIndex ci : bodies.colliderIndices[bodyIndex])
+            for (ObjectDenseIndex ci : bodies.colliderIndices[bodyIndex])
                 colliders.bodyIndex[ci] = bodyIndex;
 
             for (const BodyAttachment& attachment : bodies.attachments[bodyIndex])
@@ -371,7 +371,7 @@ namespace PS_AGONY2D
         bodies.popBack();
     }
 
-    void ObjectManager::destroyCollider(ColliderDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems)
+    void ObjectManager::destroyCollider(ObjectDenseIndex colliderIndex, ConstraintSystemArray& constraintSystems)
     {
         if (colliderIndex >= colliders.getCount()) return;
 
@@ -379,9 +379,9 @@ namespace PS_AGONY2D
         destroyColliderInternal(bodyIndex, colliderIndex);
     }
 
-    ColliderDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, BodyType shapeType, ObjectDenseIndex shapeIndex)
+    ObjectDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, BodyType shapeType, ObjectDenseIndex shapeIndex)
     {
-        const ColliderDenseIndex newCollider = colliders.append(
+        const ObjectDenseIndex newCollider = colliders.append(
             bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
         );
         bodies.addCollider(bodyIndex, newCollider);
@@ -395,7 +395,7 @@ namespace PS_AGONY2D
         return newCollider;
     }
 
-    ColliderDenseIndex ObjectManager::createConvexPolygonColliderInternal(
+    ObjectDenseIndex ObjectManager::createConvexPolygonColliderInternal(
         ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
         MaterialIndex materialIndex, std::vector<Vec2> convexVertices
     )
@@ -404,7 +404,7 @@ namespace PS_AGONY2D
 
         PolygonGeometry geometry{ convexVertices };
 
-        const ColliderDenseIndex newCollider = createColliderInternal(
+        const ObjectDenseIndex newCollider = createColliderInternal(
             bodyIndex, localOffset, localRotation, materialIndex, BodyType::Polygon, newShapeIndex
         );
         polygons.append(newCollider, std::move(geometry));
@@ -412,7 +412,7 @@ namespace PS_AGONY2D
         return newCollider;
     }
 
-    void ObjectManager::destroyColliderInternal(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIdx)
+    void ObjectManager::destroyColliderInternal(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIdx)
     {
         spatialDirty = true;
 
@@ -490,7 +490,7 @@ namespace PS_AGONY2D
         if (oldBackCollider != colliderIdx)
         {
             const ObjectDenseIndex swappedOwner = colliders.bodyIndex[colliderIdx];
-            bodies.removeCollider(swappedOwner, static_cast<ColliderDenseIndex>(oldBackCollider));
+            bodies.removeCollider(swappedOwner, static_cast<ObjectDenseIndex>(oldBackCollider));
             bodies.addCollider(swappedOwner, colliderIdx);
 
             // Moved collider: oldBackCollider -> colliderIdx in its ID list.
@@ -525,7 +525,7 @@ namespace PS_AGONY2D
 
     namespace
     {
-        Real colliderArea(const ObjectManager& om, ColliderDenseIndex c)
+        Real colliderArea(const ObjectManager& om, ObjectDenseIndex c)
         {
             const ObjectDenseIndex s = om.colliders.shapeIndex[c];
             switch (om.colliders.shapeType[c])
@@ -657,7 +657,7 @@ namespace PS_AGONY2D
 
         const uint32_t resolved = colliders.indexOf(c.handle);
         if (resolved == Handle::kNull) return;
-        const ColliderDenseIndex ci = static_cast<ColliderDenseIndex>(resolved);
+        const ObjectDenseIndex ci = static_cast<ObjectDenseIndex>(resolved);
         const ObjectDenseIndex s = colliders.shapeIndex[ci];
         const BodyType shapeType = colliders.shapeType[ci];
 
@@ -745,7 +745,7 @@ namespace PS_AGONY2D
     void ObjectManager::applyBodyMassFromDensity(ObjectDenseIndex b, Real density)
     {
         Real totalArea = Real(0);
-        for (const ColliderDenseIndex ci : bodies.colliderIndices[b])
+        for (const ObjectDenseIndex ci : bodies.colliderIndices[b])
             totalArea += colliderArea(*this, ci);
         if (totalArea <= Real(0)) return;
 
@@ -757,10 +757,10 @@ namespace PS_AGONY2D
         const Real mass = bodies.mass[b];
         if (mass <= Real(0)) return;
 
-        const std::vector<ColliderDenseIndex>& list = bodies.colliderIndices[b];
+        const std::vector<ObjectDenseIndex>& list = bodies.colliderIndices[b];
 
         Real totalArea = Real(0);
-        for (const ColliderDenseIndex ci : list)
+        for (const ObjectDenseIndex ci : list)
             totalArea += colliderArea(*this, ci);
         if (totalArea <= Real(0)) return;
 
@@ -769,7 +769,7 @@ namespace PS_AGONY2D
 
         // Sum of each collider's inertia about its own centroid plus parallel-axis shift to the body COM.
         Real inertia = Real(0);
-        for (const ColliderDenseIndex ci : list)
+        for (const ObjectDenseIndex ci : list)
         {
             const Real area = colliderArea(*this, ci);
             if (area <= Real(0)) continue;
@@ -819,7 +819,7 @@ namespace PS_AGONY2D
         std::vector<ObjectDenseIndex>& from = toStatic ? dynamicColliderIDs : staticColliderIDs;
         std::vector<ObjectDenseIndex>& to = toStatic ? staticColliderIDs : dynamicColliderIDs;
 
-        for (const ColliderDenseIndex ci : bodies.colliderIndices[b])
+        for (const ObjectDenseIndex ci : bodies.colliderIndices[b])
         {
             // O(1) swap-remove from the old list.
             const uint32_t slot = colliderSlot[ci];
@@ -834,7 +834,7 @@ namespace PS_AGONY2D
         spatialDirty = true;
     }
 
-    std::optional<ColliderData> ObjectManager::getColliderData(ColliderDenseIndex i) const noexcept
+    std::optional<ColliderData> ObjectManager::getColliderData(ObjectDenseIndex i) const noexcept
     {
         if (i >= colliders.getCount()) return std::nullopt;
 

@@ -1294,7 +1294,7 @@ static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Simulation& simulati
     if (!body) return;
 
     if (radius * 0.5f < ctx.minRadius) return;
-    for (const PS_AGONY2D::ColliderDenseIndex collider : objects.getBodyColliders(*body))
+    for (const PS_AGONY2D::ObjectDenseIndex collider : objects.getBodyColliders(*body))
         simulation.setColliderCollisionCallback(collider, ctx.callback, 16.0f * radius);
 }
 

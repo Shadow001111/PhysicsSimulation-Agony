@@ -56,7 +56,7 @@ namespace PS_AGONY2D
 	}
 
 	void PolygonSoA::append(
-		ColliderDenseIndex colliderIndex,
+		ObjectDenseIndex colliderIndex,
 		PolygonGeometry&& polygonGeometry
 	)
 	{

@@ -5,7 +5,7 @@ namespace PS_AGONY_EDITOR
 	// Finds the collider under p within a pixel tolerance. BVH circle query, then an exact test for
 	// circle/box/capsule (polygons: AABB hit only). Smallest AABB area wins, so small bodies on large ones stay pickable.
 	// Returns false if nothing was hit.
-	bool Editor::pickCollider(Simulation& sim, Vec2 p, ColliderDenseIndex& out)
+	bool Editor::pickCollider(Simulation& sim, Vec2 p, ObjectDenseIndex& out)
 	{
 		const Real tol = worldPerPixel * kPickTolerancePx;
 
@@ -22,7 +22,7 @@ namespace PS_AGONY_EDITOR
 		Real bestArea = std::numeric_limits<Real>::max();
 		bool found = false;
 
-		for (const ColliderDenseIndex ci : foundScratch)
+		for (const ObjectDenseIndex ci : foundScratch)
 		{
 			const Real dx = p.x - cv.worldPosX[ci];
 			const Real dy = p.y - cv.worldPosY[ci];
@@ -176,7 +176,7 @@ namespace PS_AGONY_EDITOR
 		if (!additive) selected.clear();
 
 		const ColliderSoAViewer cv = api.getColliders();
-		for (const ColliderDenseIndex ci : foundScratch)
+		for (const ObjectDenseIndex ci : foundScratch)
 		{
 			const Handle body = api.getBodyHandle(cv.bodyIndex[ci]);
 			if (findSelected(api, body) < 0) selected.push_back(body);
@@ -202,7 +202,7 @@ namespace PS_AGONY_EDITOR
 		}
 		if (overUI || !ImGui::IsMouseClicked(0)) return;
 
-		ColliderDenseIndex ci;
+		ObjectDenseIndex ci;
 		if (pickCollider(sim, mouseWorld, ci))
 		{
 			const Handle body = api.getBodyHandle(api.getColliders().bodyIndex[ci]);

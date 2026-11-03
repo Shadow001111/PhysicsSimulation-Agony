@@ -27,7 +27,7 @@ namespace PS_AGONY2D
 	// time so downstream solvers (which only ever act on bodies) never re-resolve them.
 	struct BodyCollisionData
 	{
-		ColliderDenseIndex colliderA, colliderB;
+		ObjectDenseIndex colliderA, colliderB;
 		ObjectDenseIndex bodyA, bodyB;
 		Vec2 normal;
 		Real penetration;
@@ -39,7 +39,7 @@ namespace PS_AGONY2D
 		BodyCollisionData() = default;
 
 		BodyCollisionData(
-			ColliderDenseIndex colliderA, ColliderDenseIndex colliderB,
+			ObjectDenseIndex colliderA, ObjectDenseIndex colliderB,
 			ObjectDenseIndex bodyA, ObjectDenseIndex bodyB,
 			Vec2 normal,
 			Real depth,

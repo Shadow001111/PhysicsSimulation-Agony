@@ -44,7 +44,7 @@ namespace PS_AGONY2D
 
 	// Define all scalar SoA fields.
 	#define PS_AGONY_POLYGON_SOA_SCALAR_FIELDS(F) \
-		F(colliderIndices, ColliderDenseIndex) \
+		F(colliderIndices, ObjectDenseIndex) \
 		F(geometry, PolygonGeometry)
 
 	struct PolygonSoA
@@ -54,7 +54,7 @@ namespace PS_AGONY2D
 		#undef DECLARE_FIELD
 
 		void append(
-			ColliderDenseIndex colliderIndex,
+			ObjectDenseIndex colliderIndex,
 			PolygonGeometry&& polygonGeometry
 		);
 

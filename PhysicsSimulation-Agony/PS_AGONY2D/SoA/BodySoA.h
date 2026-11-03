@@ -34,7 +34,7 @@
 // Define complex vector-of-vector fields.
 #define PS_AGONY_BODY_SOA_VECTOR_FIELDS(F) \
     F(attachments, BodyAttachment) \
-    F(colliderIndices, ColliderDenseIndex)
+    F(colliderIndices, ObjectDenseIndex)
 
 namespace PS_AGONY2D
 {
@@ -79,8 +79,8 @@ namespace PS_AGONY2D
         void addAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex);
         void removeAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex);
 
-        void addCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex);
-        void removeCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex);
+        void addCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex);
+        void removeCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex);
 
         bool isValid(Handle h) const noexcept { return handles.isValid(h); }
         ObjectDenseIndex indexOf(Handle h) const noexcept { return handles.indexOf(h); }

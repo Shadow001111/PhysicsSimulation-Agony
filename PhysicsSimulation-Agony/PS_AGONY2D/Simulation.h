@@ -132,8 +132,8 @@ namespace PS_AGONY2D
 		Real renderAlpha = 0;
 
 		// Other.
-		std::vector<ColliderDenseIndex> broadPhaseColliders;
-		std::vector<std::pair<ColliderDenseIndex, Real>> narrowPhaseColliders;
+		std::vector<ObjectDenseIndex> broadPhaseColliders;
+		std::vector<std::pair<ObjectDenseIndex, Real>> narrowPhaseColliders;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -162,7 +162,7 @@ namespace PS_AGONY2D
 
 		// Id 0 clears the collider's callback (threshold ignored).
 		// Returns false for an invalid collider, a dead callback id, or a non-positive threshold.
-		bool setColliderCollisionCallback(ColliderDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
+		bool setColliderCollisionCallback(ObjectDenseIndex colliderIndex, CollisionCallbackIndex callbackIndex, Real impulseThreshold);
 
 		void mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp);
 

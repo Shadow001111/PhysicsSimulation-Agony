@@ -101,13 +101,13 @@ namespace PS_AGONY2D
 		}
 	}
 
-	void BodySoA::addCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex)
+	void BodySoA::addCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
 		colliderIndices[bodyIndex].push_back(colliderIndex);
 	}
 
-	void BodySoA::removeCollider(ObjectDenseIndex bodyIndex, ColliderDenseIndex colliderIndex)
+	void BodySoA::removeCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;
 		auto& list = colliderIndices[bodyIndex];

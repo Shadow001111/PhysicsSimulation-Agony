@@ -11,7 +11,6 @@ namespace PS_AGONY2D
 	// Can't be changed.
 
 	using ObjectDenseIndex = uint32_t;
-	using ColliderDenseIndex = ObjectDenseIndex;
 	using MaterialIndex = uint32_t;
 
 	struct ObjectPair

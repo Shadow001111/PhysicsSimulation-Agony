@@ -74,12 +74,12 @@ namespace PS_AGONY_EDITOR
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
 			colliderScratch.clear();
-			for (const ColliderDenseIndex ci : api.getBodyColliders(bi)) colliderScratch.push_back(ci);
+			for (const ObjectDenseIndex ci : api.getBodyColliders(bi)) colliderScratch.push_back(ci);
 
 			Handle toDelete{};
 			bool deleteRequested = false;
 
-			for (const ColliderDenseIndex ci : colliderScratch)
+			for (const ObjectDenseIndex ci : colliderScratch)
 			{
 				const Handle ch = api.getColliderHandle(ci);
 				const auto cd = api.getColliderDataH(ch);

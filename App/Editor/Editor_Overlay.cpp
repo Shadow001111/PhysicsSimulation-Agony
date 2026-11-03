@@ -17,7 +17,7 @@ namespace PS_AGONY_EDITOR
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
 			if (bi == Handle::kNull) continue;
 
-			for (const ColliderDenseIndex ci : api.getBodyColliders(bi))
+			for (const ObjectDenseIndex ci : api.getBodyColliders(bi))
 			{
 				dl->AddRect(
 					toScreen(Vec2(cv.aabbMinX[ci], cv.aabbMaxY[ci])),

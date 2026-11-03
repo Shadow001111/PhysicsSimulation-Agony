@@ -5,7 +5,7 @@
 
 namespace PS_AGONY2D
 {
-	ColliderDenseIndex ColliderSoA::append(
+	ObjectDenseIndex ColliderSoA::append(
 		ObjectDenseIndex bodyIndexIn,
 		Vec2 localOffset,
 		Real localRotationIn,
@@ -14,7 +14,7 @@ namespace PS_AGONY2D
 		ObjectDenseIndex shapeIndexIn
 	)
 	{
-		const ColliderDenseIndex newIndex = static_cast<ColliderDenseIndex>(bodyIndex.size());
+		const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(bodyIndex.size());
 
 		bodyIndex.push_back(bodyIndexIn);
 
