@@ -51,11 +51,29 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) PS_AGONY_SWAP_WITH_BACK(name, index);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
-		#undef SWAP_FIELD
+			#undef SWAP_FIELD
 
-		#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
-		PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
-		#undef SWAP_VECTOR_FIELD
+			#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
+			PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+			#undef SWAP_VECTOR_FIELD
+	}
+
+	void BodySoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
+	{
+		if (a == b || a >= offsetX.size() || b >= offsetX.size()) [[unlikely]]
+		{
+			return;
+		}
+
+		handles.swap(a, b);
+
+		#define SWAP_FIELD(name, type) std::swap(name[a], name[b]);
+		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
+			#undef SWAP_FIELD
+
+			#define SWAP_VECTOR_FIELD(name, innerType) std::swap(name[a], name[b]);
+			PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+			#undef SWAP_VECTOR_FIELD
 	}
 
 	void BodySoA::popBack()

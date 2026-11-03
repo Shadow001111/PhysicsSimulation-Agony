@@ -21,8 +21,6 @@ namespace PS_AGONY2D
 
     std::optional<ObjectDenseIndex> ObjectManager::createBody(const BodyCreateParams& params)
     {
-        const ObjectDenseIndex newBodyIndex = static_cast<ObjectDenseIndex>(bodies.getCount());
-
         const Vec2 centerOfMass = params.centerOfMass.value_or(Vec2(0));
 
         const Real mass = std::fmax(Real(0), params.mass);
@@ -34,7 +32,7 @@ namespace PS_AGONY2D
         // No shape attached yet, so there's nothing to derive inertia from: it starts
         // at zero (infinite resistance to rotation change is NOT implied - it just
         // means no angular response until a collider/inertia is set some other way).
-        bodies.append(
+        const ObjectDenseIndex newBodyIndex = appendBody(
             params.position, params.velocity, params.rotation, params.angularVelocity,
             mass, invMass, inertia, invInertia, centerOfMass
         );
@@ -50,12 +48,14 @@ namespace PS_AGONY2D
             return std::nullopt;
         }
 
+        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
+
         const Real radius = std::fmax(Real(0), params.radius);
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(circles.getCount());
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Circle, newShapeIndex
+            bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Circle, newShapeIndex
         );
         circles.append(newCollider, radius);
 
@@ -70,13 +70,15 @@ namespace PS_AGONY2D
             return std::nullopt;
         }
 
+        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
+
         const Real width = std::fmax(Real(0), params.size.x);
         const Real height = std::fmax(Real(0), params.size.y);
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(boxes.getCount());
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Box, newShapeIndex
+            bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Box, newShapeIndex
         );
         boxes.append(newCollider, width * Real(0.5), height * Real(0.5));
 
@@ -124,13 +126,14 @@ namespace PS_AGONY2D
             return std::nullopt;
         }
 
+        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
         const ObjectDenseIndex firstCollider = createConvexPolygonColliderInternal(
-            params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
+            bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
         );
         for (size_t i = 1; i < convexPieces.size(); ++i)
         {
             createConvexPolygonColliderInternal(
-                params.bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[i])
+                bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[i])
             );
         }
 
@@ -144,6 +147,8 @@ namespace PS_AGONY2D
             std::cerr << "[AGONY][Simulation::createCapsuleCollider]: Failed: bodyIndex is invalid.\n";
             return std::nullopt;
         }
+
+        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
 
         Real length = std::fmax(Real(0), params.length);
         Vec2 localOffset = params.localOffset;
@@ -162,7 +167,7 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(capsules.getCount());
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            params.bodyIndex, localOffset, localRotation, materialIndex, BodyType::Capsule, newShapeIndex
+            bodyIndex, localOffset, localRotation, materialIndex, BodyType::Capsule, newShapeIndex
         );
         capsules.append(newCollider, length * Real(0.5), radius);
 
@@ -179,8 +184,7 @@ namespace PS_AGONY2D
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        const ObjectDenseIndex newBodyIndex = static_cast<ObjectDenseIndex>(bodies.getCount());
-        bodies.append(
+        const ObjectDenseIndex newBodyIndex = appendBody(
             params.base.position, params.base.velocity, params.base.rotation, params.base.angularVelocity,
             mass, invMass, inertia, invInertia, centerOfMass
         );
@@ -207,8 +211,7 @@ namespace PS_AGONY2D
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        const ObjectDenseIndex newBodyIndex = static_cast<ObjectDenseIndex>(bodies.getCount());
-        bodies.append(
+        const ObjectDenseIndex newBodyIndex = appendBody(
             params.base.position, params.base.velocity, params.base.rotation, params.base.angularVelocity,
             mass, invMass, inertia, invInertia, centerOfMass
         );
@@ -267,8 +270,7 @@ namespace PS_AGONY2D
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        const ObjectDenseIndex newBodyIndex = static_cast<ObjectDenseIndex>(bodies.getCount());
-        bodies.append(
+        const ObjectDenseIndex newBodyIndex = appendBody(
             worldCOM,
             params.base.velocity,
             params.base.rotation,
@@ -314,8 +316,7 @@ namespace PS_AGONY2D
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        const ObjectDenseIndex newBodyIndex = static_cast<ObjectDenseIndex>(bodies.getCount());
-        bodies.append(
+        const ObjectDenseIndex newBodyIndex = appendBody(
             position, params.base.velocity, rotation, params.base.angularVelocity,
             mass, invMass, inertia, invInertia, centerOfMass
         );
@@ -351,27 +352,8 @@ namespace PS_AGONY2D
             destroyColliderInternal(bodyIndex, colliderIdx);
         }
 
-        // Body removal.
-        if (bodyIndex != bodyCount - 1)
-        {
-            const ObjectDenseIndex oldBackIndex = static_cast<ObjectDenseIndex>(bodyCount - 1);
-
-            bodies.swapWithBack(bodyIndex);
-
-            // Fix up colliders owned by the body that got swapped into bodyIndex.
-            for (ObjectDenseIndex ci : bodies.colliderIndices[bodyIndex])
-                colliders.bodyIndex[ci] = bodyIndex;
-
-            for (const BodyAttachment& attachment : bodies.attachments[bodyIndex])
-                constraintSystems[static_cast<size_t>(attachment.type)]->remapBodyIndex(attachment.objectIndex, oldBackIndex, bodyIndex);
-
-            deletedBodies.emplace_back(bodyIndex, static_cast<ObjectDenseIndex>(bodyCount - 1));
-        }
-        else
-        {
-            deletedBodies.emplace_back(bodyIndex, bodyIndex);
-        }
-
+        // Body removal: move to the unused tail (keeps group order), then pop.
+        moveBodyToGroup(bodyIndex, BodyGroup::Unused);
         bodies.popBack();
     }
 
@@ -379,7 +361,7 @@ namespace PS_AGONY2D
     {
         if (colliderIndex >= colliders.getCount()) return;
 
-        const ObjectDenseIndex bodyIndex = colliders.bodyIndex[colliderIndex];
+        const ObjectDenseIndex bodyIndex = wakeBody(colliders.bodyIndex[colliderIndex]);
         destroyColliderInternal(bodyIndex, colliderIndex);
     }
 
@@ -391,7 +373,7 @@ namespace PS_AGONY2D
         bodies.addCollider(bodyIndex, newCollider);
         spatialDirty = true;
 
-        std::vector<ObjectDenseIndex>& list = bodies.isStatic[bodyIndex] ? staticColliderIDs : dynamicColliderIDs;
+        std::vector<ObjectDenseIndex>& list = colliderListFor(bodies.groupOf(bodyIndex));
         colliderSlot.resize(colliders.getCount());
         colliderSlot[newCollider] = static_cast<uint32_t>(list.size());
         list.push_back(static_cast<ObjectDenseIndex>(newCollider));
@@ -480,7 +462,7 @@ namespace PS_AGONY2D
 
         // Remove from the persistent ID list (swap-remove, O(1)).
         {
-            std::vector<ObjectDenseIndex>& list = bodies.isStatic[bodyIndex] ? staticColliderIDs : dynamicColliderIDs;
+            std::vector<ObjectDenseIndex>& list = colliderListFor(bodies.groupOf(bodyIndex));
             const uint32_t slot = colliderSlot[colliderIdx];
             const ObjectDenseIndex lastID = list.back();
             list[slot] = lastID;
@@ -498,7 +480,7 @@ namespace PS_AGONY2D
             bodies.addCollider(swappedOwner, colliderIdx);
 
             // Moved collider: oldBackCollider -> colliderIdx in its ID list.
-            std::vector<ObjectDenseIndex>& movedList = bodies.isStatic[swappedOwner] ? staticColliderIDs : dynamicColliderIDs;
+            std::vector<ObjectDenseIndex>& movedList = colliderListFor(bodies.groupOf(swappedOwner));
             const uint32_t movedSlot = colliderSlot[oldBackCollider];
             movedList[movedSlot] = static_cast<ObjectDenseIndex>(colliderIdx);
             colliderSlot[colliderIdx] = movedSlot;
@@ -591,8 +573,11 @@ namespace PS_AGONY2D
 
         if (c.type < T::DestroyCollider)
         {
-            const ObjectDenseIndex bodyIndex = bodies.indexOf(c.handle);
+            ObjectDenseIndex bodyIndex = bodies.indexOf(c.handle);
             if (bodyIndex == Handle::NULL_DENSE_INDEX) return;
+
+            if (c.type != T::DestroyBody)
+                bodyIndex = wakeBody(bodyIndex);
 
             switch (c.type)
             {
@@ -663,6 +648,7 @@ namespace PS_AGONY2D
 
         const ObjectDenseIndex colliderIndex = colliders.indexOf(c.handle);
         if (colliderIndex == Handle::NULL_DENSE_INDEX) return;
+        wakeBody(colliders.bodyIndex[colliderIndex]);
         const ObjectDenseIndex shapeIndex = colliders.shapeIndex[colliderIndex];
         const BodyType shapeType = colliders.shapeType[colliderIndex];
 
@@ -721,7 +707,6 @@ namespace PS_AGONY2D
     {
         newMass = std::fmax(Real(0), newMass);
         const Real oldMass = bodies.mass[b];
-        const bool wasStatic = bodies.isStatic[b] != 0;
 
         if (newMass > Real(0))
         {
@@ -746,8 +731,13 @@ namespace PS_AGONY2D
             bodies.isStatic[b] = 1;
         }
 
-        const bool isStaticNow = bodies.isStatic[b] != 0;
-        if (wasStatic != isStaticNow) moveBodyColliders(b, isStaticNow);
+        const BodyGroup from = bodies.groupOf(b);
+        const BodyGroup to = bodies.isStatic[b] ? BodyGroup::Static : BodyGroup::Dynamic;
+        if (from != to)
+        {
+            b = moveBodyToGroup(b, to);
+            moveBodyColliders(b, from, to);
+        }
     }
 
     void ObjectManager::applyBodyMassFromDensity(ObjectDenseIndex b, Real density)
@@ -822,10 +812,20 @@ namespace PS_AGONY2D
         bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
     }
 
-    void ObjectManager::moveBodyColliders(ObjectDenseIndex b, bool toStatic)
+    std::vector<ObjectDenseIndex>& ObjectManager::colliderListFor(BodyGroup group) noexcept
     {
-        std::vector<ObjectDenseIndex>& from = toStatic ? dynamicColliderIDs : staticColliderIDs;
-        std::vector<ObjectDenseIndex>& to = toStatic ? staticColliderIDs : dynamicColliderIDs;
+        switch (group)
+        {
+        case BodyGroup::Static:   return staticColliderIDs;
+        case BodyGroup::Sleeping: return sleepingColliderIDs;
+        default:                  return dynamicColliderIDs;
+        }
+    }
+
+    void ObjectManager::moveBodyColliders(ObjectDenseIndex b, BodyGroup fromGroup, BodyGroup toGroup)
+    {
+        std::vector<ObjectDenseIndex>& from = colliderListFor(fromGroup);
+        std::vector<ObjectDenseIndex>& to = colliderListFor(toGroup);
 
         for (const ObjectDenseIndex ci : bodies.colliderIndices[b])
         {
@@ -840,6 +840,90 @@ namespace PS_AGONY2D
             to.push_back(static_cast<ObjectDenseIndex>(ci));
         }
         spatialDirty = true;
+    }
+
+    void ObjectManager::swapBodies(ObjectDenseIndex a, ObjectDenseIndex b)
+    {
+        if (a == b) return;
+
+        bodies.swap(a, b);
+
+        for (const ObjectDenseIndex ci : bodies.colliderIndices[a])
+            colliders.bodyIndex[ci] = a;
+        for (const ObjectDenseIndex ci : bodies.colliderIndices[b])
+            colliders.bodyIndex[ci] = b;
+    }
+
+    ObjectDenseIndex ObjectManager::moveBodyToGroup(ObjectDenseIndex index, BodyGroup target)
+    {
+        uint32_t* const counts = bodies.groupCounts;
+        uint32_t g = static_cast<uint32_t>(bodies.groupOf(index));
+        const uint32_t to = static_cast<uint32_t>(target);
+
+        while (g != to)
+        {
+            if (g < to)
+            {
+                // Up: swap with the last body of the group, then the boundary moves under it.
+                const ObjectDenseIndex last = bodies.range(static_cast<BodyGroup>(g)).end - 1;
+                swapBodies(index, last);
+                index = last;
+                --counts[g];
+                if (g + 1 < 3) ++counts[g + 1];
+                ++g;
+            }
+            else
+            {
+                // Down: swap with the first body of the group, then the boundary moves over it.
+                const ObjectDenseIndex first = bodies.range(static_cast<BodyGroup>(g)).begin;
+                swapBodies(index, first);
+                index = first;
+                if (g < 3) --counts[g];
+                ++counts[g - 1];
+                --g;
+            }
+        }
+
+        if (target != BodyGroup::Unused)
+            bodies.isStatic[index] = (target == BodyGroup::Static) ? 1 : 0;
+
+        return index;
+    }
+
+    ObjectDenseIndex ObjectManager::appendBody(
+        Vec2 pos, Vec2 vel, Real rot, Real anglVel,
+        Real mass, Real invMass, Real inertia, Real invInertia,
+        Vec2 localCenterOfMass
+    )
+    {
+        const ObjectDenseIndex index = bodies.append(
+            pos, vel, rot, anglVel, mass, invMass, inertia, invInertia, localCenterOfMass
+        );
+        return moveBodyToGroup(index, invMass == Real(0) ? BodyGroup::Static : BodyGroup::Dynamic);
+    }
+
+    ObjectDenseIndex ObjectManager::sleepBody(ObjectDenseIndex b)
+    {
+        if (bodies.groupOf(b) != BodyGroup::Dynamic) return b;
+
+        // preUpdate no longer refreshes render-old values for this body.
+        bodies.renderOldOffsetX[b] = bodies.offsetX[b];
+        bodies.renderOldOffsetY[b] = bodies.offsetY[b];
+        bodies.renderOldRotation[b] = bodies.rotation[b];
+        bodies.renderRotationWrapCount[b] = Real(0);
+
+        b = moveBodyToGroup(b, BodyGroup::Sleeping);
+        moveBodyColliders(b, BodyGroup::Dynamic, BodyGroup::Sleeping);
+        return b;
+    }
+
+    ObjectDenseIndex ObjectManager::wakeBody(ObjectDenseIndex b)
+    {
+        if (bodies.groupOf(b) != BodyGroup::Sleeping) return b;
+
+        b = moveBodyToGroup(b, BodyGroup::Dynamic);
+        moveBodyColliders(b, BodyGroup::Sleeping, BodyGroup::Dynamic);
+        return b;
     }
 
     std::optional<ColliderData> ObjectManager::getColliderData(ObjectDenseIndex i) const noexcept

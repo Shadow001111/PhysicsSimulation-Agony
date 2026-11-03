@@ -61,6 +61,18 @@ namespace PS_AGONY2D
 			slots[a].index = static_cast<uint32_t>(last);
 		}
 
+		// Mirrors swapping dense[a] with dense[b].
+		void swap(uint32_t a, uint32_t b) noexcept
+		{
+			if (a == b || a >= denseToSlot.size() || b >= denseToSlot.size()) return;
+			const uint32_t slotA = denseToSlot[a];
+			const uint32_t slotB = denseToSlot[b];
+			denseToSlot[a] = slotB;
+			denseToSlot[b] = slotA;
+			slots[slotB].index = a;
+			slots[slotA].index = b;
+		}
+
 		// Mirrors popping the dense array. Invalidates the back element's handle.
 		void popBack() noexcept
 		{

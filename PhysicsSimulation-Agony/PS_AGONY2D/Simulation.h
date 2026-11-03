@@ -133,6 +133,7 @@ namespace PS_AGONY2D
 
 		// Other.
 		std::vector<ObjectDenseIndex> broadPhaseColliders;
+		std::vector<ObjectDenseIndex> sleepCandidates;
 		std::vector<std::pair<ObjectDenseIndex, Real>> narrowPhaseColliders;
 	public:
 		Simulation();
@@ -199,11 +200,21 @@ namespace PS_AGONY2D
 
 		// Rebuilds BVH trees for collider changes made outside physics steps (paused, or no step this frame).
 		void refreshSpatialData();
+		// Full pass over all body groups and trees. Needed after structural changes (spatialDirty).
 		void rebuildSpatialData();
+		// Per-step pass: dynamic bodies and the dynamic tree only.
+		void updateDynamicSpatialData();
+
+		// Puts dynamic bodies below the sleep thresholds to sleep immediately. Held bodies are skipped.
+		void updateSleeping();
+
+		// Held bodies are modified by the holder every step, so they must be awake before integration.
+		void wakeHeldBodies();
 
 		void buildColliderAABBs();
 
-		void computeBodyWorldCenters();
+		// range.begin must be 0 (aligned SIMD loads).
+		void computeBodyWorldCenters(IndexRange range);
 
 		void computeColliderWorldPositions();
 		void computeColliderWorldRotations();

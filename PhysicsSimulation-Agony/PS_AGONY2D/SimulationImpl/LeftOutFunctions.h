@@ -4,7 +4,7 @@
 
 namespace PS_AGONY2D
 {
-	void wrapBodyRotations(BodySoA& bodies);
+	void wrapBodyRotations(BodySoA& bodies, IndexRange range);
 
 	void wrapColliderRotations(ColliderSoA& colliders);
 }

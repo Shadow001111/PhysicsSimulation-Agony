@@ -53,6 +53,7 @@ namespace PS_AGONY2D
             for (uint32_t i = 0; i < stepCount; i++)
             {
                 physicsStep(fixedDeltaTime);
+                updateSleeping();
                 flushCommands();
             }
             postUpdate();
@@ -82,7 +83,10 @@ namespace PS_AGONY2D
         for (size_t i = 0; i < colliderCount; i++)
         {
             if (colliderMaterials[i] == materialIndex)
+            {
                 colliderMaterials[i] = 0;
+                objectManager.wakeBody(objectManager.colliders.bodyIndex[i]);
+            }
         }
         return true;
     }
@@ -143,9 +147,10 @@ namespace PS_AGONY2D
     {
         for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
         {
-            const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
+            ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
             if (bodyIndex >= objectManager.bodies.getCount()) continue;
 
+            bodyIndex = objectManager.wakeBody(bodyIndex);
             objectManager.bodies.angularVelocity[bodyIndex] += radiansSpeedUp;
         }
     }
@@ -201,42 +206,47 @@ namespace PS_AGONY2D
         objectManager.deletedColliders.clear();
         objectManager.deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
+        wakeHeldBodies();
+
+        const IndexRange dynamicRange = objectManager.bodies.range(BodyGroup::Dynamic);
+
         if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::SemiImplicit)
         {
             // Integration first phase.
-            Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-            Integrator::dampAngularVelocities(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-        
+            Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+
             // Solve constraints.
             applyBodyHolderConstraint(deltaTime, mainBodyHolder);
             constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-        
+
             // Integration second phase.
-            Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
+            Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
         }
         else if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::VelocityVerlet)
         {
             const Real halfDT = deltaTime * Real(0.5);
-        
+
             // Integration first phase.
-            Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-            Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
-        
+            Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
+
             // Solve constraints.
             applyBodyHolderConstraint(deltaTime, mainBodyHolder);
             constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-        
+
             // Integration second phase.
-            Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, deltaTime, simulationSettings.integratorSettings);
-            Integrator::dampAngularVelocities(objectManager.bodies, halfDT, simulationSettings.integratorSettings);
+            Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
         }
 
         // Computing important data.
-        wrapBodyRotations(objectManager.bodies);
-        Integrator::computeRotationCosSin(objectManager.bodies);
+        wrapBodyRotations(objectManager.bodies, dynamicRange);
+        Integrator::computeRotationCosSin(objectManager.bodies, dynamicRange);
 
-        // Compute transforms, AABBs and (re)build trees.
-        rebuildSpatialData();
+        // Full pass only after structural changes (create/destroy/sleep/commands); otherwise dynamic bodies only.
+        if (objectManager.spatialDirty) rebuildSpatialData();
+        else updateDynamicSpatialData();
 
         if (objectManager.colliders.getCount() > 1)
         {
@@ -314,7 +324,7 @@ namespace PS_AGONY2D
 
     void Simulation::rebuildSpatialData()
     {
-        computeBodyWorldCenters();
+        computeBodyWorldCenters(objectManager.bodies.liveRange());
         computeColliderWorldPositions();
         computeColliderWorldRotations();
         buildColliderAABBs();
@@ -323,19 +333,110 @@ namespace PS_AGONY2D
 
         TreesUpdateParams params{};
 
-        params.types[size_t(BroadPhaseInternal::BvhTreeType::Dynamic )] = TreeUpdate::Rebuild;
-        params.types[size_t(BroadPhaseInternal::BvhTreeType::Static  )] = TreeUpdate::Refit;
-        // TODO: Set to none when sleeping bodies didn't change. Rebuild only when changed.
-        //       Or just have generation int.
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = TreeUpdate::Rebuild;
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Static)] = TreeUpdate::Refit;
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = TreeUpdate::Rebuild;
 
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic )] = objectManager.getDynamicColliderIDs();
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Static  )] = objectManager.getStaticColliderIDs();
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = objectManager.getDynamicColliderIDs();
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Static)] = objectManager.getStaticColliderIDs();
         params.ids[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.getSleepingColliderIDs();
 
         broadPhaseCollisionDetector.updateTrees(params);
 
         objectManager.spatialDirty = false;
+    }
+
+    void Simulation::updateDynamicSpatialData()
+    {
+        computeBodyWorldCenters(objectManager.bodies.range(BodyGroup::Dynamic));
+        computeColliderWorldPositions();
+        computeColliderWorldRotations();
+        buildColliderAABBs();
+
+        TreesUpdateParams params{};
+
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = TreeUpdate::Rebuild;
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Static)] = TreeUpdate::None;
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = TreeUpdate::None;
+
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = objectManager.getDynamicColliderIDs();
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Static)] = objectManager.getStaticColliderIDs();
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.getSleepingColliderIDs();
+
+        broadPhaseCollisionDetector.updateTrees(params);
+    }
+
+    namespace
+    {
+        // TODO: Remake normally as constants.
+        struct SleepThresholds
+        {
+            Real linearSpeed;
+            Real angularSpeed;
+        };
+
+        constexpr SleepThresholds getSleepThresholds() noexcept
+        {
+            return { Real(0.05), Real(0.05) }; // Units/s, rad/s.
+        }
+    }
+
+    void Simulation::wakeHeldBodies()
+    {
+        for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
+        {
+            const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
+            if (bodyIndex >= objectManager.bodies.getCount()) continue;
+
+            objectManager.wakeBody(bodyIndex);
+        }
+    }
+
+    void Simulation::updateSleeping()
+    {
+        TRACY_SCOPE_N("Update sleeping");
+
+        BodySoA& bodies = objectManager.bodies;
+        const IndexRange range = bodies.range(BodyGroup::Dynamic);
+        if (range.empty()) return;
+
+        const SleepThresholds thresholds = getSleepThresholds();
+        const Real linearSq = thresholds.linearSpeed * thresholds.linearSpeed;
+        const Real angular = thresholds.angularSpeed;
+
+        const Real* ECSTASY_RESTRICT velX = bodies.velocityX.data();
+        const Real* ECSTASY_RESTRICT velY = bodies.velocityY.data();
+        const Real* ECSTASY_RESTRICT angVel = bodies.angularVelocity.data();
+
+        sleepCandidates.clear();
+        for (ObjectDenseIndex i = range.begin; i < range.end; i++)
+        {
+            const Real linearExcess = velX[i] * velX[i] + velY[i] * velY[i] - linearSq;
+            const Real angularExcess = std::fabs(angVel[i]) - angular;
+            if (std::fmax(linearExcess, angularExcess) <= Real(0))
+            {
+                sleepCandidates.push_back(i);
+            }
+        }
+        if (sleepCandidates.empty()) return;
+
+        // Held bodies stay awake.
+        const auto isHeld = [&](ObjectDenseIndex index)
+            {
+                for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
+                {
+                    if (bodies.indexOfUnchecked(held.body) == index) return true;
+                }
+                return false;
+            };
+
+        // Descending: a move only swaps with slots at or above the body's index, so lower candidates stay valid.
+        for (size_t k = sleepCandidates.size(); k-- > 0;)
+        {
+            const ObjectDenseIndex index = sleepCandidates[k];
+            if (isHeld(index)) continue;
+            objectManager.sleepBody(index);
+        }
     }
 
     void Simulation::refreshSpatialData()
@@ -354,7 +455,7 @@ namespace PS_AGONY2D
             objectManager.colliders.bodyIndex.data()
         );
 
-        Integrator::computeRotationCosSin(objectManager.bodies);
+        Integrator::computeRotationCosSin(objectManager.bodies, objectManager.bodies.liveRange());
         rebuildSpatialData();
     }
 
@@ -364,11 +465,15 @@ namespace PS_AGONY2D
         {
             TRACY_SCOPE_NC("Set old position/rotation/wrap-count", PS_AGONY2D::Profiling::Color::Black);
 
-            std::copy(objectManager.bodies.offsetX.begin(), objectManager.bodies.offsetX.end(), objectManager.bodies.renderOldOffsetX.begin());
-            std::copy(objectManager.bodies.offsetY.begin(), objectManager.bodies.offsetY.end(), objectManager.bodies.renderOldOffsetY.begin());
-            std::copy(objectManager.bodies.rotation.begin(), objectManager.bodies.rotation.end(), objectManager.bodies.renderOldRotation.begin());
+            // Only dynamic bodies move. Static/sleeping ones keep render-old == current.
+            BodySoA& bodies = objectManager.bodies;
+            const size_t n = bodies.range(BodyGroup::Dynamic).end;
 
-            std::fill(objectManager.bodies.renderRotationWrapCount.begin(), objectManager.bodies.renderRotationWrapCount.end(), Real(0));
+            std::copy_n(bodies.offsetX.data(), n, bodies.renderOldOffsetX.data());
+            std::copy_n(bodies.offsetY.data(), n, bodies.renderOldOffsetY.data());
+            std::copy_n(bodies.rotation.data(), n, bodies.renderOldRotation.data());
+
+            std::fill_n(bodies.renderRotationWrapCount.data(), n, Real(0));
         }
     }
 
@@ -382,7 +487,7 @@ namespace PS_AGONY2D
         }
 
         // That's for renderer to have actual information.
-        computeBodyWorldCenters();
+        computeBodyWorldCenters(objectManager.bodies.range(BodyGroup::Dynamic));
         computeColliderWorldPositions();
         computeColliderWorldRotations();
         buildColliderAABBs();
@@ -399,7 +504,7 @@ namespace PS_AGONY2D
         buildCapsuleAABBs(objectManager.colliders, objectManager.capsules);
     }
 
-    void Simulation::computeBodyWorldCenters()
+    void Simulation::computeBodyWorldCenters(IndexRange range)
     {
         TRACY_SCOPE_NC("Compute true positions", PS_AGONY2D::Profiling::Color::Magenta);
 
@@ -413,7 +518,7 @@ namespace PS_AGONY2D
         Real* ECSTASY_RESTRICT worldCenterXPtr = objectManager.bodies.worldCenterX.data();
         Real* ECSTASY_RESTRICT worldCenterYPtr = objectManager.bodies.worldCenterY.data();
 
-        const size_t bodyCount = objectManager.bodies.getCount();
+        const size_t bodyCount = range.end;
 
         size_t i = 0;
         for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)

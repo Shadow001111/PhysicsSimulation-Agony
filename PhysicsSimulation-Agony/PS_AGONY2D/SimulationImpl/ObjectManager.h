@@ -86,7 +86,7 @@ namespace PS_AGONY2D
 		// attaching colliders afterward does not recompute mass/inertia/COM for you.
 		std::optional<ObjectDenseIndex> createBody(const BodyCreateParams& params);
 
-		// Attaches a new collider of the given shape to an EXISTING body immediately.
+		// Attaches a new collider of the given shape to an EXISTING body immediately. Wakes the body if it sleeps.
 		// Returns std::nullopt if bodyIndex is invalid.
 		std::optional<ObjectDenseIndex> createCircleCollider(const CircleColliderCreateParams& params);
 		std::optional<ObjectDenseIndex> createBoxCollider(const BoxColliderCreateParams& params);
@@ -105,6 +105,13 @@ namespace PS_AGONY2D
 		// Destroys a single collider without touching its owning body.
 		// Not safe for callbacks.
 		void destroyColliderImmediate(ObjectDenseIndex colliderIndex);
+
+		// Sleeping: moves the body to the Sleeping group and its colliders to the sleeping list. Body data is kept.
+		// Any modification of a sleeping body or its colliders (commands, collider create/destroy) wakes it first.
+		// Both return the NEW dense index (group moves change body indices). No-op if the body is in the wrong group.
+		// Not safe for callbacks or during solving.
+		ObjectDenseIndex sleepBody(ObjectDenseIndex bodyIndex);
+		ObjectDenseIndex wakeBody(ObjectDenseIndex bodyIndex);
 
 		void destroyBody(Handle handle) { pushCommand(ObjectCommandType::DestroyBody, handle); }
 		void destroyCollider(Handle handle) { pushCommand(ObjectCommandType::DestroyCollider, handle); }
@@ -171,7 +178,20 @@ namespace PS_AGONY2D
 		void applyBodyMass(ObjectDenseIndex bodyIndex, Real newMass);
 		void applyBodyMassFromDensity(ObjectDenseIndex bodyIndex, Real density);
 		void recomputeBodyInertia(ObjectDenseIndex bodyIndex);
-		void moveBodyColliders(ObjectDenseIndex bodyIndex, bool toStatic);
+		void moveBodyColliders(ObjectDenseIndex bodyIndex, BodyGroup from, BodyGroup to);
+		std::vector<ObjectDenseIndex>& colliderListFor(BodyGroup group) noexcept;
+
+		// Body group machinery. Body memory order is [Dynamic][Static][Sleeping][Unused].
+		// swapBodies: swaps two bodies and re-points their colliders. Constraint body indices are not remapped.
+		void swapBodies(ObjectDenseIndex a, ObjectDenseIndex b);
+		// Moves a body across group boundaries with boundary swaps (<= 3). Returns the new dense index. Collider lists untouched.
+		ObjectDenseIndex moveBodyToGroup(ObjectDenseIndex bodyIndex, BodyGroup target);
+		// BodySoA::append + moves the new body into Static (invMass == 0) or Dynamic. Returns its final index.
+		ObjectDenseIndex appendBody(
+			Vec2 pos, Vec2 vel, Real rot, Real anglVel,
+			Real mass, Real invMass, Real inertia, Real invInertia,
+			Vec2 localCenterOfMass
+		);
 
 		//
 		ObjectDenseIndex createColliderInternal(

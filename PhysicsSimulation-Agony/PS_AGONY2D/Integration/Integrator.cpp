@@ -11,7 +11,7 @@ namespace PS_AGONY2D::Integrator
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
-    void integrateVelocities_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void integrateVelocities_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Integrate velocities (semi-implicit)", PS_AGONY2D::Profiling::Color::Red);
 
@@ -26,10 +26,9 @@ namespace PS_AGONY2D::Integrator
         const RealSimd gravityDeltaYV{ gravityDelta.y };
         const RealSimd zeros = RealSimd(Real(0));
 
-        // Integrate.
-        const size_t bodyCount = bodies.getCount();
+        // Integrate. Assume start 0.
         size_t i = 0;
-        for (; i + LANES <= bodyCount; i += LANES)
+        for (; i + LANES <= range.end; i += LANES)
         {
             RealSimd velX = RealSimd::load(velocityXPtr + i);
             RealSimd velY = RealSimd::load(velocityYPtr + i);
@@ -43,7 +42,7 @@ namespace PS_AGONY2D::Integrator
             velX.store(velocityXPtr + i);
             velY.store(velocityYPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             const Real invMass = invMassPtr[i];
             const Real movableMask = invMass != Real(0.0);
@@ -53,7 +52,7 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void integrateKinematics_SemiImplicit(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void integrateKinematics_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Integrate kinematics (semi-implicit)", PS_AGONY2D::Profiling::Color::Blue);
 
@@ -69,10 +68,9 @@ namespace PS_AGONY2D::Integrator
         // Precompute.
         const RealSimd deltaTimeV{ deltaTime };
 
-        // Integrate.
-        const size_t bodyCount = bodies.getCount();
+        // Integrate. Assume start 0.
         size_t i = 0;
-        for (; i + LANES <= bodyCount; i += LANES)
+        for (; i + LANES <= range.end; i += LANES)
         {
             const RealSimd velX = RealSimd::load(velocityXPtr + i);
             const RealSimd velY = RealSimd::load(velocityYPtr + i);
@@ -90,7 +88,7 @@ namespace PS_AGONY2D::Integrator
             posY.store(positionYPtr + i);
             rot.store(rotationPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             positionXPtr[i] += velocityXPtr[i] * deltaTime;
             positionYPtr[i] += velocityYPtr[i] * deltaTime;
@@ -98,7 +96,7 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void integratePhase1_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void integratePhase1_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Integrate phase1 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
@@ -114,10 +112,9 @@ namespace PS_AGONY2D::Integrator
         const RealSimd gravityDeltaYV{ gravityDelta.y };
         const RealSimd zeros = RealSimd(Real(0));
 
-        // Integrate.
-        const size_t bodyCount = bodies.getCount();
+        // Integrate. Assume start 0.
         size_t i = 0;
-        for (; i + LANES <= bodyCount; i += LANES)
+        for (; i + LANES <= range.end; i += LANES)
         {
             RealSimd velX = RealSimd::load(velocityXPtr + i);
             RealSimd velY = RealSimd::load(velocityYPtr + i);
@@ -131,7 +128,7 @@ namespace PS_AGONY2D::Integrator
             velX.store(velocityXPtr + i);
             velY.store(velocityYPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             const Real invMass = invMassPtr[i];
             const Real movableMask = invMass != Real(0.0);
@@ -141,7 +138,7 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void integratePhase2_VelocityVerlet(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void integratePhase2_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
     {
         TRACY_SCOPE_NC("Integrate phase2 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
@@ -164,10 +161,9 @@ namespace PS_AGONY2D::Integrator
         const RealSimd gravityDeltaYV{ gravityDelta.y };
         const RealSimd zeros = RealSimd(Real(0));
 
-        // Integrate.
-        const size_t bodyCount = bodies.getCount();
+        // Integrate. Assume start 0.
         size_t i = 0;
-        for (; i + LANES <= bodyCount; i += LANES)
+        for (; i + LANES <= range.end; i += LANES)
         {
             // Full position step.
             RealSimd velX = RealSimd::load(velocityXPtr + i);
@@ -196,7 +192,7 @@ namespace PS_AGONY2D::Integrator
             velX.store(velocityXPtr + i);
             velY.store(velocityYPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             // Full position step.
             positionXPtr[i] += velocityXPtr[i] * deltaTime;
@@ -213,7 +209,7 @@ namespace PS_AGONY2D::Integrator
     }
 
     // TODO: Remove functions below from this file.
-    void dampAngularVelocities(BodySoA& bodies, Real deltaTime, const IntegrationSettings& settings)
+    void dampAngularVelocities(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
     {
         if (!(settings.angularVelocityDamping >= 0 && settings.angularVelocityDamping < 1))
         {
@@ -232,9 +228,9 @@ namespace PS_AGONY2D::Integrator
         const Real damping = std::pow(settings.angularVelocityDamping, deltaTime);
         const RealSimd dampingV(damping);
 
-        const size_t bodyCount = bodies.getCount();
+        // Assume start 0.
         size_t i = 0;
-        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+        for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
             RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
 
@@ -247,7 +243,7 @@ namespace PS_AGONY2D::Integrator
 
             newAngVel.store(angularVelocityPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             const Real invInertia = invInertiaPtr[i];
             const Real movableMask = invInertia != Real(0.0);
@@ -262,15 +258,16 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void computeRotationCosSin(BodySoA& bodies)
+    void computeRotationCosSin(BodySoA& bodies, IndexRange range)
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", PS_AGONY2D::Profiling::Color::Teal);
 
+        // Assume start 0.
         FastCosSin::order5Array(
             bodies.rotation.data(),
             bodies.rotationCos.data(),
             bodies.rotationSin.data(),
-            bodies.getCount()
+            range.end
         );
     }
 }

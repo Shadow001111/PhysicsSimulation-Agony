@@ -11,7 +11,7 @@ namespace PS_AGONY2D
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
-    void wrapBodyRotations(BodySoA& bodies)
+    void wrapBodyRotations(BodySoA& bodies, IndexRange range)
     {
         TRACY_SCOPE_NC("Wrap body rotations", PS_AGONY2D::Profiling::Color::Cyan);
 
@@ -24,10 +24,9 @@ namespace PS_AGONY2D
         const RealSimd twoPIV(Constants::TWO_PI);
         const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
 
-        // Wrap.
-        const size_t bodyCount = bodies.getCount();
+        // Wrap. Assume start 0.
         size_t i = 0;
-        for (; i + LANES <= bodyCount; i += LANES)
+        for (; i + LANES <= range.end; i += LANES)
         {
             RealSimd rot = RealSimd::load(rotationPtr + i);
             RealSimd oldWrapCount = RealSimd::load(rotationWrapCountPtr + i);
@@ -46,7 +45,7 @@ namespace PS_AGONY2D
             rot.store(rotationPtr + i);
             (oldWrapCount + wrapCount).store(rotationWrapCountPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             Real rot = rotationPtr[i];
             Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
