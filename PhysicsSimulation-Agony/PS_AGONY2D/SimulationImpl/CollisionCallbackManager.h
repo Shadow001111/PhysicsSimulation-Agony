@@ -7,6 +7,8 @@
 #include <vector>
 #include <span>
 
+#include <iostream>
+
 namespace PS_AGONY2D
 {
 	// Owns collision callbacks. Indices are stable: destroyed slots are recycled, never erased.
@@ -80,17 +82,17 @@ namespace PS_AGONY2D
 		}
 
 		// Skips slot 0 and dead slots. Entry is copied first, so a handler may safely create/destroy callbacks.
-		void invoke(const CollisionEvent& event) const
+		void invoke(const CollisionEvent& event, Simulation& sim) const
 		{
 			const CollisionCallbackIndex index = event.callbackId;
 			if (index == 0 || !isAlive(index))
 				return;
 
 			const Entry entry = entries[index];
-			entry.function(event, entry.userData);
+			entry.function(event, sim, entry.userData);
 		}
 
-		void invoke(std::span<const CollisionEvent> events) const
+		void invoke(std::span<const CollisionEvent> events, Simulation& sim) const
 		{
 			for (const CollisionEvent& event : events)
 			{
@@ -99,7 +101,7 @@ namespace PS_AGONY2D
 					continue;
 
 				const Entry entry = entries[index];
-				entry.function(event, entry.userData);
+				entry.function(event, sim, entry.userData);
 			}
 		}
 

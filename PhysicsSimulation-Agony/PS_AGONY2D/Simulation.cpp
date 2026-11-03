@@ -123,7 +123,7 @@ namespace PS_AGONY2D
             return true;
         }
 
-        if (!collisionCallbackManager.isAlive(callbackIndex) || !(impulseThreshold > Real(0)))
+        if (!collisionCallbackManager.isAlive(callbackIndex) || !(impulseThreshold >= Real(0)))
             return false;
 
         colliders.callbackId[colliderIndex] = callbackIndex;
@@ -136,7 +136,7 @@ namespace PS_AGONY2D
         TRACY_SCOPE_N("Dispatch collision events");
 
         std::span<const CollisionEvent> events = bodyCollisionSolver.getCollisionEvents();
-        collisionCallbackManager.invoke(events);
+        collisionCallbackManager.invoke(events, *this);
     }
 
     void Simulation::mainBodyHolderIncreaseAngularVelocity(Real radiansSpeedUp)

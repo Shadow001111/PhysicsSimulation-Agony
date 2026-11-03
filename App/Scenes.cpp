@@ -211,7 +211,6 @@ void load_ObjectCar(PS_AGONY2D::Simulation& simulation,
     createSuspension(*rightWheelOpt, +1.0f);
 }
 
-
 void load_LargeWorld(
     PS_AGONY2D::Simulation& simulation,
     Ecstasy::Core::Random::Generator& rvg,
@@ -305,7 +304,7 @@ void load_LargeWorld(
         float r = rvg.real<float>(0.15f, 0.5f);
         float mass = 3.14159f * r * r;
 
-        objects.createCircle({
+        auto indexOpt = objects.createCircle({
             .base.position = { x + sceneOrientation.offsetX, y + sceneOrientation.offsetY },
             .base.velocity = { vx, vy },
             .base.rotation = 0.0f,
@@ -314,6 +313,7 @@ void load_LargeWorld(
             .base.materialIndex = materialIdx,
             .radius = r
             });
+        if (!indexOpt) [[unlikely]] continue;
     }
 
     // Spawn Boxes
@@ -1275,16 +1275,15 @@ void load_Tank(PS_AGONY2D::Simulation& simulation)
 
 struct SplitContext
 {
-    PS_AGONY2D::Simulation* simulation;
     PS_AGONY2D::MaterialIndex material;
     PS_AGONY2D::CollisionCallbackIndex callback;
     float minRadius; // Circles with radius/2 below this no longer split.
 };
 
 // Circle with mass == radius. Splittable circles get the callback (threshold = 4 * radius, i.e. approach speed ~4).
-static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Vec2 position, PS_AGONY2D::Vec2 velocity, float radius)
+static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Simulation& simulation, PS_AGONY2D::Vec2 position, PS_AGONY2D::Vec2 velocity, float radius)
 {
-    auto& objects = ctx.simulation->objects();
+    auto& objects = simulation.objects();
     const auto body = objects.createCircle({
         .base.position = position,
         .base.velocity = velocity,
@@ -1296,13 +1295,14 @@ static void spawnSplitCircle(SplitContext& ctx, PS_AGONY2D::Vec2 position, PS_AG
 
     if (radius * 0.5f < ctx.minRadius) return;
     for (const PS_AGONY2D::ColliderDenseIndex collider : objects.getBodyColliders(*body))
-        ctx.simulation->setColliderCollisionCallback(collider, ctx.callback, 16.0f * radius);
+        simulation.setColliderCollisionCallback(collider, ctx.callback, 16.0f * radius);
 }
 
-static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, void* userData)
+static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, PS_AGONY2D::Simulation& simulation, void* userData)
 {
     SplitContext& ctx = *static_cast<SplitContext*>(userData);
-    auto& objects = ctx.simulation->objects();
+
+    auto& objects = simulation.objects();
 
     const auto data = objects.getBodyData(event.selfBody);
     if (!data) return;
@@ -1316,8 +1316,8 @@ static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, void* userDat
     // Children (radius/2) sit inside the parent's footprint, side by side along the contact tangent: no overlap.
     const float half = radius * 0.5f;
     const PS_AGONY2D::Vec2 dir = { -event.normal.y, event.normal.x };
-    spawnSplitCircle(ctx, { pos.x + dir.x * half, pos.y + dir.y * half }, { vel.x + dir.x, vel.y + dir.y }, half);
-    spawnSplitCircle(ctx, { pos.x - dir.x * half, pos.y - dir.y * half }, { vel.x - dir.x, vel.y - dir.y }, half);
+    spawnSplitCircle(ctx, simulation, { pos.x + dir.x * half, pos.y + dir.y * half }, { vel.x + dir.x, vel.y + dir.y }, half);
+    spawnSplitCircle(ctx, simulation, { pos.x - dir.x * half, pos.y - dir.y * half }, { vel.x - dir.x, vel.y - dir.y }, half);
 }
 
 static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
@@ -1349,7 +1349,6 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
     // 5 splits: 3.2 -> 1.6 -> 0.8 -> 0.4 -> 0.2 -> 0.1 (powers of two, exact in float).
     constexpr float startRadius = 3.2f;
     static SplitContext ctx; // Static: referenced by the callback for the whole scene lifetime.
-    ctx.simulation = &simulation;
     ctx.material = mat;
     ctx.minRadius = 0.1f;
 
@@ -1357,7 +1356,7 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
     if (!callback) return;
     ctx.callback = *callback;
 
-    spawnSplitCircle(ctx, { 0.0f, 8.0f }, { 0.0f, 0.0f }, startRadius);
+    spawnSplitCircle(ctx, simulation, { 0.0f, 8.0f }, { 0.0f, 0.0f }, startRadius);
 }
 
 void loadScene(PS_AGONY2D::Simulation& simulation, int scene)

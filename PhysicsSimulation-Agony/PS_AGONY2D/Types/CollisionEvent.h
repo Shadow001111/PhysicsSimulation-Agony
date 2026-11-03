@@ -23,7 +23,7 @@ namespace PS_AGONY2D
 		CollisionCallbackIndex callbackId;
 	};
 
-	// Handlers run at the end of the physics step. Do NOT create/destroy bodies or colliders inside them
-	// (see the TODO at the top of Simulation.cpp). Changing velocities etc. is fine.
-	using CollisionCallback = void(*)(const CollisionEvent& event, void* userData);
+	// Handlers run at the end of the physics step.
+	class Simulation; // Forward declaration.
+	using CollisionCallback = void(*)(const CollisionEvent& event, Simulation& simulation, void* userData);
 }
