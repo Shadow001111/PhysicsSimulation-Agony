@@ -186,19 +186,31 @@ static void renderGUI(
     {
         ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
 
-        ImGui::Checkbox("Broad-Phase Dynamic AABBs", &renderOptions.broadPhaseDynamicAABBs);
-        if (renderOptions.broadPhaseDynamicAABBs)
+        ImGui::Text("Broad-phase AABBs:");
+        ImGui::Indent();
         {
-            ImGui::SameLine();
-            ImGui::ColorEdit3("##DynamicAABBColor", &renderOptions.broadPhaseDynamicAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
-        }
+            ImGui::Checkbox("Dynamic ", &renderOptions.broadPhaseDynamicAABBs);
+            if (renderOptions.broadPhaseDynamicAABBs)
+            {
+                ImGui::SameLine();
+                ImGui::ColorEdit3("##DynamicAABBColor", &renderOptions.broadPhaseDynamicAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+            }
 
-        ImGui::Checkbox("Broad-Phase Static AABBs", &renderOptions.broadPhaseStaticAABBs);
-        if (renderOptions.broadPhaseStaticAABBs)
-        {
-            ImGui::SameLine();
-            ImGui::ColorEdit3("##StaticAABBColor", &renderOptions.broadPhaseStaticAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+            ImGui::Checkbox("Static  ", &renderOptions.broadPhaseStaticAABBs);
+            if (renderOptions.broadPhaseStaticAABBs)
+            {
+                ImGui::SameLine();
+                ImGui::ColorEdit3("##StaticAABBColor", &renderOptions.broadPhaseStaticAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+            }
+
+            ImGui::Checkbox("Sleeping", &renderOptions.broadPhaseSleepingAABBs);
+            if (renderOptions.broadPhaseSleepingAABBs)
+            {
+                ImGui::SameLine();
+                ImGui::ColorEdit3("##SleepingAABBColor", &renderOptions.broadPhaseSleepingAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+            }
         }
+        ImGui::Unindent();
 
         ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
 

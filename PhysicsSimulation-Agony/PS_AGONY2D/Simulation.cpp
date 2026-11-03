@@ -319,12 +319,20 @@ namespace PS_AGONY2D
         computeColliderWorldRotations();
         buildColliderAABBs();
 
-        // Always (re)build/fit the tree, even with 0 or 1 colliders, so rendering queries
-        // (fetchAABBs/fetchCollidersInCircle/fetchCollidersInAABB) never see a stale scene.
-        broadPhaseCollisionDetector.buildTrees(
-            objectManager.getDynamicColliderIDs(),
-            objectManager.getStaticColliderIDs(),
-            StaticTreeUpdate::Refit);
+        // Rebuild/refit trees.
+
+        TreesUpdateParams params{};
+
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Dynamic )] = TreeUpdate::Rebuild;
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Static  )] = TreeUpdate::Refit;
+        // TODO: Set to none when sleeping bodies didn't change. Rebuild only when changed.
+        params.types[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = TreeUpdate::Rebuild;
+
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic )] = objectManager.getDynamicColliderIDs();
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Static  )] = objectManager.getStaticColliderIDs();
+        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.getSleepingColliderIDs();
+
+        broadPhaseCollisionDetector.updateTrees(params);
 
         objectManager.spatialDirty = false;
     }

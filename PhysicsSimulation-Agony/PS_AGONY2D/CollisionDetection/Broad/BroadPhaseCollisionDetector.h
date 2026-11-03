@@ -20,11 +20,17 @@ namespace PS_AGONY2D
 	using BvhNodePair = BroadPhaseInternal::BvhNodePair;
 
 	// How the static tree is updated by buildTrees.
-	enum class StaticTreeUpdate : uint8_t
+	enum class TreeUpdate : uint8_t
 	{
-		None,    // Static colliders did not change.
-		Refit,   // Same membership, some AABBs moved (e.g. kinematic bodies).
-		Rebuild  // Membership changed or a full rebuild is wanted.
+		None,
+		Refit,
+		Rebuild
+	};
+
+	struct TreesUpdateParams
+	{
+		std::array<TreeUpdate, 3> types{};
+		std::array<std::span<const ObjectDenseIndex>, 3> ids{};
 	};
 
 	// NOTE: This detector operates over COLLIDER AABBs, not body AABBs.
@@ -111,9 +117,7 @@ namespace PS_AGONY2D
 		AABBSoAViewer collidersAABB;
 		const ObjectDenseIndex* colliderBodyIndex = nullptr; // Collider -> owning body; rejects same-body pairs.
 
-		std::array<BroadPhaseInternal::BvhTree, 2> trees;
-
-		bool staticRebuildRequested = true;
+		std::array<BroadPhaseInternal::BvhTree, 3> trees;
 
 		QueryResources queryResources;
 		QueryPairsThreadedResources queryPairsThreadedResources;
@@ -138,19 +142,9 @@ namespace PS_AGONY2D
 		// tree data isn't served to queries.
 		void clearData();
 
-		// Rebuilds the dynamic tree every call. The static tree follows 'staticUpdate', and is
-		// also rebuilt if requestStaticRebuild() was called or its collider count differs from
-		// 'staticIds'. Spans hold COLLIDER indices; either may be empty.
-		void buildTrees(
-			std::span<const ObjectDenseIndex> dynamicIds,
-			std::span<const ObjectDenseIndex> staticIds,
-			StaticTreeUpdate staticUpdate
-		);
+		void updateTrees(const TreesUpdateParams& params);
 
 		void refitTrees(BroadPhaseInternal::BvhTreeTypeFlag flags);
-
-		// Forces a static tree rebuild on the next buildTrees.
-		void requestStaticRebuild() noexcept { staticRebuildRequested = true; }
 
 		// Finds overlapping collider pairs: dynamic-dynamic and dynamic-static. Dynamic-static
 		// pairs are ordered (dynamic, static). Returns empty if there are no dynamic colliders.
@@ -168,6 +162,8 @@ namespace PS_AGONY2D
 
 		size_t getMemoryUsage() const;
 	private:
+		void updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, std::span<const ObjectDenseIndex> ids);
+
 		void queryPairs();
 		void queryPairsThreaded();
 	};

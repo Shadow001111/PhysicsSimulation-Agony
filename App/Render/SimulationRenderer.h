@@ -35,6 +35,7 @@ namespace PS_AGONY_RENDER
 
 		bool broadPhaseDynamicAABBs = false;
 		bool broadPhaseStaticAABBs = false;
+		bool broadPhaseSleepingAABBs = false;
 
 		bool contactPoints = false;
 
@@ -42,6 +43,7 @@ namespace PS_AGONY_RENDER
 
 		glm::vec3 broadPhaseDynamicAABBColor = { 0.0f, 1.0f, 0.0f };
 		glm::vec3 broadPhaseStaticAABBColor = { 0.2f, 0.4f, 1.0f };
+		glm::vec3 broadPhaseSleepingAABBColor = { 0.2f, 0.2f, 0.2f };
 		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
 
 		// When false, all body transforms used for rendering this frame snap

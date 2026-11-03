@@ -16,12 +16,21 @@
 
 namespace PS_AGONY2D::BroadPhaseInternal
 {
+	enum class BvhTreeType : uint8_t
+	{
+		Dynamic,
+		Static,
+		Sleeping,
+		COUNT
+	};
+
 	enum class BvhTreeTypeFlag : uint8_t
 	{
 		None = 0,
-		Dynamic = 1 << 0,
-		Static = 1 << 1,
-		All = Static | Dynamic
+		Dynamic  = 1 << size_t(BvhTreeType::Dynamic),
+		Static   = 1 << size_t(BvhTreeType::Static),
+		Sleeping = 1 << size_t(BvhTreeType::Sleeping),
+		All = (1 << size_t(BvhTreeType::COUNT)) - 1
 	};
 
 	constexpr BvhTreeTypeFlag operator|(BvhTreeTypeFlag a, BvhTreeTypeFlag b) noexcept

@@ -72,31 +72,15 @@ namespace PS_AGONY2D
 		{
 			tree.clear();
 		}
-		staticRebuildRequested = true;
 	}
 
-	void BroadPhaseCollisionDetector::buildTrees(
-		std::span<const ObjectDenseIndex> dynamicIds,
-		std::span<const ObjectDenseIndex> staticIds,
-		StaticTreeUpdate staticUpdate)
+	void BroadPhaseCollisionDetector::updateTrees(const TreesUpdateParams& params)
 	{
-		TRACY_SCOPE_N("Build broad-phase trees");
+		TRACY_SCOPE_N("Update broad-phase trees");
 
-		trees[0].build(collidersAABB, dynamicIds);
-
-		const bool rebuildStatic =
-			staticUpdate == StaticTreeUpdate::Rebuild ||
-			staticRebuildRequested ||
-			trees[1].colliderCount() != staticIds.size();
-
-		if (rebuildStatic)
+		for (size_t i = 0; i < params.ids.size(); i++)
 		{
-			trees[1].build(collidersAABB, staticIds);
-			staticRebuildRequested = false;
-		}
-		else if (staticUpdate == StaticTreeUpdate::Refit)
-		{
-			trees[1].refit(collidersAABB);
+			updateTree(trees[i], params.types[i], params.ids[i]);
 		}
 	}
 
@@ -176,6 +160,24 @@ namespace PS_AGONY2D
 
 		total += getVectorMemoryUsage(collisionData);
 		return total;
+	}
+
+	void BroadPhaseCollisionDetector::updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, std::span<const ObjectDenseIndex> ids)
+	{
+		if (updateType == TreeUpdate::None) return;
+
+		const bool rebuild =
+			updateType == TreeUpdate::Rebuild ||
+			tree.colliderCount() != ids.size();
+
+		if (rebuild)
+		{
+			tree.build(collidersAABB, ids);
+		}
+		else
+		{
+			tree.refit(collidersAABB);
+		}
 	}
 
 	void BroadPhaseCollisionDetector::queryPairs()

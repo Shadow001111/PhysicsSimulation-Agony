@@ -68,7 +68,12 @@ namespace PS_AGONY_RENDER
         {
             renderColliderAABBs(foundColliders, viewProjectionMatrix);
         }
-        if (renderOptions.broadPhaseDynamicAABBs || renderOptions.broadPhaseStaticAABBs)
+
+        if (
+            renderOptions.broadPhaseDynamicAABBs ||
+            renderOptions.broadPhaseStaticAABBs ||
+            renderOptions.broadPhaseSleepingAABBs
+            )
         {
             TRACY_SCOPE_N("Broad phase leaf AABBs");
 
@@ -79,13 +84,19 @@ namespace PS_AGONY_RENDER
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Dynamic, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseDynamicAABBColor, viewProjectionMatrix); // Green.
+                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseDynamicAABBColor, viewProjectionMatrix);
             }
             if (renderOptions.broadPhaseStaticAABBs)
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Static, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseStaticAABBColor, viewProjectionMatrix); // Blue.
+                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseStaticAABBColor, viewProjectionMatrix);
+            }
+            if (renderOptions.broadPhaseSleepingAABBs)
+            {
+                queriedAABBs.clear();
+                bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Sleeping, queriedAABBs);
+                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseSleepingAABBColor, viewProjectionMatrix);
             }
         }
         if (renderOptions.contactPoints)

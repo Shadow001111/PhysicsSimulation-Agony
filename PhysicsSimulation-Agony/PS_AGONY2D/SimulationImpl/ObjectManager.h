@@ -69,10 +69,12 @@ namespace PS_AGONY2D
 		// A collider lives in exactly one list, chosen by its body's isStatic flag (moved when mass toggles 0 <-> nonzero).
 		std::vector<ObjectDenseIndex> dynamicColliderIDs;
 		std::vector<ObjectDenseIndex> staticColliderIDs;
+		std::vector<ObjectDenseIndex> sleepingColliderIDs;
 		std::vector<ObjectDenseIndex> colliderSlot; // colliderIndex -> position inside its list.
 	public:
 		std::span<const ObjectDenseIndex> getDynamicColliderIDs() const noexcept { return dynamicColliderIDs; }
 		std::span<const ObjectDenseIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
+		std::span<const ObjectDenseIndex> getSleepingColliderIDs() const noexcept { return sleepingColliderIDs; }
 
 		explicit ObjectManager(
 			const std::vector<Material>& materials,
