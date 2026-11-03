@@ -32,10 +32,16 @@ namespace PS_AGONY_RENDER
 	struct RenderOptions
 	{
 		bool colliderAABBs = false;
+
 		bool broadPhaseDynamicAABBs = false;
 		bool broadPhaseStaticAABBs = false;
+
 		bool contactPoints = false;
+
 		bool outlineColliders = true;
+
+		glm::vec3 broadPhaseDynamicAABBColor = { 0.0f, 1.0f, 0.0f };
+		glm::vec3 broadPhaseStaticAABBColor = { 0.2f, 0.4f, 1.0f };
 		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
 
 		// When false, all body transforms used for rendering this frame snap

@@ -79,13 +79,13 @@ namespace PS_AGONY_RENDER
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Dynamic, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, { 0.0f, 1.0f, 0.0f }, viewProjectionMatrix); // Green.
+                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseDynamicAABBColor, viewProjectionMatrix); // Green.
             }
             if (renderOptions.broadPhaseStaticAABBs)
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Static, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, { 0.2f, 0.4f, 1.0f }, viewProjectionMatrix); // Blue.
+                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseStaticAABBColor, viewProjectionMatrix); // Blue.
             }
         }
         if (renderOptions.contactPoints)

@@ -353,5 +353,8 @@
     <ClInclude Include="PS_AGONY2D\SimulationAPIs\ConstraintAPI.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ObjectCreateParams.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

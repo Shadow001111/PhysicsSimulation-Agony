@@ -185,14 +185,28 @@ static void renderGUI(
     if (ImGui::CollapsingHeader("Render Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
+
         ImGui::Checkbox("Broad-Phase Dynamic AABBs", &renderOptions.broadPhaseDynamicAABBs);
+        if (renderOptions.broadPhaseDynamicAABBs)
+        {
+            ImGui::SameLine();
+            ImGui::ColorEdit3("##DynamicAABBColor", &renderOptions.broadPhaseDynamicAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+        }
+
         ImGui::Checkbox("Broad-Phase Static AABBs", &renderOptions.broadPhaseStaticAABBs);
+        if (renderOptions.broadPhaseStaticAABBs)
+        {
+            ImGui::SameLine();
+            ImGui::ColorEdit3("##StaticAABBColor", &renderOptions.broadPhaseStaticAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+        }
+
         ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
+
         ImGui::Checkbox("Outline Colliders", &renderOptions.outlineColliders);
         if (renderOptions.outlineColliders)
         {
-            ImGui::ColorPicker3("Outline Color", &renderOptions.outlineColor.x,
-                ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoSidePreview);
+            ImGui::SameLine();
+            ImGui::ColorEdit3("##OutlineColor", &renderOptions.outlineColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
         }
     }
 

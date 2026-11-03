@@ -314,6 +314,7 @@
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhTreeView.h" />
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\Constants.h" />
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\HelperMethods.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ObjectCreateParams.h" />
     <ClInclude Include="PS_AGONY2D\Types\CollisionEvent.h" />
     <ClInclude Include="PS_AGONY2D\Limits.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\CollisionCallbackManager.h" />
