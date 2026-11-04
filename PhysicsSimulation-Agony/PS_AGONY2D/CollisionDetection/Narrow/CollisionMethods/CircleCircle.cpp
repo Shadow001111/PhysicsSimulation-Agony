@@ -121,7 +121,6 @@ namespace PS_AGONY2D
 
                         outCollisionData.emplace_back(
                             pair.a, pair.b,
-                            colliderOwnerPtr[pair.a], colliderOwnerPtr[pair.b],
                             normal,
                             depth,
                             1,
@@ -169,7 +168,6 @@ namespace PS_AGONY2D
 
             outCollisionData.emplace_back(
                 indexA, indexB,
-                colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                 normal,
                 depth,
                 1,

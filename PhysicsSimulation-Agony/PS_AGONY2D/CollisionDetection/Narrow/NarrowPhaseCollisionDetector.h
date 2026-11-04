@@ -9,9 +9,6 @@
 #include <atomic>
 #include <array>
 #include <span>
-#include <bit>
-#include <cstring>
-#include <algorithm>
 #include <xmmintrin.h>
 #include <robin_hood.h>
 
@@ -28,7 +25,6 @@ namespace PS_AGONY2D
 	struct BodyCollisionData
 	{
 		ObjectDenseIndex colliderA, colliderB;
-		ObjectDenseIndex bodyA, bodyB;
 		Vec2 normal;
 		Real penetration;
 		uint32_t contactCount;
@@ -40,7 +36,6 @@ namespace PS_AGONY2D
 
 		BodyCollisionData(
 			ObjectDenseIndex colliderA, ObjectDenseIndex colliderB,
-			ObjectDenseIndex bodyA, ObjectDenseIndex bodyB,
 			Vec2 normal,
 			Real depth,
 			uint32_t contactCount,
@@ -48,7 +43,6 @@ namespace PS_AGONY2D
 			uint32_t contactId1, uint32_t contactId2
 		) :
 			colliderA(colliderA), colliderB(colliderB),
-			bodyA(bodyA), bodyB(bodyB),
 			normal(normal), penetration(depth), contactCount(contactCount)
 		{
 			contactPoints[0] = contactPoint1;

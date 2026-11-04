@@ -305,7 +305,6 @@ namespace PS_AGONY2D
 
                 outCollisionData.emplace_back(
                     indexA, indexB,
-                    colliderOwnerPtr[indexA], colliderOwnerPtr[indexB],
                     normalWorld,
                     depth,
                     contactCount,

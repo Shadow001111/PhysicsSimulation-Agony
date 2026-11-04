@@ -14,7 +14,7 @@ namespace PS_AGONY2D
 	)
 	{
 		SolverBase::setResources(bodiesIn);
-		colliders = collidersIn;
+		this->colliders = collidersIn;
 		this->materials = materials;
 	}
 
@@ -62,11 +62,16 @@ namespace PS_AGONY2D
 		{
 			TRACY_SCOPE_NC("Collect body pairs from collision data", PS_AGONY2D::Profiling::Color::Red);
 
+			const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = colliders.bodyIndex;
+
 			collidingBodyPairs.resize(collisionCount);
 			for (size_t i = 0; i < collisionCount; i++)
 			{
 				const BodyCollisionData& collData = collisionData[i];
-				collidingBodyPairs[i] = { collData.bodyA, collData.bodyB };
+				collidingBodyPairs[i] = {
+					bodyIndexPtr[collData.colliderA],
+					bodyIndexPtr[collData.colliderB]
+				};
 			}
 		}
 		{
@@ -242,6 +247,7 @@ namespace PS_AGONY2D
 		const MaterialIndex* ECSTASY_RESTRICT colliderMaterialIndexPtr = colliders.materialIndex;
 		const CollisionCallbackIndex* ECSTASY_RESTRICT colliderCallbackIdPtr = colliders.callbackId;
 		const Real* ECSTASY_RESTRICT colliderEventThresholdPtr = colliders.eventThreshold;
+		const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = colliders.bodyIndex;
 		const bool recordEvents = recordCollisionEvents;
 
 		const size_t collisionCount = source.size();
@@ -260,11 +266,14 @@ namespace PS_AGONY2D
 		{
 			const auto& data = sourcePtr[order ? order[c] : c];
 
-			const Vec2 positionA = { positionXPtr[data.bodyA], positionYPtr[data.bodyA] };
-			const Vec2 positionB = { positionXPtr[data.bodyB], positionYPtr[data.bodyB] };
+			const ObjectDenseIndex bodyA = bodyIndexPtr[data.colliderA];
+			const ObjectDenseIndex bodyB = bodyIndexPtr[data.colliderB];
 
-			const Vec2 localCOMA = { localCenterOfMassXPtr[data.bodyA], localCenterOfMassYPtr[data.bodyA] };
-			const Vec2 localCOMB = { localCenterOfMassXPtr[data.bodyB], localCenterOfMassYPtr[data.bodyB] };
+			const Vec2 positionA = { positionXPtr[bodyA], positionYPtr[bodyA] };
+			const Vec2 positionB = { positionXPtr[bodyB], positionYPtr[bodyB] };
+
+			const Vec2 localCOMA = { localCenterOfMassXPtr[bodyA], localCenterOfMassYPtr[bodyA] };
+			const Vec2 localCOMB = { localCenterOfMassXPtr[bodyB], localCenterOfMassYPtr[bodyB] };
 
 			const Vec2 centerOfMassA = positionA + localCOMA;
 			const Vec2 centerOfMassB = positionB + localCOMB;
@@ -272,16 +281,16 @@ namespace PS_AGONY2D
 			// Anchors cancel out (translation-only drift), so only the initial relative position along the normal matters.
 			{
 				VelocityHotData& velocityHot = velocityHotContainer[c];
-				velocityHot.bodyA = data.bodyA;
-				velocityHot.bodyB = data.bodyB;
+				velocityHot.bodyA = bodyA;
+				velocityHot.bodyB = bodyB;
 				velocityHot.normal = data.normal;
 				velocityHot.contactCount = data.contactCount;
 				velocityHot.impulses = data.persistentContactData;
 			}
 			{
 				PositionHotData& positionHot = positionHotContainer[c];
-				positionHot.bodyA = data.bodyA;
-				positionHot.bodyB = data.bodyB;
+				positionHot.bodyA = bodyA;
+				positionHot.bodyB = bodyB;
 				positionHot.normal = data.normal;
 				positionHot.penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal) - simulationSettings.positionCorrectionSlop;
 			}
@@ -298,20 +307,20 @@ namespace PS_AGONY2D
 				frictionData.staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
 				frictionData.dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
-				const Real invMassA = invMassPtr[data.bodyA];
-				const Real invMassB = invMassPtr[data.bodyB];
-				const Real invInertiaA = invInertiaPtr[data.bodyA];
-				const Real invInertiaB = invInertiaPtr[data.bodyB];
+				const Real invMassA = invMassPtr[bodyA];
+				const Real invMassB = invMassPtr[bodyB];
+				const Real invInertiaA = invInertiaPtr[bodyA];
+				const Real invInertiaB = invInertiaPtr[bodyB];
 				const Real effectiveMass = invMassA + invMassB;
 				Real impactImpulse = Real(0);
 
 				const Vec2 normal = data.normal;
 				const Vec2 tangent{ -normal.y, normal.x };
 
-				const Vec2 linearVelocityA = { velocityXPtr[data.bodyA], velocityYPtr[data.bodyA] };
-				const Vec2 linearVelocityB = { velocityXPtr[data.bodyB], velocityYPtr[data.bodyB] };
-				const Real angularVelocityA = angularVelocityPtr[data.bodyA];
-				const Real angularVelocityB = angularVelocityPtr[data.bodyB];
+				const Vec2 linearVelocityA = { velocityXPtr[bodyA], velocityYPtr[bodyA] };
+				const Vec2 linearVelocityB = { velocityXPtr[bodyB], velocityYPtr[bodyB] };
+				const Real angularVelocityA = angularVelocityPtr[bodyA];
+				const Real angularVelocityB = angularVelocityPtr[bodyB];
 
 				for (uint32_t i = 0; i < data.contactCount; i++)
 				{
@@ -364,9 +373,22 @@ namespace PS_AGONY2D
 							: data.contactPoints[0];
 
 						if (fireA)
-							collisionEvents.push_back({ data.colliderA, data.colliderB, data.bodyA, data.bodyB, eventPoint, data.normal, impactImpulse, callbackA });
+							collisionEvents.emplace_back(
+								data.colliderA, data.colliderB,
+								bodyA, bodyB,
+								eventPoint, data.normal,
+								impactImpulse,
+								callbackA
+							);
 						if (fireB)
-							collisionEvents.push_back({ data.colliderB, data.colliderA, data.bodyB, data.bodyA, eventPoint, -data.normal, impactImpulse, callbackB });
+							collisionEvents.emplace_back(
+								data.colliderB, data.colliderA,
+								bodyB, bodyA,
+								eventPoint,
+								-data.normal,
+								impactImpulse,
+								callbackB
+							);
 					}
 				}
 			}

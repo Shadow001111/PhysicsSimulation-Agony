@@ -52,6 +52,7 @@ namespace PS_AGONY2D
             preUpdate();
             for (uint32_t i = 0; i < stepCount; i++)
             {
+                TRACY_SCOPE_NC("Physics step", PS_AGONY2D::Profiling::Color::Orange);
                 physicsStep(fixedDeltaTime);
                 updateSleeping();
                 flushCommands();
@@ -157,8 +158,6 @@ namespace PS_AGONY2D
 
     void Simulation::physicsStep(Real deltaTime)
     {
-        TRACY_SCOPE_NC("Physics step", PS_AGONY2D::Profiling::Color::Orange);
-
         // Clear data. Unnecessary, but usually it won't get cleared if narrow phase cd will get get reached.
         narrowPhaseCollisionDetector.clearData();
 
@@ -260,10 +259,17 @@ namespace PS_AGONY2D
             );
             if (narrow.empty())
             {
-                // findCollisions already emptied allCollisionData.
+                // 'findCollisions' already emptied allCollisionData.
                 narrowPhaseCollisionDetector.updatePersistentContactData();
                 return;
             }
+
+            // Wake colliding sleeping bodies before solving.
+            // Needed return saved persistent impulses. TODO: Implement that.
+            // (I guess we could wake up bodies after solving, but still returning impulses before solving).
+            // (But then we would have to create a whole new method).
+            // (Idk really).
+            wakeCollidingBodies(narrow);
 
             // Collision resolution.
             bodyCollisionSolver.solveCollisions(
@@ -275,9 +281,8 @@ namespace PS_AGONY2D
             // Updating persistent contact data.
             narrowPhaseCollisionDetector.updatePersistentContactData();
 
-            // Collision events (only exist if collisions were solved).
+            // Collision events.
             dispatchCollisionEvents();
-            wakeCollidingBodies(narrow);
         }
     }
 
@@ -376,29 +381,32 @@ namespace PS_AGONY2D
         }
     }
 
-    // TEST ONLY, NOT A GOOD SOLUTION: one-step wake latency, one island layer per step,
-    // no island/graph handling, wake() invalidates body indices in previousCollisionData
-    // (bodyA/bodyB become stale after this call), and sleepers are treated as immovable during the solve.
+    // TEST ONLY, NOT A GOOD SOLUTION: no island/graph handling.
     void Simulation::wakeCollidingBodies(std::span<const BodyCollisionData> narrow)
     {
         TRACY_SCOPE_N("Wake colliding bodies");
-
+        
         const BodySoA& bodies = objectManager.bodies;
         const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
         if (sleeping.empty()) return;
         const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
 
+        const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = objectManager.colliders.bodyIndex.data();
+        
         wakeCandidates.clear();
-        for (const BodyCollisionData& c : narrow)
+        for (const BodyCollisionData& data : narrow)
         {
-            const bool aSleep = bodies.groupOf(c.bodyA) == BodyGroup::Sleeping;
-            wakeCandidates.push_back(aSleep ? c.bodyA : c.bodyB);
+            const ObjectDenseIndex bodyA = bodyIndexPtr[data.colliderA];
+            const ObjectDenseIndex bodyB = bodyIndexPtr[data.colliderB];
+
+            const bool aSleep = bodies.groupOf(bodyA) == BodyGroup::Sleeping;
+            wakeCandidates.push_back(aSleep ? bodyA : bodyB);
         }
         if (wakeCandidates.empty()) return;
-
+        
         std::sort(wakeCandidates.begin(), wakeCandidates.end());
         wakeCandidates.erase(std::unique(wakeCandidates.begin(), wakeCandidates.end()), wakeCandidates.end());
-
+        
         // Descending: a move only swaps with slots at or above the body's index.
         for (size_t k = wakeCandidates.size(); k-- > 0;)
             objectManager.wakeBody(wakeCandidates[k]);
