@@ -321,21 +321,21 @@ namespace PS_AGONY2D
 
         for (const auto& deletion : deletedColliders)
         {
-            const ObjectDenseIndex d = deletion.deletedIndex;
-            const ObjectDenseIndex s = deletion.swappedFromIndex;
+            const ObjectDenseIndex deletedIndex = deletion.deletedIndex;
+            const ObjectDenseIndex swappedFromIndex = deletion.swappedFromIndex;
 
-            const ObjectDenseIndex victim = entityAt(d);
+            const ObjectDenseIndex victim = entityAt(deletedIndex);
             if (victim != INVALID_COLLIDER_INDEX) dead.insert(victim);
 
-            if (s != INVALID_COLLIDER_INDEX && s != d)
+            if (swappedFromIndex != INVALID_COLLIDER_INDEX && swappedFromIndex != deletedIndex)
             {
-                const ObjectDenseIndex moved = entityAt(s);
-                slotToEntity[d] = moved;
-                slotToEntity[s] = INVALID_COLLIDER_INDEX; // Vacated; a later create may reuse it.
+                const ObjectDenseIndex moved = entityAt(swappedFromIndex);
+                slotToEntity[deletedIndex] = moved;
+                slotToEntity[swappedFromIndex] = INVALID_COLLIDER_INDEX; // Vacated; a later create may reuse it.
             }
             else
             {
-                slotToEntity[d] = INVALID_COLLIDER_INDEX;
+                slotToEntity[deletedIndex] = INVALID_COLLIDER_INDEX;
             }
         }
 

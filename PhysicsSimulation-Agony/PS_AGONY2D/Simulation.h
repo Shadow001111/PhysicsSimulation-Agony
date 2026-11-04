@@ -222,6 +222,11 @@ namespace PS_AGONY2D
 
 		void wakeCollidingBodies(std::span<const BodyCollisionData> narrow);
 
+		// Consume and clear objectManager.wokenBodies / sleptBodies.
+		// Saved contact data is restored on wake (warm starting) and stored on sleep.
+		void wakeSleepingContactData();
+		void sleepContactData();
+
 		void buildColliderAABBs();
 
 		// range.begin must be 0 (aligned SIMD loads).

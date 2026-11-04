@@ -926,6 +926,7 @@ namespace PS_AGONY2D
 
         b = moveBodyToGroup(b, BodyGroup::Sleeping);
         moveBodyColliders(b, BodyGroup::Dynamic, BodyGroup::Sleeping);
+        sleptBodies.push_back(bodies.handleAt(b));
         return b;
     }
 
@@ -937,6 +938,7 @@ namespace PS_AGONY2D
 
         b = moveBodyToGroup(b, BodyGroup::Dynamic);
         moveBodyColliders(b, BodyGroup::Sleeping, BodyGroup::Dynamic);
+        wokenBodies.push_back(bodies.handleAt(b));
         return b;
     }
 

@@ -58,6 +58,10 @@ namespace PS_AGONY2D
 
 		std::vector<ObjectDeletion> deletedColliders;
 
+		// Bodies that changed sleep state since Simulation last drained them. Handles may be stale if destroyed later.
+		std::vector<Handle> sleptBodies;
+		std::vector<Handle> wokenBodies;
+
 		const std::vector<Material>& materials;
 		ConstraintSystemArray& constraintSystems;
 
