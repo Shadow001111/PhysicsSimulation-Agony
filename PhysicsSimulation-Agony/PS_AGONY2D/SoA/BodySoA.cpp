@@ -33,6 +33,7 @@ namespace PS_AGONY2D
 		this->rotationCos.push_back(std::cos(rot)); // TODO: Use fast cos/sin.
 		this->rotationSin.push_back(std::sin(rot));
 		this->isStatic.push_back(invMass == 0);
+		this->sleepingTimer.push_back(0.0f);
 		this->attachments.emplace_back();
 		this->colliderIndices.emplace_back();
 		this->handles.push();

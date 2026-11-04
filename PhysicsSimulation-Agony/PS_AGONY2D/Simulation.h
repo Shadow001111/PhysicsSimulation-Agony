@@ -82,6 +82,7 @@ namespace PS_AGONY2D
 			// Sleep.
 			Real linearSpeedSleepThreshold = 0.05f;
 			Real angularSpeedSleepThreshold = 0.05f;
+			Real sleepTimeThreshold = 0.5f;
 
 			// Debug.
 			bool trackBodyCollisionSolverConstraintErrors = false;
@@ -213,8 +214,8 @@ namespace PS_AGONY2D
 		// Per-step pass: dynamic bodies and the dynamic tree only.
 		void updateDynamicSpatialData();
 
-		// Puts dynamic bodies below the sleep thresholds to sleep immediately. Held bodies are skipped.
-		void updateSleeping();
+		// Puts dynamic bodies below the sleep thresholds to sleep. Held bodies are skipped.
+		void updateSleeping(float deltaTimeF);
 
 		// Held bodies are modified by the holder every step, so they must be awake before integration.
 		void wakeHeldBodies();

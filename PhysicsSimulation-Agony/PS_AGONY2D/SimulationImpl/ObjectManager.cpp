@@ -904,13 +904,14 @@ namespace PS_AGONY2D
 
     ObjectDenseIndex ObjectManager::sleepBody(ObjectDenseIndex b)
     {
-        if (bodies.groupOf(b) != BodyGroup::Dynamic) return b;
+        if (bodies.groupOf(b) != BodyGroup::Dynamic) [[unlikely]] return b;
 
         // preUpdate no longer refreshes render-old values for this body.
         bodies.renderOldOffsetX[b] = bodies.offsetX[b];
         bodies.renderOldOffsetY[b] = bodies.offsetY[b];
         bodies.renderOldRotation[b] = bodies.rotation[b];
         bodies.renderRotationWrapCount[b] = Real(0);
+        bodies.sleepingTimer[b] = 0.0f;
 
         b = moveBodyToGroup(b, BodyGroup::Sleeping);
         moveBodyColliders(b, BodyGroup::Dynamic, BodyGroup::Sleeping);
@@ -919,7 +920,9 @@ namespace PS_AGONY2D
 
     ObjectDenseIndex ObjectManager::wakeBody(ObjectDenseIndex b)
     {
-        if (bodies.groupOf(b) != BodyGroup::Sleeping) return b;
+        if (bodies.groupOf(b) != BodyGroup::Sleeping) [[unlikely]] return b;
+
+        bodies.sleepingTimer[b] = 0.0f;
 
         b = moveBodyToGroup(b, BodyGroup::Dynamic);
         moveBodyColliders(b, BodyGroup::Sleeping, BodyGroup::Dynamic);

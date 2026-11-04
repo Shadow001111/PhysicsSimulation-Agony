@@ -29,7 +29,8 @@
     F(invInertia, Real) \
     F(rotationCos, Real) \
     F(rotationSin, Real) \
-    F(isStatic, uint8_t)
+    F(isStatic, uint8_t) \
+    F(sleepingTimer, float)
 
 // Define complex vector-of-vector fields.
 #define PS_AGONY_BODY_SOA_VECTOR_FIELDS(F) \
@@ -73,9 +74,9 @@ namespace PS_AGONY2D
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
             #undef DECLARE_FIELD
 
-            #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
-            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
-            #undef DECLARE_VECTOR_FIELD
+        #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
+        #undef DECLARE_VECTOR_FIELD
 
             HandleTable handles;
 

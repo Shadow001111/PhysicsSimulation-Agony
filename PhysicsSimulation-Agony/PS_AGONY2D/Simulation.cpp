@@ -54,7 +54,7 @@ namespace PS_AGONY2D
             {
                 TRACY_SCOPE_NC("Physics step", PS_AGONY2D::Profiling::Color::Orange);
                 physicsStep(fixedDeltaTime);
-                updateSleeping();
+                updateSleeping(float(deltaTime));
                 flushCommands();
             }
             postUpdate();
@@ -412,7 +412,7 @@ namespace PS_AGONY2D
             objectManager.wakeBody(wakeCandidates[k]);
     }
 
-    void Simulation::updateSleeping()
+    void Simulation::updateSleeping(float deltaTimeF)
     {
         TRACY_SCOPE_N("Update sleeping");
 
@@ -423,20 +423,35 @@ namespace PS_AGONY2D
         const Real linearSq = simulationSettings.linearSpeedSleepThreshold * simulationSettings.linearSpeedSleepThreshold;
         const Real angular = simulationSettings.angularSpeedSleepThreshold;
 
-        const Real* ECSTASY_RESTRICT velX = bodies.velocityX.data();
-        const Real* ECSTASY_RESTRICT velY = bodies.velocityY.data();
-        const Real* ECSTASY_RESTRICT angVel = bodies.angularVelocity.data();
+        Real* ECSTASY_RESTRICT sleepingTimerPtr = bodies.sleepingTimer.data();
+        const Real* ECSTASY_RESTRICT velXPtr = bodies.velocityX.data();
+        const Real* ECSTASY_RESTRICT velYPtr = bodies.velocityY.data();
+        const Real* ECSTASY_RESTRICT angVelPtr = bodies.angularVelocity.data();
 
+        // Collect sleeping candidates.
         sleepCandidates.clear();
         for (ObjectDenseIndex i = range.begin; i < range.end; i++)
         {
-            const Real linearExcess = velX[i] * velX[i] + velY[i] * velY[i] - linearSq;
-            const Real angularExcess = std::fabs(angVel[i]) - angular;
+            const Real linearExcess = velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i] - linearSq;
+            const Real angularExcess = std::fabs(angVelPtr[i]) - angular;
             if (std::fmax(linearExcess, angularExcess) <= Real(0))
             {
                 sleepCandidates.push_back(i);
             }
         }
+        if (sleepCandidates.empty()) return;
+
+        // Update sleeping timers.
+        for (ObjectDenseIndex bodyIndex : sleepCandidates)
+        {
+            sleepingTimerPtr[bodyIndex] += deltaTimeF;
+        }
+
+        // Remove bodies which time haven't reached threshold.
+        std::erase_if(sleepCandidates, [&](ObjectDenseIndex bodyIndex)
+        {
+            return sleepingTimerPtr[bodyIndex] < simulationSettings.sleepTimeThreshold;
+        });
         if (sleepCandidates.empty()) return;
 
         // Held bodies stay awake.
