@@ -117,7 +117,7 @@ namespace PS_AGONY2D
 		Vec2 worldPosition{ 0 };
 		Real worldRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
-		BodyType shapeType{};
+		ColliderShapeType shapeType{};
 		CollisionCallbackIndex callbackId{ 0 };
 		Real eventThreshold{ 0 };
 		Real radius{ 0 };            // Circle, Capsule.

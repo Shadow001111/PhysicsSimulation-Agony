@@ -32,18 +32,18 @@ namespace PS_AGONY_EDITOR
 			const Real ly = -dx * s + dy * c;
 
 			bool hit = true; // Polygons: broad-phase AABB hit only (TODO: exact test once PolygonGeometry is known here).
-			const BodyType type = cv.shapeType[ci];
-			if (type == BodyType::Circle || type == BodyType::Box || type == BodyType::Capsule)
+			const ColliderShapeType type = cv.shapeType[ci];
+			if (type == ColliderShapeType::Circle || type == ColliderShapeType::Box || type == ColliderShapeType::Capsule)
 			{
 				const auto data = api.getColliderDataH(api.getColliderHandle(ci));
 				if (!data) continue;
 
-				if (type == BodyType::Circle)
+				if (type == ColliderShapeType::Circle)
 				{
 					const Real r = data->radius + tol;
 					hit = lx * lx + ly * ly <= r * r;
 				}
-				else if (type == BodyType::Box)
+				else if (type == ColliderShapeType::Box)
 				{
 					hit = std::fabs(lx) <= data->halfExtents.x + tol && std::fabs(ly) <= data->halfExtents.y + tol;
 				}

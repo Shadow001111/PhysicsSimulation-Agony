@@ -26,8 +26,17 @@ namespace PS_AGONY2D::Integrator
         const RealSimd gravityDeltaYV{ gravityDelta.y };
         const RealSimd zeros = RealSimd(Real(0));
 
-        // Integrate. Assume start 0.
-        size_t i = 0;
+        // Integrate.
+        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
+        size_t i = range.begin;
+        for (; i < alignEnd; i++)
+        {
+            const Real invMass = invMassPtr[i];
+            const Real movableMask = invMass != Real(0.0);
+
+            velocityXPtr[i] += gravityDelta.x * movableMask;
+            velocityYPtr[i] += gravityDelta.y * movableMask;
+        }
         for (; i + LANES <= range.end; i += LANES)
         {
             RealSimd velX = RealSimd::load(velocityXPtr + i);
@@ -68,8 +77,15 @@ namespace PS_AGONY2D::Integrator
         // Precompute.
         const RealSimd deltaTimeV{ deltaTime };
 
-        // Integrate. Assume start 0.
-        size_t i = 0;
+        // Integrate.
+        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
+        size_t i = range.begin;
+        for (; i < alignEnd; i++)
+        {
+            positionXPtr[i] += velocityXPtr[i] * deltaTime;
+            positionYPtr[i] += velocityYPtr[i] * deltaTime;
+            rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
+        }
         for (; i + LANES <= range.end; i += LANES)
         {
             const RealSimd velX = RealSimd::load(velocityXPtr + i);
@@ -112,8 +128,17 @@ namespace PS_AGONY2D::Integrator
         const RealSimd gravityDeltaYV{ gravityDelta.y };
         const RealSimd zeros = RealSimd(Real(0));
 
-        // Integrate. Assume start 0.
-        size_t i = 0;
+        // Integrate.
+        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
+        size_t i = range.begin;
+        for (; i < alignEnd; i++)
+        {
+            const Real invMass = invMassPtr[i];
+            const Real movableMask = invMass != Real(0.0);
+
+            velocityXPtr[i] += gravityDelta.x * movableMask;
+            velocityYPtr[i] += gravityDelta.y * movableMask;
+        }
         for (; i + LANES <= range.end; i += LANES)
         {
             RealSimd velX = RealSimd::load(velocityXPtr + i);
@@ -161,8 +186,23 @@ namespace PS_AGONY2D::Integrator
         const RealSimd gravityDeltaYV{ gravityDelta.y };
         const RealSimd zeros = RealSimd(Real(0));
 
-        // Integrate. Assume start 0.
-        size_t i = 0;
+        // Integrate.
+        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
+        size_t i = range.begin;
+        for (; i < alignEnd; i++)
+        {
+            // Full position step.
+            positionXPtr[i] += velocityXPtr[i] * deltaTime;
+            positionYPtr[i] += velocityYPtr[i] * deltaTime;
+            rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
+
+            // Half velocity step.
+            const Real invMass = invMassPtr[i];
+            const Real movableMask = invMass != Real(0.0);
+
+            velocityXPtr[i] += gravityDelta.x * movableMask;
+            velocityYPtr[i] += gravityDelta.y * movableMask;
+        }
         for (; i + LANES <= range.end; i += LANES)
         {
             // Full position step.
@@ -228,8 +268,21 @@ namespace PS_AGONY2D::Integrator
         const Real damping = std::pow(settings.angularVelocityDamping, deltaTime);
         const RealSimd dampingV(damping);
 
-        // Assume start 0.
-        size_t i = 0;
+        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
+        size_t i = range.begin;
+        for (; i < alignEnd; i++)
+        {
+            const Real invInertia = invInertiaPtr[i];
+            const Real movableMask = invInertia != Real(0.0);
+
+            const Real angVel = angularVelocityPtr[i];
+
+            Real newAngVel = angVel * damping;
+
+            newAngVel = movableMask * newAngVel + (Real(1) - movableMask) * angVel;
+
+            angularVelocityPtr[i] = newAngVel;
+        }
         for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
             RealSimd angVel = RealSimd::load(angularVelocityPtr + i);

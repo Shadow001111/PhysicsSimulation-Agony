@@ -57,24 +57,24 @@ namespace PS_AGONY2D
         NarrowPhaseCollisionDetector::collisionFuncs = [] {
         SymmetricMatrix<CollisionFunc, BODY_TYPE_COUNT> mat;
 
-        auto add = [&](BodyType typeA, BodyType typeB, CollisionFunc func)
+        auto add = [&](ColliderShapeType typeA, ColliderShapeType typeB, CollisionFunc func)
             {
                 mat((size_t)typeA, (size_t)typeB) = func;
             };
 
-        add(BodyType::Circle , BodyType::Circle , &NarrowPhaseCollisionDetector::collisionCircleCircle  );
-        add(BodyType::Circle , BodyType::Box    , &NarrowPhaseCollisionDetector::collisionCircleBox     );
-        add(BodyType::Circle , BodyType::Polygon, &NarrowPhaseCollisionDetector::collisionCirclePolygon );
-        add(BodyType::Circle , BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionCircleCapsule );
+        add(ColliderShapeType::Circle , ColliderShapeType::Circle , &NarrowPhaseCollisionDetector::collisionCircleCircle  );
+        add(ColliderShapeType::Circle , ColliderShapeType::Box    , &NarrowPhaseCollisionDetector::collisionCircleBox     );
+        add(ColliderShapeType::Circle , ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionCirclePolygon );
+        add(ColliderShapeType::Circle , ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionCircleCapsule );
 
-        add(BodyType::Box    , BodyType::Box    , &NarrowPhaseCollisionDetector::collisionBoxBox        );
-        add(BodyType::Box    , BodyType::Polygon, &NarrowPhaseCollisionDetector::collisionBoxPolygon    );
-        add(BodyType::Box    , BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionBoxCapsule    );
+        add(ColliderShapeType::Box    , ColliderShapeType::Box    , &NarrowPhaseCollisionDetector::collisionBoxBox        );
+        add(ColliderShapeType::Box    , ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionBoxPolygon    );
+        add(ColliderShapeType::Box    , ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionBoxCapsule    );
 
-        add(BodyType::Polygon, BodyType::Polygon, &NarrowPhaseCollisionDetector::collisionPolygonPolygon);
-        add(BodyType::Polygon, BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionPolygonCapsule);
+        add(ColliderShapeType::Polygon, ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionPolygonPolygon);
+        add(ColliderShapeType::Polygon, ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionPolygonCapsule);
 
-        add(BodyType::Capsule, BodyType::Capsule, &NarrowPhaseCollisionDetector::collisionCapsuleCapsule);
+        add(ColliderShapeType::Capsule, ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionCapsuleCapsule);
         return mat;
         }();
 
@@ -148,13 +148,13 @@ namespace PS_AGONY2D
     {
         for (ObjectDenseIndex colliderIndex : collidersToCheck)
         {
-            const BodyType type = colliders.shapeType[colliderIndex];
+            const ColliderShapeType type = colliders.shapeType[colliderIndex];
             const ObjectDenseIndex shapeIdx = colliders.shapeIndex[colliderIndex];
             const Vec2 colliderPos = { colliders.worldPosX[colliderIndex], colliders.worldPosY[colliderIndex] };
 
             Real sdf = std::numeric_limits<Real>::max();
 
-            if (type == BodyType::Circle)
+            if (type == ColliderShapeType::Circle)
             {
                 const Real otherRadius = circles.radius[shapeIdx];
                 const Vec2 delta = colliderPos - pos;
@@ -166,7 +166,7 @@ namespace PS_AGONY2D
 
                 sdf = std::sqrt(distSquared) - otherRadius;
             }
-            else if (type == BodyType::Box)
+            else if (type == ColliderShapeType::Box)
             {
                 const Real cosB = colliders.worldRotationCos[colliderIndex];
                 const Real sinB = colliders.worldRotationSin[colliderIndex];
@@ -197,7 +197,7 @@ namespace PS_AGONY2D
 
                 sdf = distInside + distOutside;
             }
-            else if (type == BodyType::Polygon)
+            else if (type == ColliderShapeType::Polygon)
             {
                 const Real cosB = colliders.worldRotationCos[colliderIndex];
                 const Real sinB = colliders.worldRotationSin[colliderIndex];
@@ -232,7 +232,7 @@ namespace PS_AGONY2D
                     sdf = maxSeparation;
                 }
             }
-            else if (type == BodyType::Capsule)
+            else if (type == ColliderShapeType::Capsule)
             {
                 const Real halfLengthB = capsules.halfLength[shapeIdx];
                 const Real capsuleRadius = capsules.radius[shapeIdx];
@@ -368,8 +368,8 @@ namespace PS_AGONY2D
             }
 
             // Re-sort the indices to preserve narrow-phase invariants.
-            const BodyType typeA = colliders.shapeType[a];
-            const BodyType typeB = colliders.shapeType[b];
+            const ColliderShapeType typeA = colliders.shapeType[a];
+            const ColliderShapeType typeB = colliders.shapeType[b];
             if (typeA > typeB || (typeA == typeB && b > a))
             {
                 std::swap(a, b);
@@ -556,7 +556,7 @@ namespace PS_AGONY2D
 
         const size_t firstResult = out.size();
 
-        const BodyType* ECSTASY_RESTRICT shapeTypePtr = colliders.shapeType;
+        const ColliderShapeType* ECSTASY_RESTRICT shapeTypePtr = colliders.shapeType;
 
         // Partition the given range into type-specific vectors.
         {
@@ -565,8 +565,8 @@ namespace PS_AGONY2D
             {
                 auto [colliderIndexA, colliderIndexB] = pairs[i];
 
-                BodyType typeA = shapeTypePtr[colliderIndexA];
-                BodyType typeB = shapeTypePtr[colliderIndexB];
+                ColliderShapeType typeA = shapeTypePtr[colliderIndexA];
+                ColliderShapeType typeB = shapeTypePtr[colliderIndexB];
 
                 if (typeA > typeB)
                 {

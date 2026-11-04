@@ -62,7 +62,7 @@ namespace PS_AGONY2D
 	{
 		// Structures.
 
-		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(BodyType::COUNT);
+		static constexpr size_t BODY_TYPE_COUNT = static_cast<size_t>(ColliderShapeType::COUNT);
 
 		struct alignas(64) ChunkData
 		{

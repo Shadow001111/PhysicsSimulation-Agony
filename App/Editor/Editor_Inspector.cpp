@@ -103,17 +103,17 @@ namespace PS_AGONY_EDITOR
 					int mat = static_cast<int>(cd->materialIndex);
 					if (ImGui::InputInt("Material", &mat)) api.setColliderMaterial(ch, static_cast<MaterialIndex>(std::max(mat, 0)));
 
-					if (cd->shapeType == BodyType::Circle)
+					if (cd->shapeType == ColliderShapeType::Circle)
 					{
 						float r = static_cast<float>(cd->radius);
 						if (ImGui::DragFloat("Radius", &r, 0.01f, 0.001f, 1000.0f)) api.setCircleRadius(ch, r);
 					}
-					else if (cd->shapeType == BodyType::Box)
+					else if (cd->shapeType == ColliderShapeType::Box)
 					{
 						float sz[2] = { static_cast<float>(cd->halfExtents.x * 2), static_cast<float>(cd->halfExtents.y * 2) };
 						if (ImGui::DragFloat2("Size", sz, 0.01f, 0.001f, 1000.0f)) api.setBoxSize(ch, Vec2(sz[0], sz[1]));
 					}
-					else if (cd->shapeType == BodyType::Capsule)
+					else if (cd->shapeType == ColliderShapeType::Capsule)
 					{
 						float len = static_cast<float>(cd->halfLength * 2);
 						float r = static_cast<float>(cd->radius);

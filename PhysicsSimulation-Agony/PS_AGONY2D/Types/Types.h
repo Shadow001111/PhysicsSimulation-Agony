@@ -24,7 +24,7 @@ namespace PS_AGONY2D
 		ObjectDenseIndex swappedFromIndex;
 	};
 
-	enum class BodyType : uint8_t
+	enum class ColliderShapeType : uint8_t
 	{
 		Circle,
 		Box,

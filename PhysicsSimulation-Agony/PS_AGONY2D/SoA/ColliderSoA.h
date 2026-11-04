@@ -16,7 +16,7 @@
 	F(worldRotationCos, Real) \
 	F(worldRotationSin, Real) \
 	F(materialIndex, MaterialIndex) \
-	F(shapeType, BodyType) \
+	F(shapeType, ColliderShapeType) \
 	F(shapeIndex, ObjectDenseIndex) \
 	F(aabbMinX, Real) \
 	F(aabbMinY, Real) \
@@ -40,7 +40,7 @@ namespace PS_AGONY2D
 			Vec2 localOffset,
 			Real localRotationIn,
 			MaterialIndex materialIndexIn,
-			BodyType shapeTypeIn,
+			ColliderShapeType shapeTypeIn,
 			ObjectDenseIndex shapeIndexIn
 		);
 

@@ -26,6 +26,7 @@
 #include <vector>
 #include <optional>
 #include <array>
+#include <span>
 
 namespace PS_AGONY2D
 {
@@ -77,6 +78,10 @@ namespace PS_AGONY2D
 
 			// Integration.
 			Integrator::IntegrationSettings integratorSettings;
+
+			// Sleep.
+			Real linearSpeedSleepThreshold = 0.05f;
+			Real angularSpeedSleepThreshold = 0.05f;
 
 			// Debug.
 			bool trackBodyCollisionSolverConstraintErrors = false;
@@ -131,10 +136,13 @@ namespace PS_AGONY2D
 		// Render.
 		Real renderAlpha = 0;
 
-		// Other.
+		// Query colliders.
 		std::vector<ObjectDenseIndex> broadPhaseColliders;
-		std::vector<ObjectDenseIndex> sleepCandidates;
 		std::vector<std::pair<ObjectDenseIndex, Real>> narrowPhaseColliders;
+
+		// Sleep.
+		std::vector<ObjectDenseIndex> sleepCandidates;
+		std::vector<ObjectDenseIndex> wakeCandidates;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -210,6 +218,8 @@ namespace PS_AGONY2D
 
 		// Held bodies are modified by the holder every step, so they must be awake before integration.
 		void wakeHeldBodies();
+
+		void wakeCollidingBodies(std::span<const BodyCollisionData> narrow);
 
 		void buildColliderAABBs();
 

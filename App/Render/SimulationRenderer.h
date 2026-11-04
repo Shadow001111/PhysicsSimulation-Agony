@@ -6,6 +6,8 @@
 #include "PS_AGONY2D/SimulationImpl/PolygonBuild.h"
 
 #include <span>
+#include <array>
+#include <vector>
 #include <optional>
 
 namespace PS_AGONY2D
@@ -41,8 +43,8 @@ namespace PS_AGONY_RENDER
 
 		bool outlineColliders = true;
 
-		glm::vec3 broadPhaseDynamicAABBColor = { 0.0f, 1.0f, 0.0f };
-		glm::vec3 broadPhaseStaticAABBColor = { 0.2f, 0.4f, 1.0f };
+		glm::vec3 broadPhaseDynamicAABBColor  = { 0.0f, 1.0f, 0.0f };
+		glm::vec3 broadPhaseStaticAABBColor   = { 0.2f, 0.4f, 1.0f };
 		glm::vec3 broadPhaseSleepingAABBColor = { 0.2f, 0.2f, 0.2f };
 		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
 
@@ -52,13 +54,66 @@ namespace PS_AGONY_RENDER
 		// rotation wrap/trunc math - use when the render rate matches the
 		// sim rate and interpolation isn't needed.
 		bool interpolation = true;
+
+		// Tint per body group, indexed by BodyGroup.
+		std::array<glm::vec3, size_t(BodyGroup::Unused)> bodyGroupColors = {
+			glm::vec3{ 1.0f, 1.0f, 1.0f },
+			glm::vec3{ 0.2f, 0.4f, 1.0f },
+			glm::vec3{ 0.2f, 0.2f, 0.2f }
+		};
 	};
 
 	class SimulationRenderer
 	{
+		// Colliders in camera view, bucketed by (shape, body group).
+		struct FoundColliders
+		{
+			static constexpr size_t groupCount = size_t(BodyGroup::Unused);
+			static constexpr size_t shapeCount = size_t(ColliderShapeType::COUNT);
+			static constexpr size_t binCount = shapeCount * groupCount;
+
+			std::vector<ObjectDenseIndex> raw;     // Query output, contiguous per group.
+			std::vector<ObjectDenseIndex> sorted;  // Ordered by shape, then group.
+			std::vector<uint8_t> shapes;           // Scratch: shape per raw entry.
+			std::array<uint32_t, binCount + 1> offsets{};     // Bin = shape * groupCount + group.
+			std::array<uint32_t, groupCount + 1> groupBegin{}; // Group ranges in raw.
+
+			void build(const ColliderSoAViewer& colliders);
+
+			std::span<const ObjectDenseIndex> get(ColliderShapeType shape) const noexcept
+			{
+				const size_t b = size_t(shape) * groupCount;
+				return { sorted.data() + offsets[b], offsets[b + groupCount] - offsets[b] };
+			}
+
+			// All colliders of a shape plus per-group boundaries relative to that span.
+			struct ShapeRange
+			{
+				std::span<const ObjectDenseIndex> colliders;
+				std::array<uint32_t, groupCount + 1> groupBegin;
+			};
+
+			ShapeRange getRange(ColliderShapeType shape) const noexcept
+			{
+				const size_t b = size_t(shape) * groupCount;
+				ShapeRange r;
+				r.colliders = get(shape);
+				for (size_t g = 0; g <= groupCount; g++)
+					r.groupBegin[g] = offsets[b + g] - offsets[b];
+				return r;
+			}
+
+			std::span<const ObjectDenseIndex> get(ColliderShapeType shape, BodyGroup group) const noexcept
+			{
+				const size_t b = size_t(shape) * groupCount + size_t(group);
+				return { sorted.data() + offsets[b], offsets[b + 1] - offsets[b] };
+			}
+		};
+
+		using GroupColors = std::array<uint32_t, FoundColliders::groupCount>; // Packed 0xRRGGBB per BodyGroup.
+
 		// Resources.
-		std::vector<ObjectDenseIndex> foundColliders;
-		std::vector<ObjectDenseIndex> foundColliderShapes[(size_t)BodyType::COUNT];
+		FoundColliders foundColliders;
 
 		std::vector<AABB> queriedAABBs;
 
@@ -117,7 +172,7 @@ namespace PS_AGONY_RENDER
 		);
 
 		// Returns nullptr if the preview is valid, otherwise an error message to show the user.
-		const char* renderObjectPreview(const void* params, BodyType type);
+		const char* renderObjectPreview(const void* params, ColliderShapeType type);
 
 		Camera2D& getCamera() noexcept { return camera; }
 
@@ -129,17 +184,17 @@ namespace PS_AGONY_RENDER
 
 		// Collect data and render.
 
-		void renderColliders(const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderColliders(const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const GroupColors& groupColors);
 		void renderBodyCentersOfMass(const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 		void renderBodyPositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 		void renderBodyTruePositions(const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
-		void renderCircleColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
-		void renderBoxColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
-		void renderCapsuleColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
-		void renderPolygonColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderCircleColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderBoxColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderCapsuleColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
+		void renderPolygonColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 
-		void renderColliderAABBs(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix);
+		void renderColliderAABBs(std::span<const ObjectDenseIndex> givenColliders, const Mat4& viewProjectionMatrix);
 		void renderLeafAABBs(std::span<const AABB> aabbs, const glm::vec3& color, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 

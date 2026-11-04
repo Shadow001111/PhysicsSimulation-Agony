@@ -10,6 +10,18 @@
 
 namespace PS_AGONY_RENDER
 {
+    namespace
+    {
+        uint32_t packColor(const glm::vec3& c) noexcept
+        {
+            const auto to8 = [](float v) -> uint32_t
+                {
+                    return static_cast<uint32_t>(std::fmax(0.0f, std::fmin(1.0f, v)) * 255.0f + 0.5f);
+                };
+            return (to8(c.x) << 16) | (to8(c.y) << 8) | to8(c.z);
+        }
+    }
+
     void SimulationRenderer::init()
     {
         TRACY_SCOPE_N("SimulationRenderer init");
@@ -50,7 +62,12 @@ namespace PS_AGONY_RENDER
         queryCollidersForRender(simulation, cameraAABB);
 
         // Render.
-        renderColliders(viewProjectionMatrix, transformContext);
+        GroupColors groupColors;
+        for (size_t g = 0; g < FoundColliders::groupCount; g++)
+        {
+            groupColors[g] = packColor(renderOptions.bodyGroupColors[g]);
+        }
+        renderColliders(viewProjectionMatrix, transformContext, groupColors);
 
         // Color-only from here: avoids a feedback loop when sampling the id texture.
         glDrawBuffers(1, &RenderAttachments::colorDrawBuffer);
@@ -66,7 +83,7 @@ namespace PS_AGONY_RENDER
 
         if (renderOptions.colliderAABBs)
         {
-            renderColliderAABBs(foundColliders, viewProjectionMatrix);
+            renderColliderAABBs(foundColliders.raw, viewProjectionMatrix);
         }
 
         if (
@@ -109,7 +126,7 @@ namespace PS_AGONY_RENDER
         //renderBodyPositions(viewProjectionMatrix, cameraAABB); // Blue.
     }
 
-    const char* SimulationRenderer::renderObjectPreview(const void* params, BodyType type)
+    const char* SimulationRenderer::renderObjectPreview(const void* params, ColliderShapeType type)
     {
         if (params == nullptr) return nullptr;
 
@@ -119,7 +136,7 @@ namespace PS_AGONY_RENDER
         const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
 
         // Draw body depending on the type.
-        if (type == BodyType::Circle)
+        if (type == ColliderShapeType::Circle)
         {
             const auto* circleParams = static_cast<const CircleCreateParams*>(params);
 
@@ -137,7 +154,7 @@ namespace PS_AGONY_RENDER
 
             shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
         }
-        else if (type == BodyType::Box)
+        else if (type == ColliderShapeType::Box)
         {
             const auto* boxParams = static_cast<const BoxCreateParams*>(params);
 
@@ -156,7 +173,7 @@ namespace PS_AGONY_RENDER
 
             shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
         }
-        else if (type == BodyType::Polygon)
+        else if (type == ColliderShapeType::Polygon)
         {
             const auto* polyParams = static_cast<const PolygonCreateParams*>(params);
             if (polyParams->localVertices.data() == nullptr) return nullptr;
@@ -235,33 +252,67 @@ namespace PS_AGONY_RENDER
         return nullptr;
     }
 
+    void SimulationRenderer::FoundColliders::build(const ColliderSoAViewer& colliders)
+    {
+        const size_t n = raw.size();
+        shapes.resize(n);
+        sorted.resize(n);
+        offsets.fill(0);
+
+        // Pass 1: count per bin, cache shape.
+        for (size_t g = 0; g < groupCount; g++)
+        {
+            for (size_t i = groupBegin[g]; i < groupBegin[g + 1]; i++)
+            {
+                const size_t shape = size_t(colliders.shapeType[raw[i]]);
+                shapes[i] = static_cast<uint8_t>(shape);
+                offsets[shape * groupCount + g + 1]++;
+            }
+        }
+
+        for (size_t b = 0; b < binCount; b++)
+        {
+            offsets[b + 1] += offsets[b];
+        }
+
+        // Pass 2: scatter.
+        std::array<uint32_t, binCount> cursor;
+        std::copy_n(offsets.begin(), binCount, cursor.begin());
+
+        for (size_t g = 0; g < groupCount; g++)
+        {
+            for (size_t i = groupBegin[g]; i < groupBegin[g + 1]; i++)
+            {
+                sorted[cursor[size_t(shapes[i]) * groupCount + g]++] = raw[i];
+            }
+        }
+    }
+
     void SimulationRenderer::queryCollidersForRender(const Simulation& simulation, const AABB& cameraAABB)
     {
         {
             TRACY_SCOPE_N("Find colliders for render");
 
             const auto& collisionDetector = simulation.getBroadPhaseCollisionDetector();
+            const BroadPhaseInternal::AABBQuery query(cameraAABB);
 
-            foundColliders.clear();
-            collisionDetector.queryCollidersInShape(
-                BroadPhaseInternal::AABBQuery(cameraAABB),
-                BroadPhaseInternal::BvhTreeTypeFlag::All,
-                foundColliders
-            );
+            using TreeFlag = BroadPhaseInternal::BvhTreeTypeFlag;
+            constexpr TreeFlag groupTree[FoundColliders::groupCount] = {
+                TreeFlag::Dynamic, TreeFlag::Static, TreeFlag::Sleeping // Indexed by BodyGroup.
+            };
+
+            foundColliders.raw.clear();
+            for (size_t g = 0; g < FoundColliders::groupCount; g++)
+            {
+                foundColliders.groupBegin[g] = static_cast<uint32_t>(foundColliders.raw.size());
+                collisionDetector.queryCollidersInShape(query, groupTree[g], foundColliders.raw);
+            }
+            foundColliders.groupBegin[FoundColliders::groupCount] = static_cast<uint32_t>(foundColliders.raw.size());
         }
         {
             TRACY_SCOPE_N("Partition found colliders");
 
-            for (auto& vec : foundColliderShapes)
-            {
-                vec.clear();
-            }
-
-            for (ObjectDenseIndex collider : foundColliders)
-            {
-                BodyType shape = colliders.shapeType[collider];
-                foundColliderShapes[(size_t)shape].push_back(collider);
-            }
+            foundColliders.build(colliders);
         }
     }
 
@@ -269,9 +320,9 @@ namespace PS_AGONY_RENDER
     {
         size_t total = 0;
 
-        total += getVectorMemoryUsage(foundColliders);
-        for (const auto& vec : foundColliderShapes)
-            total += getVectorMemoryUsage(vec);
+        total += getVectorMemoryUsage(foundColliders.raw);
+        total += getVectorMemoryUsage(foundColliders.sorted);
+        total += getVectorMemoryUsage(foundColliders.shapes);
 
         total += getVectorMemoryUsage(circleInstanceData);
         total += getVectorMemoryUsage(simplePointInstanceData);

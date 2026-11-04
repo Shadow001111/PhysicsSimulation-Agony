@@ -9,7 +9,7 @@ namespace PS_AGONY2D
 		Vec2 localOffset,
 		Real localRotationIn,
 		MaterialIndex materialIndexIn,
-		BodyType shapeTypeIn,
+		ColliderShapeType shapeTypeIn,
 		ObjectDenseIndex shapeIndexIn
 	)
 	{

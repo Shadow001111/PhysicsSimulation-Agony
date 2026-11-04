@@ -56,7 +56,6 @@ namespace PS_AGONY2D
 		PolygonSoA polygons;
 		CapsuleSoA capsules;
 
-		std::vector<ObjectDeletion> deletedBodies;
 		std::vector<ObjectDeletion> deletedColliders;
 
 		const std::vector<Material>& materials;
@@ -196,7 +195,7 @@ namespace PS_AGONY2D
 		//
 		ObjectDenseIndex createColliderInternal(
 			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
-			MaterialIndex materialIndex, BodyType shapeType, ObjectDenseIndex shapeIndex
+			MaterialIndex materialIndex, ColliderShapeType shapeType, ObjectDenseIndex shapeIndex
 		);
 
 		// Appends a single convex-polygon collider (assumed already convex, CCW, >=3 vertices -

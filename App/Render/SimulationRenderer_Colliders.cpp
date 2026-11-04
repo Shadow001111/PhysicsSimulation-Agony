@@ -8,14 +8,15 @@
 
 namespace PS_AGONY_RENDER
 {
-    void SimulationRenderer::renderColliders(const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderColliders(const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const GroupColors& groupColors)
     {
         TRACY_SCOPE_N("Render colliders");
 
-        renderCircleColliders(foundColliderShapes[(size_t)BodyType::Circle], viewProjectionMatrix, transformContext);
-        renderBoxColliders(foundColliderShapes[(size_t)BodyType::Box], viewProjectionMatrix, transformContext);
-        renderCapsuleColliders(foundColliderShapes[(size_t)BodyType::Capsule], viewProjectionMatrix, transformContext);
-        renderPolygonColliders(foundColliderShapes[(size_t)BodyType::Polygon], viewProjectionMatrix, transformContext);
+        // Circles first; within each shape, colliders are ordered by body group (ascending).
+        renderCircleColliders(foundColliders.getRange(ColliderShapeType::Circle), groupColors, viewProjectionMatrix, transformContext);
+        renderBoxColliders(foundColliders.getRange(ColliderShapeType::Box), groupColors, viewProjectionMatrix, transformContext);
+        renderCapsuleColliders(foundColliders.getRange(ColliderShapeType::Capsule), groupColors, viewProjectionMatrix, transformContext);
+        renderPolygonColliders(foundColliders.getRange(ColliderShapeType::Polygon), groupColors, viewProjectionMatrix, transformContext);
     }
 
     void SimulationRenderer::renderBodyCentersOfMass(const Mat4& viewProjectionMatrix, const AABB& cameraAABB)
@@ -148,8 +149,9 @@ namespace PS_AGONY_RENDER
         shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCircleColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderCircleColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
+        const std::span<const ObjectDenseIndex> givenColliders = range.colliders;
         const size_t count = givenColliders.size();
         if (count == 0) return;
 
@@ -172,38 +174,41 @@ namespace PS_AGONY_RENDER
 
         ShapeRenderer::CircleInstanceData* ECSTASY_RESTRICT renderDataPtr = circleInstanceData.data();
 
-        for (size_t i = 0; i < count; i++)
-        {
-            const ObjectDenseIndex colliderIndex = givenColliders[i];
+        for (size_t g = 0; g < FoundColliders::groupCount; g++)
+            for (size_t i = range.groupBegin[g]; i < range.groupBegin[g + 1]; i++)
+            {
+                const uint32_t groupColor = groupColors[g];
+                const ObjectDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+                const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+                const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
-            const BodyTransformSample body = transformContext.sample(bodyIndex);
+                const BodyTransformSample body = transformContext.sample(bodyIndex);
 
-            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
-            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
-            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+                const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+                const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+                const Real localRot = colliderLocalRotationPtr[colliderIndex];
 
-            const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
-            const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
+                const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
+                const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
 
-            renderDataPtr[i].positionX = body.x + worldOffX;
-            renderDataPtr[i].positionY = body.y + worldOffY;
-            renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
-            renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = body.rotation + localRot;
-            renderDataPtr[i].radius = radiusPtr[shapeIndex];
-            renderDataPtr[i].color = 0xFFFFFF;
-            renderDataPtr[i].id = colliderIndex + 1;
-        }
+                renderDataPtr[i].positionX = body.x + worldOffX;
+                renderDataPtr[i].positionY = body.y + worldOffY;
+                renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
+                renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
+                renderDataPtr[i].rotation = body.rotation + localRot;
+                renderDataPtr[i].radius = radiusPtr[shapeIndex];
+                renderDataPtr[i].color = groupColor;
+                renderDataPtr[i].id = colliderIndex + 1;
+            }
 
         // Render.
         shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderBoxColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderBoxColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
+        const std::span<const ObjectDenseIndex> givenColliders = range.colliders;
         const size_t count = givenColliders.size();
         if (count == 0) return;
 
@@ -227,39 +232,42 @@ namespace PS_AGONY_RENDER
 
         ShapeRenderer::BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxInstanceData.data();
 
-        for (size_t i = 0; i < count; i++)
-        {
-            const ObjectDenseIndex colliderIndex = givenColliders[i];
+        for (size_t g = 0; g < FoundColliders::groupCount; g++)
+            for (size_t i = range.groupBegin[g]; i < range.groupBegin[g + 1]; i++)
+            {
+                const uint32_t groupColor = groupColors[g];
+                const ObjectDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+                const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+                const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
-            const BodyTransformSample body = transformContext.sample(bodyIndex);
+                const BodyTransformSample body = transformContext.sample(bodyIndex);
 
-            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
-            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
-            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+                const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+                const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+                const Real localRot = colliderLocalRotationPtr[colliderIndex];
 
-            const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
-            const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
+                const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
+                const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
 
-            renderDataPtr[i].positionX = body.x + worldOffX;
-            renderDataPtr[i].positionY = body.y + worldOffY;
-            renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
-            renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = body.rotation + localRot;
-            renderDataPtr[i].halfWidth = halfWidthPtr[shapeIndex];
-            renderDataPtr[i].halfHeight = halfHeightPtr[shapeIndex];
-            renderDataPtr[i].color = 0xFFFFFF;
-            renderDataPtr[i].id = colliderIndex + 1;
-        }
+                renderDataPtr[i].positionX = body.x + worldOffX;
+                renderDataPtr[i].positionY = body.y + worldOffY;
+                renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
+                renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
+                renderDataPtr[i].rotation = body.rotation + localRot;
+                renderDataPtr[i].halfWidth = halfWidthPtr[shapeIndex];
+                renderDataPtr[i].halfHeight = halfHeightPtr[shapeIndex];
+                renderDataPtr[i].color = groupColor;
+                renderDataPtr[i].id = colliderIndex + 1;
+            }
 
         // Render.
         shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderCapsuleColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderCapsuleColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
+        const std::span<const ObjectDenseIndex> givenColliders = range.colliders;
         const size_t count = givenColliders.size();
         if (count == 0) return;
 
@@ -283,40 +291,43 @@ namespace PS_AGONY_RENDER
 
         ShapeRenderer::BoxInstanceData* ECSTASY_RESTRICT renderDataPtr = boxInstanceData.data();
 
-        for (size_t i = 0; i < count; i++)
-        {
-            const ObjectDenseIndex colliderIndex = givenColliders[i];
+        for (size_t g = 0; g < FoundColliders::groupCount; g++)
+            for (size_t i = range.groupBegin[g]; i < range.groupBegin[g + 1]; i++)
+            {
+                const uint32_t groupColor = groupColors[g];
+                const ObjectDenseIndex colliderIndex = givenColliders[i];
 
-            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+                const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+                const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
 
-            const BodyTransformSample body = transformContext.sample(bodyIndex);
+                const BodyTransformSample body = transformContext.sample(bodyIndex);
 
-            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
-            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
-            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+                const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+                const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+                const Real localRot = colliderLocalRotationPtr[colliderIndex];
 
-            const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
-            const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
+                const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
+                const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
 
-            renderDataPtr[i].positionX = body.x + worldOffX;
-            renderDataPtr[i].positionY = body.y + worldOffY;
-            renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
-            renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
-            renderDataPtr[i].rotation = body.rotation + localRot;
-            const float r = static_cast<float>(radiusPtr[shapeIndex]);
-            renderDataPtr[i].halfWidth = static_cast<float>(halfLengthPtr[shapeIndex]) + r;
-            renderDataPtr[i].halfHeight = r;
-            renderDataPtr[i].color = 0xFFFFFF;
-            renderDataPtr[i].id = colliderIndex + 1;
-        }
+                renderDataPtr[i].positionX = body.x + worldOffX;
+                renderDataPtr[i].positionY = body.y + worldOffY;
+                renderDataPtr[i].localCOMX = localCOMXPtr[bodyIndex];
+                renderDataPtr[i].localCOMY = localCOMYPtr[bodyIndex];
+                renderDataPtr[i].rotation = body.rotation + localRot;
+                const float r = static_cast<float>(radiusPtr[shapeIndex]);
+                renderDataPtr[i].halfWidth = static_cast<float>(halfLengthPtr[shapeIndex]) + r;
+                renderDataPtr[i].halfHeight = r;
+                renderDataPtr[i].color = groupColor;
+                renderDataPtr[i].id = colliderIndex + 1;
+            }
 
         // Render.
         shapeRenderer.renderCapsuleShapes(boxInstanceData, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderPolygonColliders(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
+    void SimulationRenderer::renderPolygonColliders(const FoundColliders::ShapeRange& range, const GroupColors& groupColors, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext)
     {
+        const std::span<const ObjectDenseIndex> givenColliders = range.colliders;
         const size_t count = givenColliders.size();
         if (count == 0) return;
 
@@ -358,52 +369,54 @@ namespace PS_AGONY_RENDER
 
         uint32_t vertexOffset = 0;
 
-        for (size_t i = 0; i < count; i++)
-        {
-            const ObjectDenseIndex colliderIndex = givenColliders[i];
-
-            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
-            const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
-
-            const PolygonGeometry& geometry = geometryPtr[shapeIndex];
-            const Vec2* ECSTASY_RESTRICT localVertsPtr = geometry.vertices();
-            const uint32_t vertCount = geometry.size();
-
-            for (uint32_t v = 0; v < vertCount; v++)
+        for (size_t g = 0; g < FoundColliders::groupCount; g++)
+            for (size_t i = range.groupBegin[g]; i < range.groupBegin[g + 1]; i++)
             {
-                verts[vertexOffset + v].x = localVertsPtr[v].x;
-                verts[vertexOffset + v].y = localVertsPtr[v].y;
+                const uint32_t groupColor = groupColors[g];
+                const ObjectDenseIndex colliderIndex = givenColliders[i];
+
+                const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+                const ObjectDenseIndex shapeIndex = colliderShapeIndexPtr[colliderIndex];
+
+                const PolygonGeometry& geometry = geometryPtr[shapeIndex];
+                const Vec2* ECSTASY_RESTRICT localVertsPtr = geometry.vertices();
+                const uint32_t vertCount = geometry.size();
+
+                for (uint32_t v = 0; v < vertCount; v++)
+                {
+                    verts[vertexOffset + v].x = localVertsPtr[v].x;
+                    verts[vertexOffset + v].y = localVertsPtr[v].y;
+                }
+
+                const BodyTransformSample body = transformContext.sample(bodyIndex);
+
+                const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+                const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+                const Real localRot = colliderLocalRotationPtr[colliderIndex];
+
+                const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
+                const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
+
+                instData[i].positionX = body.x + worldOffX;
+                instData[i].positionY = body.y + worldOffY;
+                instData[i].localCOMX = localCOMXPtr[bodyIndex];
+                instData[i].localCOMY = localCOMYPtr[bodyIndex];
+                instData[i].rotation = body.rotation + localRot;
+                instData[i].color = groupColor;
+                instData[i].id = colliderIndex + 1;
+
+                cmds[i].count = vertCount;
+                cmds[i].instanceCount = 1;
+                cmds[i].first = vertexOffset;
+                cmds[i].baseInstance = 0;
+
+                vertexOffset += vertCount;
             }
-
-            const BodyTransformSample body = transformContext.sample(bodyIndex);
-
-            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
-            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
-            const Real localRot = colliderLocalRotationPtr[colliderIndex];
-
-            const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
-            const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
-
-            instData[i].positionX = body.x + worldOffX;
-            instData[i].positionY = body.y + worldOffY;
-            instData[i].localCOMX = localCOMXPtr[bodyIndex];
-            instData[i].localCOMY = localCOMYPtr[bodyIndex];
-            instData[i].rotation = body.rotation + localRot;
-            instData[i].color = 0xFFFFFF;
-            instData[i].id = colliderIndex + 1;
-
-            cmds[i].count = vertCount;
-            cmds[i].instanceCount = 1;
-            cmds[i].first = vertexOffset;
-            cmds[i].baseInstance = 0;
-
-            vertexOffset += vertCount;
-        }
 
         shapeRenderer.renderPolygonShapes(polygonVertexData, polygonInstanceData, polygonDrawCommands, viewProjectionMatrix);
     }
 
-    void SimulationRenderer::renderColliderAABBs(const std::vector<ObjectDenseIndex>& givenColliders, const Mat4& viewProjectionMatrix)
+    void SimulationRenderer::renderColliderAABBs(std::span<const ObjectDenseIndex> givenColliders, const Mat4& viewProjectionMatrix)
     {
         TRACY_SCOPE_N("Render collider AABBs");
 

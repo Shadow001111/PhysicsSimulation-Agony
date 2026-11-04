@@ -6,10 +6,11 @@
 
 #include "PS_AGONY2D/Constants.h"
 
+#include <algorithm>
+
 namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
-    constexpr size_t LANES = RealSimd::lanes;
 
     void wrapBodyRotations(BodySoA& bodies, IndexRange range)
     {
@@ -24,9 +25,23 @@ namespace PS_AGONY2D
         const RealSimd twoPIV(Constants::TWO_PI);
         const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
 
-        // Wrap. Assume start 0.
-        size_t i = 0;
-        for (; i + LANES <= range.end; i += LANES)
+        // Wrap.
+        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
+        size_t i = range.begin;
+        for (; i < alignEnd; i++)
+        {
+            Real rot = rotationPtr[i];
+            Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
+            rot -= wrapCount * Constants::TWO_PI;
+
+            Real isRotNegativeMask = rot < 0;
+            rot += isRotNegativeMask * Constants::TWO_PI;
+            wrapCount -= isRotNegativeMask;
+
+            rotationPtr[i] = rot;
+            rotationWrapCountPtr[i] += wrapCount;
+        }
+        for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
             RealSimd rot = RealSimd::load(rotationPtr + i);
             RealSimd oldWrapCount = RealSimd::load(rotationWrapCountPtr + i);
@@ -74,7 +89,7 @@ namespace PS_AGONY2D
         // Wrap.
         const size_t colliderCount = colliders.getCount();
         size_t i = 0;
-        for (; i + LANES <= colliderCount; i += LANES)
+        for (; i + RealSimd::lanes <= colliderCount; i += RealSimd::lanes)
         {
             RealSimd rot = RealSimd::load(rotationPtr + i);
 

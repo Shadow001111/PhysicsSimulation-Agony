@@ -55,7 +55,7 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(circles.getCount());
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Circle, newShapeIndex
+            bodyIndex, params.localOffset, params.localRotation, materialIndex, ColliderShapeType::Circle, newShapeIndex
         );
         circles.append(newCollider, radius);
 
@@ -78,7 +78,7 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(boxes.getCount());
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            bodyIndex, params.localOffset, params.localRotation, materialIndex, BodyType::Box, newShapeIndex
+            bodyIndex, params.localOffset, params.localRotation, materialIndex, ColliderShapeType::Box, newShapeIndex
         );
         boxes.append(newCollider, width * Real(0.5), height * Real(0.5));
 
@@ -167,7 +167,7 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(capsules.getCount());
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            bodyIndex, localOffset, localRotation, materialIndex, BodyType::Capsule, newShapeIndex
+            bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Capsule, newShapeIndex
         );
         capsules.append(newCollider, length * Real(0.5), radius);
 
@@ -365,7 +365,7 @@ namespace PS_AGONY2D
         destroyColliderInternal(bodyIndex, colliderIndex);
     }
 
-    ObjectDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, BodyType shapeType, ObjectDenseIndex shapeIndex)
+    ObjectDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, ColliderShapeType shapeType, ObjectDenseIndex shapeIndex)
     {
         const ObjectDenseIndex newCollider = colliders.append(
             bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
@@ -391,7 +391,7 @@ namespace PS_AGONY2D
         PolygonGeometry geometry{ convexVertices };
 
         const ObjectDenseIndex newCollider = createColliderInternal(
-            bodyIndex, localOffset, localRotation, materialIndex, BodyType::Polygon, newShapeIndex
+            bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Polygon, newShapeIndex
         );
         polygons.append(newCollider, std::move(geometry));
 
@@ -402,12 +402,12 @@ namespace PS_AGONY2D
     {
         spatialDirty = true;
 
-        const BodyType shapeType = colliders.shapeType[colliderIdx];
+        const ColliderShapeType shapeType = colliders.shapeType[colliderIdx];
         const ObjectDenseIndex shapeIdx = colliders.shapeIndex[colliderIdx];
 
         // Remove from the underlying shape SoA (swap-remove), fixing up the collider
         // that now occupies shapeIdx (if any) to point at its new slot.
-        if (shapeType == BodyType::Circle)
+        if (shapeType == ColliderShapeType::Circle)
         {
             const size_t last = circles.getCount() - 1;
             if (shapeIdx != last)
@@ -419,7 +419,7 @@ namespace PS_AGONY2D
             circles.colliderIndices.pop_back();
             circles.radius.pop_back();
         }
-        else if (shapeType == BodyType::Box)
+        else if (shapeType == ColliderShapeType::Box)
         {
             const size_t last = boxes.getCount() - 1;
             if (shapeIdx != last)
@@ -433,7 +433,7 @@ namespace PS_AGONY2D
             boxes.halfWidth.pop_back();
             boxes.halfHeight.pop_back();
         }
-        else if (shapeType == BodyType::Polygon)
+        else if (shapeType == ColliderShapeType::Polygon)
         {
             const size_t last = polygons.getCount() - 1;
             if (shapeIdx != last)
@@ -445,7 +445,7 @@ namespace PS_AGONY2D
             polygons.colliderIndices.pop_back();
             polygons.geometry.pop_back();
         }
-        else if (shapeType == BodyType::Capsule)
+        else if (shapeType == ColliderShapeType::Capsule)
         {
             const size_t last = capsules.getCount() - 1;
             if (shapeIdx != last)
@@ -486,15 +486,15 @@ namespace PS_AGONY2D
             colliderSlot[colliderIdx] = movedSlot;
 
             // Fix the shape SoA's back-reference: it still points at the collider's old index.
-            const BodyType movedShapeType = colliders.shapeType[colliderIdx];
+            const ColliderShapeType movedShapeType = colliders.shapeType[colliderIdx];
             const ObjectDenseIndex movedShapeIdx = colliders.shapeIndex[colliderIdx];
-            if (movedShapeType == BodyType::Circle)
+            if (movedShapeType == ColliderShapeType::Circle)
                 circles.colliderIndices[movedShapeIdx] = colliderIdx;
-            else if (movedShapeType == BodyType::Box)
+            else if (movedShapeType == ColliderShapeType::Box)
                 boxes.colliderIndices[movedShapeIdx] = colliderIdx;
-            else if (movedShapeType == BodyType::Polygon)
+            else if (movedShapeType == ColliderShapeType::Polygon)
                 polygons.colliderIndices[movedShapeIdx] = colliderIdx;
-            else if (movedShapeType == BodyType::Capsule)
+            else if (movedShapeType == ColliderShapeType::Capsule)
                 capsules.colliderIndices[movedShapeIdx] = colliderIdx;
 
             deletedColliders.emplace_back(
@@ -516,13 +516,13 @@ namespace PS_AGONY2D
             const ObjectDenseIndex s = om.colliders.shapeIndex[c];
             switch (om.colliders.shapeType[c])
             {
-            case BodyType::Circle:
+            case ColliderShapeType::Circle:
                 return PhysicsGeometry::calculateCircleArea(om.circles.radius[s]);
-            case BodyType::Box:
+            case ColliderShapeType::Box:
                 return PhysicsGeometry::calculateBoxArea(om.boxes.halfWidth[s] * Real(2), om.boxes.halfHeight[s] * Real(2));
-            case BodyType::Capsule:
+            case ColliderShapeType::Capsule:
                 return PhysicsGeometry::calculateCapsuleArea(om.capsules.halfLength[s] * Real(2), om.capsules.radius[s]);
-            case BodyType::Polygon:
+            case ColliderShapeType::Polygon:
             {
                 const PolygonGeometry& g = om.polygons.geometry[s];
                 return PhysicsGeometry::calculatePolygonArea({ g.vertices(), g.size() });
@@ -650,7 +650,7 @@ namespace PS_AGONY2D
         if (colliderIndex == Handle::NULL_DENSE_INDEX) return;
         wakeBody(colliders.bodyIndex[colliderIndex]);
         const ObjectDenseIndex shapeIndex = colliders.shapeIndex[colliderIndex];
-        const BodyType shapeType = colliders.shapeType[colliderIndex];
+        const ColliderShapeType shapeType = colliders.shapeType[colliderIndex];
 
         switch (c.type)
         {
@@ -673,27 +673,27 @@ namespace PS_AGONY2D
             break;
 
         case T::SetCircleRadius:
-            if (shapeType != BodyType::Circle) break;
+            if (shapeType != ColliderShapeType::Circle) break;
             circles.radius[shapeIndex] = std::fmax(Real(0), c.a);
             spatialDirty = true;
             break;
 
         case T::SetBoxSize:
-            if (shapeType != BodyType::Box) break;
+            if (shapeType != ColliderShapeType::Box) break;
             boxes.halfWidth[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             boxes.halfHeight[shapeIndex] = std::fmax(Real(0), c.b) * Real(0.5);
             spatialDirty = true;
             break;
 
         case T::SetCapsuleShape:
-            if (shapeType != BodyType::Capsule) break;
+            if (shapeType != ColliderShapeType::Capsule) break;
             capsules.halfLength[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             capsules.radius[shapeIndex] = std::fmax(Real(0), c.b);
             spatialDirty = true;
             break;
 
         case T::SetPolygonGeometry:
-            if (shapeType != BodyType::Polygon) break;
+            if (shapeType != ColliderShapeType::Polygon) break;
             polygons.geometry[shapeIndex] = std::move(pendingPolygons[c.index]);
             spatialDirty = true;
             break;
@@ -779,16 +779,16 @@ namespace PS_AGONY2D
 
             switch (colliders.shapeType[ci])
             {
-            case BodyType::Circle:
+            case ColliderShapeType::Circle:
                 own = PhysicsGeometry::calculateCircleInertia(m, circles.radius[s], Vec2(0));
                 break;
-            case BodyType::Box:
+            case ColliderShapeType::Box:
                 own = PhysicsGeometry::calculateBoxInertia(m, boxes.halfWidth[s] * Real(2), boxes.halfHeight[s] * Real(2), Vec2(0));
                 break;
-            case BodyType::Capsule:
+            case ColliderShapeType::Capsule:
                 own = PhysicsGeometry::calculateCapsuleInertia(m, capsules.halfLength[s] * Real(2), capsules.radius[s], Vec2(0));
                 break;
-            case BodyType::Polygon:
+            case ColliderShapeType::Polygon:
             {
                 const PolygonGeometry& g = polygons.geometry[s];
                 const auto [polyInertia, polyCentroid] = PhysicsGeometry::calculatePolygonInertia(m, { g.vertices(), g.size() }, std::nullopt);
@@ -944,17 +944,17 @@ namespace PS_AGONY2D
         const ObjectDenseIndex s = colliders.shapeIndex[i];
         switch (d.shapeType)
         {
-        case BodyType::Circle:
+        case ColliderShapeType::Circle:
             d.radius = circles.radius[s];
             break;
-        case BodyType::Box:
+        case ColliderShapeType::Box:
             d.halfExtents = Vec2(boxes.halfWidth[s], boxes.halfHeight[s]);
             break;
-        case BodyType::Capsule:
+        case ColliderShapeType::Capsule:
             d.halfLength = capsules.halfLength[s];
             d.radius = capsules.radius[s];
             break;
-        case BodyType::Polygon:
+        case ColliderShapeType::Polygon:
             d.polygon = &polygons.geometry[s];
             break;
         default:

@@ -151,9 +151,9 @@ namespace PS_AGONY_EDITOR
 
 		switch (shape)
 		{
-		case CreateShape::Circle: previewError = renderer.renderObjectPreview(&circleP, BodyType::Circle); break;
-		case CreateShape::Box: previewError = renderer.renderObjectPreview(&boxP, BodyType::Box); break;
-		case CreateShape::RegularPolygon: previewError = renderer.renderObjectPreview(&polyP, BodyType::Polygon); break;
+		case CreateShape::Circle: previewError = renderer.renderObjectPreview(&circleP, ColliderShapeType::Circle); break;
+		case CreateShape::Box: previewError = renderer.renderObjectPreview(&boxP, ColliderShapeType::Box); break;
+		case CreateShape::RegularPolygon: previewError = renderer.renderObjectPreview(&polyP, ColliderShapeType::Polygon); break;
 		default: break; // Capsule and free polygon are drawn in the overlay.
 		}
 	}

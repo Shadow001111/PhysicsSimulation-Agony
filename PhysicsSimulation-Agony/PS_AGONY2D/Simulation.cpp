@@ -172,8 +172,7 @@ namespace PS_AGONY2D
         );
 
         // Check if any body exist.
-        const size_t bodyCount = objectManager.bodies.getCount();
-        if (bodyCount == 0)
+        if (objectManager.bodies.getCount() == 0)
         {
             broadPhaseCollisionDetector.clearData();
             return;
@@ -204,7 +203,6 @@ namespace PS_AGONY2D
         // now keyed by collider pairs, not body pairs, so this must use deletedColliders.
         narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
         objectManager.deletedColliders.clear();
-        objectManager.deletedBodies.clear(); // Nothing currently consumes body-deletion remaps; clear to avoid unbounded growth.
 
         wakeHeldBodies();
 
@@ -279,6 +277,7 @@ namespace PS_AGONY2D
 
             // Collision events (only exist if collisions were solved).
             dispatchCollisionEvents();
+            wakeCollidingBodies(narrow);
         }
     }
 
@@ -366,21 +365,6 @@ namespace PS_AGONY2D
         broadPhaseCollisionDetector.updateTrees(params);
     }
 
-    namespace
-    {
-        // TODO: Remake normally as constants.
-        struct SleepThresholds
-        {
-            Real linearSpeed;
-            Real angularSpeed;
-        };
-
-        constexpr SleepThresholds getSleepThresholds() noexcept
-        {
-            return { Real(0.05), Real(0.05) }; // Units/s, rad/s.
-        }
-    }
-
     void Simulation::wakeHeldBodies()
     {
         for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
@@ -392,6 +376,34 @@ namespace PS_AGONY2D
         }
     }
 
+    // TEST ONLY, NOT A GOOD SOLUTION: one-step wake latency, one island layer per step,
+    // no island/graph handling, wake() invalidates body indices in previousCollisionData
+    // (bodyA/bodyB become stale after this call), and sleepers are treated as immovable during the solve.
+    void Simulation::wakeCollidingBodies(std::span<const BodyCollisionData> narrow)
+    {
+        TRACY_SCOPE_N("Wake colliding bodies");
+
+        const BodySoA& bodies = objectManager.bodies;
+        const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
+        if (sleeping.empty()) return;
+        const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
+
+        wakeCandidates.clear();
+        for (const BodyCollisionData& c : narrow)
+        {
+            const bool aSleep = bodies.groupOf(c.bodyA) == BodyGroup::Sleeping;
+            wakeCandidates.push_back(aSleep ? c.bodyA : c.bodyB);
+        }
+        if (wakeCandidates.empty()) return;
+
+        std::sort(wakeCandidates.begin(), wakeCandidates.end());
+        wakeCandidates.erase(std::unique(wakeCandidates.begin(), wakeCandidates.end()), wakeCandidates.end());
+
+        // Descending: a move only swaps with slots at or above the body's index.
+        for (size_t k = wakeCandidates.size(); k-- > 0;)
+            objectManager.wakeBody(wakeCandidates[k]);
+    }
+
     void Simulation::updateSleeping()
     {
         TRACY_SCOPE_N("Update sleeping");
@@ -400,9 +412,8 @@ namespace PS_AGONY2D
         const IndexRange range = bodies.range(BodyGroup::Dynamic);
         if (range.empty()) return;
 
-        const SleepThresholds thresholds = getSleepThresholds();
-        const Real linearSq = thresholds.linearSpeed * thresholds.linearSpeed;
-        const Real angular = thresholds.angularSpeed;
+        const Real linearSq = simulationSettings.linearSpeedSleepThreshold * simulationSettings.linearSpeedSleepThreshold;
+        const Real angular = simulationSettings.angularSpeedSleepThreshold;
 
         const Real* ECSTASY_RESTRICT velX = bodies.velocityX.data();
         const Real* ECSTASY_RESTRICT velY = bodies.velocityY.data();
