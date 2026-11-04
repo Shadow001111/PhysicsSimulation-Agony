@@ -51,9 +51,10 @@ namespace PS_AGONY_EDITOR
 		if (type == ConstraintType::Motor)
 		{
 			MotorConstraintSystem::CreateParams p{};
+			p.bodyHandle = a;
 			p.targetSpeed = static_cast<Real>(motorSpeed);
 			p.maxTorque = static_cast<Real>(motorTorque);
-			res = cs.createMotorH(a, p);
+			res = cs.createMotor(p);
 		}
 		else
 		{
@@ -80,39 +81,47 @@ namespace PS_AGONY_EDITOR
 			case ConstraintType::Spring:
 			{
 				SpringConstraintSystem::CreateParams p{};
+				p.bodyHandleA = a;
+				p.bodyHandleB = b;
 				p.localAnchorA = localA; p.localAnchorB = localB;
 				p.restLength = len;
 				p.stiffness = static_cast<Real>(springStiffness);
 				p.damping = static_cast<Real>(springDamping);
-				res = cs.createSpringH(a, b, p);
+				res = cs.createSpring(p);
 				break;
 			}
 			case ConstraintType::RevoluteJoint:
 			{
 				RevoluteJointConstraintSystem::CreateParams p{};
+				p.bodyHandleA = a;
+				p.bodyHandleB = b;
 				p.localAnchorA = localA; p.localAnchorB = localB;
 				p.stiffness = jk; p.damping = jd;
-				res = cs.createRevoluteJointH(a, b, p);
+				res = cs.createRevoluteJoint(p);
 				break;
 			}
 			case ConstraintType::PrismaticJoint:
 			{
 				PrismaticJointConstraintSystem::CreateParams p{};
+				p.bodyHandleA = a;
+				p.bodyHandleB = b;
 				p.localAnchorA = localA; p.localAnchorB = localB;
 				p.localAxisA = axis;
 				p.stiffness = jk; p.damping = jd;
 				p.lowerLimit = lo; p.upperLimit = hi; p.enableLimit = limitEnabled;
-				res = cs.createPrismaticJointH(a, b, p);
+				res = cs.createPrismaticJoint(p);
 				break;
 			}
 			case ConstraintType::SliderJoint:
 			{
 				SliderJointConstraintSystem::CreateParams p{};
 				p.localAnchorA = localA; p.localAnchorB = localB;
+				p.bodyHandleA = a;
+				p.bodyHandleB = b;
 				p.localAxisA = axis;
 				p.stiffness = jk; p.damping = jd;
 				p.lowerLimit = lo; p.upperLimit = hi; p.enableLimit = limitEnabled;
-				res = cs.createSliderJointH(a, b, p);
+				res = cs.createSliderJoint(p);
 				break;
 			}
 			default: break;

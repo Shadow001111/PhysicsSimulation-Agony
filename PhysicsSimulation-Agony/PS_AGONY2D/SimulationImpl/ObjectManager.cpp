@@ -852,6 +852,17 @@ namespace PS_AGONY2D
             colliders.bodyIndex[ci] = a;
         for (const ObjectDenseIndex ci : bodies.colliderIndices[b])
             colliders.bodyIndex[ci] = b;
+
+        // Attachments swapped with the bodies: lists at b reference old index a, lists at a reference old index b.
+        const auto& attA = bodies.attachments[b];
+        const auto& attB = bodies.attachments[a];
+        if (attA.empty() && attB.empty()) return;
+
+        // Sentinel pass so constraints touching both bodies are not remapped twice.
+        constexpr ObjectDenseIndex TMP = Handle::NULL_DENSE_INDEX;
+        for (const auto& at : attA) constraintSystems[static_cast<size_t>(at.type)]->remapBodyIndex(at.objectIndex, a, TMP);
+        for (const auto& at : attB) constraintSystems[static_cast<size_t>(at.type)]->remapBodyIndex(at.objectIndex, b, a);
+        for (const auto& at : attA) constraintSystems[static_cast<size_t>(at.type)]->remapBodyIndex(at.objectIndex, TMP, b);
     }
 
     ObjectDenseIndex ObjectManager::moveBodyToGroup(ObjectDenseIndex index, BodyGroup target)

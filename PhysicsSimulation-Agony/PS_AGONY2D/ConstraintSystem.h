@@ -109,6 +109,14 @@ namespace PS_AGONY2D
 			return true;
 		}
 
+		// Resolves body handles to dense indices. False if any is stale.
+		static bool resolve(const BodySoA& bodies, Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b) noexcept
+		{
+			a = bodies.indexOf(hA);
+			b = bodies.indexOf(hB);
+			return a != Handle::NULL_DENSE_INDEX && b != Handle::NULL_DENSE_INDEX;
+		}
+
 		// Appends a single-body constraint and registers it with its body.
 		template<class... Args>
 		Handle createSingleImpl(ObjectDenseIndex index, BodySoA& bodies, Args&&... args)
@@ -219,8 +227,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectDenseIndex bodyIndexA;
-			ObjectDenseIndex bodyIndexB;
+			Handle bodyHandleA;
+			Handle bodyHandleB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Real restLength;
@@ -228,6 +236,7 @@ namespace PS_AGONY2D
 			Real damping;
 		};
 
+		// Create: nullopt if a body handle is stale.
 		// Instant snapshot. Body handles are Handle::kNull-safe copies of BodySoA handles.
 		struct Data
 		{
@@ -240,9 +249,11 @@ namespace PS_AGONY2D
 			Real damping{ 0 };
 		};
 
-		Handle create(const CreateParams& p, BodySoA& bodies)
+		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
 		{
-			return createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.restLength, p.stiffness, p.damping);
+			ObjectDenseIndex a, b;
+			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
+			return createImpl(a, b, bodies, p.localAnchorA, p.localAnchorB, p.restLength, p.stiffness, p.damping);
 		}
 
 		// Deferred modification commands.
@@ -301,8 +312,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectDenseIndex bodyIndexA;
-			ObjectDenseIndex bodyIndexB;
+			Handle bodyHandleA;
+			Handle bodyHandleB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Real stiffness;
@@ -319,9 +330,11 @@ namespace PS_AGONY2D
 			Real damping{ 0 };
 		};
 
-		Handle create(const CreateParams& p, BodySoA& bodies)
+		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
 		{
-			return createImpl(p.bodyIndexA, p.bodyIndexB, bodies, p.localAnchorA, p.localAnchorB, p.stiffness, p.damping);
+			ObjectDenseIndex a, b;
+			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
+			return createImpl(a, b, bodies, p.localAnchorA, p.localAnchorB, p.stiffness, p.damping);
 		}
 
 		void queueLocalAnchorA(Handle h, Vec2 v) { pushCommand(Cmd::LocalAnchorA, h, v.x, v.y); }
@@ -375,8 +388,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectDenseIndex bodyIndexA;
-			ObjectDenseIndex bodyIndexB;
+			Handle bodyHandleA;
+			Handle bodyHandleB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Vec2 localAxisA; // Axis in body A's local space that translation is locked to; need not be pre-normalized.
@@ -402,15 +415,18 @@ namespace PS_AGONY2D
 			bool enableLimit{ false };
 		};
 
-		Handle create(const CreateParams& p, BodySoA& bodies)
+		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
 		{
+			ObjectDenseIndex a, b;
+			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
+
 			// Normalize the axis defensively; a zero-length axis would make the joint singular.
 			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
 			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
 
 			return createImpl(
-				p.bodyIndexA, p.bodyIndexB, bodies,
-				p.localAnchorA, p.localAnchorB, axis, computeReferenceAngle(bodies, p.bodyIndexA, p.bodyIndexB),
+				a, b, bodies,
+				p.localAnchorA, p.localAnchorB, axis, computeReferenceAngle(bodies, a, b),
 				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
 		}
@@ -502,8 +518,8 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectDenseIndex bodyIndexA;
-			ObjectDenseIndex bodyIndexB;
+			Handle bodyHandleA;
+			Handle bodyHandleB;
 			Vec2 localAnchorA;
 			Vec2 localAnchorB;
 			Vec2 localAxisA; // Axis in body A's local space; need not be pre-normalized.
@@ -528,14 +544,17 @@ namespace PS_AGONY2D
 			bool enableLimit{ false };
 		};
 
-		Handle create(const CreateParams& p, BodySoA& bodies)
+		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
 		{
+			ObjectDenseIndex a, b;
+			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
+
 			// Normalize the axis defensively; a zero-length axis would make the joint singular.
 			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
 			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
 
 			return createImpl(
-				p.bodyIndexA, p.bodyIndexB, bodies,
+				a, b, bodies,
 				p.localAnchorA, p.localAnchorB, axis,
 				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
@@ -612,7 +631,7 @@ namespace PS_AGONY2D
 	public:
 		struct CreateParams
 		{
-			ObjectDenseIndex bodyIndex;
+			Handle bodyHandle;
 			Real targetSpeed;  // Target angular velocity.
 			Real maxTorque;    // Torque limit.
 		};
@@ -625,9 +644,11 @@ namespace PS_AGONY2D
 			Real accumulatedImpulse{ 0 }; // Last solved impulse (warm-start); useful as torque feedback.
 		};
 
-		Handle create(const CreateParams& p, BodySoA& bodies)
+		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
 		{
-			return createSingleImpl(p.bodyIndex, bodies, p.targetSpeed, p.maxTorque);
+			const ObjectDenseIndex i = bodies.indexOf(p.bodyHandle);
+			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
+			return createSingleImpl(i, bodies, p.targetSpeed, p.maxTorque);
 		}
 
 		// accumulatedImpulse is intentionally left untouched on change.

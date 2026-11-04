@@ -28,29 +28,12 @@ namespace PS_AGONY2D
 		ConstraintAPI(const ConstraintAPI&) = delete;
 		ConstraintAPI& operator=(const ConstraintAPI&) = delete;
 
-		// Creation (dense body indices). nullopt if a body index is out of range.
-		std::optional<Handle> createSpring(const SpringConstraintSystem::CreateParams& p) { return createDense(springs(), p); }
-		std::optional<Handle> createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& p) { return createDense(revoluteJoints(), p); }
-		std::optional<Handle> createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& p) { return createDense(prismaticJoints(), p); }
-		std::optional<Handle> createSliderJoint(const SliderJointConstraintSystem::CreateParams& p) { return createDense(sliderJoints(), p); }
-		std::optional<Handle> createMotor(const MotorConstraintSystem::CreateParams& p) { return createDense(motors(), p); }
-
-		// Creation (body handles; params.bodyIndex* ignored). nullopt if a handle is stale.
-		std::optional<Handle> createSpringH(Handle bodyA, Handle bodyB, SpringConstraintSystem::CreateParams p)
-			{ return createPairH(springs(), bodyA, bodyB, p); }
-		std::optional<Handle> createRevoluteJointH(Handle bodyA, Handle bodyB, RevoluteJointConstraintSystem::CreateParams p)
-			{ return createPairH(revoluteJoints(), bodyA, bodyB, p); }
-		std::optional<Handle> createPrismaticJointH(Handle bodyA, Handle bodyB, PrismaticJointConstraintSystem::CreateParams p)
-			{ return createPairH(prismaticJoints(), bodyA, bodyB, p); }
-		std::optional<Handle> createSliderJointH(Handle bodyA, Handle bodyB, SliderJointConstraintSystem::CreateParams p)
-			{ return createPairH(sliderJoints(), bodyA, bodyB, p); }
-		std::optional<Handle> createMotorH(Handle body, MotorConstraintSystem::CreateParams p)
-		{
-			const uint32_t b = objectManager.bodies.indexOf(body);
-			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			p.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return motors().create(p, objectManager.bodies);
-		}
+		// Creation (body handles in params). nullopt if a body handle is stale.
+		std::optional<Handle> createSpring(const SpringConstraintSystem::CreateParams& p) { return springs().create(p, objectManager.bodies); }
+		std::optional<Handle> createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& p) { return revoluteJoints().create(p, objectManager.bodies); }
+		std::optional<Handle> createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& p) { return prismaticJoints().create(p, objectManager.bodies); }
+		std::optional<Handle> createSliderJoint(const SliderJointConstraintSystem::CreateParams& p) { return sliderJoints().create(p, objectManager.bodies); }
+		std::optional<Handle> createMotor(const MotorConstraintSystem::CreateParams& p) { return motors().create(p, objectManager.bodies); }
 
 		// Destruction.
 		void destroySpring(ObjectDenseIndex index) { springs().removeConstraint(index, objectManager.bodies); }
@@ -59,7 +42,6 @@ namespace PS_AGONY2D
 		void destroySliderJoint(ObjectDenseIndex index) { sliderJoints().removeConstraint(index, objectManager.bodies); }
 		void destroyMotor(ObjectDenseIndex index) { motors().removeConstraint(index, objectManager.bodies); }
 
-		// Stale handle: no-op.
 		void destroySpring(Handle h) { destroyByHandle(springs(), h); }
 		void destroyRevoluteJoint(Handle h) { destroyByHandle(revoluteJoints(), h); }
 		void destroyPrismaticJoint(Handle h) { destroyByHandle(prismaticJoints(), h); }
@@ -163,33 +145,6 @@ namespace PS_AGONY2D
 		MotorSoAViewer getMotors() const noexcept
 			{ return motors().getViewer(); }
 	private:
-		bool bodyInRange(ObjectDenseIndex index) const noexcept { return index < objectManager.bodies.getCount(); }
-
-		template<class System, class Params>
-		std::optional<Handle> createDense(System& system, const Params& p)
-		{
-			if constexpr (requires { p.bodyIndex; })
-			{
-				if (!bodyInRange(p.bodyIndex)) return std::nullopt;
-			}
-			else
-			{
-				if (!bodyInRange(p.bodyIndexA) || !bodyInRange(p.bodyIndexB)) return std::nullopt;
-			}
-			return system.create(p, objectManager.bodies);
-		}
-
-		template<class System, class Params>
-		std::optional<Handle> createPairH(System& system, Handle bodyA, Handle bodyB, Params& p)
-		{
-			const uint32_t a = objectManager.bodies.indexOf(bodyA);
-			const uint32_t b = objectManager.bodies.indexOf(bodyB);
-			if (a == Handle::NULL_DENSE_INDEX || b == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			p.bodyIndexA = static_cast<ObjectDenseIndex>(a);
-			p.bodyIndexB = static_cast<ObjectDenseIndex>(b);
-			return system.create(p, objectManager.bodies);
-		}
-
 		template<class System>
 		void destroyByHandle(System& system, Handle h)
 		{
