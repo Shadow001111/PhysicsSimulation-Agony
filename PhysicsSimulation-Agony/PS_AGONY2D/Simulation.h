@@ -80,8 +80,8 @@ namespace PS_AGONY2D
 			Integrator::IntegrationSettings integratorSettings;
 
 			// Sleep.
-			Real linearSpeedSleepThreshold = 0.05f;
-			Real angularSpeedSleepThreshold = 0.05f;
+			Real linearSpeedSleepThreshold = 0.1f;
+			Real angularSpeedSleepThreshold = 0.1f;
 			Real sleepTimeThreshold = 0.5f;
 
 			// Debug.

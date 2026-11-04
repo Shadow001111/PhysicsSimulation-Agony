@@ -430,13 +430,17 @@ namespace PS_AGONY2D
 
         // Collect sleeping candidates.
         sleepCandidates.clear();
-        for (ObjectDenseIndex i = range.begin; i < range.end; i++)
+        for (ObjectDenseIndex bodyIndex = range.begin; bodyIndex < range.end; bodyIndex++)
         {
-            const Real linearExcess = velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i] - linearSq;
-            const Real angularExcess = std::fabs(angVelPtr[i]) - angular;
+            const Real linearExcess = velXPtr[bodyIndex] * velXPtr[bodyIndex] + velYPtr[bodyIndex] * velYPtr[bodyIndex] - linearSq;
+            const Real angularExcess = std::fabs(angVelPtr[bodyIndex]) - angular;
             if (std::fmax(linearExcess, angularExcess) <= Real(0))
             {
-                sleepCandidates.push_back(i);
+                sleepCandidates.push_back(bodyIndex);
+            }
+            else
+            {
+                sleepingTimerPtr[bodyIndex] = 0;
             }
         }
         if (sleepCandidates.empty()) return;
