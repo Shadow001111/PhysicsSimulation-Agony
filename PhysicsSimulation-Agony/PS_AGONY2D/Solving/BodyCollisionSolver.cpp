@@ -20,6 +20,20 @@ namespace PS_AGONY2D
 		this->materials = materials;
 	}
 
+	std::span<const ObjectPair> BodyCollisionSolver::fillCollidingBodyPairs(std::span<const BodyCollisionData> collisionData)
+	{
+		TRACY_SCOPE_NC("Collect body pairs from collision data", PS_AGONY2D::Profiling::Color::Red);
+		const ObjectDenseIndex* ECSTASY_RESTRICT bodyOwnerPtr = colliders.bodyIndex;
+
+		collidingBodyPairs.resize(collisionData.size());
+		for (size_t i = 0; i < collisionData.size(); i++)
+		{
+			collidingBodyPairs[i].a = bodyOwnerPtr[collisionData[i].colliderA];
+			collidingBodyPairs[i].b = bodyOwnerPtr[collisionData[i].colliderB];
+		}
+		return collidingBodyPairs;
+	}
+
 	void BodyCollisionSolver::solveCollisions(
 		std::span<BodyCollisionData> collisionData,
 		uint32_t velocityIterations,
@@ -61,21 +75,6 @@ namespace PS_AGONY2D
 		}
 
 		// Multi-threading path.
-		{
-			TRACY_SCOPE_NC("Collect body pairs from collision data", PS_AGONY2D::Profiling::Color::Red);
-
-			const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = colliders.bodyIndex;
-
-			collidingBodyPairs.resize(collisionCount);
-			for (size_t i = 0; i < collisionCount; i++)
-			{
-				const BodyCollisionData& collData = collisionData[i];
-				collidingBodyPairs[i] = {
-					bodyIndexPtr[collData.colliderA],
-					bodyIndexPtr[collData.colliderB]
-				};
-			}
-		}
 		{
 			TRACY_SCOPE_NC("Plan execution", PS_AGONY2D::Profiling::Color::Blue);
 
@@ -507,6 +506,7 @@ namespace PS_AGONY2D
 		}
 	}
 
+	// TODO: Try solving with taking colliding indices from 'collidingBodyPairs', not constraint data. Remove indices from constraint data.
 	void BodyCollisionSolver::solveVelocityConstraints(SolvingPlan::Pass pass)
 	{
 		TRACY_SCOPE_NC("Solve collision velocity constraints", PS_AGONY2D::Profiling::Color::Violet);

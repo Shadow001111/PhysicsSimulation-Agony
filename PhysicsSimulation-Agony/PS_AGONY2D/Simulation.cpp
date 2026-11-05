@@ -208,8 +208,6 @@ namespace PS_AGONY2D
         objectManager.deletedColliders.clear();
 
         wakeHeldBodies();
-
-
         integrateAndApplyConstraints(deltaTime);
 
         // Computing important data.
@@ -223,54 +221,7 @@ namespace PS_AGONY2D
 
         if (objectManager.colliders.getCount() > 1)
         {
-            // Broad phase.
-            const std::span<const ObjectPair> broad = broadPhaseCollisionDetector.findCollisions(
-                ExecutionPolicy::ForceSingleThreaded
-            );
-            if (broad.empty()) return;
-
-            // Narrow phase.
-            std::span<BodyCollisionData> narrow = narrowPhaseCollisionDetector.findCollisions(broad);
-            if (narrow.empty())
-            {
-                narrowPhaseCollisionDetector.rebuildContactCache();
-                return;
-            }
-
-            // Wake colliding sleeping bodies before solving.
-            wakeCollidingBodies(narrow);
-            wakeSleepingContactData();
-            narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
-
-            // Build islands.
-            // TODO: Precompute pairs(colliders?) once and use them in solver.
-            //       Or precompute body pairs.
-            {
-                TRACY_SCOPE_N("Build islands");
-
-                const ObjectDenseIndex* ECSTASY_RESTRICT bodyOwnerPtr = objectManager.colliders.bodyIndex.data();
-                std::vector<ObjectPair> edges;
-                edges.resize(narrow.size());
-                for (size_t i = 0; i < narrow.size(); i++)
-                {
-                    edges[i].a = bodyOwnerPtr[narrow[i].colliderA];
-                    edges[i].b = bodyOwnerPtr[narrow[i].colliderB];
-                }
-                islandManager.build(objectManager.bodies, edges);
-            }
-
-            // Collision resolution.
-            bodyCollisionSolver.solveCollisions(
-                narrow,
-                simulationSettings.collisionVelocitySolvingIterations,
-                simulationSettings.collisionPositionSolvingIterations
-            );
-
-            // Updating persistent contact data.
-            narrowPhaseCollisionDetector.rebuildContactCache();
-
-            // Collision events.
-            dispatchCollisionEvents();
+            collisionStep();
         }
     }
 
@@ -306,6 +257,49 @@ namespace PS_AGONY2D
             Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
             Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
         }
+    }
+
+    void Simulation::collisionStep()
+    {
+        // Broad phase.
+        const std::span<const ObjectPair> broad = broadPhaseCollisionDetector.findCollisions(ExecutionPolicy::ForceSingleThreaded);
+        if (broad.empty()) return;
+
+        // Narrow phase.
+        std::span<BodyCollisionData> narrow = narrowPhaseCollisionDetector.findCollisions(broad);
+        if (narrow.empty())
+        {
+            narrowPhaseCollisionDetector.rebuildContactCache();
+            return;
+        }
+
+        // Wake colliding sleeping bodies before solving.
+        wakeCollidingBodies(narrow);
+        wakeSleepingContactData();
+        narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
+
+        // Get body pairs from collider pairs. Must be called before solving.
+        // TODO: Ensure duplicates won't hurt.
+        std::span<const ObjectPair> edges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
+
+        // Build islands.
+        {
+            TRACY_SCOPE_N("Build islands");
+            islandManager.build(objectManager.bodies, edges);
+        }
+
+        // Collision resolution.
+        bodyCollisionSolver.solveCollisions(
+            narrow,
+            simulationSettings.collisionVelocitySolvingIterations,
+            simulationSettings.collisionPositionSolvingIterations
+        );
+
+        // Updating persistent contact data.
+        narrowPhaseCollisionDetector.rebuildContactCache();
+
+        // Collision events.
+        dispatchCollisionEvents();
     }
 
     void Simulation::flushCommands()

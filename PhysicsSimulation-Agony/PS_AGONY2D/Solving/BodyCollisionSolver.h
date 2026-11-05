@@ -104,6 +104,10 @@ namespace PS_AGONY2D
 			const Material* materials
 		);
 
+		// Fills internal array with colliders' owners.
+		// Must be called before solving.
+		std::span<const ObjectPair> fillCollidingBodyPairs(std::span<const BodyCollisionData> collisionData);
+
 		void solveCollisions(
 			std::span<BodyCollisionData> collisionData,
 			uint32_t velocityIterations,

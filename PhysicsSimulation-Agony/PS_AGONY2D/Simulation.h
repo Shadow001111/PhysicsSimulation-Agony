@@ -206,6 +206,8 @@ namespace PS_AGONY2D
 
 		void integrateAndApplyConstraints(Real deltaTime);
 
+		void collisionStep();
+
 		void flushCommands();
 
 		void updateDebugData(Real deltaTime, uint32_t stepCount);
