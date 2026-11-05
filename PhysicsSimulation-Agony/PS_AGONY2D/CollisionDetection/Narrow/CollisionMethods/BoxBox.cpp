@@ -32,7 +32,6 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT rotationCosPtr = colliders.worldRotationCos;
         const Real* ECSTASY_RESTRICT rotationSinPtr = colliders.worldRotationSin;
         const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
-        const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT halfWidthPtr = boxes.halfWidth;
         const Real* ECSTASY_RESTRICT halfHeightPtr = boxes.halfHeight;

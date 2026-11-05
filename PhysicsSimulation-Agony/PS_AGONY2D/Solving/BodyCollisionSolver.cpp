@@ -5,6 +5,8 @@
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Core/Portablity.h"
 
+#include <cmath>
+
 namespace PS_AGONY2D
 {
 	void BodyCollisionSolver::setDataViewers(
@@ -601,7 +603,7 @@ namespace PS_AGONY2D
 					else
 					{
 						const Real maxDynamic = jn * dynamicFriction;
-						accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic);
+						accumulatedJt = glm::clamp(targetJt, -maxDynamic, maxDynamic);
 					}
 
 					const Real deltaJt = accumulatedJt - oldJt;
@@ -797,7 +799,7 @@ namespace PS_AGONY2D
 							else
 							{
 								const Real maxDynamic = jn * dynamicFriction;
-								accumulatedJt = std::clamp(targetJt, -maxDynamic, maxDynamic);
+								accumulatedJt = glm::clamp(targetJt, -maxDynamic, maxDynamic);
 							}
 
 							const Real deltaJt = accumulatedJt - oldJt;
@@ -871,8 +873,8 @@ namespace PS_AGONY2D
 									const Real s1 = (K00 * bPrime1 - K01 * bPrime0) * invDet;
 									if (std::fabs(s0) <= limit0 + EPS && std::fabs(s1) <= limit1 + EPS)
 									{
-										x0 = std::clamp(s0, -limit0, limit0);
-										x1 = std::clamp(s1, -limit1, limit1);
+										x0 = glm::clamp(s0, -limit0, limit0);
+										x1 = glm::clamp(s1, -limit1, limit1);
 										return true;
 									}
 								}
@@ -889,7 +891,7 @@ namespace PS_AGONY2D
 										if (std::fabs(t1) <= limit1 + EPS && s * w0 <= EPS)
 										{
 											x0 = t0;
-											x1 = std::clamp(t1, -limit1, limit1);
+											x1 = glm::clamp(t1, -limit1, limit1);
 											return true;
 										}
 									}
@@ -906,7 +908,7 @@ namespace PS_AGONY2D
 										const Real w1 = K01 * t0 + K11 * t1 - bPrime1;
 										if (std::fabs(t0) <= limit0 + EPS && s * w1 <= EPS)
 										{
-											x0 = std::clamp(t0, -limit0, limit0);
+											x0 = glm::clamp(t0, -limit0, limit0);
 											x1 = t1;
 											return true;
 										}

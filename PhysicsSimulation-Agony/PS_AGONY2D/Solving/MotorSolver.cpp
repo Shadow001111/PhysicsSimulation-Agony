@@ -10,7 +10,6 @@ namespace PS_AGONY2D
 		TRACY_SCOPE_NC("Compute motor constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
 		// Body data is read-only here; the warm start is applied separately in warmStart().
-		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = viewer.bodyIndex;

@@ -20,26 +20,6 @@
 #include <sstream>
 #include <format>
 
-
-static std::string formatSize(size_t value)
-{
-    static const char* suffixes[] = { "", "k", "M", "G", "T", "P", "E" };
-    constexpr size_t suffixCount = sizeof(suffixes) / sizeof(suffixes[0]);
-    double scaled = static_cast<double>(value);
-    size_t suffixIndex = 0;
-
-    while (scaled >= 1000.0 && suffixIndex < suffixCount - 1)
-    {
-        scaled /= 1000.0;
-        ++suffixIndex;
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision((scaled < 10.0 && suffixIndex > 0) ? 1 : 0);
-    oss << scaled << suffixes[suffixIndex];
-    return oss.str();
-}
-
 static std::string formatSizeBinary(size_t value)
 {
     static const char* suffixes[] = { "B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB" };
@@ -479,7 +459,7 @@ static int gameFunc()
 
     PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 1);
+    loadScene(simulation, 3);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;

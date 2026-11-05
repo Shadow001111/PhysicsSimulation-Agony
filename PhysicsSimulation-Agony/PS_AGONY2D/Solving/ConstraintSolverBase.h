@@ -248,7 +248,7 @@ namespace PS_AGONY2D
 			SolvingPlanner::threadLocal().planSingleStandardExecution(
 				this->solvingPlan,
 				this->bodyRefs, this->bodies->getCount(),
-				bodies->range(BodyGroup::Static).begin, true,
+				this->bodies->range(BodyGroup::Static).begin, true,
 				workerCount
 			);
 		}

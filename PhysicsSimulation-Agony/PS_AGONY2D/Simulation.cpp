@@ -246,6 +246,8 @@ namespace PS_AGONY2D
             // TODO: Precompute pairs(colliders?) once and use them in solver.
             //       Or precompute body pairs.
             {
+                TRACY_SCOPE_N("Build islands");
+
                 const ObjectDenseIndex* ECSTASY_RESTRICT bodyOwnerPtr = objectManager.colliders.bodyIndex.data();
                 std::vector<ObjectPair> edges;
                 edges.resize(narrow.size());

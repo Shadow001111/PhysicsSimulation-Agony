@@ -441,6 +441,7 @@ namespace PS_AGONY2D
         unmarkColliders(colliderIndices);
     }
 
+    // TODO: Check if it needs to remap sleeping data.
     void NarrowPhaseCollisionDetector::remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders)
     {
         if (deletedColliders.empty() || previousCollisionArray.empty())

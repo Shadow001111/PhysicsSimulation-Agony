@@ -20,7 +20,6 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT positionXPtr = colliders.worldPosX;
         const Real* ECSTASY_RESTRICT positionYPtr = colliders.worldPosY;
         const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndexPtr = colliders.shapeIndex;
-        const ObjectDenseIndex* ECSTASY_RESTRICT colliderOwnerPtr = colliders.bodyIndex;
 
         const Real* ECSTASY_RESTRICT radiusPtr = circles.radius;
 

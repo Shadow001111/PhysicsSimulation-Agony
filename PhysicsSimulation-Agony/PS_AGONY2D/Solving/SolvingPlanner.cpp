@@ -679,7 +679,7 @@ namespace PS_AGONY2D
         std::vector<int32_t> bodyOwner(bodyCount + 1, -1);
         std::vector<uint8_t> scheduled(collisions.size(), 0);
 
-        for (size_t wave = 0; wave < numWaves; ++wave)
+        for (size_t wave = 0; wave < numWaves; wave++)
         {
             std::fill(bodyOwner.begin(), bodyOwner.end(), -1);
 
@@ -701,7 +701,7 @@ namespace PS_AGONY2D
                         return true;
                     };
 
-                for (size_t i = 0; i < pass.size; ++i)
+                for (size_t i = 0; i < pass.size; i++)
                 {
                     const size_t idx = flatIndices[static_cast<size_t>(pass.start) + i];
                     if (idx >= collisions.size() || scheduled[idx] != 0)
