@@ -10,8 +10,8 @@ namespace PS_AGONY2D
 		TRACY_SCOPE_NC("Compute motor constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
 		// Body data is read-only here; the warm start is applied separately in warmStart().
+		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = viewer.bodyIndex;
 		const Real* ECSTASY_RESTRICT targetSpeedPtr = viewer.targetSpeed;
@@ -31,10 +31,10 @@ namespace PS_AGONY2D
 
 			data.bodyIndex = bodyIndex;
 			data.soaIndex = i;
+			data.invInertia = invInertia;
 
-			if (isStaticPtr[bodyIndex] || invInertia <= Real(0)) [[unlikely]]
+			if (invInertia == 0) [[unlikely]]
 			{
-				data.invInertia = Real(0);
 				accumulatedImpulsePtr[i] = Real(0);
 				continue;
 			}
@@ -44,7 +44,6 @@ namespace PS_AGONY2D
 			// Clamp to the (possibly changed) limit.
 			const Real impulse = glm::clamp(accumulatedImpulsePtr[i], -maxImpulse, maxImpulse);
 
-			data.invInertia = invInertia;
 			data.inertia = Real(1) / invInertia;
 			data.targetSpeed = targetSpeedPtr[i];
 			data.maxImpulse = maxImpulse;

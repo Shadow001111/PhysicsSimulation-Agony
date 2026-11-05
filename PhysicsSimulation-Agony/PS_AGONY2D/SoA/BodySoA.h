@@ -29,7 +29,6 @@
     F(invInertia, Real) \
     F(rotationCos, Real) \
     F(rotationSin, Real) \
-    F(isStatic, uint8_t) \
     F(sleepingTimer, float) \
     F(islandId, ObjectDenseIndex) \
     F(sleepIslandId, ObjectDenseIndex)
@@ -64,7 +63,6 @@ namespace PS_AGONY2D
         Real mass, invMass;
         Real inertia, invInertia;
         Real rotationCos, rotationSin;
-        bool isStatic;
         Handle handle;
         // TODO: If user will be able to change body data, rotation cache must be kept in sync with changes.
         // We can compute sine and cosine everytime, but better only recompute when dirty on demand.

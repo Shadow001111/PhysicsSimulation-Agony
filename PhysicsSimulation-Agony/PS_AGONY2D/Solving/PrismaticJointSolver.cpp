@@ -43,7 +43,6 @@ namespace PS_AGONY2D
 		const Real* ECSTASY_RESTRICT rotationPtr = bodies->rotation.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Vec2* ECSTASY_RESTRICT localAxisAPtr = viewer.localAxisA;
 		const Real* ECSTASY_RESTRICT referenceAnglePtr = viewer.referenceAngle;
@@ -84,7 +83,7 @@ namespace PS_AGONY2D
 			const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
 			// Both bodies are entirely fixed -> nothing to solve.
-			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
+			if (invMassA == 0 && invMassB == 0) [[unlikely]]
 			{
 				continue;
 			}
@@ -221,7 +220,6 @@ namespace PS_AGONY2D
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t jointCount = constraintDataSpan.size();
@@ -244,7 +242,7 @@ namespace PS_AGONY2D
 			Real angularVelocityA = angularVelocityPtr[bodyIndexA];
 			Real angularVelocityB = angularVelocityPtr[bodyIndexB];
 
-			// --- Perpendicular translation + relative-angle block. ---
+			// Perpendicular translation + relative-angle block.
 			if (constraintData.blockValid)
 			{
 				const Vec2 perp = constraintData.perp;
@@ -271,8 +269,8 @@ namespace PS_AGONY2D
 				angularVelocityB += LB * invInertiaB;
 			}
 
-			// --- Axis limit (hard, one-sided stop). Impulse is accumulated and clamped
-			//     across iterations so the stop can only push (never pull) in its direction. ---
+			// Axis limit (hard, one-sided stop). Impulse is accumulated and clamped
+			// across iterations so the stop can only push (never pull) in its direction.
 			if (constraintData.limitDirection != Real(0))
 			{
 				const Vec2 axis = constraintData.axis;
@@ -303,14 +301,14 @@ namespace PS_AGONY2D
 			}
 
 			// Apply impulse.
-			if (!isStaticPtr[bodyIndexA]) [[likely]]
+			if (invMassA > 0) [[likely]]
 			{
 				velocityXPtr[bodyIndexA] = linearVelocityA.x;
 				velocityYPtr[bodyIndexA] = linearVelocityA.y;
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (!isStaticPtr[bodyIndexB]) [[likely]]
+			if (invMassB > 0) [[likely]]
 			{
 				velocityXPtr[bodyIndexB] = linearVelocityB.x;
 				velocityYPtr[bodyIndexB] = linearVelocityB.y;

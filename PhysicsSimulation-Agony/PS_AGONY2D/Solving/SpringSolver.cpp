@@ -22,7 +22,6 @@ namespace PS_AGONY2D
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Real* ECSTASY_RESTRICT springRestLengthPtr = viewer.restLength;
 		const Real* ECSTASY_RESTRICT springStiffnessPtr = viewer.stiffness;
@@ -48,7 +47,7 @@ namespace PS_AGONY2D
 			const Real invMassB = invMassPtr[bodyIndexB];
 
 			// Both attachments are static anchors -> nothing to solve.
-			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
+			if (invMassA == 0 && invMassB == 0) [[unlikely]]
 			{
 				constraintData.invEffectiveMass = Real(0);
 				continue;
@@ -133,7 +132,6 @@ namespace PS_AGONY2D
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t springCount = constraintDataSpan.size();
@@ -177,7 +175,7 @@ namespace PS_AGONY2D
 			const Vec2 impulse = dir * impulseMag;
 
 			// Apply impulse.
-			if (!isStaticPtr[bodyIndexA]) [[likely]]
+			if (invMassA > 0) [[likely]]
 			{
 				linearVelocityA += impulse * invMassA;
 
@@ -189,7 +187,7 @@ namespace PS_AGONY2D
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (!isStaticPtr[bodyIndexB]) [[likely]]
+			if (invMassB > 0) [[likely]]
 			{
 				linearVelocityB -= impulse * invMassB;
 

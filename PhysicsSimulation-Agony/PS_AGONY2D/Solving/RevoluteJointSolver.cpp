@@ -22,7 +22,6 @@ namespace PS_AGONY2D
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		const Real* ECSTASY_RESTRICT jointStiffnessPtr = viewer.stiffness;
 		const Real* ECSTASY_RESTRICT jointDampingPtr = viewer.damping;
@@ -49,7 +48,7 @@ namespace PS_AGONY2D
 			const Real invInertiaB = invInertiaPtr[bodyIndexB];
 
 			// Both attachments are static anchors -> nothing to solve.
-			if (isStaticPtr[bodyIndexA] && isStaticPtr[bodyIndexB]) [[unlikely]]
+			if (invMassA == 0 && invMassB == 0) [[unlikely]]
 			{
 				constraintData.invK11 = constraintData.invK12 = constraintData.invK22 = Real(0);
 				continue;
@@ -126,7 +125,6 @@ namespace PS_AGONY2D
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
-		const uint8_t* ECSTASY_RESTRICT isStaticPtr = bodies->isStatic.data();
 
 		// Main loop.
 		const size_t jointCount = constraintDataSpan.size();
@@ -172,7 +170,7 @@ namespace PS_AGONY2D
 			};
 
 			// Apply impulse.
-			if (!isStaticPtr[bodyIndexA]) [[likely]]
+			if (invMassA > 0) [[likely]]
 			{
 				linearVelocityA += impulse * invMassA;
 
@@ -184,7 +182,7 @@ namespace PS_AGONY2D
 
 				angularVelocityPtr[bodyIndexA] = angularVelocityA;
 			}
-			if (!isStaticPtr[bodyIndexB]) [[likely]]
+			if (invMassB > 0) [[likely]]
 			{
 				linearVelocityB -= impulse * invMassB;
 

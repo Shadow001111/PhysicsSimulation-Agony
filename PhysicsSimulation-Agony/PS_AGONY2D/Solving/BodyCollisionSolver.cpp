@@ -81,7 +81,7 @@ namespace PS_AGONY2D
 			//	solvingPlan,
 			//	collidingBodyPairs,
 			//	bodies->getCount(),
-			//	bodies->isStatic.data(),
+			//	bodies->range(BodyGroup::Static).begin,
 			//	false,
 			//	workerCount
 			//);
@@ -90,7 +90,7 @@ namespace PS_AGONY2D
 			SolvingPlanner::threadLocal().planCacheLineAwareExecution(
 				solvingPlan,
 				collidingBodyPairs, bodies->getCount(),
-				bodies->isStatic.data(), false,
+				bodies->range(BodyGroup::Static).begin, false,
 				workerCount,
 				sizeof(Real)
 			);
@@ -99,7 +99,7 @@ namespace PS_AGONY2D
 			//SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
 			//	solvingPlan,
 			//	collidingBodyPairs, bodies->getCount(),
-			//	bodies->isStatic.data(), false,
+			//	bodies->range(BodyGroup::Static).begin, false,
 			//	workerCount,
 			//	sizeof(Real)
 			//);

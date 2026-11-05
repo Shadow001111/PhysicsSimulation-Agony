@@ -623,7 +623,7 @@ namespace PS_AGONY2D
 
             case T::SetBodyInertia:
             {
-                if (bodies.isStatic[bodyIndex]) break;
+                if (bodies.invMass[bodyIndex] == 0) break;
                 const Real inertia = std::fmax(Real(0), c.a);
                 bodies.inertia[bodyIndex] = inertia;
                 bodies.invInertia[bodyIndex] = inertia > Real(0) ? Real(1) / inertia : Real(0);
@@ -712,6 +712,7 @@ namespace PS_AGONY2D
         newMass = std::fmax(Real(0), newMass);
         const Real oldMass = bodies.mass[b];
 
+        BodyGroup to;
         if (newMass > Real(0))
         {
             Real inertia = bodies.inertia[b];
@@ -721,7 +722,8 @@ namespace PS_AGONY2D
             bodies.invMass[b] = Real(1) / newMass;
             bodies.inertia[b] = inertia;
             bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
-            bodies.isStatic[b] = 0;
+
+            to = BodyGroup::Dynamic;
         }
         else
         {
@@ -732,11 +734,11 @@ namespace PS_AGONY2D
             bodies.velocityX[b] = Real(0);
             bodies.velocityY[b] = Real(0);
             bodies.angularVelocity[b] = Real(0);
-            bodies.isStatic[b] = 1;
+
+            to = BodyGroup::Static;
         }
 
         const BodyGroup from = bodies.groupOf(b);
-        const BodyGroup to = bodies.isStatic[b] ? BodyGroup::Static : BodyGroup::Dynamic;
         if (from != to)
         {
             b = moveBodyToGroup(b, to);
@@ -898,9 +900,6 @@ namespace PS_AGONY2D
                 --g;
             }
         }
-
-        if (target != BodyGroup::Unused)
-            bodies.isStatic[index] = (target == BodyGroup::Static) ? 1 : 0;
 
         return index;
     }

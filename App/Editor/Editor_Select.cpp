@@ -77,7 +77,7 @@ namespace PS_AGONY_EDITOR
 		if (bi == Handle::NULL_DENSE_INDEX) return false;
 
 		const BodySoAViewer bv = api.getBodies();
-		if (bv.isStatic[bi] != 0) return false;
+		if (bv.invMass[bi] == 0) return false;
 
 		const Real wx = anchorWorld.x - bv.worldCenterX[bi];
 		const Real wy = anchorWorld.y - bv.worldCenterY[bi];

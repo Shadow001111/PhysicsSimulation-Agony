@@ -26,7 +26,8 @@ namespace PS_AGONY_EDITOR
 			float rot = static_cast<float>(bd->rotation);
 			if (ImGui::DragFloat("Rotation", &rot, 0.01f)) api.setBodyRotation(h, rot);
 
-			ImGui::BeginDisabled(bd->isStatic);
+			const bool isStatic = bd->invMass == 0;
+			ImGui::BeginDisabled(isStatic);
 			float vel[2] = { static_cast<float>(bd->velocity.x), static_cast<float>(bd->velocity.y) };
 			if (ImGui::DragFloat2("Velocity", vel, 0.05f)) api.setBodyVelocity(h, Vec2(vel[0], vel[1]));
 
@@ -34,7 +35,7 @@ namespace PS_AGONY_EDITOR
 			if (ImGui::DragFloat("Angular velocity", &av, 0.05f)) api.setBodyAngularVelocity(h, av);
 			ImGui::EndDisabled();
 
-			bool st = bd->isStatic;
+			bool st = isStatic;
 			if (ImGui::Checkbox("Static", &st))
 			{
 				if (st)

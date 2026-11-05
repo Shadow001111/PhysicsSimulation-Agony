@@ -32,7 +32,6 @@ namespace PS_AGONY2D
 		this->invInertia.push_back(invInertia);
 		this->rotationCos.push_back(std::cos(rot)); // TODO: Use fast cos/sin.
 		this->rotationSin.push_back(std::sin(rot));
-		this->isStatic.push_back(invMass == 0);
 		this->sleepingTimer.push_back(0.0f);
 		this->islandId.push_back(-1);
 		this->sleepIslandId.push_back(-1);
@@ -158,7 +157,6 @@ namespace PS_AGONY2D
 			mass[index], invMass[index],
 			inertia[index], invInertia[index],
 			rotationCos[index], rotationSin[index],
-			isStatic[index] != 0,
 			handles.handleAt(index)
 		};
 	}
