@@ -42,7 +42,7 @@ namespace PS_AGONY2D
 			ObjectDenseIndex bodyA, bodyB;
 			Vec2 normal;
 			uint32_t contactCount;
-			std::array<PersistentContactData, 2> impulses; // Working copy; scattered back to the detector's data at the end.
+			std::array<PersistentImpulses, 2> impulses; // Working copy; scattered back to the detector's data at the end.
 		};
 
 		struct PositionHotData

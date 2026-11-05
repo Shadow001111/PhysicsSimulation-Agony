@@ -9,6 +9,9 @@
 
 #include <tuple>
 #include <algorithm>
+#include <xmmintrin.h>
+#include <robin_hood.h>
+#include <iostream>
 
 /*
  * NARROW PHASE: DESIGN NOTES
@@ -103,14 +106,19 @@ namespace PS_AGONY2D
     {
         TRACY_SCOPE_N("Narrow phase");
 
-        allCollisionData.clear();
+        currentCollisionArray.clear();
 
         if (colliderPairs.empty())
         {
-            return allCollisionData;
+            previousCollisionArray.clear();
+            contactCacheDirty = true;
+            return {};
         }
 
-        allCollisionData.reserve(colliderPairs.size());
+        // Sleep/wake changed 'previousCollisionArray' after the cache was built.
+        if (contactCacheDirty) rebuildContactCache();
+
+        currentCollisionArray.reserve(colliderPairs.size());
 
         // Determine to use threading or not.
         bool useThreading = false;
@@ -137,7 +145,10 @@ namespace PS_AGONY2D
             findCollisionsSingleThreaded(colliderPairs);
         }
 
-        return allCollisionData;
+        std::swap(currentCollisionArray, previousCollisionArray);
+        currentCollisionArray.clear();
+
+        return previousCollisionArray;
     }
 
     void NarrowPhaseCollisionDetector::findCollisionsInCircle(
@@ -259,45 +270,180 @@ namespace PS_AGONY2D
         }
     }
 
-    void NarrowPhaseCollisionDetector::updatePersistentContactData()
-    {
-        TRACY_SCOPE_N("Update persistent contact data");
-
-        // The solved results (with accumulated impulses) become next frame's warm-start source.
-        // NOTE: allCollisionData is empty after this call.
-        std::swap(allCollisionData, previousCollisionData);
-        allCollisionData.clear();
-        rebuildContactCache();
-    }
-
     void NarrowPhaseCollisionDetector::rebuildContactCache()
     {
+        TRACY_SCOPE_N("Rebuild contact cache");
+
         using Real4Simd = Ecstasy::Core::Simd<Real, sizeof(Real) * 32>;
 
-        const size_t n = previousCollisionData.size();
-        contactCache.reset(n);
+        contactCacheDirty = false;
 
-        const BodyCollisionData* ECSTASY_RESTRICT prev = previousCollisionData.data();
-        for (size_t i = 0; i < n; i++)
+        const size_t prevCount = previousCollisionArray.size();
+        contactCache.reset(prevCount);
+
+        const BodyCollisionData* ECSTASY_RESTRICT prevPtr = previousCollisionArray.data();
+        for (size_t i = 0; i < prevCount; i++)
         {
-            const BodyCollisionData& d = prev[i];
+            const BodyCollisionData& prevData = prevPtr[i];
             // Dead (deleted collider) or no contacts: nothing to warm-start.
-            if (d.colliderA == INVALID_COLLIDER_INDEX || d.contactCount == 0) continue;
+            if (prevData.colliderA == INVALID_COLLIDER_INDEX || prevData.contactCount == 0) continue;
 
             // Zero accumulators are identical to a lookup miss: don't store them.
-            const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(d.persistentContactData.data()));
+            const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(prevData.persistentContactData.data()));
             uint32_t impulseMask = (impulsesV != Real4Simd::fillLanesWithZero()).movemask();
-            impulseMask &= (1u << (2u * d.contactCount)) - 1;
+            impulseMask &= (1u << (2u * prevData.contactCount)) - 1;
             const bool any = impulseMask != 0;
             if (!any) continue;
 
-            contactCache.insert(ContactCache::makeKey(d.colliderA, d.colliderB), uint32_t(i));
+            contactCache.insert(ContactCache::makeKey(prevData.colliderA, prevData.colliderB), uint32_t(i));
         }
+    }
+
+    void NarrowPhaseCollisionDetector::markColliders(std::span<const ObjectDenseIndex> colliderIndices)
+    {
+        size_t maxIndex = 0;
+        for (ObjectDenseIndex i : colliderIndices) maxIndex = std::max(maxIndex, size_t(i));
+        if (colliderFlags.size() < maxIndex + 1) colliderFlags.resize(maxIndex + 1, 0);
+        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] |= FLAG_IN_SET;
+    }
+
+    void NarrowPhaseCollisionDetector::unmarkColliders(std::span<const ObjectDenseIndex> colliderIndices)
+    {
+        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] &= uint8_t(~FLAG_IN_SET);
+    }
+
+    void NarrowPhaseCollisionDetector::sleepContactData(std::span<const ObjectDenseIndex> colliderIndices)
+    {
+        TRACY_SCOPE_N("Sleep contact data");
+
+        if (colliderIndices.empty()) return;
+
+        // Flags first: they must be set even when there is nothing to move.
+        markColliders(colliderIndices);
+        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] |= FLAG_ASLEEP;
+
+        if (previousCollisionArray.empty())
+        {
+            unmarkColliders(colliderIndices);
+            return;
+        }
+
+        // Single stable compaction pass: preserves order.
+        BodyCollisionData* ECSTASY_RESTRICT data = previousCollisionArray.data();
+        const size_t count = previousCollisionArray.size();
+        size_t write = 0;
+        for (size_t r = 0; r < count; r++)
+        {
+            const BodyCollisionData& d = data[r];
+            if (isMarked(d.colliderA) || isMarked(d.colliderB))
+            {
+                // Dead (deleted collider) or empty manifolds are simply dropped.
+                if (d.colliderA != INVALID_COLLIDER_INDEX && d.contactCount > 0)
+                    sleepingCollisionArray.push_back(d);
+                continue; // Removed from the active array.
+            }
+            if (write != r) data[write] = d;
+            write++;
+        }
+
+        if (write != count)
+        {
+            previousCollisionArray.resize(write);
+            contactCacheDirty = true; // Indices shifted.
+        }
+
+        unmarkColliders(colliderIndices);
+    }
+
+    void NarrowPhaseCollisionDetector::wakeContactData(std::span<const ObjectDenseIndex> colliderIndices)
+    {
+        TRACY_SCOPE_N("Wake contact data");
+
+        if (colliderIndices.empty()) return;
+
+        // Woken colliders are no longer asleep, so isAsleep() below only reports partners that stay asleep.
+        markColliders(colliderIndices);
+        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] &= uint8_t(~FLAG_ASLEEP);
+
+        if (sleepingCollisionArray.empty())
+        {
+            unmarkColliders(colliderIndices);
+            return;
+        }
+
+        bool cacheBuilt = false;
+
+        // Single stable pass: restored entries are consumed (duplicates included), others kept.
+        const size_t count = sleepingCollisionArray.size();
+        size_t write = 0;
+        for (size_t r = 0; r < count; r++)
+        {
+            const BodyCollisionData& s = sleepingCollisionArray[r];
+
+            const bool touched = isMarked(s.colliderA) || isMarked(s.colliderB);
+            if (!touched)
+            {
+                if (write != r) sleepingCollisionArray[write] = s;
+                write++;
+                continue;
+            }
+
+            if (!cacheBuilt)
+            {
+                // Capacity covers the entries appended below.
+                const size_t n = previousCollisionArray.size();
+                wakeCache.reset(n + count);
+                const BodyCollisionData* ECSTASY_RESTRICT cur = previousCollisionArray.data();
+                for (size_t i = 0; i < n; i++)
+                {
+                    if (cur[i].colliderA == INVALID_COLLIDER_INDEX || cur[i].contactCount == 0) continue;
+                    wakeCache.insert(ContactCache::makeKey(cur[i].colliderA, cur[i].colliderB), uint32_t(i));
+                }
+                cacheBuilt = true;
+            }
+
+            const auto key = ContactCache::makeKey(s.colliderA, s.colliderB);
+            const uint32_t idx = wakeCache.find(key);
+
+            if (idx != ContactCache::NONE)
+            {
+                // Pair was generated this frame: it keeps its fresh geometry, take the impulses.
+                BodyCollisionData& c = previousCollisionArray[idx];
+                for (uint32_t i = 0; i < c.contactCount; i++)
+                {
+                    for (uint32_t j = 0; j < s.contactCount; j++)
+                    {
+                        if (c.contactIds[i] == s.contactIds[j])
+                        {
+                            c.persistentContactData[i] = s.persistentContactData[j];
+                            break;
+                        }
+                    }
+                }
+                continue; // Consumed.
+            }
+
+            if (isAsleep(s.colliderA) || isAsleep(s.colliderB))
+            {
+                // Partner still asleep (no islands): keep it stored.
+                if (write != r) sleepingCollisionArray[write] = s;
+                write++;
+                continue;
+            }
+
+            // Not generated this frame (partner static, or broad phase skipped the pair): restore the whole manifold.
+            wakeCache.insert(key, uint32_t(previousCollisionArray.size()));
+            previousCollisionArray.push_back(s);
+            contactCacheDirty = true;
+        }
+        sleepingCollisionArray.resize(write);
+
+        unmarkColliders(colliderIndices);
     }
 
     void NarrowPhaseCollisionDetector::remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders)
     {
-        if (deletedColliders.empty() || previousCollisionData.empty())
+        if (deletedColliders.empty() || previousCollisionArray.empty())
         {
             return;
         }
@@ -349,7 +495,7 @@ namespace PS_AGONY2D
         }
 
         // Rewrite the keys stored in the previous results, then rebuild the table.
-        for (BodyCollisionData& d : previousCollisionData)
+        for (BodyCollisionData& d : previousCollisionArray)
         {
             ObjectDenseIndex a = d.colliderA;
             ObjectDenseIndex b = d.colliderB;
@@ -383,26 +529,32 @@ namespace PS_AGONY2D
 
     void NarrowPhaseCollisionDetector::clearData()
     {
-        allCollisionData.clear();
+        currentCollisionArray.clear();
     }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
     {
-        size_t total = sizeof(NarrowPhaseCollisionDetector);
-        total += PS_AGONY2D::getVectorMemoryUsage(allCollisionData);
+        size_t total = 0;
 
-        total += PS_AGONY2D::getVectorMemoryUsage(chunks);
+        // Collision arrays.
+        total += getVectorMemoryUsage(currentCollisionArray);
+        total += getVectorMemoryUsage(previousCollisionArray);
+        total += getVectorMemoryUsage(sleepingCollisionArray);
 
+        // Chunks.
+        total += getVectorMemoryUsage(chunks);
         for (const auto& chunkData : chunks)
         {
             for (const auto& vec : chunkData.pairs.getDirectAccess())
             {
-                total += PS_AGONY2D::getVectorMemoryUsage(vec);
+                total += getVectorMemoryUsage(vec);
             }
-            total += PS_AGONY2D::getVectorMemoryUsage(chunkData.results);
+            total += getVectorMemoryUsage(chunkData.results);
         }
-        total += PS_AGONY2D::getVectorMemoryUsage(previousCollisionData);
+
+        // The rest.
         total += contactCache.memoryUsage();
+        total += getVectorMemoryUsage(colliderFlags) + wakeCache.memoryUsage();
         return total;
     }
 
@@ -422,7 +574,7 @@ namespace PS_AGONY2D
             cd.start = start;
             cd.end = std::min(start + step, total);
             cd.clear();
-            processPairs(colliderPairs, cd, allCollisionData);
+            processPairs(colliderPairs, cd, currentCollisionArray);
         }
     }
 
@@ -479,7 +631,7 @@ namespace PS_AGONY2D
                     if (blocking) cd.finished.wait(false, std::memory_order_acquire);
                     else if (!cd.finished.load(std::memory_order_acquire)) return;
 
-                    allCollisionData.insert(allCollisionData.end(), cd.results.begin(), cd.results.end());
+                    currentCollisionArray.insert(currentCollisionArray.end(), cd.results.begin(), cd.results.end());
                     nextToMerge++;
                 }
             };
@@ -599,21 +751,19 @@ namespace PS_AGONY2D
                 }
             }
         }
-
-        // Move persistent contact data from previous frame (read-only lookups, thread-safe).
         if (!contactCache.empty())
         {
             movePreviousContactData(firstResult, out);
         }
     }
 
-    void NarrowPhaseCollisionDetector::movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> out)
+    void NarrowPhaseCollisionDetector::movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> chunkCollisionData)
     {
         TRACY_SCOPE_N("Move previous contact data");
 
-        const BodyCollisionData* ECSTASY_RESTRICT prev = previousCollisionData.data();
-        BodyCollisionData* ECSTASY_RESTRICT resultPtr = out.data();
-        const size_t end = out.size();
+        const BodyCollisionData* ECSTASY_RESTRICT prevDataPtr = previousCollisionArray.data();
+        BodyCollisionData* ECSTASY_RESTRICT resultPtr = chunkCollisionData.data();
+        const size_t end = chunkCollisionData.size();
 
         constexpr size_t LOOKAHEAD = 8;
         for (size_t r = firstResult; r < std::min(firstResult + LOOKAHEAD, end); r++)
@@ -624,21 +774,21 @@ namespace PS_AGONY2D
             if (r + LOOKAHEAD < end)
                 contactCache.prefetch(ContactCache::makeKey(resultPtr[r + LOOKAHEAD].colliderA, resultPtr[r + LOOKAHEAD].colliderB));
 
-            BodyCollisionData& cur = resultPtr[r];
-            const uint32_t idx = contactCache.find(ContactCache::makeKey(cur.colliderA, cur.colliderB));
+            BodyCollisionData& currData = resultPtr[r];
+            const uint32_t idx = contactCache.find(ContactCache::makeKey(currData.colliderA, currData.colliderB));
             if (idx == ContactCache::NONE) continue;
 
-            const BodyCollisionData& p = prev[idx];
-            const uint32_t pc = p.contactCount;
+            const BodyCollisionData& prevData = prevDataPtr[idx];
+            const uint32_t contactCount = prevData.contactCount;
 
             // Match current contacts with previous frame contacts using contactIds.
-            for (uint32_t i = 0; i < cur.contactCount; i++)
+            for (uint32_t i = 0; i < currData.contactCount; i++)
             {
-                const uint32_t id = cur.contactIds[i];
-                if (pc > 0 && id == p.contactIds[0])
-                    cur.persistentContactData[i] = p.persistentContactData[0];
-                else if (pc > 1 && id == p.contactIds[1])
-                    cur.persistentContactData[i] = p.persistentContactData[1];
+                const uint32_t id = currData.contactIds[i];
+                if (contactCount > 0 && id == prevData.contactIds[0])
+                    currData.persistentContactData[i] = prevData.persistentContactData[0];
+                else if (contactCount > 1 && id == prevData.contactIds[1])
+                    currData.persistentContactData[i] = prevData.persistentContactData[1];
             }
         }
     }

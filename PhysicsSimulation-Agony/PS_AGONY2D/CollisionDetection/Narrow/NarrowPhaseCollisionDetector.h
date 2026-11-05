@@ -9,12 +9,10 @@
 #include <atomic>
 #include <array>
 #include <span>
-#include <xmmintrin.h>
-#include <robin_hood.h>
 
 namespace PS_AGONY2D
 {
-	struct PersistentContactData
+	struct PersistentImpulses
 	{
 		Real normalImpulseAccumulator = 0;
 		Real tangentImpulseAccumulator = 0;
@@ -30,7 +28,7 @@ namespace PS_AGONY2D
 		uint32_t contactCount;
 		Vec2 contactPoints[2];
 		uint32_t contactIds[2];
-		std::array<PersistentContactData, 2> persistentContactData{};
+		std::array<PersistentImpulses, 2> persistentContactData{};
 
 		BodyCollisionData() = default;
 
@@ -108,12 +106,23 @@ namespace PS_AGONY2D
 
 		// Fields.
 
-		CacheLineAlignedVector<BodyCollisionData> allCollisionData;
+		CacheLineAlignedVector<BodyCollisionData> currentCollisionArray;
 		CacheLineAlignedVector<ChunkData> chunks;
 
-		// Previous frame's results (owner of warm-start data) + lookup table into them.
-		CacheLineAlignedVector<BodyCollisionData> previousCollisionData;
+		CacheLineAlignedVector<BodyCollisionData> previousCollisionArray;
 		ContactCache contactCache;
+
+		// Full manifolds touching sleeping colliders. Kept intact (geometry, ids, impulses), so a woken body
+		// can be solved immediately instead of waiting for the narrow phase to regenerate the contact.
+		CacheLineAlignedVector<BodyCollisionData> sleepingCollisionArray;
+		ContactCache wakeCache; // Lazily built over 'previousCollisionArray' in wakeContactData.
+
+		static constexpr uint8_t FLAG_IN_SET = 1; // Scratch: collider is in the current sleep/wake set.
+		static constexpr uint8_t FLAG_ASLEEP = 2; // Persistent: collider is asleep (set by sleep, cleared by wake).
+		std::vector<uint8_t> colliderFlags;
+
+		// 'previousCollisionArray' was compacted/appended since 'contactCache' was built. Rebuilt lazily in findCollisions.
+		bool contactCacheDirty = false;
 
 		// SoA data viewers.
 		BodySoAViewer bodies;
@@ -158,27 +167,43 @@ namespace PS_AGONY2D
 			std::vector<std::pair<ObjectDenseIndex, Real>>& outColliding
 		) const;
 
-		void updatePersistentContactData();
+		void rebuildContactCache();
+
+		// Moves every manifold touching the given colliders from 'previousCollisionArray' to the sleeping array.
+		void sleepContactData(std::span<const ObjectDenseIndex> colliderIndices);
+
+		// Restores sleeping manifolds touching the given colliders (call after the narrow phase, before solving).
+		// Pair already generated this frame: impulses are copied into it. Otherwise the stored manifold is appended
+		// to 'previousCollisionArray' (may reallocate: re-fetch the span via getBodyCollisionData()).
+		// Manifolds whose partner is still asleep stay stored (no islands).
+		void wakeContactData(std::span<const ObjectDenseIndex> colliderIndices);
 
 		// 'deletedColliders' is the collider swap-remove log (same shape as ObjectDeletion,
 		// but every index in it is a collider index, not a body index).
+		// TODO: Must fix/delete data in 'sleepPersistentContactData', to not leave data lying forever.
 		void remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders);
 
 		void clearData();
 
-		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionData; }
-		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return previousCollisionData; }
+		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionArray; }
+		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return previousCollisionArray; }
 
 		size_t getMemoryUsage() const;
 	private:
-		void rebuildContactCache();
+		void markColliders(std::span<const ObjectDenseIndex> colliderIndices);
+		void unmarkColliders(std::span<const ObjectDenseIndex> colliderIndices);
+		bool isMarked(ObjectDenseIndex i) const noexcept { return size_t(i) < colliderFlags.size() && (colliderFlags[size_t(i)] & FLAG_IN_SET); }
+		bool isAsleep(ObjectDenseIndex i) const noexcept { return size_t(i) < colliderFlags.size() && (colliderFlags[size_t(i)] & FLAG_ASLEEP); }
+
 		void findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs);
 		void findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount);
 
 		// Appends results to 'out' and applies warm-starting to the appended range only.
 		void processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out);
 
-		void movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> out);
+		// Moves persistent contact data from previous frame (read-only lookups, thread-safe).
+		// (Copies persistent impulses from previous to current frame, only matching contacts).
+		void movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> chunkCollisionData);
 
 		void collisionCircleCircle	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox		(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);

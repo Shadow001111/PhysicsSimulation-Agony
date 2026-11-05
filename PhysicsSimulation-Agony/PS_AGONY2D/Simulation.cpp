@@ -254,22 +254,17 @@ namespace PS_AGONY2D
             if (broad.empty()) return;
 
             // Narrow phase.
-            const std::span<BodyCollisionData> narrow = narrowPhaseCollisionDetector.findCollisions(
-                broad
-            );
+            std::span<BodyCollisionData> narrow = narrowPhaseCollisionDetector.findCollisions(broad);
             if (narrow.empty())
             {
-                // 'findCollisions' already emptied allCollisionData.
-                narrowPhaseCollisionDetector.updatePersistentContactData();
+                narrowPhaseCollisionDetector.rebuildContactCache();
                 return;
             }
 
             // Wake colliding sleeping bodies before solving.
-            // This will corrupt body indices, but not collider indices.
-            // Solver gets body indices from collider indices.
-            // Needed return saved persistent impulses. TODO: Implement that.
             wakeCollidingBodies(narrow);
             wakeSleepingContactData();
+            narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
 
             // Collision resolution.
             bodyCollisionSolver.solveCollisions(
@@ -279,7 +274,7 @@ namespace PS_AGONY2D
             );
 
             // Updating persistent contact data.
-            narrowPhaseCollisionDetector.updatePersistentContactData();
+            narrowPhaseCollisionDetector.rebuildContactCache();
 
             // Collision events.
             dispatchCollisionEvents();
@@ -392,51 +387,84 @@ namespace PS_AGONY2D
         const BodySoA& bodies = objectManager.bodies;
         const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
         if (sleeping.empty()) return;
-        const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
 
         const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = objectManager.colliders.bodyIndex.data();
 
-        wakeCandidates.clear();
+        sleepRelatedCandidates.clear();
         for (const BodyCollisionData& data : narrow)
         {
             const ObjectDenseIndex bodyA = bodyIndexPtr[data.colliderA];
             const ObjectDenseIndex bodyB = bodyIndexPtr[data.colliderB];
 
             const bool aSleep = bodies.groupOf(bodyA) == BodyGroup::Sleeping;
-            wakeCandidates.push_back(aSleep ? bodyA : bodyB);
+            sleepRelatedCandidates.push_back(aSleep ? bodyA : bodyB);
         }
-        if (wakeCandidates.empty()) return;
+        if (sleepRelatedCandidates.empty()) return;
 
-        std::sort(wakeCandidates.begin(), wakeCandidates.end());
-        wakeCandidates.erase(std::unique(wakeCandidates.begin(), wakeCandidates.end()), wakeCandidates.end());
+        std::sort(sleepRelatedCandidates.begin(), sleepRelatedCandidates.end());
+        sleepRelatedCandidates.erase(std::unique(sleepRelatedCandidates.begin(), sleepRelatedCandidates.end()), sleepRelatedCandidates.end());
 
         // Descending: a move only swaps with slots at or above the body's index.
-        for (size_t k = wakeCandidates.size(); k-- > 0;)
-            objectManager.wakeBody(wakeCandidates[k]);
+        for (size_t k = sleepRelatedCandidates.size(); k-- > 0;)
+            objectManager.wakeBody(sleepRelatedCandidates[k]);
     }
 
     void Simulation::wakeSleepingContactData()
     {
-        TRACY_SCOPE_N("Wake sleeping contact data");
-
         const std::span<const Handle> woken = objectManager.wokenBodies;
         if (woken.empty()) return;
 
-        // TODO: Restore saved contact data of 'woken' bodies (warm starting).
+        {
+            TRACY_SCOPE_N("Get woken candidates colliders");
 
-        objectManager.wokenBodies.clear();
+            // Get colliders from body handles.
+            sleepRelatedCandidates.clear();
+            for (const Handle& handle : woken)
+            {
+                // Get body index from handle.
+                const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOf(handle);
+                if (bodyIndex == Handle::NULL_DENSE_INDEX) [[unlikely]] continue;
+
+                // Get colliders from body.
+                std::span<const ObjectDenseIndex> colliders = objectManager.bodies.colliderIndices[bodyIndex];
+
+                // Append colliders to list.
+                sleepRelatedCandidates.insert(sleepRelatedCandidates.end(), colliders.begin(), colliders.end());
+            }
+            objectManager.wokenBodies.clear();
+        }
+
+        // Put contact data to sleep.
+        narrowPhaseCollisionDetector.wakeContactData(sleepRelatedCandidates);
     }
 
     void Simulation::sleepContactData()
     {
-        TRACY_SCOPE_N("Sleep contact data");
-
         const std::span<const Handle> slept = objectManager.sleptBodies;
         if (slept.empty()) return;
 
-        // TODO: Save contact data of 'slept' bodies for later restoring.
+        {
+            TRACY_SCOPE_N("Get sleep candidates colliders");
 
-        objectManager.sleptBodies.clear();
+            // Get colliders from body handles.
+            sleepRelatedCandidates.clear();
+            for (const Handle& handle : slept)
+            {
+                // Get body index from handle.
+                const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOf(handle);
+                if (bodyIndex == Handle::NULL_DENSE_INDEX) [[unlikely]] continue;
+
+                // Get colliders from body.
+                std::span<const ObjectDenseIndex> colliders = objectManager.bodies.colliderIndices[bodyIndex];
+
+                // Append colliders to list.
+                sleepRelatedCandidates.insert(sleepRelatedCandidates.end(), colliders.begin(), colliders.end());
+            }
+            objectManager.sleptBodies.clear();
+        }
+
+        // Put contact data to sleep.
+        narrowPhaseCollisionDetector.sleepContactData(sleepRelatedCandidates);
     }
 
     void Simulation::updateSleeping(float deltaTimeF)
@@ -456,34 +484,34 @@ namespace PS_AGONY2D
         const Real* ECSTASY_RESTRICT angVelPtr = bodies.angularVelocity.data();
 
         // Collect sleeping candidates.
-        sleepCandidates.clear();
+        sleepRelatedCandidates.clear();
         for (ObjectDenseIndex bodyIndex = range.begin; bodyIndex < range.end; bodyIndex++)
         {
             const Real linearExcess = velXPtr[bodyIndex] * velXPtr[bodyIndex] + velYPtr[bodyIndex] * velYPtr[bodyIndex] - linearSq;
             const Real angularExcess = std::fabs(angVelPtr[bodyIndex]) - angular;
             if (std::fmax(linearExcess, angularExcess) <= Real(0))
             {
-                sleepCandidates.push_back(bodyIndex);
+                sleepRelatedCandidates.push_back(bodyIndex);
             }
             else
             {
                 sleepingTimerPtr[bodyIndex] = 0;
             }
         }
-        if (sleepCandidates.empty()) return;
+        if (sleepRelatedCandidates.empty()) return;
 
         // Update sleeping timers.
-        for (ObjectDenseIndex bodyIndex : sleepCandidates)
+        for (ObjectDenseIndex bodyIndex : sleepRelatedCandidates)
         {
             sleepingTimerPtr[bodyIndex] += deltaTimeF;
         }
 
         // Remove bodies which time haven't reached threshold.
-        std::erase_if(sleepCandidates, [&](ObjectDenseIndex bodyIndex)
+        std::erase_if(sleepRelatedCandidates, [&](ObjectDenseIndex bodyIndex)
             {
                 return sleepingTimerPtr[bodyIndex] < simulationSettings.sleepTimeThreshold;
             });
-        if (sleepCandidates.empty()) return;
+        if (sleepRelatedCandidates.empty()) return;
 
         // Held bodies stay awake.
         const auto isHeld = [&](ObjectDenseIndex index)
@@ -496,9 +524,9 @@ namespace PS_AGONY2D
             };
 
         // Descending: a move only swaps with slots at or above the body's index, so lower candidates stay valid.
-        for (size_t k = sleepCandidates.size(); k-- > 0;)
+        for (size_t k = sleepRelatedCandidates.size(); k-- > 0;)
         {
-            const ObjectDenseIndex index = sleepCandidates[k];
+            const ObjectDenseIndex index = sleepRelatedCandidates[k];
             if (isHeld(index)) continue;
             objectManager.sleepBody(index);
         }

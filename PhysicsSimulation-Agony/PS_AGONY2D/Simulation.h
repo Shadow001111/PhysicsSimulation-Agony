@@ -142,8 +142,7 @@ namespace PS_AGONY2D
 		std::vector<std::pair<ObjectDenseIndex, Real>> narrowPhaseColliders;
 
 		// Sleep.
-		std::vector<ObjectDenseIndex> sleepCandidates;
-		std::vector<ObjectDenseIndex> wakeCandidates;
+		std::vector<ObjectDenseIndex> sleepRelatedCandidates;
 	public:
 		Simulation();
 		~Simulation() = default;
