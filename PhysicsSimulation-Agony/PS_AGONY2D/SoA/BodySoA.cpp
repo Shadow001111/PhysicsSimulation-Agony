@@ -34,6 +34,9 @@ namespace PS_AGONY2D
 		this->rotationSin.push_back(std::sin(rot));
 		this->isStatic.push_back(invMass == 0);
 		this->sleepingTimer.push_back(0.0f);
+		this->islandId.push_back(-1);
+		this->sleepIslandId.push_back(-1);
+
 		this->attachments.emplace_back();
 		this->colliderIndices.emplace_back();
 		this->handles.push();

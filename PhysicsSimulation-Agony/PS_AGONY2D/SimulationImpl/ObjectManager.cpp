@@ -5,6 +5,7 @@
 #include "PS_AGONY2D/Limits.h"
 #include "PS_AGONY2D/Constants.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -337,6 +338,9 @@ namespace PS_AGONY2D
     {
         const size_t bodyCount = bodies.getCount();
         if (bodyIndex >= bodyCount) return;
+
+        // Removing a body from a sleeping island invalidates its rest state: wake the island.
+        bodyIndex = wakeBody(bodyIndex);
 
         // Cascade-delete constraints (springs, unchanged).
         while (!bodies.attachments[bodyIndex].empty())
@@ -913,9 +917,13 @@ namespace PS_AGONY2D
         return moveBodyToGroup(index, invMass == Real(0) ? BodyGroup::Static : BodyGroup::Dynamic);
     }
 
-    ObjectDenseIndex ObjectManager::sleepBody(ObjectDenseIndex b)
+    ObjectDenseIndex ObjectManager::sleepBody(ObjectDenseIndex b, uint32_t sleepIslandId)
     {
         if (bodies.groupOf(b) != BodyGroup::Dynamic) [[unlikely]] return b;
+
+        // Callers sleeping a whole island pass its shared id (>= 2). 0 means a standalone body: fresh id.
+        if (sleepIslandId == 0) sleepIslandId = newSleepIslandId();
+        bodies.sleepIslandId[b] = sleepIslandId;
 
         // preUpdate no longer refreshes render-old values for this body.
         bodies.renderOldOffsetX[b] = bodies.offsetX[b];
@@ -930,16 +938,59 @@ namespace PS_AGONY2D
         return b;
     }
 
-    ObjectDenseIndex ObjectManager::wakeBody(ObjectDenseIndex b)
+    // Wakes exactly one body. Callers go through wakeBody / wakeSleepIslands.
+    ObjectDenseIndex ObjectManager::wakeOne(ObjectDenseIndex b)
     {
         if (bodies.groupOf(b) != BodyGroup::Sleeping) [[unlikely]] return b;
 
         bodies.sleepingTimer[b] = 0.0f;
+        bodies.sleepIslandId[b] = 0;
 
         b = moveBodyToGroup(b, BodyGroup::Dynamic);
         moveBodyColliders(b, BodyGroup::Sleeping, BodyGroup::Dynamic);
         wokenBodies.push_back(bodies.handleAt(b));
         return b;
+    }
+
+    // Wakes every Sleeping body whose sleepIslandId is in ids (sorted, unique, no zeros).
+    void ObjectManager::wakeSleepIslands(std::span<const uint32_t> ids)
+    {
+        const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
+        if (ids.empty() || sleeping.empty()) return;
+
+        const uint32_t* sleepId = bodies.sleepIslandId.data();
+
+        wakeScratch.clear();
+        if (ids.size() == 1)
+        {
+            const uint32_t id = ids[0];
+            for (ObjectDenseIndex i = sleeping.begin; i < sleeping.end; ++i)
+                if (sleepId[i] == id) wakeScratch.push_back(i);
+        }
+        else
+        {
+            for (ObjectDenseIndex i = sleeping.begin; i < sleeping.end; ++i)
+                if (std::binary_search(ids.begin(), ids.end(), sleepId[i])) wakeScratch.push_back(i);
+        }
+
+        // Ascending: waking swaps the body with the first Sleeping slot (<= its index), which can never hold
+        // a still-pending candidate, so the remaining indices stay valid. (Sleeping is the opposite: descending.)
+        for (const ObjectDenseIndex i : wakeScratch)
+            wakeOne(i);
+    }
+
+    // Wakes the body and its whole sleeping island. Returns the body's new index.
+    ObjectDenseIndex ObjectManager::wakeBody(ObjectDenseIndex b)
+    {
+        if (bodies.groupOf(b) != BodyGroup::Sleeping) [[unlikely]] return b;
+
+        const uint32_t id = bodies.sleepIslandId[b];
+        if (id == 0) [[unlikely]] return wakeOne(b);
+
+        // Other members move too, so track this body by handle.
+        const Handle handle = bodies.handleAt(b);
+        wakeSleepIslands(std::span<const uint32_t>(&id, 1));
+        return bodies.indexOfUnchecked(handle);
     }
 
     std::optional<ColliderData> ObjectManager::getColliderData(ObjectDenseIndex i) const noexcept

@@ -30,7 +30,9 @@
     F(rotationCos, Real) \
     F(rotationSin, Real) \
     F(isStatic, uint8_t) \
-    F(sleepingTimer, float)
+    F(sleepingTimer, float) \
+    F(islandId, ObjectDenseIndex) \
+    F(sleepIslandId, ObjectDenseIndex)
 
 // Define complex vector-of-vector fields.
 #define PS_AGONY_BODY_SOA_VECTOR_FIELDS(F) \

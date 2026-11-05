@@ -1,5 +1,6 @@
 #pragma once
 #include "ConstraintSystem.h"
+#include "IslandManager.h"
 #include "Constants.h"
 
 #include "Types/Material.h"
@@ -143,6 +144,10 @@ namespace PS_AGONY2D
 
 		// Sleep.
 		std::vector<ObjectDenseIndex> sleepRelatedCandidates;
+
+		// Islands.
+		IslandManager islandManager;
+		std::vector<uint32_t> islandSleepFlags;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -194,8 +199,12 @@ namespace PS_AGONY2D
 		const ObjectAPI& objects() const noexcept { return objectAPI; }
 		ConstraintAPI& constraints() noexcept { return constraintAPI; }
 		const ConstraintAPI& constraints() const noexcept { return constraintAPI; }
+		IslandManager& islands() noexcept { return islandManager; }
+		const IslandManager& islands() const noexcept { return islandManager; }
 	private:
 		void physicsStep(Real deltaTime);
+
+		void integrateAndApplyConstraints(Real deltaTime);
 
 		void flushCommands();
 

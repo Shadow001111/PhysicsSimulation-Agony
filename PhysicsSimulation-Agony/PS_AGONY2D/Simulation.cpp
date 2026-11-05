@@ -1,5 +1,6 @@
 #include "Simulation.h"
 #include "FastCosSin.h"
+#include "IslandManager.h"
 
 #include "SimulationImpl/ColliderAABBBuilder.h"
 #include "SimulationImpl/LeftOutFunctions.h"
@@ -54,7 +55,7 @@ namespace PS_AGONY2D
             {
                 TRACY_SCOPE_NC("Physics step", PS_AGONY2D::Profiling::Color::Orange);
                 physicsStep(fixedDeltaTime);
-                updateSleeping(float(deltaTime));
+                updateSleeping(float(fixedDeltaTime));
                 sleepContactData();
                 flushCommands();
             }
@@ -165,6 +166,9 @@ namespace PS_AGONY2D
         // Update timer.
         simulationRunTimer += deltaTime;
 
+        // Islands are rebuilt below when there are contacts; updateSleeping falls back to singletons.
+        islandManager.invalidate();
+
         // Reset stuff.
         bodyCollisionSolver.reportNoCollisions();
         bodyCollisionSolver.setCollisionEventRecording(
@@ -205,39 +209,11 @@ namespace PS_AGONY2D
 
         wakeHeldBodies();
 
-        const IndexRange dynamicRange = objectManager.bodies.range(BodyGroup::Dynamic);
 
-        if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::SemiImplicit)
-        {
-            // Integration first phase.
-            Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
-            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
-
-            // Solve constraints.
-            applyBodyHolderConstraint(deltaTime, mainBodyHolder);
-            constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-
-            // Integration second phase.
-            Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
-        }
-        else if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::VelocityVerlet)
-        {
-            const Real halfDT = deltaTime * Real(0.5);
-
-            // Integration first phase.
-            Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
-            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
-
-            // Solve constraints.
-            applyBodyHolderConstraint(deltaTime, mainBodyHolder);
-            constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
-
-            // Integration second phase.
-            Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
-            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
-        }
+        integrateAndApplyConstraints(deltaTime);
 
         // Computing important data.
+        const IndexRange dynamicRange = objectManager.bodies.range(BodyGroup::Dynamic);
         wrapBodyRotations(objectManager.bodies, dynamicRange);
         Integrator::computeRotationCosSin(objectManager.bodies, dynamicRange);
 
@@ -266,6 +242,21 @@ namespace PS_AGONY2D
             wakeSleepingContactData();
             narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
 
+            // Build islands.
+            // TODO: Precompute pairs(colliders?) once and use them in solver.
+            //       Or precompute body pairs.
+            {
+                const ObjectDenseIndex* ECSTASY_RESTRICT bodyOwnerPtr = objectManager.colliders.bodyIndex.data();
+                std::vector<ObjectPair> edges;
+                edges.resize(narrow.size());
+                for (size_t i = 0; i < narrow.size(); i++)
+                {
+                    edges[i].a = bodyOwnerPtr[narrow[i].colliderA];
+                    edges[i].b = bodyOwnerPtr[narrow[i].colliderB];
+                }
+                islandManager.build(objectManager.bodies, edges);
+            }
+
             // Collision resolution.
             bodyCollisionSolver.solveCollisions(
                 narrow,
@@ -278,6 +269,40 @@ namespace PS_AGONY2D
 
             // Collision events.
             dispatchCollisionEvents();
+        }
+    }
+
+    void Simulation::integrateAndApplyConstraints(Real deltaTime)
+    {
+        const IndexRange dynamicRange = objectManager.bodies.range(BodyGroup::Dynamic);
+        if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::SemiImplicit)
+        {
+            // Integration first phase.
+            Integrator::integrateVelocities_SemiImplicit(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+
+            // Solve constraints.
+            applyBodyHolderConstraint(deltaTime, mainBodyHolder);
+            constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
+
+            // Integration second phase.
+            Integrator::integrateKinematics_SemiImplicit(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+        }
+        else if (simulationSettings.integratorSettings.integratorType == Integrator::IntegratorType::VelocityVerlet)
+        {
+            const Real halfDT = deltaTime * Real(0.5);
+
+            // Integration first phase.
+            Integrator::integratePhase1_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
+
+            // Solve constraints.
+            applyBodyHolderConstraint(deltaTime, mainBodyHolder);
+            constraintScheduler.solve(constraintSystems, deltaTime, objectManager.bodies);
+
+            // Integration second phase.
+            Integrator::integratePhase2_VelocityVerlet(objectManager.bodies, dynamicRange, deltaTime, simulationSettings.integratorSettings);
+            Integrator::dampAngularVelocities(objectManager.bodies, dynamicRange, halfDT, simulationSettings.integratorSettings);
         }
     }
 
@@ -379,7 +404,7 @@ namespace PS_AGONY2D
         }
     }
 
-    // TEST ONLY, NOT A GOOD SOLUTION: no island/graph handling.
+    // Wakes whole sleeping islands touched by a contact.
     void Simulation::wakeCollidingBodies(std::span<const BodyCollisionData> narrow)
     {
         TRACY_SCOPE_N("Wake colliding bodies");
@@ -389,24 +414,25 @@ namespace PS_AGONY2D
         if (sleeping.empty()) return;
 
         const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = objectManager.colliders.bodyIndex.data();
+        const uint32_t* ECSTASY_RESTRICT sleepIdPtr = bodies.sleepIslandId.data();
+
+        // Unsigned wrap trick: one compare tests begin <= index < end.
+        const auto isSleeping = [&](ObjectDenseIndex index) { return index - sleeping.begin < sleeping.size(); };
 
         sleepRelatedCandidates.clear();
         for (const BodyCollisionData& data : narrow)
         {
             const ObjectDenseIndex bodyA = bodyIndexPtr[data.colliderA];
             const ObjectDenseIndex bodyB = bodyIndexPtr[data.colliderB];
-
-            const bool aSleep = bodies.groupOf(bodyA) == BodyGroup::Sleeping;
-            sleepRelatedCandidates.push_back(aSleep ? bodyA : bodyB);
+            if (isSleeping(bodyA)) sleepRelatedCandidates.push_back(sleepIdPtr[bodyA]);
+            if (isSleeping(bodyB)) sleepRelatedCandidates.push_back(sleepIdPtr[bodyB]);
         }
         if (sleepRelatedCandidates.empty()) return;
 
         std::sort(sleepRelatedCandidates.begin(), sleepRelatedCandidates.end());
         sleepRelatedCandidates.erase(std::unique(sleepRelatedCandidates.begin(), sleepRelatedCandidates.end()), sleepRelatedCandidates.end());
 
-        // Descending: a move only swaps with slots at or above the body's index.
-        for (size_t k = sleepRelatedCandidates.size(); k-- > 0;)
-            objectManager.wakeBody(sleepRelatedCandidates[k]);
+        objectManager.wakeSleepIslands(sleepRelatedCandidates);
     }
 
     void Simulation::wakeSleepingContactData()
@@ -472,63 +498,63 @@ namespace PS_AGONY2D
         TRACY_SCOPE_N("Update sleeping");
 
         BodySoA& bodies = objectManager.bodies;
-        const IndexRange range = bodies.range(BodyGroup::Dynamic);
-        if (range.empty()) return;
+        const ObjectDenseIndex rangeEnd = bodies.range(BodyGroup::Dynamic).end;
+        if (rangeEnd == 0) return;
+
+        // No contacts this step: every body is its own island.
+        if (!islandManager.isValid()) islandManager.buildSingletons(bodies);
 
         const Real linearSq = simulationSettings.linearSpeedSleepThreshold * simulationSettings.linearSpeedSleepThreshold;
         const Real angular = simulationSettings.angularSpeedSleepThreshold;
+        const Real sleepTime = simulationSettings.sleepTimeThreshold;
 
         Real* ECSTASY_RESTRICT sleepingTimerPtr = bodies.sleepingTimer.data();
         const Real* ECSTASY_RESTRICT velXPtr = bodies.velocityX.data();
         const Real* ECSTASY_RESTRICT velYPtr = bodies.velocityY.data();
         const Real* ECSTASY_RESTRICT angVelPtr = bodies.angularVelocity.data();
+        const ObjectDenseIndex* ECSTASY_RESTRICT islandIdPtr = bodies.islandId.data();
 
-        // Collect sleeping candidates.
+        // islandSleepFlags[island]: 0 = stays awake, 1 = may sleep, >= 2 = assigned sleep island id.
+        islandSleepFlags.assign(islandManager.getIslandCount(), 1u);
+        uint32_t* const flags = islandSleepFlags.data();
+
+        // Pass 1: timers + AND-reduce readiness per island.
+        for (ObjectDenseIndex i = 0; i < rangeEnd; i++)
+        {
+            const Real linearExcess = velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i] - linearSq;
+            const Real angularExcess = std::fabs(angVelPtr[i]) - angular;
+            const bool quiet = std::fmax(linearExcess, angularExcess) <= Real(0);
+
+            const Real timer = (sleepingTimerPtr[i] + deltaTimeF) * Real(quiet);
+            sleepingTimerPtr[i] = timer;
+
+            flags[islandIdPtr[i]] &= uint32_t(quiet) & uint32_t(timer >= sleepTime); // 0 or 1.
+        }
+
+        // Held bodies keep their whole island awake.
+        for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
+        {
+            const ObjectDenseIndex index = bodies.indexOfUnchecked(held.body);
+            if (index < rangeEnd) flags[islandIdPtr[index]] = 0;
+        }
+
+        // Pass 2: collect members of sleeping islands.
         sleepRelatedCandidates.clear();
-        for (ObjectDenseIndex bodyIndex = range.begin; bodyIndex < range.end; bodyIndex++)
+        for (ObjectDenseIndex i = 0; i < rangeEnd; i++)
         {
-            const Real linearExcess = velXPtr[bodyIndex] * velXPtr[bodyIndex] + velYPtr[bodyIndex] * velYPtr[bodyIndex] - linearSq;
-            const Real angularExcess = std::fabs(angVelPtr[bodyIndex]) - angular;
-            if (std::fmax(linearExcess, angularExcess) <= Real(0))
-            {
-                sleepRelatedCandidates.push_back(bodyIndex);
-            }
-            else
-            {
-                sleepingTimerPtr[bodyIndex] = 0;
-            }
+            uint32_t& f = flags[islandIdPtr[i]];
+            if (f == 0) continue;
+            if (f == 1) f = objectManager.newSleepIslandId();
+            sleepRelatedCandidates.push_back(i);
         }
         if (sleepRelatedCandidates.empty()) return;
 
-        // Update sleeping timers.
-        for (ObjectDenseIndex bodyIndex : sleepRelatedCandidates)
-        {
-            sleepingTimerPtr[bodyIndex] += deltaTimeF;
-        }
-
-        // Remove bodies which time haven't reached threshold.
-        std::erase_if(sleepRelatedCandidates, [&](ObjectDenseIndex bodyIndex)
-            {
-                return sleepingTimerPtr[bodyIndex] < simulationSettings.sleepTimeThreshold;
-            });
-        if (sleepRelatedCandidates.empty()) return;
-
-        // Held bodies stay awake.
-        const auto isHeld = [&](ObjectDenseIndex index)
-            {
-                for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
-                {
-                    if (bodies.indexOfUnchecked(held.body) == index) return true;
-                }
-                return false;
-            };
-
-        // Descending: a move only swaps with slots at or above the body's index, so lower candidates stay valid.
+        // Descending: sleeping swaps with the last Dynamic slot (>= its index), so lower candidates stay valid.
+        // islandId travels with the body through swaps, so it still maps to the right flag.
         for (size_t k = sleepRelatedCandidates.size(); k-- > 0;)
         {
             const ObjectDenseIndex index = sleepRelatedCandidates[k];
-            if (isHeld(index)) continue;
-            objectManager.sleepBody(index);
+            objectManager.sleepBody(index, flags[bodies.islandId[index]]);
         }
     }
 

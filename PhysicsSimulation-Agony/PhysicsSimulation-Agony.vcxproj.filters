@@ -159,6 +159,9 @@
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="PS_AGONY2D\IslandManager.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PS_AGONY2D\Simulation.h">
@@ -354,6 +357,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="PS_AGONY2D\SimulationImpl\ObjectCreateParams.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\IslandManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

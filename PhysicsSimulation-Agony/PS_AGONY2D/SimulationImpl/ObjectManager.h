@@ -113,8 +113,23 @@ namespace PS_AGONY2D
 		// Any modification of a sleeping body or its colliders (commands, collider create/destroy) wakes it first.
 		// Both return the NEW dense index (group moves change body indices). No-op if the body is in the wrong group.
 		// Not safe for callbacks or during solving.
-		ObjectDenseIndex sleepBody(ObjectDenseIndex bodyIndex);
+		//
+		// Sleeping islands: bodies put to sleep together share a sleepIslandId (>= 2); pass it as sleepIslandId, or 0
+		// for a standalone body (fresh id). wakeBody wakes the body's WHOLE island, so other bodies change index too:
+		// only the returned index is valid afterwards. When sleeping many bodies, call in DESCENDING index order.
+		ObjectDenseIndex sleepBody(ObjectDenseIndex bodyIndex, uint32_t sleepIslandId = 0);
 		ObjectDenseIndex wakeBody(ObjectDenseIndex bodyIndex);
+
+		// Wakes every Sleeping body whose sleepIslandId is in the list (sorted, unique, no zeros). One scan of the
+		// Sleeping range regardless of list size.
+		void wakeSleepIslands(std::span<const uint32_t> sortedUniqueIds);
+
+		// Unique among live sleeping islands. Never returns 0 or 1.
+		uint32_t newSleepIslandId() noexcept
+		{
+			if (++nextSleepIslandId < 2) nextSleepIslandId = 2;
+			return nextSleepIslandId;
+		}
 
 		void destroyBody(Handle handle) { pushCommand(ObjectCommandType::DestroyBody, handle); }
 		void destroyCollider(Handle handle) { pushCommand(ObjectCommandType::DestroyCollider, handle); }
@@ -166,6 +181,9 @@ namespace PS_AGONY2D
 		std::vector<ObjectCommand> commands;
 		std::vector<PolygonGeometry> pendingPolygons;
 
+		uint32_t nextSleepIslandId = 1;
+		std::vector<ObjectDenseIndex> wakeScratch;
+
 		void pushCommand(ObjectCommandType type, Handle handle, Real a = 0, Real b = 0, uint32_t index = 0)
 		{
 			ObjectCommand command;
@@ -182,6 +200,8 @@ namespace PS_AGONY2D
 		void applyBodyMassFromDensity(ObjectDenseIndex bodyIndex, Real density);
 		void recomputeBodyInertia(ObjectDenseIndex bodyIndex);
 		void moveBodyColliders(ObjectDenseIndex bodyIndex, BodyGroup from, BodyGroup to);
+		// Wakes exactly one body (no island logic). Returns its new index.
+		ObjectDenseIndex wakeOne(ObjectDenseIndex bodyIndex);
 		std::vector<ObjectDenseIndex>& colliderListFor(BodyGroup group) noexcept;
 
 		// Body group machinery. Body memory order is [Dynamic][Static][Sleeping][Unused].
