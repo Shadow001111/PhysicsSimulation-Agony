@@ -314,10 +314,11 @@ namespace PS_AGONY2D
 
     void Simulation::flushCommands()
     {
+        std::vector<Handle> sink;
         objectManager.flushCommands();
         for (auto* constraintSystem : constraintSystems)
         {
-            constraintSystem->flushCommands(objectManager.bodies);
+            constraintSystem->flushCommands(objectManager.bodies, sink);
         }
 
         wakeSleepingContactData();

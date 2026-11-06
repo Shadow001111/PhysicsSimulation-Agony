@@ -28,24 +28,24 @@ namespace PS_AGONY2D
 		ConstraintAPI& operator=(const ConstraintAPI&) = delete;
 
 		// Creation (body handles in params). nullopt if a body handle is stale.
-		std::optional<Handle> createSpring(const SpringConstraintSystem::CreateParams& p) { return springs().create(p, objectManager.bodies); }
-		std::optional<Handle> createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& p) { return revoluteJoints().create(p, objectManager.bodies); }
-		std::optional<Handle> createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& p) { return prismaticJoints().create(p, objectManager.bodies); }
-		std::optional<Handle> createSliderJoint(const SliderJointConstraintSystem::CreateParams& p) { return sliderJoints().create(p, objectManager.bodies); }
-		std::optional<Handle> createMotor(const MotorConstraintSystem::CreateParams& p) { return motors().create(p, objectManager.bodies); }
+		std::optional<Handle> createSpring(const SpringConstraintSystem::CreateParams& p) { return objectManager.createSpring(p); }
+		std::optional<Handle> createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& p) { return objectManager.createRevoluteJoint(p); }
+		std::optional<Handle> createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& p) { return objectManager.createPrismaticJoint(p); }
+		std::optional<Handle> createSliderJoint(const SliderJointConstraintSystem::CreateParams& p) { return objectManager.createSliderJoint(p); }
+		std::optional<Handle> createMotor(const MotorConstraintSystem::CreateParams& p) { return objectManager.createMotor(p); }
 
 		// Destruction.
-		void destroySpring(ObjectDenseIndex index) { springs().removeConstraint(index, objectManager.bodies); }
-		void destroyRevoluteJoint(ObjectDenseIndex index) { revoluteJoints().removeConstraint(index, objectManager.bodies); }
-		void destroyPrismaticJoint(ObjectDenseIndex index) { prismaticJoints().removeConstraint(index, objectManager.bodies); }
-		void destroySliderJoint(ObjectDenseIndex index) { sliderJoints().removeConstraint(index, objectManager.bodies); }
-		void destroyMotor(ObjectDenseIndex index) { motors().removeConstraint(index, objectManager.bodies); }
+		void destroySpring(ObjectDenseIndex index) { objectManager.destroyConstraintImmediate(ConstraintType::Spring, index); }
+		void destroyRevoluteJoint(ObjectDenseIndex index) { objectManager.destroyConstraintImmediate(ConstraintType::RevoluteJoint, index); }
+		void destroyPrismaticJoint(ObjectDenseIndex index) { objectManager.destroyConstraintImmediate(ConstraintType::PrismaticJoint, index); }
+		void destroySliderJoint(ObjectDenseIndex index) { objectManager.destroyConstraintImmediate(ConstraintType::SliderJoint, index); }
+		void destroyMotor(ObjectDenseIndex index) { objectManager.destroyConstraintImmediate(ConstraintType::Motor, index); }
 
-		void destroySpring(Handle h) { destroyByHandle(springs(), h); }
-		void destroyRevoluteJoint(Handle h) { destroyByHandle(revoluteJoints(), h); }
-		void destroyPrismaticJoint(Handle h) { destroyByHandle(prismaticJoints(), h); }
-		void destroySliderJoint(Handle h) { destroyByHandle(sliderJoints(), h); }
-		void destroyMotor(Handle h) { destroyByHandle(motors(), h); }
+		void destroySpring(Handle h) { objectManager.destroySpringImmediate(h); }
+		void destroyRevoluteJoint(Handle h) { objectManager.destroyRevoluteJointImmediate(h); }
+		void destroyPrismaticJoint(Handle h) { objectManager.destroyPrismaticJointImmediate(h); }
+		void destroySliderJoint(Handle h) { objectManager.destroySliderJointImmediate(h); }
+		void destroyMotor(Handle h) { objectManager.destroyMotorImmediate(h); }
 
 		// Handles.
 		Handle getSpringHandle(ObjectDenseIndex index) const noexcept { return handleOf(springs(), index); }
@@ -144,13 +144,6 @@ namespace PS_AGONY2D
 		MotorSoAViewer getMotors() const noexcept
 			{ return motors().getViewer(); }
 	private:
-		template<class System>
-		void destroyByHandle(System& system, Handle h)
-		{
-			const uint32_t i = system.indexOf(h);
-			if (i != Handle::NULL_DENSE_INDEX) system.removeConstraint(i, objectManager.bodies);
-		}
-
 		template<class System>
 		static Handle handleOf(const System& system, ObjectDenseIndex index) noexcept
 		{

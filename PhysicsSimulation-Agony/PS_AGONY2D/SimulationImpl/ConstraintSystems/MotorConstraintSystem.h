@@ -26,20 +26,19 @@ namespace PS_AGONY2D
 			Real accumulatedImpulse{ 0 }; // Last solved impulse (warm-start); useful as torque feedback.
 		};
 
-		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
+		// Call through ObjectManager::createMotor (wakes the body, registers the attachment).
+		ObjectDenseIndex createAt(ObjectDenseIndex bodyIndex, const CreateParams& p)
 		{
-			const ObjectDenseIndex i = bodies.indexOf(p.bodyHandle);
-			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			return createSingleImpl(i, bodies, p.targetSpeed, p.maxTorque);
+			return createSingleImpl(bodyIndex, p.targetSpeed, p.maxTorque);
 		}
 
 		// 'accumulatedImpulse is intentionally' left untouched on change.
 		void queueTargetSpeed(Handle h, Real v) { pushCommand(Cmd::TargetSpeed, h, v); }
 		void queueMaxTorque(Handle h, Real v) { pushCommand(Cmd::MaxTorque, h, v); }
 
-		void flushCommands(const BodySoA&) override
+		void flushCommands(const BodySoA& bodies, std::vector<Handle>& bodiesToWake) override
 		{
-			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
+			flushImpl(bodies, bodiesToWake, [this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{

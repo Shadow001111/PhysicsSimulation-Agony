@@ -110,6 +110,26 @@ namespace PS_AGONY2D
 		// Not safe for callbacks.
 		void destroyColliderImmediate(ObjectDenseIndex colliderIndex);
 
+		// Constraint lifetime. ObjectManager owns body attachments; creating/destroying wakes the touched bodies
+		// (and their sleeping islands). Not safe for callbacks or during solving.
+		// createSpring: nullopt if a body handle is stale.
+		std::optional<Handle> createSpring(const SpringConstraintSystem::CreateParams& params);
+		std::optional<Handle> createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& params);
+		std::optional<Handle> createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& params);
+		std::optional<Handle> createSliderJoint(const SliderJointConstraintSystem::CreateParams& params);
+		std::optional<Handle> createMotor(const MotorConstraintSystem::CreateParams& params);
+
+		void destroySpringImmediate(Handle h);
+		void destroyRevoluteJointImmediate(Handle h);
+		void destroyPrismaticJointImmediate(Handle h);
+		void destroySliderJointImmediate(Handle h);
+		void destroyMotorImmediate(Handle h);
+		void destroyConstraintImmediate(ConstraintType type, ObjectDenseIndex constraintIndex);
+
+		// Applies every system's queued edits, then wakes the bodies of each edited constraint. Replaces calling
+		// IConstraintSystem::flushCommands directly.
+		void flushConstraintCommands();
+
 		// Sleeping: moves the body to the Sleeping group and its colliders to the sleeping list. Body data is kept.
 		// Any modification of a sleeping body or its colliders (commands, collider create/destroy) wakes it first.
 		// Both return the NEW dense index (group moves change body indices). No-op if the body is in the wrong group.
@@ -184,6 +204,15 @@ namespace PS_AGONY2D
 
 		uint32_t nextSleepIslandId = 1;
 		std::vector<ObjectDenseIndex> wakeScratch;
+		std::vector<Handle> constraintWakeScratch;
+
+		// Wakes both bodies (indices move: re-resolved by handle). False if either handle is stale.
+		bool wakeAndResolvePair(Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b);
+		// Two-body create: wake, append via System::createAt, attach to both bodies. Defined in the .cpp.
+		template<class System, class Params>
+		std::optional<Handle> createPairConstraint(ConstraintType type, const Params& params);
+		template<class System>
+		void destroyConstraintByHandle(ConstraintType type, Handle h);
 
 		void pushCommand(ObjectCommandType type, Handle handle, Real a = 0, Real b = 0, uint32_t index = 0)
 		{

@@ -342,12 +342,17 @@ namespace PS_AGONY2D
         // Removing a body from a sleeping island invalidates its rest state: wake the island.
         bodyIndex = wakeBody(bodyIndex);
 
-        // Cascade-delete constraints (springs, unchanged).
-        while (!bodies.attachments[bodyIndex].empty())
+        // Cascade-delete constraints. Waking the other bodies moves indices (possibly ours), so track by handle.
+        const Handle bodyHandle = bodies.handleAt(bodyIndex);
+        for (;;)
         {
-            const BodyAttachment attachment = bodies.attachments[bodyIndex].back();
-            constraintSystems[static_cast<size_t>(attachment.type)]->removeConstraint(attachment.objectIndex, bodies);
+            bodyIndex = bodies.indexOfUnchecked(bodyHandle);
+            const auto& list = bodies.attachments[bodyIndex];
+            if (list.empty()) break;
+            const BodyAttachment attachment = list.back();
+            destroyConstraintImmediate(attachment.type, attachment.objectIndex);
         }
+        bodyIndex = bodies.indexOfUnchecked(bodyHandle);
 
         // Cascade-delete every collider owned by this body.
         while (!bodies.colliderIndices[bodyIndex].empty())
@@ -367,6 +372,126 @@ namespace PS_AGONY2D
 
         const ObjectDenseIndex bodyIndex = wakeBody(colliders.bodyIndex[colliderIndex]);
         destroyColliderInternal(bodyIndex, colliderIndex);
+    }
+
+    bool ObjectManager::wakeAndResolvePair(Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b)
+    {
+        if (bodies.indexOf(hA) == Handle::NULL_DENSE_INDEX ||
+            bodies.indexOf(hB) == Handle::NULL_DENSE_INDEX) return false;
+
+        wakeBody(bodies.indexOfUnchecked(hA));
+        wakeBody(bodies.indexOfUnchecked(hB));
+        a = bodies.indexOfUnchecked(hA);
+        b = bodies.indexOfUnchecked(hB);
+        return true;
+    }
+
+    template<class System, class Params>
+    std::optional<Handle> ObjectManager::createPairConstraint(ConstraintType type, const Params& p)
+    {
+        ObjectDenseIndex a, b;
+        if (!wakeAndResolvePair(p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
+
+        auto& system = static_cast<System&>(*constraintSystems[size_t(type)]);
+        const BodySoA& constBodies = bodies;
+        ObjectDenseIndex ci;
+        if constexpr (requires { system.createAt(a, b, p, constBodies); }) ci = system.createAt(a, b, p, constBodies);
+        else ci = system.createAt(a, b, p);
+
+        bodies.addAttachment(a, type, ci);
+        bodies.addAttachment(b, type, ci);
+        return system.handleAt(ci);
+    }
+
+    template<class System>
+    void ObjectManager::destroyConstraintByHandle(ConstraintType type, Handle h)
+    {
+        const auto& system = static_cast<const System&>(*constraintSystems[size_t(type)]);
+        const ObjectDenseIndex i = system.indexOf(h);
+        if (i != Handle::NULL_DENSE_INDEX) destroyConstraintImmediate(type, i);
+    }
+
+    std::optional<Handle> ObjectManager::createSpring(const SpringConstraintSystem::CreateParams& p)
+    {
+        return createPairConstraint<SpringConstraintSystem>(ConstraintType::Spring, p);
+    }
+
+    std::optional<Handle> ObjectManager::createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& p)
+    {
+        return createPairConstraint<RevoluteJointConstraintSystem>(ConstraintType::RevoluteJoint, p);
+    }
+
+    std::optional<Handle> ObjectManager::createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& p)
+    {
+        return createPairConstraint<PrismaticJointConstraintSystem>(ConstraintType::PrismaticJoint, p);
+    }
+
+    std::optional<Handle> ObjectManager::createSliderJoint(const SliderJointConstraintSystem::CreateParams& p)
+    {
+        return createPairConstraint<SliderJointConstraintSystem>(ConstraintType::SliderJoint, p);
+    }
+
+    std::optional<Handle> ObjectManager::createMotor(const MotorConstraintSystem::CreateParams& p)
+    {
+        if (bodies.indexOf(p.bodyHandle) == Handle::NULL_DENSE_INDEX) return std::nullopt;
+
+        const ObjectDenseIndex bodyIndex = wakeBody(bodies.indexOfUnchecked(p.bodyHandle));
+        auto& motors = static_cast<MotorConstraintSystem&>(*constraintSystems[size_t(ConstraintType::Motor)]);
+        const ObjectDenseIndex ci = motors.createAt(bodyIndex, p);
+        bodies.addAttachment(bodyIndex, ConstraintType::Motor, ci);
+        return motors.handleAt(ci);
+    }
+
+    void ObjectManager::destroySpringImmediate(Handle h) { destroyConstraintByHandle<SpringConstraintSystem>(ConstraintType::Spring, h); }
+    void ObjectManager::destroyRevoluteJointImmediate(Handle h) { destroyConstraintByHandle<RevoluteJointConstraintSystem>(ConstraintType::RevoluteJoint, h); }
+    void ObjectManager::destroyPrismaticJointImmediate(Handle h) { destroyConstraintByHandle<PrismaticJointConstraintSystem>(ConstraintType::PrismaticJoint, h); }
+    void ObjectManager::destroySliderJointImmediate(Handle h) { destroyConstraintByHandle<SliderJointConstraintSystem>(ConstraintType::SliderJoint, h); }
+    void ObjectManager::destroyMotorImmediate(Handle h) { destroyConstraintByHandle<MotorConstraintSystem>(ConstraintType::Motor, h); }
+
+    void ObjectManager::destroyConstraintImmediate(ConstraintType type, ObjectDenseIndex index)
+    {
+        IConstraintSystem& system = *constraintSystems[size_t(type)];
+        if (index >= system.getCount()) return;
+
+        constexpr ObjectDenseIndex NONE = Handle::NULL_DENSE_INDEX;
+        ObjectDenseIndex a, b;
+        system.getBodyIndices(index, a, b);
+
+        // Wake first (body indices move, constraint indices do not), then re-read the pair.
+        const Handle hA = bodies.handleAt(a);
+        const Handle hB = b != NONE ? bodies.handleAt(b) : Handle{};
+        wakeBody(a);
+        if (b != NONE) wakeBody(bodies.indexOfUnchecked(hB));
+        system.getBodyIndices(index, a, b);
+
+        bodies.removeAttachment(a, type, index);
+        if (b != NONE) bodies.removeAttachment(b, type, index);
+
+        const ObjectDenseIndex oldBack = system.swapRemove(index);
+        if (oldBack == index) return;
+
+        // The old back constraint now lives at 'index': relink on its bodies.
+        system.getBodyIndices(index, a, b);
+        bodies.removeAttachment(a, type, oldBack);
+        bodies.addAttachment(a, type, index);
+        if (b != NONE)
+        {
+            bodies.removeAttachment(b, type, oldBack);
+            bodies.addAttachment(b, type, index);
+        }
+    }
+
+    void ObjectManager::flushConstraintCommands()
+    {
+        constraintWakeScratch.clear();
+        for (IConstraintSystem* system : constraintSystems)
+            if (system) system->flushCommands(bodies, constraintWakeScratch);
+
+        for (const Handle h : constraintWakeScratch)
+        {
+            const ObjectDenseIndex i = bodies.indexOf(h);
+            if (i != Handle::NULL_DENSE_INDEX) wakeBody(i);
+        }
     }
 
     ObjectDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, ColliderShapeType shapeType, ObjectDenseIndex shapeIndex)

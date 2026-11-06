@@ -29,12 +29,17 @@ namespace PS_AGONY2D
 
 		virtual ~IConstraintSystem() = default;
 
-		virtual void removeConstraint(ObjectDenseIndex index, BodySoA& bodies) = 0;
+		// Raw swap-and-pop. Returns the old back index (== index if nothing moved), NULL_DENSE_INDEX if out of range.
+		// Does NOT touch body attachments: ObjectManager owns that.
+		virtual ObjectDenseIndex swapRemove(ObjectDenseIndex index) = 0;
+		// Body indices of a constraint (b == NULL_DENSE_INDEX for single-body). index must be in range.
+		virtual void getBodyIndices(ObjectDenseIndex index, ObjectDenseIndex& a, ObjectDenseIndex& b) const noexcept = 0;
 		virtual void remapBodyIndex(ObjectDenseIndex index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) = 0;
 
 		// Applies and clears the queued modification commands.
 		// Stale handles are dropped; values are sanitized on apply.
-		virtual void flushCommands(const BodySoA& bodies) = 0;
+		// Appends the body handles of every edited constraint to bodiesToWake (ObjectManager wakes them).
+		virtual void flushCommands(const BodySoA& bodies, std::vector<Handle>& bodiesToWake) = 0;
 
 		// Binds data views and (re)plans if this type changed. Solving is driven by ConstraintScheduler through getSolver().
 		virtual void prepare(BodySoA& bodies) = 0;
@@ -77,10 +82,10 @@ namespace PS_AGONY2D
 			commands.push_back(command);
 		}
 
-		// Resolves each handle and calls apply(command, denseIndex). Stale handles are dropped.
+		// Resolves each handle, calls apply(command, denseIndex) and reports the touched bodies. Stale handles are dropped.
 		// Value edits never touch wasSoAChanged.
 		template<class F>
-		void flushImpl(F&& apply)
+		void flushImpl(const BodySoA& bodies, std::vector<Handle>& wake, F&& apply)
 		{
 			if (commands.empty()) return;
 
@@ -89,6 +94,11 @@ namespace PS_AGONY2D
 				const uint32_t resolved = soa.indexOf(command.handle);
 				if (resolved == Handle::NULL_DENSE_INDEX) continue;
 				apply(command, resolved);
+
+				ObjectDenseIndex a, b;
+				getBodyIndices(resolved, a, b);
+				wake.push_back(bodies.handleAt(a));
+				if (b != Handle::NULL_DENSE_INDEX) wake.push_back(bodies.handleAt(b));
 			}
 			commands.clear();
 		}
@@ -110,65 +120,45 @@ namespace PS_AGONY2D
 			return a != Handle::NULL_DENSE_INDEX && b != Handle::NULL_DENSE_INDEX;
 		}
 
-		// Appends a single-body constraint and registers it with its body.
+		// Appends a single-body constraint. Returns its dense index. Attachments are ObjectManager's job.
 		template<class... Args>
-		Handle createSingleImpl(ObjectDenseIndex index, BodySoA& bodies, Args&&... args)
+		ObjectDenseIndex createSingleImpl(ObjectDenseIndex index, Args&&... args)
 		{
-			const uint32_t newIndex = static_cast<uint32_t>(soa.append(index, std::forward<Args>(args)...));
-			bodies.addAttachment(index, Type, newIndex);
+			const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(soa.append(index, std::forward<Args>(args)...));
 			wasSoAChanged = true;
-			return soa.handleAt(newIndex);
+			return newIndex;
 		}
 
-		// Appends a constraint and registers it with both bodies it touches.
+		// Appends a constraint. Returns its dense index. Attachments are ObjectManager's job.
 		template<class... Args>
-		Handle createImpl(ObjectDenseIndex indexA, ObjectDenseIndex indexB, BodySoA& bodies, Args&&... args)
+		ObjectDenseIndex createImpl(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Args&&... args)
 		{
-			const ObjectDenseIndex newIndex = static_cast<uint32_t>(soa.append(indexA, indexB, std::forward<Args>(args)...));
-			bodies.addAttachment(indexA, Type, newIndex);
-			bodies.addAttachment(indexB, Type, newIndex);
+			const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(soa.append(indexA, indexB, std::forward<Args>(args)...));
 			wasSoAChanged = true;
-			return soa.handleAt(newIndex);
+			return newIndex;
 		}
 	public:
-		void removeConstraint(ObjectDenseIndex index, BodySoA& bodies) final
+		ObjectDenseIndex swapRemove(ObjectDenseIndex index) final
 		{
-			if (index >= soa.getCount()) [[unlikely]]
-			{
-				return;
-			}
+			if (index >= soa.getCount()) [[unlikely]] return Handle::NULL_DENSE_INDEX;
+			const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
+			wasSoAChanged = true;
+			return oldBackIndex;
+		}
 
+		void getBodyIndices(ObjectDenseIndex index, ObjectDenseIndex& a, ObjectDenseIndex& b) const noexcept final
+		{
 			if constexpr (IsSingleBody)
 			{
-				bodies.removeAttachment(soa.bodyIndex[index], Type, index);
-
-				const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
-				if (oldBackIndex != index)
-				{
-					bodies.removeAttachment(soa.bodyIndex[index], Type, oldBackIndex);
-					bodies.addAttachment(soa.bodyIndex[index], Type, index);
-				}
+				a = soa.bodyIndex[index];
+				b = Handle::NULL_DENSE_INDEX;
 			}
 			else
 			{
-				// Unlink the constraint being removed from both of its bodies.
-				const ObjectPair bodyIndexPair = soa.bodyIndexPair[index];
-				bodies.removeAttachment(bodyIndexPair.a, Type, index);
-				bodies.removeAttachment(bodyIndexPair.b, Type, index);
-
-				const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
-
-				// If a constraint got swapped into 'index', relink it there.
-				if (oldBackIndex != index)
-				{
-					const ObjectPair bodyIndexPair = soa.bodyIndexPair[index];
-					bodies.removeAttachment(bodyIndexPair.a, Type, oldBackIndex);
-					bodies.addAttachment(bodyIndexPair.a, Type, index);
-					bodies.removeAttachment(bodyIndexPair.b, Type, oldBackIndex);
-					bodies.addAttachment(bodyIndexPair.b, Type, index);
-				}
+				const ObjectPair pair = soa.bodyIndexPair[index];
+				a = pair.a;
+				b = pair.b;
 			}
-			wasSoAChanged = true;
 		}
 
 		void remapBodyIndex(ObjectDenseIndex index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) final

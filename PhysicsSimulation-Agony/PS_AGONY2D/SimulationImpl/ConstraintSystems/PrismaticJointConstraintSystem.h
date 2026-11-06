@@ -40,17 +40,15 @@ namespace PS_AGONY2D
 			bool enableLimit{ false };
 		};
 
-		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
+		// Call through ObjectManager::createPrismaticJoint (wakes bodies, registers attachments).
+		ObjectDenseIndex createAt(ObjectDenseIndex a, ObjectDenseIndex b, const CreateParams& p, const BodySoA& bodies)
 		{
-			ObjectDenseIndex a, b;
-			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
-
 			// Normalize the axis defensively; a zero-length axis would make the joint singular.
 			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
 			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
 
 			return createImpl(
-				a, b, bodies,
+				a, b,
 				p.localAnchorA, p.localAnchorB, axis, computeReferenceAngle(bodies, a, b),
 				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
@@ -68,9 +66,9 @@ namespace PS_AGONY2D
 		// Locks rotation at the bodies' current relative angle.
 		void queueResetReferenceAngle(Handle h) { pushCommand(Cmd::ResetReferenceAngle, h); }
 
-		void flushCommands(const BodySoA& bodies) override
+		void flushCommands(const BodySoA& bodies, std::vector<Handle>& bodiesToWake) override
 		{
-			flushImpl([this, &bodies](const ConstraintCommand& c, ObjectDenseIndex i)
+			flushImpl(bodies, bodiesToWake, [this, &bodies](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{

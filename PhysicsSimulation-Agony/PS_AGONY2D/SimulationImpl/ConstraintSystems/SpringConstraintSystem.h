@@ -35,11 +35,11 @@ namespace PS_AGONY2D
 			Real damping{ 0 };
 		};
 
-		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
+		// Appends a spring between two resolved, awake bodies. Returns its dense index.
+		// Call through ObjectManager::createSpring (wakes bodies, registers attachments).
+		ObjectDenseIndex createAt(ObjectDenseIndex a, ObjectDenseIndex b, const CreateParams& p)
 		{
-			ObjectDenseIndex a, b;
-			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
-			return createImpl(a, b, bodies, p.localAnchorA, p.localAnchorB, p.restLength, p.stiffness, p.damping);
+			return createImpl(a, b, p.localAnchorA, p.localAnchorB, p.restLength, p.stiffness, p.damping);
 		}
 
 		// Deferred modification commands.
@@ -49,9 +49,9 @@ namespace PS_AGONY2D
 		void queueStiffness(Handle h, Real v) { pushCommand(Cmd::Stiffness, h, v); }
 		void queueDamping(Handle h, Real v) { pushCommand(Cmd::Damping, h, v); }
 
-		void flushCommands(const BodySoA&) override
+		void flushCommands(const BodySoA& bodies, std::vector<Handle>& bodiesToWake) override
 		{
-			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
+			flushImpl(bodies, bodiesToWake, [this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{

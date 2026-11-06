@@ -39,17 +39,15 @@ namespace PS_AGONY2D
 			bool enableLimit{ false };
 		};
 
-		std::optional<Handle> create(const CreateParams& p, BodySoA& bodies)
+		// Call through ObjectManager::createSliderJoint (wakes bodies, registers attachments).
+		ObjectDenseIndex createAt(ObjectDenseIndex a, ObjectDenseIndex b, const CreateParams& p)
 		{
-			ObjectDenseIndex a, b;
-			if (!resolve(bodies, p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
-
 			// Normalize the axis defensively; a zero-length axis would make the joint singular.
 			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
 			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
 
 			return createImpl(
-				a, b, bodies,
+				a, b,
 				p.localAnchorA, p.localAnchorB, axis,
 				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
@@ -65,9 +63,9 @@ namespace PS_AGONY2D
 		void queueLimits(Handle h, Real lower, Real upper) { pushCommand(Cmd::Limits, h, lower, upper); }
 		void queueEnableLimit(Handle h, bool enable) { pushCommand(Cmd::EnableLimit, h, 0, 0, enable ? 1u : 0u); }
 
-		void flushCommands(const BodySoA&) override
+		void flushCommands(const BodySoA& bodies, std::vector<Handle>& bodiesToWake) override
 		{
-			flushImpl([this](const ConstraintCommand& c, ObjectDenseIndex i)
+			flushImpl(bodies, bodiesToWake, [this](const ConstraintCommand& c, ObjectDenseIndex i)
 				{
 					switch (static_cast<Cmd>(c.type))
 					{
