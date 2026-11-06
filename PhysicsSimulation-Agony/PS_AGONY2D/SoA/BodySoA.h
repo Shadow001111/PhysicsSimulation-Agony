@@ -40,8 +40,7 @@
 
 namespace PS_AGONY2D
 {
-    // Memory order of bodies is always [Dynamic][Static][Sleeping][Unused].
-    // Unused is the tail past the grouped bodies (at most one body, transient during create/destroy).
+    // Memory order of bodies is always follows the enum order. (Pls, keep unused always at the back).
     enum class BodyGroup : uint8_t { Dynamic, Static, Sleeping, Unused };
 
     struct IndexRange
@@ -72,45 +71,42 @@ namespace PS_AGONY2D
     {
         #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-            #undef DECLARE_FIELD
+        #undef DECLARE_FIELD
 
         #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
         PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
         #undef DECLARE_VECTOR_FIELD
 
-            HandleTable handles;
+        HandleTable handles;
 
-        // Only the counts are stored, ranges are derived. Changed by ObjectManager::moveBodyToGroup only.
-        uint32_t groupCounts[3]{};
+        // Changed by ObjectManager::moveBodyToGroup only.
+        uint32_t groupCounts[size_t(BodyGroup::Unused)]{};
+        uint32_t groupStarts[size_t(BodyGroup::Unused) + 1]{};
 
         IndexRange range(BodyGroup group) const noexcept
         {
-            const ObjectDenseIndex d = groupCounts[0];
-            const ObjectDenseIndex s = d + groupCounts[1];
-            const ObjectDenseIndex z = s + groupCounts[2];
-            switch (group)
+            const size_t index = static_cast<size_t>(group);
+            if (index < size_t(BodyGroup::Unused)) [[likely]]
             {
-            case BodyGroup::Dynamic:  return { 0, d };
-            case BodyGroup::Static:   return { d, s };
-            case BodyGroup::Sleeping: return { s, z };
-            default:                  return { z, static_cast<ObjectDenseIndex>(getCount()) };
+                return { groupStarts[index], groupStarts[index + 1] };
             }
+            return { groupStarts[size_t(BodyGroup::Unused)], static_cast<ObjectDenseIndex>(getCount()) };
         }
 
-        // Dynamic + Static + Sleeping. Always begins at 0.
         IndexRange liveRange() const noexcept
         {
-            return { 0, static_cast<ObjectDenseIndex>(groupCounts[0] + groupCounts[1] + groupCounts[2]) };
+            return { 0, groupStarts[size_t(BodyGroup::Unused)]};
         }
 
         BodyGroup groupOf(ObjectDenseIndex index) const noexcept
         {
-            const ObjectDenseIndex d = groupCounts[0];
-            const ObjectDenseIndex s = d + groupCounts[1];
-            const ObjectDenseIndex z = s + groupCounts[2];
-            if (index < d) return BodyGroup::Dynamic;
-            if (index < s) return BodyGroup::Static;
-            if (index < z) return BodyGroup::Sleeping;
+            for (size_t i = 0; i < size_t(BodyGroup::Unused); i++)
+            {
+                if (index >= groupStarts[i] && index < groupStarts[i + 1])
+                {
+                    return static_cast<BodyGroup>(i);
+                }
+            }
             return BodyGroup::Unused;
         }
 
@@ -149,13 +145,13 @@ namespace PS_AGONY2D
     public:
         #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-            #undef DECLARE_VIEWER_FIELD
+        #undef DECLARE_VIEWER_FIELD
 
-            #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
-            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
-            #undef DECLARE_VIEWER_VECTOR_FIELD
+        #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
+        #undef DECLARE_VIEWER_VECTOR_FIELD
 
-            BodySoAViewer() = default;
+        BodySoAViewer() = default;
         explicit BodySoAViewer(const BodySoA& data) noexcept;
 
         size_t getCount() const noexcept { return count; }

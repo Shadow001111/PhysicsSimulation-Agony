@@ -873,7 +873,9 @@ namespace PS_AGONY2D
 
     ObjectDenseIndex ObjectManager::moveBodyToGroup(ObjectDenseIndex index, BodyGroup target)
     {
-        uint32_t* const counts = bodies.groupCounts;
+        uint32_t* counts = bodies.groupCounts;
+        uint32_t* ranges = bodies.groupStarts;
+
         uint32_t g = static_cast<uint32_t>(bodies.groupOf(index));
         const uint32_t to = static_cast<uint32_t>(target);
 
@@ -885,9 +887,10 @@ namespace PS_AGONY2D
                 const ObjectDenseIndex last = bodies.range(static_cast<BodyGroup>(g)).end - 1;
                 swapBodies(index, last);
                 index = last;
-                --counts[g];
-                if (g + 1 < 3) ++counts[g + 1];
-                ++g;
+                counts[g]--;
+                if (g + 1 < size_t(BodyGroup::Unused)) counts[g + 1]++;
+                ranges[g + 1]--;
+                g++;
             }
             else
             {
@@ -895,9 +898,10 @@ namespace PS_AGONY2D
                 const ObjectDenseIndex first = bodies.range(static_cast<BodyGroup>(g)).begin;
                 swapBodies(index, first);
                 index = first;
-                if (g < 3) --counts[g];
-                ++counts[g - 1];
-                --g;
+                if (g < size_t(BodyGroup::Unused)) counts[g]--;
+                counts[g - 1]++;
+                ranges[g]++;
+                g--;
             }
         }
 
