@@ -311,6 +311,12 @@
     <ClInclude Include="PS_AGONY2D\SimulationAPIs\ObjectAPI.h" />
     <ClInclude Include="PS_AGONY2D\Profiling\TracyProfiler.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\ColliderAABBBuilder.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\ConstraintSystemBase.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\MotorConstraintSystem.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\PrismaticJointConstraintSystem.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\RevoluteJointConstraintSystem.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\SliderJointConstraintSystem.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\SpringConstraintSystem.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\LeftOutFunctions.h" />
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhTree.h" />
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Broad\BvhTreeView.h" />
@@ -341,7 +347,7 @@
     <ClInclude Include="PS_AGONY2D\Integration\Integrator.h" />
     <ClInclude Include="PS_AGONY2D\SimulationImpl\PhysicsGeometry.h" />
     <ClInclude Include="PS_AGONY2D\Types\Camera2D.h" />
-    <ClInclude Include="PS_AGONY2D\ConstraintSystem.h" />
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\AllConstraintSystem.h" />
     <ClInclude Include="PS_AGONY2D\SoA\ColliderSoA.h" />
     <ClInclude Include="PS_AGONY2D\SoA\BodySoA.h" />
     <ClInclude Include="PS_AGONY2D\SoA\Constraints\RevoluteJointSoA.h" />

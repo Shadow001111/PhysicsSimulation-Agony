@@ -2,9 +2,10 @@
 #include "ObjectCreateParams.h"
 
 #include "PS_AGONY2D/ObjectSoA.h"
-#include "PS_AGONY2D/ConstraintSystem.h"
 #include "PS_AGONY2D/Types/Types.h"
 #include "PS_AGONY2D/Types/Material.h"
+
+#include "PS_AGONY2D/SimulationImpl/AllConstraintSystem.h"
 
 #include <cstdint>
 #include <optional>

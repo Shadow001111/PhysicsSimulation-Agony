@@ -227,7 +227,7 @@
     <ClInclude Include="PS_AGONY2D\SoA\Constraints\SpringSoA.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="PS_AGONY2D\ConstraintSystem.h">
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\AllConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="PS_AGONY2D\Types\Camera2D.h">
@@ -360,6 +360,24 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="PS_AGONY2D\IslandManager.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\ConstraintSystemBase.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\SpringConstraintSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\RevoluteJointConstraintSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\PrismaticJointConstraintSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\SliderJointConstraintSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\MotorConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

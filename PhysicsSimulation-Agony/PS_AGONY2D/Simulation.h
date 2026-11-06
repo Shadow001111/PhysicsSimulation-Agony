@@ -1,5 +1,4 @@
 #pragma once
-#include "ConstraintSystem.h"
 #include "IslandManager.h"
 #include "Constants.h"
 
@@ -20,6 +19,7 @@
 #include "SimulationImpl/CollisionCallbackManager.h"
 #include "SimulationImpl/ObjectManager.h"
 #include "SimulationImpl/FixedClock.h"
+#include "SimulationImpl/AllConstraintSystem.h"
 
 #include "SimulationAPIs/ObjectAPI.h"
 #include "SimulationAPIs/ConstraintAPI.h"
