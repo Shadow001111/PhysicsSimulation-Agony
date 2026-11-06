@@ -68,7 +68,5 @@ namespace PS_AGONY2D
 		}
 
 		const char* getName() const noexcept override { return "Motor"; }
-
-		void appendBodyPairs(std::vector<ObjectPair>& pairs) const override {}
 	};
 }

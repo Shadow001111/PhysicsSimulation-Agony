@@ -6,8 +6,7 @@
 
 // Define all scalar SoA fields.
 #define PS_AGONY_PRISMATIC_JOINT_SOA_SCALAR_FIELDS(F) \
-    F(bodyIndexA, ObjectDenseIndex) \
-    F(bodyIndexB, ObjectDenseIndex) \
+    F(bodyIndexPair, ObjectPair) \
     F(localAnchorA, Vec2) \
     F(localAnchorB, Vec2) \
     F(localAxisA, Vec2) \
@@ -44,7 +43,7 @@ namespace PS_AGONY2D
         Handle handleAt(size_t index) const noexcept { return handles.handleAt(index); }
 
 
-        size_t getCount() const noexcept { return bodyIndexA.size(); }
+        size_t getCount() const noexcept { return bodyIndexPair.size(); }
         size_t getMemoryUsage() const noexcept;
     };
 

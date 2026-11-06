@@ -90,7 +90,8 @@ namespace PS_AGONY2D
 						break;
 					case Cmd::EnableLimit: soa.enableLimit[i] = static_cast<uint8_t>(c.index != 0); break;
 					case Cmd::ResetReferenceAngle:
-						soa.referenceAngle[i] = computeReferenceAngle(bodies, soa.bodyIndexA[i], soa.bodyIndexB[i]);
+						const ObjectPair bodyIndexPair = soa.bodyIndexPair[i];
+						soa.referenceAngle[i] = computeReferenceAngle(bodies, bodyIndexPair.a, bodyIndexPair.b);
 						break;
 					}
 				});
@@ -107,8 +108,9 @@ namespace PS_AGONY2D
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;
-			d.bodyHandleA = bodies.handleAt(soa.bodyIndexA[i]);
-			d.bodyHandleB = bodies.handleAt(soa.bodyIndexB[i]);
+			const ObjectPair bodyIndexPair = soa.bodyIndexPair[i];
+			d.bodyHandleA = bodies.handleAt(bodyIndexPair.a);
+			d.bodyHandleB = bodies.handleAt(bodyIndexPair.b);
 			d.localAnchorA = soa.localAnchorA[i];
 			d.localAnchorB = soa.localAnchorB[i];
 			d.localAxisA = soa.localAxisA[i];
@@ -122,18 +124,6 @@ namespace PS_AGONY2D
 		}
 
 		const char* getName() const noexcept override { return "PrismaticJoint"; }
-
-		void appendBodyPairs(std::vector<ObjectPair>& pairs) const override
-		{
-			const size_t count = soa.getCount();
-			for (size_t i = 0; i < count; i++)
-			{
-				pairs.emplace_back(
-					soa.bodyIndexA[i],
-					soa.bodyIndexB[i]
-				);
-			}
-		}
 	private:
 		// (bodyB.rotation - bodyA.rotation) wrapped to (-pi, pi], robust to each body's rotation wrapping independently.
 		static Real computeReferenceAngle(const BodySoA& bodies, ObjectDenseIndex a, ObjectDenseIndex b) noexcept

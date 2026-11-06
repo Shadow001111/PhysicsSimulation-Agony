@@ -68,8 +68,9 @@ namespace PS_AGONY2D
 		{
 			if (i >= soa.getCount()) return std::nullopt;
 			Data d;
-			d.bodyHandleA = bodies.handleAt(soa.bodyIndexA[i]);
-			d.bodyHandleB = bodies.handleAt(soa.bodyIndexB[i]);
+			const ObjectPair bodyIndexPair = soa.bodyIndexPair[i];
+			d.bodyHandleA = bodies.handleAt(bodyIndexPair.a);
+			d.bodyHandleB = bodies.handleAt(bodyIndexPair.b);
 			d.localAnchorA = soa.localAnchorA[i];
 			d.localAnchorB = soa.localAnchorB[i];
 			d.stiffness = soa.stiffness[i];
@@ -78,17 +79,5 @@ namespace PS_AGONY2D
 		}
 
 		const char* getName() const noexcept override { return "RevoluteJoint"; }
-
-		void appendBodyPairs(std::vector<ObjectPair>& pairs) const override
-		{
-			const size_t count = soa.getCount();
-			for (size_t i = 0; i < count; i++)
-			{
-				pairs.emplace_back(
-					soa.bodyIndexA[i],
-					soa.bodyIndexB[i]
-				);
-			}
-		}
 	};
 }

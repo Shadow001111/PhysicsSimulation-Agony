@@ -1,13 +1,10 @@
 #include "MotorSoA.h"
 
-#include <utility>
-
-
 namespace PS_AGONY2D
 {
 	ObjectDenseIndex MotorSoA::append(ObjectDenseIndex index, Real speed, Real torqueLimit)
 	{
-		const ObjectDenseIndex newIndex = this->bodyIndex.size();
+		const ObjectDenseIndex newIndex = getCount();
 
 		this->bodyIndex.push_back(index);
 		this->targetSpeed.push_back(speed);
@@ -21,7 +18,7 @@ namespace PS_AGONY2D
 
 	void MotorSoA::swapWithBack(size_t index)
 	{
-		if (index >= bodyIndex.size()) [[unlikely]]
+		if (index >= getCount()) [[unlikely]]
 		{
 			return;
 		}
@@ -35,7 +32,7 @@ namespace PS_AGONY2D
 
 	void MotorSoA::popBack()
 	{
-		if (bodyIndex.empty()) [[unlikely]]
+		if (getCount() == 0) [[unlikely]]
 		{
 			return;
 		}
@@ -49,7 +46,7 @@ namespace PS_AGONY2D
 
 	size_t MotorSoA::swapRemove(size_t index)
 	{
-		const size_t lastIndex = bodyIndex.size() - 1;
+		const size_t lastIndex = getCount() - 1;
 		if (index != lastIndex)
 		{
 			swapWithBack(index);

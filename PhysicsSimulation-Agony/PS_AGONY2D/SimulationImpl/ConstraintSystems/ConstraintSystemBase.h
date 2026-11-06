@@ -152,18 +152,20 @@ namespace PS_AGONY2D
 			else
 			{
 				// Unlink the constraint being removed from both of its bodies.
-				bodies.removeAttachment(soa.bodyIndexA[index], Type, index);
-				bodies.removeAttachment(soa.bodyIndexB[index], Type, index);
+				const ObjectPair bodyIndexPair = soa.bodyIndexPair[index];
+				bodies.removeAttachment(bodyIndexPair.a, Type, index);
+				bodies.removeAttachment(bodyIndexPair.b, Type, index);
 
 				const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
 
 				// If a constraint got swapped into 'index', relink it there.
 				if (oldBackIndex != index)
 				{
-					bodies.removeAttachment(soa.bodyIndexA[index], Type, oldBackIndex);
-					bodies.addAttachment(soa.bodyIndexA[index], Type, index);
-					bodies.removeAttachment(soa.bodyIndexB[index], Type, oldBackIndex);
-					bodies.addAttachment(soa.bodyIndexB[index], Type, index);
+					const ObjectPair bodyIndexPair = soa.bodyIndexPair[index];
+					bodies.removeAttachment(bodyIndexPair.a, Type, oldBackIndex);
+					bodies.addAttachment(bodyIndexPair.a, Type, index);
+					bodies.removeAttachment(bodyIndexPair.b, Type, oldBackIndex);
+					bodies.addAttachment(bodyIndexPair.b, Type, index);
 				}
 			}
 			wasSoAChanged = true;
@@ -181,8 +183,9 @@ namespace PS_AGONY2D
 			}
 			else
 			{
-				if (soa.bodyIndexA[index] == oldBodyIndex) soa.bodyIndexA[index] = newBodyIndex;
-				if (soa.bodyIndexB[index] == oldBodyIndex) soa.bodyIndexB[index] = newBodyIndex;
+				ObjectPair& bodyIndexPair = soa.bodyIndexPair[index];
+				if (bodyIndexPair.a == oldBodyIndex) bodyIndexPair.a = newBodyIndex;
+				if (bodyIndexPair.b == oldBodyIndex) bodyIndexPair.b = newBodyIndex;
 			}
 			wasSoAChanged = true;
 		}
@@ -192,6 +195,14 @@ namespace PS_AGONY2D
 			solver.setDataViewers(bodies, Viewer(soa));
 			solver.prepare(wasSoAChanged);
 			wasSoAChanged = false;
+		}
+
+		void appendBodyPairs(std::vector<ObjectPair>& pairs) const final
+		{
+			if constexpr (!IsSingleBody)
+			{
+				pairs.insert(pairs.end(), soa.bodyIndexPair.begin(), soa.bodyIndexPair.end());
+			}
 		}
 
 		IConstraintSolver& getSolver() noexcept final { return solver; }

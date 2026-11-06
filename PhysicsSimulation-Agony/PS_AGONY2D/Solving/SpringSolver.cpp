@@ -37,8 +37,9 @@ namespace PS_AGONY2D
 			const size_t i = springIndicesPtr[springIndex];
 			SpringConstraintData& constraintData = constraintContainer[outOffset + springIndex];
 
-			const ObjectDenseIndex bodyIndexA = viewer.bodyIndexA[i];
-			const ObjectDenseIndex bodyIndexB = viewer.bodyIndexB[i];
+			const ObjectPair bodyIndexPair = viewer.bodyIndexPair[i];
+			const ObjectDenseIndex bodyIndexA = bodyIndexPair.a;
+			const ObjectDenseIndex bodyIndexB = bodyIndexPair.b;
 
 			constraintData.bodyIndexA = bodyIndexA;
 			constraintData.bodyIndexB = bodyIndexB;

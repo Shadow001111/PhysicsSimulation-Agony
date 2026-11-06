@@ -216,7 +216,7 @@ namespace PS_AGONY2D
 	public:
 		ObjectPair makeBodyRef(size_t i) const
 		{
-			return { this->viewer.bodyIndexA[i], this->viewer.bodyIndexB[i] };
+			return { this->viewer.bodyIndexPair[i] };
 		}
 
 		void planExecution(size_t workerCount)

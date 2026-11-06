@@ -1,16 +1,12 @@
 #include "SliderJointSoA.h"
 
-#include <utility>
-
-
 namespace PS_AGONY2D
 {
 	ObjectDenseIndex SliderJointSoA::append(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Vec2 anchorA, Vec2 anchorB, Vec2 axisA, Real stiffness, Real damping, Real lowerLimit, Real upperLimit, bool enableLimit)
 	{
-		const ObjectDenseIndex newIndex = this->bodyIndexA.size();
+		const ObjectDenseIndex newIndex = getCount();
 
-		this->bodyIndexA.push_back(indexA);
-		this->bodyIndexB.push_back(indexB);
+		this->bodyIndexPair.emplace_back(indexA, indexB);
 		this->localAnchorA.push_back(anchorA);
 		this->localAnchorB.push_back(anchorB);
 		this->localAxisA.push_back(axisA);
@@ -27,7 +23,7 @@ namespace PS_AGONY2D
 
 	void SliderJointSoA::swapWithBack(size_t index)
 	{
-		if (index >= bodyIndexA.size()) [[unlikely]]
+		if (index >= getCount()) [[unlikely]]
 		{
 			return;
 		}
@@ -40,7 +36,7 @@ namespace PS_AGONY2D
 
 	void SliderJointSoA::popBack()
 	{
-		if (bodyIndexA.empty()) [[unlikely]]
+		if (getCount() == 0) [[unlikely]]
 		{
 			return;
 		}
@@ -53,7 +49,7 @@ namespace PS_AGONY2D
 
 	size_t SliderJointSoA::swapRemove(size_t index)
 	{
-		const size_t lastIndex = bodyIndexA.size() - 1;
+		const size_t lastIndex = getCount() - 1;
 		if (index != lastIndex)
 		{
 			swapWithBack(index);
