@@ -122,6 +122,18 @@ namespace PS_AGONY2D
 		}
 
 		const char* getName() const noexcept override { return "PrismaticJoint"; }
+
+		void appendBodyPairs(std::vector<ObjectPair>& pairs) const override
+		{
+			const size_t count = soa.getCount();
+			for (size_t i = 0; i < count; i++)
+			{
+				pairs.emplace_back(
+					soa.bodyIndexA[i],
+					soa.bodyIndexB[i]
+				);
+			}
+		}
 	private:
 		// (bodyB.rotation - bodyA.rotation) wrapped to (-pi, pi], robust to each body's rotation wrapping independently.
 		static Real computeReferenceAngle(const BodySoA& bodies, ObjectDenseIndex a, ObjectDenseIndex b) noexcept

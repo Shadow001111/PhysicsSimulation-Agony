@@ -279,13 +279,23 @@ namespace PS_AGONY2D
         narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
 
         // Get body pairs from collider pairs. Must be called before solving.
-        // TODO: Ensure duplicates won't hurt.
-        std::span<const ObjectPair> edges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
+        std::span<const ObjectPair> bodyCollisionEdges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
+
+        std::vector<ObjectPair> allEdges(bodyCollisionEdges.begin(), bodyCollisionEdges.end()); // Copy.
+
+        // Add constraint edges.
+        {
+            TRACY_SCOPE_N("Get constraint edges");
+            for (auto* constraintSystem : constraintSystems)
+            {
+                constraintSystem->appendBodyPairs(allEdges);
+            }
+        }
 
         // Build islands.
         {
             TRACY_SCOPE_N("Build islands");
-            islandManager.build(objectManager.bodies, edges);
+            islandManager.build(objectManager.bodies, allEdges);
         }
 
         // Collision resolution.

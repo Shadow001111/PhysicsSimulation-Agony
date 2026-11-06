@@ -38,6 +38,9 @@ namespace PS_AGONY2D
 
 		// Binds data views and (re)plans if this type changed. Solving is driven by ConstraintScheduler through getSolver().
 		virtual void prepare(BodySoA& bodies) = 0;
+
+		virtual void appendBodyPairs(std::vector<ObjectPair>& pairs) const = 0;
+
 		virtual IConstraintSolver& getSolver() noexcept = 0;
 
 		virtual size_t getCount() const noexcept = 0;
