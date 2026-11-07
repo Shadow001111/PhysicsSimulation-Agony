@@ -4,7 +4,7 @@
 #include "Ecstasy/Core/Portablity.h"
 #include "Ecstasy/Core/Simd.h"
 
-#include "PS_AGONY2D/FastCosSin.h"
+#include "PS_AGONY2D/FastCosSin.h"RealSimd::storeu
 
 namespace PS_AGONY2D::Integrator
 {
@@ -27,29 +27,20 @@ namespace PS_AGONY2D::Integrator
         const RealSimd zeros = RealSimd(Real(0));
 
         // Integrate.
-        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
         size_t i = range.begin;
-        for (; i < alignEnd; i++)
-        {
-            const Real invMass = invMassPtr[i];
-            const Real movableMask = invMass != Real(0.0);
-
-            velocityXPtr[i] += gravityDelta.x * movableMask;
-            velocityYPtr[i] += gravityDelta.y * movableMask;
-        }
         for (; i + LANES <= range.end; i += LANES)
         {
-            RealSimd velX = RealSimd::load(velocityXPtr + i);
-            RealSimd velY = RealSimd::load(velocityYPtr + i);
+            RealSimd velX = RealSimd::loadu(velocityXPtr + i);
+            RealSimd velY = RealSimd::loadu(velocityYPtr + i);
 
-            const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+            const RealSimd invMassV = RealSimd::loadu(invMassPtr + i);
             const auto movableMask = invMassV != zeros;
 
             velX += gravityDeltaXV & movableMask;
             velY += gravityDeltaYV & movableMask;
 
-            velX.store(velocityXPtr + i);
-            velY.store(velocityYPtr + i);
+            velX.storeu(velocityXPtr + i);
+            velY.storeu(velocityYPtr + i);
         }
         for (; i < range.end; i++)
         {
@@ -78,31 +69,24 @@ namespace PS_AGONY2D::Integrator
         const RealSimd deltaTimeV{ deltaTime };
 
         // Integrate.
-        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
         size_t i = range.begin;
-        for (; i < alignEnd; i++)
-        {
-            positionXPtr[i] += velocityXPtr[i] * deltaTime;
-            positionYPtr[i] += velocityYPtr[i] * deltaTime;
-            rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
-        }
         for (; i + LANES <= range.end; i += LANES)
         {
-            const RealSimd velX = RealSimd::load(velocityXPtr + i);
-            const RealSimd velY = RealSimd::load(velocityYPtr + i);
-            const RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
+            const RealSimd velX = RealSimd::loadu(velocityXPtr + i);
+            const RealSimd velY = RealSimd::loadu(velocityYPtr + i);
+            const RealSimd angVel = RealSimd::loadu(angularVelocityPtr + i);
 
-            RealSimd posX = RealSimd::load(positionXPtr + i);
-            RealSimd posY = RealSimd::load(positionYPtr + i);
-            RealSimd rot = RealSimd::load(rotationPtr + i);
+            RealSimd posX = RealSimd::loadu(positionXPtr + i);
+            RealSimd posY = RealSimd::loadu(positionYPtr + i);
+            RealSimd rot = RealSimd::loadu(rotationPtr + i);
 
             posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
             posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
             rot = RealSimd::mulAdd(angVel, deltaTimeV, rot);
 
-            posX.store(positionXPtr + i);
-            posY.store(positionYPtr + i);
-            rot.store(rotationPtr + i);
+            posX.storeu(positionXPtr + i);
+            posY.storeu(positionYPtr + i);
+            rot.storeu(rotationPtr + i);
         }
         for (; i < range.end; i++)
         {
@@ -129,29 +113,20 @@ namespace PS_AGONY2D::Integrator
         const RealSimd zeros = RealSimd(Real(0));
 
         // Integrate.
-        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
         size_t i = range.begin;
-        for (; i < alignEnd; i++)
-        {
-            const Real invMass = invMassPtr[i];
-            const Real movableMask = invMass != Real(0.0);
-
-            velocityXPtr[i] += gravityDelta.x * movableMask;
-            velocityYPtr[i] += gravityDelta.y * movableMask;
-        }
         for (; i + LANES <= range.end; i += LANES)
         {
-            RealSimd velX = RealSimd::load(velocityXPtr + i);
-            RealSimd velY = RealSimd::load(velocityYPtr + i);
+            RealSimd velX = RealSimd::loadu(velocityXPtr + i);
+            RealSimd velY = RealSimd::loadu(velocityYPtr + i);
 
-            const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+            const RealSimd invMassV = RealSimd::loadu(invMassPtr + i);
             const auto movableMask = invMassV != zeros;
 
             velX += gravityDeltaXV & movableMask;
             velY += gravityDeltaYV & movableMask;
 
-            velX.store(velocityXPtr + i);
-            velY.store(velocityYPtr + i);
+            velX.storeu(velocityXPtr + i);
+            velY.storeu(velocityYPtr + i);
         }
         for (; i < range.end; i++)
         {
@@ -187,50 +162,35 @@ namespace PS_AGONY2D::Integrator
         const RealSimd zeros = RealSimd(Real(0));
 
         // Integrate.
-        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
         size_t i = range.begin;
-        for (; i < alignEnd; i++)
-        {
-            // Full position step.
-            positionXPtr[i] += velocityXPtr[i] * deltaTime;
-            positionYPtr[i] += velocityYPtr[i] * deltaTime;
-            rotationPtr[i] += angularVelocityPtr[i] * deltaTime;
-
-            // Half velocity step.
-            const Real invMass = invMassPtr[i];
-            const Real movableMask = invMass != Real(0.0);
-
-            velocityXPtr[i] += gravityDelta.x * movableMask;
-            velocityYPtr[i] += gravityDelta.y * movableMask;
-        }
         for (; i + LANES <= range.end; i += LANES)
         {
             // Full position step.
-            RealSimd velX = RealSimd::load(velocityXPtr + i);
-            RealSimd velY = RealSimd::load(velocityYPtr + i);
-            const RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
+            RealSimd velX = RealSimd::loadu(velocityXPtr + i);
+            RealSimd velY = RealSimd::loadu(velocityYPtr + i);
+            const RealSimd angVel = RealSimd::loadu(angularVelocityPtr + i);
 
-            RealSimd posX = RealSimd::load(positionXPtr + i);
-            RealSimd posY = RealSimd::load(positionYPtr + i);
-            RealSimd rot = RealSimd::load(rotationPtr + i);
+            RealSimd posX = RealSimd::loadu(positionXPtr + i);
+            RealSimd posY = RealSimd::loadu(positionYPtr + i);
+            RealSimd rot = RealSimd::loadu(rotationPtr + i);
 
             posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
             posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
             rot = RealSimd::mulAdd(angVel, deltaTimeV, rot);
 
-            posX.store(positionXPtr + i);
-            posY.store(positionYPtr + i);
-            rot.store(rotationPtr + i);
+            posX.storeu(positionXPtr + i);
+            posY.storeu(positionYPtr + i);
+            rot.storeu(rotationPtr + i);
 
             // Half velocity step.
-            const RealSimd invMassV = RealSimd::load(invMassPtr + i);
+            const RealSimd invMassV = RealSimd::loadu(invMassPtr + i);
             const auto movableMask = invMassV != zeros;
 
             velX += gravityDeltaXV & movableMask;
             velY += gravityDeltaYV & movableMask;
 
-            velX.store(velocityXPtr + i);
-            velY.store(velocityYPtr + i);
+            velX.storeu(velocityXPtr + i);
+            velY.storeu(velocityYPtr + i);
         }
         for (; i < range.end; i++)
         {
@@ -268,33 +228,19 @@ namespace PS_AGONY2D::Integrator
         const Real damping = std::pow(settings.angularVelocityDamping, deltaTime);
         const RealSimd dampingV(damping);
 
-        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
         size_t i = range.begin;
-        for (; i < alignEnd; i++)
-        {
-            const Real invInertia = invInertiaPtr[i];
-            const Real movableMask = invInertia != Real(0.0);
-
-            const Real angVel = angularVelocityPtr[i];
-
-            Real newAngVel = angVel * damping;
-
-            newAngVel = movableMask * newAngVel + (Real(1) - movableMask) * angVel;
-
-            angularVelocityPtr[i] = newAngVel;
-        }
         for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
-            RealSimd angVel = RealSimd::load(angularVelocityPtr + i);
+            RealSimd angVel = RealSimd::loadu(angularVelocityPtr + i);
 
-            const RealSimd invInertiaV = RealSimd::load(invInertiaPtr + i);
+            const RealSimd invInertiaV = RealSimd::loadu(invInertiaPtr + i);
             const auto movableMask = invInertiaV != zeros;
 
             RealSimd newAngVel = angVel * dampingV;
 
             newAngVel = RealSimd::blendv(angVel, newAngVel, movableMask);
 
-            newAngVel.store(angularVelocityPtr + i);
+            newAngVel.storeu(angularVelocityPtr + i);
         }
         for (; i < range.end; i++)
         {
@@ -315,12 +261,11 @@ namespace PS_AGONY2D::Integrator
     {
         TRACY_SCOPE_NC("Compute rotation cos/sin", PS_AGONY2D::Profiling::Color::Teal);
 
-        // Assume start 0.
         FastCosSin::order5Array(
-            bodies.rotation.data(),
-            bodies.rotationCos.data(),
-            bodies.rotationSin.data(),
-            range.end
+            bodies.rotation.data() + range.begin,
+            bodies.rotationCos.data() + range.begin,
+            bodies.rotationSin.data() + range.begin,
+            range.size()
         );
     }
 }

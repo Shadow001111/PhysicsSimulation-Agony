@@ -10,9 +10,7 @@ namespace PS_AGONY2D::FastCosSin
 {
 	using RealSimd = Ecstasy::Core::Simd<Real>;
 
-	// Requirments to use these functions:
-	// 1) Input pointers must be RealSimd aligned.
-	// 2) Angles/rotations must be in range [0; 2pi).
+	// Requirment to use these functions: Angles/rotations must be in range [0; 2pi).
 
 	void order5Array(
 		const Real* ECSTASY_RESTRICT inAngleArray,

@@ -26,25 +26,11 @@ namespace PS_AGONY2D
         const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
 
         // Wrap.
-        const size_t alignEnd = std::min<size_t>(range.end, range.begin + ((RealSimd::lanes - (range.begin % RealSimd::lanes)) % RealSimd::lanes));
         size_t i = range.begin;
-        for (; i < alignEnd; i++)
-        {
-            Real rot = rotationPtr[i];
-            Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);
-            rot -= wrapCount * Constants::TWO_PI;
-
-            Real isRotNegativeMask = rot < 0;
-            rot += isRotNegativeMask * Constants::TWO_PI;
-            wrapCount -= isRotNegativeMask;
-
-            rotationPtr[i] = rot;
-            rotationWrapCountPtr[i] += wrapCount;
-        }
         for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
-            RealSimd rot = RealSimd::load(rotationPtr + i);
-            RealSimd oldWrapCount = RealSimd::load(rotationWrapCountPtr + i);
+            RealSimd rot = RealSimd::loadu(rotationPtr + i);
+            RealSimd oldWrapCount = RealSimd::loadu(rotationWrapCountPtr + i);
 
             RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
             rot = RealSimd::negMulAdd(
@@ -57,8 +43,8 @@ namespace PS_AGONY2D
             rot += isRotNegativeMask & twoPIV;
             wrapCount -= isRotNegativeMask & oneV;
 
-            rot.store(rotationPtr + i);
-            (oldWrapCount + wrapCount).store(rotationWrapCountPtr + i);
+            rot.storeu(rotationPtr + i);
+            (oldWrapCount + wrapCount).storeu(rotationWrapCountPtr + i);
         }
         for (; i < range.end; i++)
         {

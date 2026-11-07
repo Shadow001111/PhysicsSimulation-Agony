@@ -46,7 +46,7 @@ namespace PS_AGONY2D::FastCosSin
 		size_t i = 0;
 		for (; i + LANES <= size; i += LANES)
 		{
-			RealSimd x = RealSimd::load(inAngleArray + i);
+			RealSimd x = RealSimd::loadu(inAngleArray + i);
 
 			IntSimd quadrantIndex = (x * invHalfPiV).realToSmallNonNegativeInteger();
 
@@ -77,8 +77,8 @@ namespace PS_AGONY2D::FastCosSin
 			RealSimd sin = sinMag ^ sinMask;
 			RealSimd cos = cosMag ^ cosMask;
 
-			sin.store(outSinArray + i);
-			cos.store(outCosArray + i);
+			sin.storeu(outSinArray + i);
+			cos.storeu(outCosArray + i);
 		}
 		for (; i < size; i++)
 		{

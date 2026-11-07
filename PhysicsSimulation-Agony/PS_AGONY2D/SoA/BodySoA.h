@@ -42,6 +42,7 @@ namespace PS_AGONY2D
 {
     // Memory order of bodies is always follows the enum order. (Pls, keep unused always at the back).
     enum class BodyGroup : uint8_t { Dynamic, Static, Sleeping, Unused };
+    //enum class BodyGroup : uint8_t { Static, Dynamic, Sleeping, Unused };
 
     struct IndexRange
     {
