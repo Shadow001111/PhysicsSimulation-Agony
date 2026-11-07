@@ -90,16 +90,7 @@ namespace PS_AGONY2D
 				std::abort();
 			}
 
-			//SolvingPlanner::threadLocal().planStandardExecution(
-			//	solvingPlan,
-			//	collidingBodyPairs,
-			//	claimRange,
-			//	bodies->range(BodyGroup::Static),
-			//	false,
-			//	workerCount
-			//);
-
-			// Rating: Sometimes results in faster execution, but I think it may have huge worst-case scenario dependent on body ordering.
+			// Rating: Results in faster execution, but I think it may have huge worst-case scenario dependent on body ordering.
 			SolvingPlanner::threadLocal().planCacheLineAwareExecution(
 				solvingPlan,
 				collidingBodyPairs,
@@ -108,16 +99,6 @@ namespace PS_AGONY2D
 				workerCount,
 				sizeof(Real)
 			);
-			
-			// Rating: Worse than upper method in planning time and speeding up solving.
-			//SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
-			//	solvingPlan,
-			//	collidingBodyPairs,
-			//  claimRange,
-			//	bodies->range(BodyGroup::Static), false,
-			//	workerCount,
-			//	sizeof(Real)
-			//);
 		}
 
 		// Constraint data is gathered straight through the plan's indices, so no separate reorder copy of the full data is needed.
