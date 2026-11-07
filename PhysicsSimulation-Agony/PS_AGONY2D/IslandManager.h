@@ -48,6 +48,8 @@ namespace PS_AGONY2D
         {
             return { membersArray.data() + startArray[i], startArray[i + 1] - startArray[i] };
         }
+
+        [[nodiscard]] size_t getMemoryUsage() const;
     private:
         // Iterative path halving. Valid for both roots and non-roots.
         uint32_t find(uint32_t x) noexcept;

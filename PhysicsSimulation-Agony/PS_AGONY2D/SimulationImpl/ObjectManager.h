@@ -47,6 +47,7 @@ namespace PS_AGONY2D
 		uint32_t index{ 0 }; // Material index or pending polygon slot.
 	};
 
+	// TODO: Add internal stuff to getMemoryUsage.
 	class ObjectManager
 	{
 	public:

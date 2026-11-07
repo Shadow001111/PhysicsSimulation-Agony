@@ -36,29 +36,41 @@ namespace PS_AGONY2D
 	public:
 		struct DebugData
 		{
+			struct MemoryUsage
+			{
+				size_t bodyData = 0;
+
+				size_t colliderData = 0;
+
+				size_t circleData = 0;
+				size_t boxData = 0;
+				size_t polygonData = 0;
+				size_t capsuleData = 0;
+
+				size_t materialData = 0;
+
+				size_t collisionCallback = 0;
+
+				size_t broadPhaseDetector = 0;
+				size_t narrowPhaseDetector = 0;
+
+				size_t bodyCollisionSolver = 0;
+
+				std::array<size_t, size_t(ConstraintType::COUNT)> constraintData{};
+
+				size_t solvingPlanner = 0;
+
+				size_t islandManager = 0;
+
+				size_t other = 0;
+			};
+
 			// UPS.
 			uint32_t updatesHappened = 0;
 			uint32_t updatesSupposedToHappen = 0;
 
 			// Memory.
-			size_t bodyDataMemoryUsage = 0;
-
-			size_t colliderDataMemoryUsage = 0;
-			size_t circleDataMemoryUsage = 0;
-			size_t boxDataMemoryUsage = 0;
-			size_t polygonDataMemoryUsage = 0;
-			size_t capsuleDataMemoryUsage = 0;
-
-			size_t materialDataMemoryUsage = 0;
-			size_t collisionCallbackMemoryUsage = 0;
-
-			size_t broadPhaseDetectorMemoryUsage = 0;
-			size_t narrowPhaseDetectorMemoryUsage = 0;
-
-			size_t bodyCollisionSolverMemoryUsage = 0;
-			std::array<size_t, size_t(ConstraintType::COUNT)> constraintDataMemoryUsage{};
-
-			size_t solvingPlannerMemoryUsage = 0;
+			MemoryUsage memoryUsage{};
 
 			// Solving errors.
 			Real bodyCollisionSolverVelocityError = 0;
@@ -247,6 +259,6 @@ namespace PS_AGONY2D
 
 		void applyBodyHolderConstraint(Real deltaTime, const Interactivity::BodyHolder& holder);
 
-		void collectMemoryUsage(DebugData& data) const;
+		void collectMemoryUsage(DebugData::MemoryUsage& data) const;
 	};
 }

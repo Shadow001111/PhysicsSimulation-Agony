@@ -212,36 +212,37 @@ static void renderGUI(
     // Simulation memory hierarchy.
     if (ImGui::CollapsingHeader("Simulation Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        const size_t shapeTotal =
-            simulationData.circleDataMemoryUsage +
-            simulationData.boxDataMemoryUsage +
-            simulationData.polygonDataMemoryUsage +
-            simulationData.capsuleDataMemoryUsage;
+        const auto& memory = simulationData.memoryUsage;
 
-        const size_t colliderTotal = simulationData.colliderDataMemoryUsage;
+        const size_t shapeTotal =
+            memory.circleData +
+            memory.boxData +
+            memory.polygonData +
+            memory.capsuleData;
 
         size_t constraintsTotal = 0;
-        size_t solversTotal = simulationData.bodyCollisionSolverMemoryUsage;
+        size_t solversTotal = memory.bodyCollisionSolver;
 
         for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
         {
-            constraintsTotal += simulationData.constraintDataMemoryUsage[i];
+            constraintsTotal += memory.constraintData[i];
 
             solversTotal += simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i)).getSolverMemoryUsage();
         }
 
         const size_t totalMemory =
-            simulationData.bodyDataMemoryUsage +
-            colliderTotal +
+            memory.bodyData +
+            memory.colliderData +
             shapeTotal +
-            constraintsTotal +
-            simulationData.broadPhaseDetectorMemoryUsage +
-            simulationData.narrowPhaseDetectorMemoryUsage +
+            memory.materialData +
+            memory.collisionCallback +
+            memory.broadPhaseDetector +
+            memory.narrowPhaseDetector +
             solversTotal +
-            simulationData.solvingPlannerMemoryUsage +
-            simulationData.materialDataMemoryUsage +
-            simulationData.collisionCallbackMemoryUsage
-            ;
+            constraintsTotal +
+            memory.solvingPlanner +
+            memory.islandManager +
+            memory.other;
 
         ImGui::Text("Total: %s", formatSizeBinary(totalMemory).c_str());
         ImGui::Separator();
@@ -276,14 +277,14 @@ static void renderGUI(
                 ImGui::Text("%.1f%%", percentage);
                 };
 
-            addMemoryRow("Bodies", simulationData.bodyDataMemoryUsage);
-            addMemoryRow("Colliders", simulationData.colliderDataMemoryUsage);
+            addMemoryRow("Bodies", memory.bodyData);
+            addMemoryRow("Colliders", memory.colliderData);
 
             addMemoryRow("Shapes", shapeTotal);
-            addMemoryRow("Circles", simulationData.circleDataMemoryUsage, true);
-            addMemoryRow("Boxes", simulationData.boxDataMemoryUsage, true);
-            addMemoryRow("Polygons", simulationData.polygonDataMemoryUsage, true);
-            addMemoryRow("Capsules", simulationData.capsuleDataMemoryUsage, true);
+            addMemoryRow("Circles", memory.circleData, true);
+            addMemoryRow("Boxes", memory.boxData, true);
+            addMemoryRow("Polygons", memory.polygonData, true);
+            addMemoryRow("Capsules", memory.capsuleData, true);
 
             {
                 addMemoryRow("Constraints", constraintsTotal);
@@ -292,18 +293,18 @@ static void renderGUI(
                     const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
                     const std::string label = std::string(system.getName()) + "s";
 
-                    addMemoryRow(label.c_str(), simulationData.constraintDataMemoryUsage[i], true);
+                    addMemoryRow(label.c_str(), memory.constraintData[i], true);
                 }
             }
 
-            addMemoryRow("Broad Phase Detector", simulationData.broadPhaseDetectorMemoryUsage);
-            addMemoryRow("Narrow Phase Detector", simulationData.narrowPhaseDetectorMemoryUsage);
-            addMemoryRow("Materials", simulationData.materialDataMemoryUsage);
-            addMemoryRow("Collision Callbacks", simulationData.collisionCallbackMemoryUsage);
+            addMemoryRow("Broad Phase Detector", memory.broadPhaseDetector);
+            addMemoryRow("Narrow Phase Detector", memory.narrowPhaseDetector);
+            addMemoryRow("Materials", memory.materialData);
+            addMemoryRow("Collision Callbacks", memory.collisionCallback);
 
             {
                 addMemoryRow("Solvers", solversTotal);
-                addMemoryRow("Body Collision Solver", simulationData.bodyCollisionSolverMemoryUsage, true);
+                addMemoryRow("Body Collision Solver", memory.bodyCollisionSolver, true);
                 for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
                 {
                     const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
@@ -313,7 +314,11 @@ static void renderGUI(
                 }
             }
 
-            addMemoryRow("Solving Planner", simulationData.solvingPlannerMemoryUsage);
+            addMemoryRow("Solving Planner", memory.solvingPlanner);
+
+            addMemoryRow("Island manager", memory.islandManager);
+
+            addMemoryRow("Other", memory.other);
 
             ImGui::EndTable();
         }

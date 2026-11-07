@@ -82,6 +82,16 @@ namespace PS_AGONY2D
         valid = true;
     }
 
+    size_t IslandManager::getMemoryUsage() const
+    {
+        size_t total = 0;
+        total += getVectorMemoryUsage(parentArray);
+        total += getVectorMemoryUsage(rootToId);
+        total += getVectorMemoryUsage(startArray);
+        total += getVectorMemoryUsage(membersArray);
+        return total;
+    }
+
     uint32_t IslandManager::find(uint32_t x) noexcept
     {
         int32_t* parentArrayPtr = parentArray.data();

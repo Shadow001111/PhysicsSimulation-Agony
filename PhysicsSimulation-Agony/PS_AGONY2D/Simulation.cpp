@@ -334,7 +334,7 @@ namespace PS_AGONY2D
 
             runtimeDebugData.updatesHappened = 0;
 
-            collectMemoryUsage(debugDataSnaphot);
+            collectMemoryUsage(debugDataSnaphot.memoryUsage);
         }
 
         runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
@@ -841,32 +841,40 @@ namespace PS_AGONY2D
         }
     }
 
-    void Simulation::collectMemoryUsage(DebugData& data) const
+    void Simulation::collectMemoryUsage(DebugData::MemoryUsage& data) const
     {
-        data.bodyDataMemoryUsage = objectManager.bodies.getMemoryUsage();
+        data.bodyData = objectManager.bodies.getMemoryUsage();
 
-        data.colliderDataMemoryUsage = objectManager.colliders.getMemoryUsage();
-        data.circleDataMemoryUsage = objectManager.circles.getMemoryUsage();
-        data.boxDataMemoryUsage = objectManager.boxes.getMemoryUsage();
-        data.polygonDataMemoryUsage = objectManager.polygons.getMemoryUsage();
-        data.capsuleDataMemoryUsage = objectManager.capsules.getMemoryUsage();
+        data.colliderData = objectManager.colliders.getMemoryUsage();
 
-        data.materialDataMemoryUsage = materialManager.getMemoryUsage();
-        data.collisionCallbackMemoryUsage = collisionCallbackManager.getMemoryUsage();
-        data.broadPhaseDetectorMemoryUsage = broadPhaseCollisionDetector.getMemoryUsage();
-        data.narrowPhaseDetectorMemoryUsage = narrowPhaseCollisionDetector.getMemoryUsage();
+        data.circleData = objectManager.circles.getMemoryUsage();
+        data.boxData = objectManager.boxes.getMemoryUsage();
+        data.polygonData = objectManager.polygons.getMemoryUsage();
+        data.capsuleData = objectManager.capsules.getMemoryUsage();
 
-        data.bodyCollisionSolverMemoryUsage = bodyCollisionSolver.getMemoryUsage();
+        data.materialData = materialManager.getMemoryUsage();
+
+        data.collisionCallback = collisionCallbackManager.getMemoryUsage();
+
+        data.broadPhaseDetector = broadPhaseCollisionDetector.getMemoryUsage();
+        data.narrowPhaseDetector = narrowPhaseCollisionDetector.getMemoryUsage();
+
+        data.bodyCollisionSolver = bodyCollisionSolver.getMemoryUsage();
 
         for (size_t i = 0; i < constraintSystems.size(); ++i)
         {
-            data.constraintDataMemoryUsage[i] = constraintSystems[i]->getMemoryUsage();
+            data.constraintData[i] = constraintSystems[i]->getMemoryUsage();
         }
 
-        data.solvingPlannerMemoryUsage = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
+        data.solvingPlanner = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
 
-        // TODO: Add:
-        // std::vector<ColliderIndex> broadPhaseColliders;
-        // std::vector<std::pair<ColliderIndex, Real>> narrowPhaseColliders;
+        data.islandManager = islandManager.getMemoryUsage();
+
+        data.other =
+            getVectorMemoryUsage(broadPhaseColliders) +
+            getVectorMemoryUsage(narrowPhaseColliders) +
+            getVectorMemoryUsage(sleepRelatedCandidates) +
+            getVectorMemoryUsage(islandSleepFlags)
+            ;
     }
 }
