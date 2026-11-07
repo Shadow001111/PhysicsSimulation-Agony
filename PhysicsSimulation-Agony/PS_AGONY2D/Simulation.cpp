@@ -278,24 +278,20 @@ namespace PS_AGONY2D
         wakeSleepingContactData();
         narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
 
-        // Get body pairs from collider pairs. Must be called before solving.
-        std::span<const ObjectPair> bodyCollisionEdges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
-
-        std::vector<ObjectPair> allEdges(bodyCollisionEdges.begin(), bodyCollisionEdges.end()); // Copy.
-
-        // Add constraint edges.
-        {
-            TRACY_SCOPE_N("Get constraint edges");
-            for (auto* constraintSystem : constraintSystems)
-            {
-                constraintSystem->appendBodyPairs(allEdges);
-            }
-        }
-
         // Build islands.
+        std::span<const ObjectPair> bodyCollisionEdges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
         {
             TRACY_SCOPE_N("Build islands");
-            islandManager.build(objectManager.bodies, allEdges);
+
+            islandManager.reset(objectManager.bodies);
+
+            islandManager.step(bodyCollisionEdges);
+            for (auto* constraintSystem : constraintSystems)
+            {
+                islandManager.step(constraintSystem->getBodyPairs());
+            }
+
+            islandManager.finalize(objectManager.bodies);
         }
 
         // Collision resolution.
@@ -314,7 +310,7 @@ namespace PS_AGONY2D
 
     void Simulation::flushCommands()
     {
-        std::vector<Handle> sink;
+        std::vector<Handle> sink; // TODO: Check if needed to use it.
         objectManager.flushCommands();
         for (auto* constraintSystem : constraintSystems)
         {
@@ -509,7 +505,11 @@ namespace PS_AGONY2D
         if (rangeEnd == 0) return;
 
         // No contacts this step: every body is its own island.
-        if (!islandManager.isValid()) islandManager.buildSingletons(bodies);
+        if (!islandManager.isValid())
+        {
+            islandManager.reset(bodies);
+            islandManager.finalize(bodies);
+        }
 
         const Real linearSq = simulationSettings.linearSpeedSleepThreshold * simulationSettings.linearSpeedSleepThreshold;
         const Real angular = simulationSettings.angularSpeedSleepThreshold;

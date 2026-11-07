@@ -44,7 +44,7 @@ namespace PS_AGONY2D
 		// Binds data views and (re)plans if this type changed. Solving is driven by ConstraintScheduler through getSolver().
 		virtual void prepare(BodySoA& bodies) = 0;
 
-		virtual void appendBodyPairs(std::vector<ObjectPair>& pairs) const = 0;
+		virtual std::span<const ObjectPair> getBodyPairs() const = 0;
 
 		virtual IConstraintSolver& getSolver() noexcept = 0;
 
@@ -187,11 +187,15 @@ namespace PS_AGONY2D
 			wasSoAChanged = false;
 		}
 
-		void appendBodyPairs(std::vector<ObjectPair>& pairs) const final
+		std::span<const ObjectPair> getBodyPairs() const final
 		{
-			if constexpr (!IsSingleBody)
+			if constexpr (IsSingleBody)
 			{
-				pairs.insert(pairs.end(), soa.bodyIndexPair.begin(), soa.bodyIndexPair.end());
+				return {};
+			}
+			else
+			{
+				return soa.bodyIndexPair;
 			}
 		}
 

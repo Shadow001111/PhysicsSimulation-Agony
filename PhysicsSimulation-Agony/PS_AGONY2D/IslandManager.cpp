@@ -1,46 +1,55 @@
 #include "IslandManager.h"
 
-#include <numeric>
+#include <algorithm>
 
 namespace PS_AGONY2D
 {
-    void IslandManager::build(BodySoA& bodies, std::span<const ObjectPair> edges)
+    void IslandManager::reset(BodySoA& bodies)
     {
-        const uint32_t dynamicBodyCount = bodies.groupCounts[0];
-        if (edges.empty() || dynamicBodyCount == 0)
-        {
-            buildSingletons(bodies);
-            return;
-        }
+        const auto range = bodies.range(BodyGroup::Dynamic);
+        dynBegin = static_cast<uint32_t>(range.begin);
+        dynEnd = static_cast<uint32_t>(range.end);
 
         const size_t total = bodies.getCount();
         uint32_t* islandId = bodies.islandId.data();
-
-        // Fill other body groups.
-        if (dynamicBodyCount < total)
-        {
-            std::fill(islandId + dynamicBodyCount, islandId + total, NO_ISLAND);
-        }
+        std::fill(islandId, islandId + dynBegin, NO_ISLAND);
+        std::fill(islandId + dynEnd, islandId + total, NO_ISLAND);
 
         // parentArray[i] >= 0: parent index. parentArray[i] < 0: root, -parentArray[i] is the set size.
-        parentArray.assign(dynamicBodyCount, -1);
+        parentArray.assign(dynEnd - dynBegin, -1);
+        valid = false;
+    }
 
+    void IslandManager::step(std::span<const ObjectPair> edges) noexcept
+    {
+        const uint32_t count = dynEnd - dynBegin;
         for (const ObjectPair& edge : edges)
         {
-            if (edge.a >= dynamicBodyCount || edge.b >= dynamicBodyCount)
+            const uint32_t a = edge.a - dynBegin;
+            const uint32_t b = edge.b - dynBegin;
+            // Unsigned wrap rejects indices below dynBegin as well.
+            if (a >= count || b >= count)
                 continue;
-            unite(edge.a, edge.b);
+            unite(a, b);
         }
+        valid = false;
+    }
 
-        // Pass 1: number roots, store their sizes in startArray, mark root as -(id + 1).
-        startArray.resize(dynamicBodyCount + 1);
+    void IslandManager::finalize(BodySoA& bodies)
+    {
+        const uint32_t count = dynEnd - dynBegin;
+        uint32_t* islandId = bodies.islandId.data() + dynBegin;
+
+        // Pass 1: number roots in index order, store their sizes in startArray.
+        startArray.resize(count + 1);
+        rootToId.resize(count);
         uint32_t k = 0;
-        for (uint32_t i = 0; i < dynamicBodyCount; i++)
+        for (uint32_t i = 0; i < count; i++)
         {
             if (parentArray[i] < 0)
             {
                 startArray[k] = static_cast<uint32_t>(-parentArray[i]);
-                parentArray[i] = -static_cast<int32_t>(k) - 1;
+                rootToId[i] = k;
                 k++;
             }
         }
@@ -56,13 +65,12 @@ namespace PS_AGONY2D
         startArray[k] = sum;
 
         // Pass 2: scatter (counting sort). startArray[id] is used as a cursor.
-        membersArray.resize(dynamicBodyCount);
-        for (uint32_t i = 0; i < dynamicBodyCount; i++)
+        membersArray.resize(count);
+        for (uint32_t i = 0; i < count; i++)
         {
-            const uint32_t root = find(i);
-            const uint32_t id = static_cast<uint32_t>(-parentArray[root] - 1);
+            const uint32_t id = rootToId[find(i)];
             islandId[i] = id;
-            membersArray[startArray[id]++] = i;
+            membersArray[startArray[id]++] = i + dynBegin;
         }
 
         // Cursors now hold island ends; shift back to starts.
@@ -71,25 +79,6 @@ namespace PS_AGONY2D
         startArray[0] = 0;
 
         islandCount = k;
-        valid = true;
-    }
-
-    void IslandManager::buildSingletons(BodySoA& bodies)
-    {
-        const uint32_t dynamicBodyCount = bodies.groupCounts[0];
-        const size_t total = bodies.getCount();
-        uint32_t* islandId = bodies.islandId.data();
-
-        if (dynamicBodyCount < total)
-            std::fill(islandId + dynamicBodyCount, islandId + total, NO_ISLAND);
-        std::iota(islandId, islandId + dynamicBodyCount, 0u);
-
-        startArray.resize(dynamicBodyCount + 1);
-        std::iota(startArray.begin(), startArray.end(), 0u);
-        membersArray.resize(dynamicBodyCount);
-        std::iota(membersArray.begin(), membersArray.end(), uint32_t(0));
-
-        islandCount = dynamicBodyCount;
         valid = true;
     }
 
