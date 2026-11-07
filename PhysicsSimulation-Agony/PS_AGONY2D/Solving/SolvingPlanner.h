@@ -24,7 +24,7 @@ namespace PS_AGONY2D
         void print() const;
 
         [[nodiscard]] double computeEfficiency() const;
-        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, ObjectDenseIndex staticRangeBegin) const;
+        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, IndexRange staticRange) const;
         [[nodiscard]] size_t getMemoryUsage() const;
         [[nodiscard]] size_t getWorkerCount() const noexcept { return workerCount; }
         [[nodiscard]] const auto& getFlatIndices() const noexcept { return flatIndices; }
@@ -64,9 +64,9 @@ namespace PS_AGONY2D
         std::vector<size_t> boundaryPending;
         std::vector<ObjectPair> singlePairs;
 
-        void buildSchedulable(std::span<const ObjectPair> collisions, ObjectDenseIndex staticRangeBegin, bool hasStaticStaticPairs, uint32_t groupShift);
+        void buildSchedulable(std::span<const ObjectPair> collisions, IndexRange staticRange, bool hasStaticStaticPairs, uint32_t groupShift);
         template <bool UseShift>
-        void planGreedy(SolvingPlan& outPlan, std::span<const ObjectPair> collisions, size_t bodyCount, ObjectDenseIndex staticRangeBegin, bool hasStaticStaticPairs, size_t workerCount, uint32_t groupShift);
+        void planGreedy(SolvingPlan& outPlan, std::span<const ObjectPair> collisions, size_t bodyCount, IndexRange staticRange, bool hasStaticStaticPairs, size_t workerCount, uint32_t groupShift);
         void partitionGroups(size_t groupCount, size_t workerCount);
     public:
         SolvingPlanner() = default;
@@ -88,7 +88,7 @@ namespace PS_AGONY2D
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
             size_t bodyCount,
-            ObjectDenseIndex staticRangeBegin,
+            IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount);
 
@@ -96,7 +96,7 @@ namespace PS_AGONY2D
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
             size_t bodyCount,
-            ObjectDenseIndex staticRangeBegin,
+            IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount,
             size_t chunkSize);
@@ -105,7 +105,7 @@ namespace PS_AGONY2D
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
             size_t bodyCount,
-            ObjectDenseIndex staticRangeBegin,
+            IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount,
             size_t bodyStrideBytes);
@@ -114,7 +114,7 @@ namespace PS_AGONY2D
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
             size_t bodyCount,
-            ObjectDenseIndex staticRangeBegin,
+            IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount,
             size_t bodyStrideBytes);
@@ -123,7 +123,7 @@ namespace PS_AGONY2D
             SolvingPlan& outPlan,
             const std::vector<ObjectDenseIndex>& objects,
             size_t bodyCount,
-            ObjectDenseIndex staticRangeBegin,
+            IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount);
 

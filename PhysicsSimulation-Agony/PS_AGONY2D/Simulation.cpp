@@ -501,8 +501,8 @@ namespace PS_AGONY2D
         TRACY_SCOPE_N("Update sleeping");
 
         BodySoA& bodies = objectManager.bodies;
-        const ObjectDenseIndex rangeEnd = bodies.range(BodyGroup::Dynamic).end;
-        if (rangeEnd == 0) return;
+        const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
+        if (dynamic.empty()) return;
 
         // No contacts this step: every body is its own island.
         if (!islandManager.isValid())
@@ -526,7 +526,7 @@ namespace PS_AGONY2D
         uint32_t* const flags = islandSleepFlags.data();
 
         // Pass 1: timers + AND-reduce readiness per island.
-        for (ObjectDenseIndex i = 0; i < rangeEnd; i++)
+        for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
         {
             const Real linearExcess = velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i] - linearSq;
             const Real angularExcess = std::fabs(angVelPtr[i]) - angular;
@@ -542,12 +542,12 @@ namespace PS_AGONY2D
         for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
         {
             const ObjectDenseIndex index = bodies.indexOfUnchecked(held.body);
-            if (index < rangeEnd) flags[islandIdPtr[index]] = 0;
+            if (index - dynamic.begin < dynamic.size()) flags[islandIdPtr[index]] = 0;
         }
 
         // Pass 2: collect members of sleeping islands.
         sleepRelatedCandidates.clear();
-        for (ObjectDenseIndex i = 0; i < rangeEnd; i++)
+        for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
         {
             uint32_t& f = flags[islandIdPtr[i]];
             if (f == 0) continue;
@@ -593,13 +593,15 @@ namespace PS_AGONY2D
 
             // Only dynamic bodies move. Static/sleeping ones keep render-old == current.
             BodySoA& bodies = objectManager.bodies;
-            const size_t n = bodies.range(BodyGroup::Dynamic).end;
+            const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
+            const size_t b = dynamic.begin;
+            const size_t n = dynamic.size();
 
-            std::copy_n(bodies.offsetX.data(), n, bodies.renderOldOffsetX.data());
-            std::copy_n(bodies.offsetY.data(), n, bodies.renderOldOffsetY.data());
-            std::copy_n(bodies.rotation.data(), n, bodies.renderOldRotation.data());
+            std::copy_n(bodies.offsetX.data() + b, n, bodies.renderOldOffsetX.data() + b);
+            std::copy_n(bodies.offsetY.data() + b, n, bodies.renderOldOffsetY.data() + b);
+            std::copy_n(bodies.rotation.data() + b, n, bodies.renderOldRotation.data() + b);
 
-            std::fill_n(bodies.renderRotationWrapCount.data(), n, Real(0));
+            std::fill_n(bodies.renderRotationWrapCount.data() + b, n, Real(0));
         }
     }
 
@@ -644,27 +646,25 @@ namespace PS_AGONY2D
         Real* ECSTASY_RESTRICT worldCenterXPtr = objectManager.bodies.worldCenterX.data();
         Real* ECSTASY_RESTRICT worldCenterYPtr = objectManager.bodies.worldCenterY.data();
 
-        const size_t bodyCount = range.end;
-
-        size_t i = 0;
-        for (; i + RealSimd::lanes <= bodyCount; i += RealSimd::lanes)
+        size_t i = range.begin;
+        for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
-            const RealSimd positionX = RealSimd::load(positionXPtr + i);
-            const RealSimd positionY = RealSimd::load(positionYPtr + i);
+            const RealSimd positionX = RealSimd::loadu(positionXPtr + i);
+            const RealSimd positionY = RealSimd::loadu(positionYPtr + i);
 
-            const RealSimd localCenterOfMassX = RealSimd::load(localCenterOfMassXPtr + i);
-            const RealSimd localCenterOfMassY = RealSimd::load(localCenterOfMassYPtr + i);
+            const RealSimd localCenterOfMassX = RealSimd::loadu(localCenterOfMassXPtr + i);
+            const RealSimd localCenterOfMassY = RealSimd::loadu(localCenterOfMassYPtr + i);
 
-            const RealSimd cosRot = RealSimd::load(rotationCosPtr + i);
-            const RealSimd sinRot = RealSimd::load(rotationSinPtr + i);
+            const RealSimd cosRot = RealSimd::loadu(rotationCosPtr + i);
+            const RealSimd sinRot = RealSimd::loadu(rotationSinPtr + i);
 
             const RealSimd truePositionX = RealSimd::negMulAdd(localCenterOfMassX, cosRot, RealSimd::mulAdd(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
             const RealSimd truePositionY = RealSimd::negMulAdd(localCenterOfMassX, sinRot, RealSimd::negMulAdd(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
 
-            truePositionX.store(worldCenterXPtr + i);
-            truePositionY.store(worldCenterYPtr + i);
+            truePositionX.storeu(worldCenterXPtr + i);
+            truePositionY.storeu(worldCenterYPtr + i);
         }
-        for (; i < bodyCount; i++)
+        for (; i < range.end; i++)
         {
             const Real positionX = positionXPtr[i];
             const Real positionY = positionYPtr[i];

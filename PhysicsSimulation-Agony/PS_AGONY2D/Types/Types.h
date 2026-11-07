@@ -18,6 +18,14 @@ namespace PS_AGONY2D
 		ObjectDenseIndex a, b;
 	};
 
+	struct IndexRange
+	{
+		ObjectDenseIndex begin = 0;
+		ObjectDenseIndex end = 0;
+		ObjectDenseIndex size() const noexcept { return end - begin; }
+		bool empty() const noexcept { return begin == end; }
+	};
+
 	struct ObjectDeletion
 	{
 		ObjectDenseIndex deletedIndex;
