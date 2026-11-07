@@ -400,7 +400,9 @@ namespace PS_AGONY2D
 
         bodies.addAttachment(a, type, ci);
         bodies.addAttachment(b, type, ci);
-        return system.handleAt(ci);
+        const Handle handle = system.handleAt(ci);
+        refreshConstraintGroup(type, ci);
+        return handle;
     }
 
     template<class System>
@@ -439,7 +441,9 @@ namespace PS_AGONY2D
         auto& motors = static_cast<MotorConstraintSystem&>(*constraintSystems[size_t(ConstraintType::Motor)]);
         const ObjectDenseIndex ci = motors.createAt(bodyIndex, p);
         bodies.addAttachment(bodyIndex, ConstraintType::Motor, ci);
-        return motors.handleAt(ci);
+        const Handle handle = motors.handleAt(ci);
+        refreshConstraintGroup(ConstraintType::Motor, ci);
+        return handle;
     }
 
     void ObjectManager::destroySpringImmediate(Handle h) { destroyConstraintByHandle<SpringConstraintSystem>(ConstraintType::Spring, h); }
@@ -467,18 +471,9 @@ namespace PS_AGONY2D
         bodies.removeAttachment(a, type, index);
         if (b != NONE) bodies.removeAttachment(b, type, index);
 
-        const ObjectDenseIndex oldBack = system.swapRemove(index);
-        if (oldBack == index) return;
-
-        // The old back constraint now lives at 'index': relink on its bodies.
-        system.getBodyIndices(index, a, b);
-        bodies.removeAttachment(a, type, oldBack);
-        bodies.addAttachment(a, type, index);
-        if (b != NONE)
-        {
-            bodies.removeAttachment(b, type, oldBack);
-            bodies.addAttachment(b, type, index);
-        }
+        // Out of the live range (partners relinked by the boundary swaps), then pop.
+        moveConstraintToGroup(type, index, ConstraintGroup::Unused);
+        system.popBack();
     }
 
     void ObjectManager::flushConstraintCommands()
@@ -868,6 +863,7 @@ namespace PS_AGONY2D
         {
             b = moveBodyToGroup(b, to);
             moveBodyColliders(b, from, to);
+            refreshBodyConstraintGroups(b);
         }
     }
 
@@ -994,6 +990,88 @@ namespace PS_AGONY2D
         for (const auto& at : attA) constraintSystems[static_cast<size_t>(at.type)]->remapBodyIndex(at.objectIndex, a, TMP);
         for (const auto& at : attB) constraintSystems[static_cast<size_t>(at.type)]->remapBodyIndex(at.objectIndex, b, a);
         for (const auto& at : attA) constraintSystems[static_cast<size_t>(at.type)]->remapBodyIndex(at.objectIndex, TMP, b);
+    }
+
+    void ObjectManager::swapConstraints(ConstraintType type, ObjectDenseIndex a, ObjectDenseIndex b)
+    {
+        if (a == b) return;
+
+        IConstraintSystem& system = *constraintSystems[size_t(type)];
+        constexpr ObjectDenseIndex NONE = Handle::NULL_DENSE_INDEX;
+
+        ObjectDenseIndex a0, a1, b0, b1;
+        system.getBodyIndices(a, a0, a1);
+        system.getBodyIndices(b, b0, b1);
+        system.swap(a, b);
+
+        // Sentinel pass so constraints sharing a body are not relinked twice.
+        const auto relink = [&](ObjectDenseIndex x, ObjectDenseIndex y, ObjectDenseIndex from, ObjectDenseIndex to)
+            {
+                bodies.replaceAttachment(x, type, from, to);
+                if (y != NONE) bodies.replaceAttachment(y, type, from, to);
+            };
+        relink(a0, a1, a, NONE);
+        relink(b0, b1, b, a);
+        relink(a0, a1, NONE, b);
+    }
+
+    ObjectDenseIndex ObjectManager::moveConstraintToGroup(ConstraintType type, ObjectDenseIndex index, ConstraintGroup target)
+    {
+        IConstraintSystem& system = *constraintSystems[size_t(type)];
+        uint32_t* starts = system.groupStarts;
+        constexpr uint32_t ACTIVE = static_cast<uint32_t>(ConstraintGroup::Active);
+
+        uint32_t g = static_cast<uint32_t>(system.groupOf(index));
+        const uint32_t to = static_cast<uint32_t>(target);
+
+        while (g != to)
+        {
+            const uint32_t from = g;
+            if (g < to)
+            {
+                const ObjectDenseIndex last = system.range(static_cast<ConstraintGroup>(g)).end - 1;
+                swapConstraints(type, index, last);
+                index = last;
+                starts[g + 1]--;
+                g++;
+            }
+            else
+            {
+                const ObjectDenseIndex first = system.range(static_cast<ConstraintGroup>(g)).begin;
+                swapConstraints(type, index, first);
+                index = first;
+                starts[g]++;
+                g--;
+            }
+            if (from == ACTIVE || g == ACTIVE) system.wasSoAChanged = true;
+        }
+
+        return index;
+    }
+
+    ObjectDenseIndex ObjectManager::refreshConstraintGroup(ConstraintType type, ObjectDenseIndex index)
+    {
+        IConstraintSystem& system = *constraintSystems[size_t(type)];
+        if (system.groupOf(index) == ConstraintGroup::Sleeping) return index;
+
+        ObjectDenseIndex a, b;
+        system.getBodyIndices(index, a, b);
+        const bool inactive = bodies.invMass[a] == Real(0) &&
+            (b == Handle::NULL_DENSE_INDEX || bodies.invMass[b] == Real(0));
+
+        // Static set of a plan may have changed even without a move.
+        if (!inactive) system.wasSoAChanged = true;
+        return moveConstraintToGroup(type, index, inactive ? ConstraintGroup::Inactive : ConstraintGroup::Active);
+    }
+
+    void ObjectManager::refreshBodyConstraintGroups(ObjectDenseIndex b)
+    {
+        // Moves relink attachments in place, so list positions stay valid; entries are re-read each step.
+        for (size_t i = 0; i < bodies.attachments[b].size(); i++)
+        {
+            const BodyAttachment attachment = bodies.attachments[b][i];
+            refreshConstraintGroup(attachment.type, attachment.objectIndex);
+        }
     }
 
     ObjectDenseIndex ObjectManager::moveBodyToGroup(ObjectDenseIndex index, BodyGroup target)

@@ -21,6 +21,19 @@ namespace PS_AGONY2D
 		return newIndex;
 	}
 
+	void SliderJointSoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
+	{
+		if (a == b || a >= getCount() || b >= getCount()) [[unlikely]]
+		{
+			return;
+		}
+		handles.swap(a, b);
+
+		#define SWAP_FIELD(name, type) std::swap(name[a], name[b]);
+		PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(SWAP_FIELD)
+		#undef SWAP_FIELD
+	}
+
 	void SliderJointSoA::swapWithBack(size_t index)
 	{
 		if (index >= getCount()) [[unlikely]]
@@ -70,9 +83,14 @@ namespace PS_AGONY2D
 	}
 
 	SliderJointSoAViewer::SliderJointSoAViewer(const SliderJointSoA& data) noexcept :
-		count(data.getCount())
+		SliderJointSoAViewer(data, IndexRange{ 0, static_cast<ObjectDenseIndex>(data.getCount()) })
 	{
-		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
+	}
+
+	SliderJointSoAViewer::SliderJointSoAViewer(const SliderJointSoA& data, IndexRange range) noexcept :
+		count(range.end - range.begin)
+	{
+		#define INIT_VIEWER_FIELD(name, type) name = data.name.data() + range.begin;
 		PS_AGONY_SLIDER_JOINT_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)
 		#undef INIT_VIEWER_FIELD
 	}

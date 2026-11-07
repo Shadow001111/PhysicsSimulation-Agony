@@ -18,6 +18,19 @@ namespace PS_AGONY2D
 		return newIndex;
 	}
 
+	void SpringSoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
+	{
+		if (a == b || a >= getCount() || b >= getCount()) [[unlikely]]
+		{
+			return;
+		}
+		handles.swap(a, b);
+
+		#define SWAP_FIELD(name, type) std::swap(name[a], name[b]);
+		PS_AGONY_SPRING_SOA_SCALAR_FIELDS(SWAP_FIELD)
+			#undef SWAP_FIELD
+	}
+
 	void SpringSoA::swapWithBack(size_t index)
 	{
 		if (index >= getCount()) [[unlikely]]
@@ -28,7 +41,7 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) std::swap(name[index], name.back());
 		PS_AGONY_SPRING_SOA_SCALAR_FIELDS(SWAP_FIELD)
-		#undef SWAP_FIELD
+			#undef SWAP_FIELD
 	}
 
 	void SpringSoA::popBack()
@@ -41,7 +54,7 @@ namespace PS_AGONY2D
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_SPRING_SOA_SCALAR_FIELDS(POP_FIELD)
-		#undef POP_FIELD
+			#undef POP_FIELD
 	}
 
 	size_t SpringSoA::swapRemove(size_t index)
@@ -61,16 +74,21 @@ namespace PS_AGONY2D
 
 		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
 		PS_AGONY_SPRING_SOA_SCALAR_FIELDS(MEM_FIELD)
-		#undef MEM_FIELD
+			#undef MEM_FIELD
 
-		return total;
+			return total;
 	}
 
 	SpringSoAViewer::SpringSoAViewer(const SpringSoA& data) noexcept :
-		count(data.getCount())
+		SpringSoAViewer(data, IndexRange{ 0, static_cast<ObjectDenseIndex>(data.getCount()) })
 	{
-		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
+	}
+
+	SpringSoAViewer::SpringSoAViewer(const SpringSoA& data, IndexRange range) noexcept :
+		count(range.end - range.begin)
+	{
+		#define INIT_VIEWER_FIELD(name, type) name = data.name.data() + range.begin;
 		PS_AGONY_SPRING_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)
-		#undef INIT_VIEWER_FIELD
+			#undef INIT_VIEWER_FIELD
 	}
 }

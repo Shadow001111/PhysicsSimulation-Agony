@@ -27,6 +27,8 @@ namespace PS_AGONY2D
         HandleTable handles;
 
         ObjectDenseIndex append(ObjectDenseIndex index, Real speed, Real torqueLimit);
+        // Swaps two entries in every field (handles included).
+        void swap(ObjectDenseIndex a, ObjectDenseIndex b);
         void swapWithBack(size_t index);
         void popBack();
         size_t swapRemove(size_t index);
@@ -54,6 +56,8 @@ namespace PS_AGONY2D
 
         MotorSoAViewer() = default;
         explicit MotorSoAViewer(const MotorSoA& data) noexcept;
+        // Views only [range.begin, range.end): index 0 is range.begin.
+        MotorSoAViewer(const MotorSoA& data, IndexRange range) noexcept;
 
         size_t getCount() const noexcept { return count; }
     };

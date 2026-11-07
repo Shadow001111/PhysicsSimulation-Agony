@@ -24,6 +24,8 @@ namespace PS_AGONY2D
         HandleTable handles;
 
         ObjectDenseIndex append(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Vec2 anchorA, Vec2 anchorB, Real stiffness, Real damping);
+        // Swaps two entries in every field (handles included).
+        void swap(ObjectDenseIndex a, ObjectDenseIndex b);
         void swapWithBack(size_t index);
         void popBack();
         size_t swapRemove(size_t index);
@@ -47,6 +49,8 @@ namespace PS_AGONY2D
 
         RevoluteJointSoAViewer() = default;
         explicit RevoluteJointSoAViewer(const RevoluteJointSoA& data) noexcept;
+        // Views only [range.begin, range.end): index 0 is range.begin.
+        RevoluteJointSoAViewer(const RevoluteJointSoA& data, IndexRange range) noexcept;
 
         size_t getCount() const noexcept { return count; }
     };

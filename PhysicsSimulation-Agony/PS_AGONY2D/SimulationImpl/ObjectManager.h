@@ -238,6 +238,16 @@ namespace PS_AGONY2D
 		// Body group machinery. Body memory order is [Dynamic][Static][Sleeping][Unused].
 		// swapBodies: swaps two bodies and re-points their colliders. Constraint body indices are not remapped.
 		void swapBodies(ObjectDenseIndex a, ObjectDenseIndex b);
+
+		// Constraint group machinery (per system, see ConstraintGroup). Same scheme as bodies.
+		// swapConstraints: swaps two constraints of one system and relinks their body attachments.
+		void swapConstraints(ConstraintType type, ObjectDenseIndex a, ObjectDenseIndex b);
+		// Moves a constraint across group boundaries (boundary swaps). Returns the new dense index.
+		ObjectDenseIndex moveConstraintToGroup(ConstraintType type, ObjectDenseIndex index, ConstraintGroup target);
+		// Inactive if every body is static, else Active (Sleeping constraints are left alone). Returns the new index.
+		ObjectDenseIndex refreshConstraintGroup(ConstraintType type, ObjectDenseIndex index);
+		// Refreshes every constraint attached to the body (call after its static/dynamic state changed).
+		void refreshBodyConstraintGroups(ObjectDenseIndex bodyIndex);
 		// Moves a body across group boundaries with boundary swaps (<= 3). Returns the new dense index. Collider lists untouched.
 		ObjectDenseIndex moveBodyToGroup(ObjectDenseIndex bodyIndex, BodyGroup target);
 		// BodySoA::append + moves the new body into Static (invMass == 0) or Dynamic. Returns its final index.

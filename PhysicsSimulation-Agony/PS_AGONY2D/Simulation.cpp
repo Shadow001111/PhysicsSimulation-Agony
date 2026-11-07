@@ -288,7 +288,7 @@ namespace PS_AGONY2D
             islandManager.step(bodyCollisionEdges);
             for (auto* constraintSystem : constraintSystems)
             {
-                islandManager.step(constraintSystem->getBodyPairs());
+                islandManager.step(constraintSystem->getActiveEdges());
             }
 
             islandManager.finalize(objectManager.bodies);

@@ -65,13 +65,13 @@ namespace PS_AGONY2D
     {
         #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-        #undef DECLARE_FIELD
+            #undef DECLARE_FIELD
 
-        #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
-        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
-        #undef DECLARE_VECTOR_FIELD
+            #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
+            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
+            #undef DECLARE_VECTOR_FIELD
 
-        HandleTable handles;
+            HandleTable handles;
 
         // Changed by ObjectManager::moveBodyToGroup only.
         uint32_t groupCounts[size_t(BodyGroup::Unused)]{};
@@ -89,7 +89,7 @@ namespace PS_AGONY2D
 
         IndexRange liveRange() const noexcept
         {
-            return { 0, groupStarts[size_t(BodyGroup::Unused)]};
+            return { 0, groupStarts[size_t(BodyGroup::Unused)] };
         }
 
         BodyGroup groupOf(ObjectDenseIndex index) const noexcept
@@ -118,6 +118,8 @@ namespace PS_AGONY2D
 
         void addAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex);
         void removeAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex);
+        // In place (position in the list is kept). No-op if not found.
+        void replaceAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex oldObjectIndex, ObjectDenseIndex newObjectIndex);
 
         void addCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex);
         void removeCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex);
@@ -139,13 +141,13 @@ namespace PS_AGONY2D
     public:
         #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-        #undef DECLARE_VIEWER_FIELD
+            #undef DECLARE_VIEWER_FIELD
 
-        #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
-        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
-        #undef DECLARE_VIEWER_VECTOR_FIELD
+            #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
+            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
+            #undef DECLARE_VIEWER_VECTOR_FIELD
 
-        BodySoAViewer() = default;
+            BodySoAViewer() = default;
         explicit BodySoAViewer(const BodySoA& data) noexcept;
 
         size_t getCount() const noexcept { return count; }

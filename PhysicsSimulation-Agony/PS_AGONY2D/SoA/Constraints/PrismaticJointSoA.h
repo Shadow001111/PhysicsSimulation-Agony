@@ -34,6 +34,8 @@ namespace PS_AGONY2D
         HandleTable handles;
 
         ObjectDenseIndex append(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Vec2 anchorA, Vec2 anchorB, Vec2 axisA, Real referenceAngle, Real stiffness, Real damping, Real lowerLimit, Real upperLimit, bool enableLimit);
+        // Swaps two entries in every field (handles included).
+        void swap(ObjectDenseIndex a, ObjectDenseIndex b);
         void swapWithBack(size_t index);
         void popBack();
         size_t swapRemove(size_t index);
@@ -57,6 +59,8 @@ namespace PS_AGONY2D
 
         PrismaticJointSoAViewer() = default;
         explicit PrismaticJointSoAViewer(const PrismaticJointSoA& data) noexcept;
+        // Views only [range.begin, range.end): index 0 is range.begin.
+        PrismaticJointSoAViewer(const PrismaticJointSoA& data, IndexRange range) noexcept;
 
         size_t getCount() const noexcept { return count; }
     };

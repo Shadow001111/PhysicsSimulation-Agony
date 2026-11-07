@@ -18,11 +18,13 @@ namespace PS_AGONY2D
     {
         #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
         PS_AGONY_SPRING_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-        #undef DECLARE_FIELD
+            #undef DECLARE_FIELD
 
-        HandleTable handles;
+            HandleTable handles;
 
         ObjectDenseIndex append(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Vec2 anchorA, Vec2 anchorB, Real restLength, Real stiffness, Real damping);
+        // Swaps two springs in every field (handles included). Does not touch groups or attachments.
+        void swap(ObjectDenseIndex a, ObjectDenseIndex b);
         void swapWithBack(size_t index);
         void popBack();
         size_t swapRemove(size_t index);
@@ -42,10 +44,12 @@ namespace PS_AGONY2D
     public:
         #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
         PS_AGONY_SPRING_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-        #undef DECLARE_VIEWER_FIELD
+            #undef DECLARE_VIEWER_FIELD
 
-        SpringSoAViewer() = default;
+            SpringSoAViewer() = default;
         explicit SpringSoAViewer(const SpringSoA& data) noexcept;
+        // Views only [range.begin, range.end): index 0 is range.begin.
+        SpringSoAViewer(const SpringSoA& data, IndexRange range) noexcept;
 
         size_t getCount() const noexcept { return count; }
     };

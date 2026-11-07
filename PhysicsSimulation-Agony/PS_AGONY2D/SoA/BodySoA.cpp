@@ -123,6 +123,22 @@ namespace PS_AGONY2D
 		}
 	}
 
+	void BodySoA::replaceAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex oldObjectIndex, ObjectDenseIndex newObjectIndex)
+	{
+		if (bodyIndex >= attachments.size()) [[unlikely]]
+		{
+			return;
+		}
+		for (auto& attachment : attachments[bodyIndex])
+		{
+			if (attachment.type == type && attachment.objectIndex == oldObjectIndex)
+			{
+				attachment.objectIndex = newObjectIndex;
+				return;
+			}
+		}
+	}
+
 	void BodySoA::addCollider(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex)
 	{
 		if (bodyIndex >= colliderIndices.size()) [[unlikely]] return;

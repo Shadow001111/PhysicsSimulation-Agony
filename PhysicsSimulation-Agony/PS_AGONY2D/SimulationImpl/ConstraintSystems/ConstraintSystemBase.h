@@ -20,6 +20,10 @@ namespace PS_AGONY2D
 		uint32_t index{ 0 };
 	};
 
+	// Dense order [Inactive][Sleeping][Active][Unused], ascending by change frequency like BodyGroup.
+	// Inactive: every body of the constraint is static. Sleeping: reserved, not implemented yet.
+	enum class ConstraintGroup : uint8_t { Inactive, Sleeping, Active, Unused };
+
 	// One implementation per ConstraintType. Owns the constraint SoA and its solver, wires
 	// them to BodySoA (attachments, cascade deletion, index remapping) and solves them.
 	class IConstraintSystem
@@ -27,11 +31,41 @@ namespace PS_AGONY2D
 	public:
 		uint32_t iterations = 6;
 
+		// groupStarts[g] = first index of group g, [Unused] = end of live constraints. Changed by
+		// ObjectManager::moveConstraintToGroup only.
+		uint32_t groupStarts[size_t(ConstraintGroup::Unused) + 1]{};
+
+		// Set when the Active range changed (content, order or body layout). Consumed by prepare().
+		bool wasSoAChanged = false;
+
+		IndexRange range(ConstraintGroup group) const noexcept
+		{
+			const size_t index = static_cast<size_t>(group);
+			if (index < size_t(ConstraintGroup::Unused)) [[likely]]
+			{
+				return { groupStarts[index], groupStarts[index + 1] };
+			}
+			return { groupStarts[size_t(ConstraintGroup::Unused)], static_cast<ObjectDenseIndex>(getCount()) };
+		}
+
+		ConstraintGroup groupOf(ObjectDenseIndex index) const noexcept
+		{
+			for (size_t i = 0; i < size_t(ConstraintGroup::Unused); i++)
+			{
+				if (index >= groupStarts[i] && index < groupStarts[i + 1])
+				{
+					return static_cast<ConstraintGroup>(i);
+				}
+			}
+			return ConstraintGroup::Unused;
+		}
+
 		virtual ~IConstraintSystem() = default;
 
-		// Raw swap-and-pop. Returns the old back index (== index if nothing moved), NULL_DENSE_INDEX if out of range.
-		// Does NOT touch body attachments: ObjectManager owns that.
-		virtual ObjectDenseIndex swapRemove(ObjectDenseIndex index) = 0;
+		// Swaps two constraints in every field (handles included). Does not touch groups or body attachments: ObjectManager owns that.
+		virtual void swap(ObjectDenseIndex a, ObjectDenseIndex b) = 0;
+		// Removes the last constraint. Callers move it to the Unused group first.
+		virtual void popBack() = 0;
 		// Body indices of a constraint (b == NULL_DENSE_INDEX for single-body). index must be in range.
 		virtual void getBodyIndices(ObjectDenseIndex index, ObjectDenseIndex& a, ObjectDenseIndex& b) const noexcept = 0;
 		virtual void remapBodyIndex(ObjectDenseIndex index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) = 0;
@@ -44,7 +78,8 @@ namespace PS_AGONY2D
 		// Binds data views and (re)plans if this type changed. Solving is driven by ConstraintScheduler through getSolver().
 		virtual void prepare(BodySoA& bodies) = 0;
 
-		virtual std::span<const ObjectPair> getBodyPairs() const = 0;
+		// Body pairs of the Active range only (empty for single-body types). Element i is constraint index range(Active).begin + i.
+		virtual std::span<const ObjectPair> getActiveEdges() const = 0;
 
 		virtual IConstraintSolver& getSolver() noexcept = 0;
 
@@ -64,7 +99,6 @@ namespace PS_AGONY2D
 	protected:
 		SoA soa;
 		Solver solver;
-		bool wasSoAChanged = false;
 		std::vector<ConstraintCommand> commands;
 
 		// Single-body constraints expose `bodyIndex` instead of `bodyIndexA/B`.
@@ -125,7 +159,6 @@ namespace PS_AGONY2D
 		ObjectDenseIndex createSingleImpl(ObjectDenseIndex index, Args&&... args)
 		{
 			const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(soa.append(index, std::forward<Args>(args)...));
-			wasSoAChanged = true;
 			return newIndex;
 		}
 
@@ -134,17 +167,11 @@ namespace PS_AGONY2D
 		ObjectDenseIndex createImpl(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Args&&... args)
 		{
 			const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(soa.append(indexA, indexB, std::forward<Args>(args)...));
-			wasSoAChanged = true;
 			return newIndex;
 		}
 	public:
-		ObjectDenseIndex swapRemove(ObjectDenseIndex index) final
-		{
-			if (index >= soa.getCount()) [[unlikely]] return Handle::NULL_DENSE_INDEX;
-			const ObjectDenseIndex oldBackIndex = soa.swapRemove(index);
-			wasSoAChanged = true;
-			return oldBackIndex;
-		}
+		void swap(ObjectDenseIndex a, ObjectDenseIndex b) final { soa.swap(a, b); }
+		void popBack() final { soa.popBack(); }
 
 		void getBodyIndices(ObjectDenseIndex index, ObjectDenseIndex& a, ObjectDenseIndex& b) const noexcept final
 		{
@@ -177,17 +204,17 @@ namespace PS_AGONY2D
 				if (bodyIndexPair.a == oldBodyIndex) bodyIndexPair.a = newBodyIndex;
 				if (bodyIndexPair.b == oldBodyIndex) bodyIndexPair.b = newBodyIndex;
 			}
-			wasSoAChanged = true;
+			if (index >= groupStarts[size_t(ConstraintGroup::Active)]) wasSoAChanged = true;
 		}
 
 		void prepare(BodySoA& bodies) final
 		{
-			solver.setDataViewers(bodies, Viewer(soa));
+			solver.setDataViewers(bodies, Viewer(soa, range(ConstraintGroup::Active)));
 			solver.prepare(wasSoAChanged);
 			wasSoAChanged = false;
 		}
 
-		std::span<const ObjectPair> getBodyPairs() const final
+		std::span<const ObjectPair> getActiveEdges() const final
 		{
 			if constexpr (IsSingleBody)
 			{
@@ -195,7 +222,8 @@ namespace PS_AGONY2D
 			}
 			else
 			{
-				return soa.bodyIndexPair;
+				const IndexRange active = range(ConstraintGroup::Active);
+				return std::span<const ObjectPair>(soa.bodyIndexPair.data() + active.begin, active.end - active.begin);
 			}
 		}
 

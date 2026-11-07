@@ -16,6 +16,20 @@ namespace PS_AGONY2D
 		return newIndex;
 	}
 
+	void MotorSoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
+	{
+		if (a == b || a >= getCount() || b >= getCount()) [[unlikely]]
+		{
+			return;
+		}
+		handles.swap(a, b);
+
+		#define SWAP_FIELD(name, type) std::swap(name[a], name[b]);
+		PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(SWAP_FIELD)
+		PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(SWAP_FIELD)
+		#undef SWAP_FIELD
+	}
+
 	void MotorSoA::swapWithBack(size_t index)
 	{
 		if (index >= getCount()) [[unlikely]]
@@ -68,9 +82,14 @@ namespace PS_AGONY2D
 	}
 
 	MotorSoAViewer::MotorSoAViewer(const MotorSoA& data) noexcept :
-		count(data.getCount())
+		MotorSoAViewer(data, IndexRange{ 0, static_cast<ObjectDenseIndex>(data.getCount()) })
 	{
-		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
+	}
+
+	MotorSoAViewer::MotorSoAViewer(const MotorSoA& data, IndexRange range) noexcept :
+		count(range.end - range.begin)
+	{
+		#define INIT_VIEWER_FIELD(name, type) name = data.name.data() + range.begin;
 		PS_AGONY_MOTOR_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)
 		PS_AGONY_MOTOR_SOA_MUTABLE_FIELDS(INIT_VIEWER_FIELD)
 		#undef INIT_VIEWER_FIELD
