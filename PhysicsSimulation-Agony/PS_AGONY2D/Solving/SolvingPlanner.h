@@ -24,7 +24,7 @@ namespace PS_AGONY2D
         void print() const;
 
         [[nodiscard]] double computeEfficiency() const;
-        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, IndexRange staticRange) const;
+        [[nodiscard]] bool validateNoCrossing(std::span<const ObjectPair> collisions, IndexRange claimRange, IndexRange staticRange) const;
         [[nodiscard]] size_t getMemoryUsage() const;
         [[nodiscard]] size_t getWorkerCount() const noexcept { return workerCount; }
         [[nodiscard]] const auto& getFlatIndices() const noexcept { return flatIndices; }
@@ -32,7 +32,7 @@ namespace PS_AGONY2D
     };
 
     // Planning engine with reusable scratch buffers. Not reentrant on the same instance.
-    // The bodyCount parameter is the largest body index. The isStatic array must cover it.
+    // The claimRange parameter is the index range of non-static bodies.
     // The hasStaticStaticPairs parameter allows skipping the static-static filtering when it is known to be unneeded.
     class SolvingPlanner
     {
@@ -64,9 +64,9 @@ namespace PS_AGONY2D
         std::vector<size_t> boundaryPending;
         std::vector<ObjectPair> singlePairs;
 
-        void buildSchedulable(std::span<const ObjectPair> collisions, IndexRange staticRange, bool hasStaticStaticPairs, uint32_t groupShift);
+        void buildSchedulable(std::span<const ObjectPair> collisions, IndexRange claimRange, IndexRange staticRange, bool hasStaticStaticPairs, uint32_t groupShift);
         template <bool UseShift>
-        void planGreedy(SolvingPlan& outPlan, std::span<const ObjectPair> collisions, size_t bodyCount, IndexRange staticRange, bool hasStaticStaticPairs, size_t workerCount, uint32_t groupShift);
+        void planGreedy(SolvingPlan& outPlan, std::span<const ObjectPair> collisions, IndexRange claimRange, IndexRange staticRange, bool hasStaticStaticPairs, size_t workerCount, uint32_t groupShift);
         void partitionGroups(size_t groupCount, size_t workerCount);
     public:
         SolvingPlanner() = default;
@@ -87,7 +87,7 @@ namespace PS_AGONY2D
         void planStandardExecution(
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
-            size_t bodyCount,
+            IndexRange claimRange,
             IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount);
@@ -95,7 +95,7 @@ namespace PS_AGONY2D
         void planSimdAwareExecution(
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
-            size_t bodyCount,
+            IndexRange claimRange,
             IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount,
@@ -104,7 +104,7 @@ namespace PS_AGONY2D
         void planCacheLineAwareExecution(
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
-            size_t bodyCount,
+            IndexRange claimRange,
             IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount,
@@ -113,7 +113,7 @@ namespace PS_AGONY2D
         void planCacheSharingAwareExecution(
             SolvingPlan& outPlan,
             std::span<const ObjectPair> collisions,
-            size_t bodyCount,
+            IndexRange claimRange,
             IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount,
@@ -122,7 +122,7 @@ namespace PS_AGONY2D
         void planSingleStandardExecution(
             SolvingPlan& outPlan,
             const std::vector<ObjectDenseIndex>& objects,
-            size_t bodyCount,
+            IndexRange claimRange,
             IndexRange staticRange,
             bool hasStaticStaticPairs,
             size_t workerCount);

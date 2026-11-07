@@ -86,11 +86,35 @@ namespace PS_AGONY2D
         {
             return static_cast<ObjectDenseIndex>(bodyIndex - staticRange.begin) < staticRange.size();
         }
+
+        struct GroupMap
+        {
+            size_t base;
+            size_t count;
+            uint32_t shift;
+
+            [[nodiscard]] uint32_t operator()(size_t body) const noexcept
+            {
+                return static_cast<uint32_t>((body >> shift) - base);
+            }
+        };
+
+        GroupMap makeGroupMap(IndexRange range, uint32_t shift) noexcept
+        {
+            const size_t size = static_cast<size_t>(range.size());
+            if (size == 0)
+                return { 0, 0, shift };
+
+            const size_t first = static_cast<size_t>(range.begin) >> shift;
+            const size_t last = (static_cast<size_t>(range.begin) + size - 1) >> shift;
+            return { first, last - first + 1, shift };
+        }
     }
 
-    void SolvingPlanner::buildSchedulable(std::span<const ObjectPair> collisions, IndexRange staticRange, bool hasStaticStaticPairs, uint32_t groupShift)
+    void SolvingPlanner::buildSchedulable(std::span<const ObjectPair> collisions, IndexRange claimRange, IndexRange staticRange, bool hasStaticStaticPairs, uint32_t groupShift)
     {
         const size_t collisionCount = collisions.size();
+        const GroupMap map = makeGroupMap(claimRange, groupShift);
         groupPairs.resize(collisionCount);
         pending.clear();
         pending.reserve(collisionCount);
@@ -109,7 +133,7 @@ namespace PS_AGONY2D
 
             const size_t ownerA = static_cast<size_t>(aStatic ? c.b : c.a);
             const size_t ownerB = static_cast<size_t>(bStatic ? c.a : c.b);
-            pairsPtr[i] = { static_cast<uint32_t>(ownerA >> groupShift), static_cast<uint32_t>(ownerB >> groupShift) };
+            pairsPtr[i] = { map(ownerA), map(ownerB) };
             pending.push_back(i);
         }
     }
@@ -118,7 +142,7 @@ namespace PS_AGONY2D
     void SolvingPlanner::planGreedy(
         SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
-        size_t bodyCount,
+        IndexRange claimRange,
         IndexRange staticRange,
         bool hasStaticStaticPairs,
         size_t workerCount,
@@ -126,11 +150,12 @@ namespace PS_AGONY2D
     {
         beginPlan(outPlan, workerCount, collisions.size());
 
-        if (collisions.empty() || workerCount == 0)
+        const GroupMap map = makeGroupMap(claimRange, groupShift);
+        if (collisions.empty() || workerCount == 0 || map.count == 0)
             return;
 
         const size_t collisionCount = collisions.size();
-        const size_t groupCount = (UseShift ? (bodyCount >> groupShift) : bodyCount) + 1;
+        const size_t groupCount = map.count;
 
         groupPairs.resize(collisionCount);
         claimOwner.assign(groupCount, kUnowned);
@@ -143,12 +168,12 @@ namespace PS_AGONY2D
         uint8_t* ECSTASY_RESTRICT owners = claimOwner.data();
         size_t* ECSTASY_RESTRICT loads = workerLoad.data();
 
-        const auto toGroup = [groupShift](size_t body) -> uint32_t
+        const auto toGroup = [map](size_t body) -> uint32_t
             {
                 if constexpr (UseShift)
-                    return static_cast<uint32_t>(body >> groupShift);
+                    return map(body);
                 else
-                    return static_cast<uint32_t>(body);
+                    return static_cast<uint32_t>(body - map.base);
             };
 
         const auto pass1Item = [&](auto first, size_t idx, uint32_t ga, uint32_t gb)
@@ -257,18 +282,18 @@ namespace PS_AGONY2D
     void SolvingPlanner::planStandardExecution(
         SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
-        size_t bodyCount,
+        IndexRange claimRange,
         IndexRange staticRange,
         bool hasStaticStaticPairs,
         size_t workerCount)
     {
-        planGreedy<false>(outPlan, collisions, bodyCount, staticRange, hasStaticStaticPairs, workerCount, 0);
+        planGreedy<false>(outPlan, collisions, claimRange, staticRange, hasStaticStaticPairs, workerCount, 0);
     }
 
     void SolvingPlanner::planCacheLineAwareExecution(
         SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
-        size_t bodyCount,
+        IndexRange claimRange,
         IndexRange staticRange,
         bool hasStaticStaticPairs,
         size_t workerCount,
@@ -280,14 +305,14 @@ namespace PS_AGONY2D
             return;
         }
 
-        planGreedy<true>(outPlan, collisions, bodyCount, staticRange, hasStaticStaticPairs, workerCount,
+        planGreedy<true>(outPlan, collisions, claimRange, staticRange, hasStaticStaticPairs, workerCount,
             cacheGroupShift(bodyStrideBytes, std::hardware_destructive_interference_size));
     }
 
     void SolvingPlanner::planSimdAwareExecution(
         SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
-        size_t bodyCount,
+        IndexRange claimRange,
         IndexRange staticRange,
         bool hasStaticStaticPairs,
         size_t workerCount,
@@ -298,16 +323,16 @@ namespace PS_AGONY2D
         if (chunkSize == 0)
             throw std::invalid_argument("SolvingPlanner: chunkSize must not be zero.");
 
-        if (collisions.empty() || workerCount == 0)
+        const size_t bodySlots = makeGroupMap(claimRange, 0).count;
+        if (collisions.empty() || workerCount == 0 || bodySlots == 0)
             return;
 
-        buildSchedulable(collisions, staticRange, hasStaticStaticPairs, 0);
+        buildSchedulable(collisions, claimRange, staticRange, hasStaticStaticPairs, 0);
 
-        claimOwner.assign(bodyCount + 1, kUnowned);
+        claimOwner.assign(bodySlots, kUnowned);
         workerQueues.resize(workerCount);
         workerLoad.assign(workerCount, 0);
 
-        const size_t bodySlots = bodyCount + 1;
         const GroupPair* ECSTASY_RESTRICT pairsPtr = groupPairs.data();
         uint8_t* ECSTASY_RESTRICT owners = claimOwner.data();
         size_t* ECSTASY_RESTRICT loads = workerLoad.data();
@@ -479,7 +504,7 @@ namespace PS_AGONY2D
     void SolvingPlanner::planCacheSharingAwareExecution(
         SolvingPlan& outPlan,
         std::span<const ObjectPair> collisions,
-        size_t bodyCount,
+        IndexRange claimRange,
         IndexRange staticRange,
         bool hasStaticStaticPairs,
         size_t workerCount,
@@ -491,9 +516,11 @@ namespace PS_AGONY2D
             return;
 
         const uint32_t groupShift = cacheGroupShift(bodyStrideBytes, std::hardware_destructive_interference_size);
-        const size_t groupCount = (bodyCount >> groupShift) + 1;
+        const size_t groupCount = makeGroupMap(claimRange, groupShift).count;
+        if (groupCount == 0)
+            return;
 
-        buildSchedulable(collisions, staticRange, hasStaticStaticPairs, groupShift);
+        buildSchedulable(collisions, claimRange, staticRange, hasStaticStaticPairs, groupShift);
 
         adjacency.resize(groupCount);
         for (auto& v : adjacency)
@@ -609,7 +636,7 @@ namespace PS_AGONY2D
     void SolvingPlanner::planSingleStandardExecution(
         SolvingPlan& outPlan,
         const std::vector<ObjectDenseIndex>& objects,
-        size_t bodyCount,
+        IndexRange claimRange,
         IndexRange staticRange,
         bool hasStaticStaticPairs,
         size_t workerCount)
@@ -619,7 +646,7 @@ namespace PS_AGONY2D
             singlePairs[i] = { objects[i], objects[i] };
 
         planCacheSharingAwareExecution(
-            outPlan, singlePairs, bodyCount, staticRange, hasStaticStaticPairs, workerCount,
+            outPlan, singlePairs, claimRange, staticRange, hasStaticStaticPairs, workerCount,
             sizeof(Real));
     }
 
@@ -670,13 +697,13 @@ namespace PS_AGONY2D
         return static_cast<double>(flatIndices.size()) / static_cast<double>(capacity) * 100.0;
     }
 
-    bool SolvingPlan::validateNoCrossing(std::span<const ObjectPair> collisions, size_t bodyCount, IndexRange staticRange) const
+    bool SolvingPlan::validateNoCrossing(std::span<const ObjectPair> collisions, IndexRange claimRange, IndexRange staticRange) const
     {
         if (workerCount == 0)
             return passOffsets.empty();
 
         const size_t numWaves = passOffsets.size() / workerCount;
-        std::vector<int32_t> bodyOwner(bodyCount + 1, -1);
+        std::vector<int32_t> bodyOwner(static_cast<size_t>(claimRange.size()), -1);
         std::vector<uint8_t> scheduled(collisions.size(), 0);
 
         for (size_t wave = 0; wave < numWaves; wave++)
@@ -693,7 +720,11 @@ namespace PS_AGONY2D
                         if (isStatic(body, staticRange))
                             return true;
 
-                        int32_t& owner = bodyOwner[body];
+                        const ObjectDenseIndex local = static_cast<ObjectDenseIndex>(body - claimRange.begin);
+                        if (local >= claimRange.size())
+                            return false;
+
+                        int32_t& owner = bodyOwner[local];
                         if (owner != -1 && owner != workerId)
                             return false;
 

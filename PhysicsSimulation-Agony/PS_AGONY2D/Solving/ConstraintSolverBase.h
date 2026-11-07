@@ -221,10 +221,16 @@ namespace PS_AGONY2D
 
 		void planExecution(size_t workerCount)
 		{
+			const IndexRange staticRange = this->bodies->range(BodyGroup::Static);
+			const IndexRange dynamicRange = this->bodies->range(BodyGroup::Dynamic);
+			const IndexRange sleepingRange = this->bodies->range(BodyGroup::Sleeping);
+			const IndexRange claimRange{ sleepingRange.begin, dynamicRange.end };
+
 			SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
 				this->solvingPlan,
-				this->bodyRefs, this->bodies->getCount(),
-				this->bodies->range(BodyGroup::Static), true,
+				this->bodyRefs,
+				claimRange,
+				staticRange, true,
 				workerCount,
 				sizeof(Real)
 			);
@@ -245,10 +251,16 @@ namespace PS_AGONY2D
 
 		void planExecution(size_t workerCount)
 		{
+			const IndexRange staticRange = this->bodies->range(BodyGroup::Static);
+			const IndexRange dynamicRange = this->bodies->range(BodyGroup::Dynamic);
+			const IndexRange sleepingRange = this->bodies->range(BodyGroup::Sleeping);
+			const IndexRange claimRange{ sleepingRange.begin, dynamicRange.end };
+
 			SolvingPlanner::threadLocal().planSingleStandardExecution(
 				this->solvingPlan,
-				this->bodyRefs, this->bodies->getCount(),
-				this->bodies->range(BodyGroup::Static), true,
+				this->bodyRefs,
+				claimRange,
+				staticRange, true,
 				workerCount
 			);
 		}

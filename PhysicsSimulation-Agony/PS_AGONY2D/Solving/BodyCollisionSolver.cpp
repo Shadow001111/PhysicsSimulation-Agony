@@ -6,6 +6,7 @@
 #include "Ecstasy/Core/Portablity.h"
 
 #include <cmath>
+#include <iostream>
 
 namespace PS_AGONY2D
 {
@@ -78,10 +79,21 @@ namespace PS_AGONY2D
 		{
 			TRACY_SCOPE_NC("Plan execution", PS_AGONY2D::Profiling::Color::Blue);
 
+			const IndexRange staticRange = bodies->range(BodyGroup::Static);
+			const IndexRange dynamicRange = bodies->range(BodyGroup::Dynamic);
+			const IndexRange sleepingRange = bodies->range(BodyGroup::Sleeping);
+			const IndexRange claimRange{ sleepingRange.begin, dynamicRange.end };
+
+			if (sleepingRange.end != dynamicRange.begin) [[unlikely]]
+			{
+				std::cerr << "[PS_AGONY2D][BodyCollisionSolver::solveCollisions]: Dynamic range doesn't start after sleeping range\n";
+				std::abort();
+			}
+
 			//SolvingPlanner::threadLocal().planStandardExecution(
 			//	solvingPlan,
 			//	collidingBodyPairs,
-			//	bodies->getCount(),
+			//	claimRange,
 			//	bodies->range(BodyGroup::Static),
 			//	false,
 			//	workerCount
@@ -90,7 +102,8 @@ namespace PS_AGONY2D
 			// Rating: Sometimes results in faster execution, but I think it may have huge worst-case scenario dependent on body ordering.
 			SolvingPlanner::threadLocal().planCacheLineAwareExecution(
 				solvingPlan,
-				collidingBodyPairs, bodies->getCount(),
+				collidingBodyPairs,
+				claimRange,
 				bodies->range(BodyGroup::Static), false,
 				workerCount,
 				sizeof(Real)
@@ -99,7 +112,8 @@ namespace PS_AGONY2D
 			// Rating: Worse than upper method in planning time and speeding up solving.
 			//SolvingPlanner::threadLocal().planCacheSharingAwareExecution(
 			//	solvingPlan,
-			//	collidingBodyPairs, bodies->getCount(),
+			//	collidingBodyPairs,
+			//  claimRange,
 			//	bodies->range(BodyGroup::Static), false,
 			//	workerCount,
 			//	sizeof(Real)

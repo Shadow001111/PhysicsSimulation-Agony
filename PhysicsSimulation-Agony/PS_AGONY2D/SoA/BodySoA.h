@@ -40,8 +40,9 @@
 
 namespace PS_AGONY2D
 {
-    // Memory order of bodies is always follows the enum order. (Pls, keep unused always at the back).
     // Ordered in ascending order by change frequency to reduce swap count.
+    // Keeping sleeping and dynamic bodies together because constraints still act on sleeping bodies, so solving planner can claim single big range.
+    // TODO: Remove above comment if it will get fixed.
     enum class BodyGroup : uint8_t { Static, Sleeping, Dynamic, Unused };
 
     struct BodyData
