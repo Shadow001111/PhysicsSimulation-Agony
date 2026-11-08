@@ -20,7 +20,6 @@ namespace PS_AGONY2D
         uint32_t dynBegin = 0;
         uint32_t dynEnd = 0;
         uint32_t islandCount = 0;
-        bool valid = false;
     public:
         static constexpr uint32_t NO_ISLAND = -1;
 
@@ -36,10 +35,6 @@ namespace PS_AGONY2D
         // Island ids are ordered by DSU root index (deterministic, not stable between steps).
         // Does not modify the DSU: step() may continue afterwards.
         void finalize(BodySoA& bodies);
-
-        // Call at the start of a physics step. Islands are stale until finalize() runs.
-        void invalidate() noexcept { valid = false; }
-        bool isValid() const noexcept { return valid; }
 
         uint32_t getIslandCount() const noexcept { return islandCount; }
 

@@ -1139,7 +1139,14 @@ namespace PS_AGONY2D
         bodies.sleepingTimer[b] = 0.0f;
 
         b = moveBodyToGroup(b, BodyGroup::Sleeping);
+
         moveBodyColliders(b, BodyGroup::Dynamic, BodyGroup::Sleeping);
+
+        for (BodyAttachment& attachment: bodies.attachments[b])
+        {
+            moveConstraintToGroup(attachment.type, attachment.objectIndex, ConstraintGroup::Sleeping);
+        }
+
         sleptBodies.push_back(bodies.handleAt(b));
         return b;
     }
@@ -1153,7 +1160,15 @@ namespace PS_AGONY2D
         bodies.sleepIslandId[b] = 0;
 
         b = moveBodyToGroup(b, BodyGroup::Dynamic);
+
         moveBodyColliders(b, BodyGroup::Sleeping, BodyGroup::Dynamic);
+
+        for (BodyAttachment& attachment : bodies.attachments[b])
+        {
+            moveConstraintToGroup(attachment.type, attachment.objectIndex, ConstraintGroup::Active);
+            // TODO: Also add to inactive.
+        }
+
         wokenBodies.push_back(bodies.handleAt(b));
         return b;
     }

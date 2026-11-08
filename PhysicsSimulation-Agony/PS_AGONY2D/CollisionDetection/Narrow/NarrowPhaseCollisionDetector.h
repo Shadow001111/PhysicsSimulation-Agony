@@ -183,7 +183,7 @@ namespace PS_AGONY2D
 		// TODO: Must fix/delete data in 'sleepPersistentContactData', to not leave data lying forever.
 		void remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders);
 
-		void clearData();
+		void resetCollisionData();
 
 		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionArray; }
 		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return previousCollisionArray; }

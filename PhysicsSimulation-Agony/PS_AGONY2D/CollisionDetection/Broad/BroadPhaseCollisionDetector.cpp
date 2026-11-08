@@ -76,7 +76,7 @@ namespace PS_AGONY2D
 		colliderBodyIndex = colliderBodyIndexIn;
 	}
 
-	void BroadPhaseCollisionDetector::clearData()
+	void BroadPhaseCollisionDetector::resetCollisionData()
 	{
 		collisionData.clear();
 		for (auto& tree : trees)

@@ -116,7 +116,7 @@ namespace PS_AGONY2D
 		scatterImpulses(collisionData, flatIndicesPtr);
 	}
 
-	void BodyCollisionSolver::reportNoCollisions()
+	void BodyCollisionSolver::resetCollisionData()
 	{
 		activeCollisionCount = 0;
 		collisionEvents.clear();

@@ -17,7 +17,6 @@ namespace PS_AGONY2D
 
         // parentArray[i] >= 0: parent index. parentArray[i] < 0: root, -parentArray[i] is the set size.
         parentArray.assign(dynEnd - dynBegin, -1);
-        valid = false;
     }
 
     void IslandManager::step(std::span<const ObjectPair> edges) noexcept
@@ -32,7 +31,6 @@ namespace PS_AGONY2D
                 continue;
             unite(a, b);
         }
-        valid = false;
     }
 
     void IslandManager::finalize(BodySoA& bodies)
@@ -79,7 +77,6 @@ namespace PS_AGONY2D
         startArray[0] = 0;
 
         islandCount = k;
-        valid = true;
     }
 
     size_t IslandManager::getMemoryUsage() const

@@ -528,9 +528,9 @@ namespace PS_AGONY2D
         rebuildContactCache();
     }
 
-    void NarrowPhaseCollisionDetector::clearData()
+    void NarrowPhaseCollisionDetector::resetCollisionData()
     {
-        currentCollisionArray.clear();
+        previousCollisionArray.clear();
     }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const

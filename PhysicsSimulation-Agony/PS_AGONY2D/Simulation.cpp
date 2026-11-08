@@ -6,6 +6,7 @@
 #include "SimulationImpl/LeftOutFunctions.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
+
 #include "Ecstasy/Core/Portablity.h"
 
 //#include <iostream>
@@ -14,6 +15,15 @@
 namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
+
+    // TODO: I decided to come up with an ideal simulation code plan:
+    // No remaping is desired, better build safe, but perfomant.
+    // 'physicsStep':
+    //     1) Advance internal timer.
+    //     2) Reset/clear data. Enable settings, that depend on commands(on collision, new callback may be created).
+    //     3) If no body exist, skip.
+    //     4) Update data viewers to avoid dangling pointers on reallocation.
+    //     5) 
 
 
     Simulation::Simulation() :
@@ -55,9 +65,6 @@ namespace PS_AGONY2D
             {
                 TRACY_SCOPE_NC("Physics step", PS_AGONY2D::Profiling::Color::Orange);
                 physicsStep(fixedDeltaTime);
-                updateSleeping(float(fixedDeltaTime));
-                sleepContactData();
-                flushCommands();
             }
             postUpdate();
         }
@@ -160,17 +167,13 @@ namespace PS_AGONY2D
 
     void Simulation::physicsStep(Real deltaTime)
     {
-        // Clear data. Unnecessary, but usually it won't get cleared if narrow phase cd will get get reached.
-        narrowPhaseCollisionDetector.clearData();
-
         // Update timer.
         simulationRunTimer += deltaTime;
 
-        // Islands are rebuilt below when there are contacts; updateSleeping falls back to singletons.
-        islandManager.invalidate();
-
         // Reset stuff.
-        bodyCollisionSolver.reportNoCollisions();
+        bodyCollisionSolver.resetCollisionData();
+
+        // Enable or disable collision event recording.
         bodyCollisionSolver.setCollisionEventRecording(
             simulationSettings.collisionEventsEnabled && collisionCallbackManager.hasCallbacks()
         );
@@ -178,11 +181,66 @@ namespace PS_AGONY2D
         // Check if any body exist.
         if (objectManager.bodies.getCount() == 0)
         {
-            broadPhaseCollisionDetector.clearData();
+            narrowPhaseCollisionDetector.resetCollisionData();
+            broadPhaseCollisionDetector.resetCollisionData();
             return;
         }
 
         // Set data viewers.
+        setDataViewers();
+
+        // Remap warm-starting data if a collider was deleted.
+        narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
+        objectManager.deletedColliders.clear();
+
+        wakeHeldBodies();
+        integrateAndApplyConstraints(deltaTime);
+
+        // Computing important data.
+        const IndexRange dynamicRange = objectManager.bodies.range(BodyGroup::Dynamic);
+        wrapBodyRotations(objectManager.bodies, dynamicRange);
+        Integrator::computeRotationCosSin(objectManager.bodies, dynamicRange);
+
+        // Full pass only after structural changes (create/destroy/sleep/commands); otherwise dynamic bodies only.
+        if (objectManager.spatialDirty) rebuildSpatialData();
+        else updateDynamicSpatialData();
+
+        // Invalidate island body collision edges. 'collisionStep' will update it if collisions exist.
+        islandBodyCollisionEdges = {};
+
+        // Take a collision step.
+        if (objectManager.colliders.getCount() > 1)
+        {
+            collisionStep();
+        }
+        else
+        {
+            narrowPhaseCollisionDetector.resetCollisionData();
+        }
+
+        // Build islands.
+        {
+            TRACY_SCOPE_N("Build islands");
+
+            islandManager.reset(objectManager.bodies);
+
+            islandManager.step(islandBodyCollisionEdges);
+            for (auto* constraintSystem : constraintSystems)
+            {
+                islandManager.step(constraintSystem->getActiveEdges());
+            }
+
+            islandManager.finalize(objectManager.bodies);
+        }
+
+        //
+        updateSleeping(float(deltaTime));
+        sleepContactData();
+        flushCommands();
+    }
+
+    void Simulation::setDataViewers()
+    {
         broadPhaseCollisionDetector.setDataViewers(
             AABBSoAViewer(objectManager.colliders),
             objectManager.colliders.bodyIndex.data()
@@ -202,27 +260,6 @@ namespace PS_AGONY2D
             ColliderSoAViewer(objectManager.colliders),
             materialManager.getMaterials().data()
         );
-
-        // Remap warm-starting data if a collider was deleted.
-        narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
-        objectManager.deletedColliders.clear();
-
-        wakeHeldBodies();
-        integrateAndApplyConstraints(deltaTime);
-
-        // Computing important data.
-        const IndexRange dynamicRange = objectManager.bodies.range(BodyGroup::Dynamic);
-        wrapBodyRotations(objectManager.bodies, dynamicRange);
-        Integrator::computeRotationCosSin(objectManager.bodies, dynamicRange);
-
-        // Full pass only after structural changes (create/destroy/sleep/commands); otherwise dynamic bodies only.
-        if (objectManager.spatialDirty) rebuildSpatialData();
-        else updateDynamicSpatialData();
-
-        if (objectManager.colliders.getCount() > 1)
-        {
-            collisionStep();
-        }
     }
 
     void Simulation::integrateAndApplyConstraints(Real deltaTime)
@@ -263,7 +300,11 @@ namespace PS_AGONY2D
     {
         // Broad phase.
         const std::span<const ObjectPair> broad = broadPhaseCollisionDetector.findCollisions(ExecutionPolicy::ForceSingleThreaded);
-        if (broad.empty()) return;
+        if (broad.empty())
+        {
+            narrowPhaseCollisionDetector.resetCollisionData();
+            return;
+        }
 
         // Narrow phase.
         std::span<BodyCollisionData> narrow = narrowPhaseCollisionDetector.findCollisions(broad);
@@ -278,21 +319,8 @@ namespace PS_AGONY2D
         wakeSleepingContactData();
         narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
 
-        // Build islands.
-        std::span<const ObjectPair> bodyCollisionEdges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
-        {
-            TRACY_SCOPE_N("Build islands");
-
-            islandManager.reset(objectManager.bodies);
-
-            islandManager.step(bodyCollisionEdges);
-            for (auto* constraintSystem : constraintSystems)
-            {
-                islandManager.step(constraintSystem->getActiveEdges());
-            }
-
-            islandManager.finalize(objectManager.bodies);
-        }
+        // Update span.
+        islandBodyCollisionEdges = bodyCollisionSolver.fillCollidingBodyPairs(narrow);
 
         // Collision resolution.
         bodyCollisionSolver.solveCollisions(
@@ -499,14 +527,6 @@ namespace PS_AGONY2D
         const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
         if (dynamic.empty()) return;
 
-        if (!islandManager.isValid())
-        {
-            islandManager.reset(bodies);
-            for (auto* constraintSystem : constraintSystems)
-                islandManager.step(constraintSystem->getActiveEdges());
-            islandManager.finalize(bodies);
-        }
-
         const Real linearSq = simulationSettings.linearSpeedSleepThreshold * simulationSettings.linearSpeedSleepThreshold;
         const Real angular = simulationSettings.angularSpeedSleepThreshold;
         const Real sleepTime = simulationSettings.sleepTimeThreshold;
@@ -567,7 +587,7 @@ namespace PS_AGONY2D
 
         if (objectManager.bodies.getCount() == 0)
         {
-            broadPhaseCollisionDetector.clearData();
+            broadPhaseCollisionDetector.resetCollisionData();
             objectManager.spatialDirty = false;
             return;
         }

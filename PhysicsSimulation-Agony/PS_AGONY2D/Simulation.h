@@ -158,6 +158,7 @@ namespace PS_AGONY2D
 		std::vector<ObjectDenseIndex> sleepRelatedCandidates;
 
 		// Islands.
+		std::span<const ObjectPair> islandBodyCollisionEdges{};
 		IslandManager islandManager;
 		std::vector<uint32_t> islandSleepFlags;
 	public:
@@ -215,6 +216,8 @@ namespace PS_AGONY2D
 		const IslandManager& islands() const noexcept { return islandManager; }
 	private:
 		void physicsStep(Real deltaTime);
+
+		void setDataViewers();
 
 		void integrateAndApplyConstraints(Real deltaTime);
 

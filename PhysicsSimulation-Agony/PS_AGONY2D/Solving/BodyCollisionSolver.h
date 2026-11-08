@@ -114,7 +114,7 @@ namespace PS_AGONY2D
 			uint32_t positionIterations
 		);
 
-		void reportNoCollisions();
+		void resetCollisionData();
 
 		// Runtime gate. When false, the solver does no event work at all.
 		void setCollisionEventRecording(bool enabled);

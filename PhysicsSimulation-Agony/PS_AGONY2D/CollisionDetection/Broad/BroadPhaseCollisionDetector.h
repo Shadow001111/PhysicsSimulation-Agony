@@ -148,7 +148,7 @@ namespace PS_AGONY2D
 
 		// Clears both trees and cached pairs. Call when there are zero colliders so stale
 		// tree data isn't served to queries.
-		void clearData();
+		void resetCollisionData();
 
 		void updateTrees(const TreesUpdateParams& params);
 
