@@ -127,10 +127,6 @@ namespace PS_AGONY2D
 		void destroyMotorImmediate(Handle h);
 		void destroyConstraintImmediate(ConstraintType type, ObjectDenseIndex constraintIndex);
 
-		// Applies every system's queued edits, then wakes the bodies of each edited constraint. Replaces calling
-		// IConstraintSystem::flushCommands directly.
-		void flushConstraintCommands();
-
 		// Sleeping: moves the body to the Sleeping group and its colliders to the sleeping list. Body data is kept.
 		// Any modification of a sleeping body or its colliders (commands, collider create/destroy) wakes it first.
 		// Both return the NEW dense index (group moves change body indices). No-op if the body is in the wrong group.
@@ -195,6 +191,7 @@ namespace PS_AGONY2D
 		bool queueColliderPolygon(Handle collider, std::span<const Vec2> localVertices);
 
 		// Applies and clears the queue. Must not run during collision-event dispatch or solving.
+		// Commands include bodies and constraints.
 		void flushCommands();
 
 		// Instant reads (no queue). nullopt if index is out of range.

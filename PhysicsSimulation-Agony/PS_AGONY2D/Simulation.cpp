@@ -310,12 +310,7 @@ namespace PS_AGONY2D
 
     void Simulation::flushCommands()
     {
-        std::vector<Handle> sink; // TODO: Check if needed to use it.
         objectManager.flushCommands();
-        for (auto* constraintSystem : constraintSystems)
-        {
-            constraintSystem->flushCommands(objectManager.bodies, sink);
-        }
 
         wakeSleepingContactData();
         sleepContactData();
@@ -504,10 +499,11 @@ namespace PS_AGONY2D
         const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
         if (dynamic.empty()) return;
 
-        // No contacts this step: every body is its own island.
         if (!islandManager.isValid())
         {
             islandManager.reset(bodies);
+            for (auto* constraintSystem : constraintSystems)
+                islandManager.step(constraintSystem->getActiveEdges());
             islandManager.finalize(bodies);
         }
 

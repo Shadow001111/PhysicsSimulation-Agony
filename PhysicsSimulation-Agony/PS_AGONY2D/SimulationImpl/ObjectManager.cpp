@@ -461,32 +461,18 @@ namespace PS_AGONY2D
         ObjectDenseIndex a, b;
         system.getBodyIndices(index, a, b);
 
-        // Wake first (body indices move, constraint indices do not), then re-read the pair.
-        const Handle hA = bodies.handleAt(a);
-        const Handle hB = b != NONE ? bodies.handleAt(b) : Handle{};
-        wakeBody(a);
-        if (b != NONE) wakeBody(bodies.indexOfUnchecked(hB));
-        system.getBodyIndices(index, a, b);
-
+        // Remove attachments(Constraint from bodies' lists).
         bodies.removeAttachment(a, type, index);
-        if (b != NONE) bodies.removeAttachment(b, type, index);
+        bodies.removeAttachment(b, type, index);
 
-        // Out of the live range (partners relinked by the boundary swaps), then pop.
+        // Delete constraint.
         moveConstraintToGroup(type, index, ConstraintGroup::Unused);
         system.popBack();
-    }
 
-    void ObjectManager::flushConstraintCommands()
-    {
-        constraintWakeScratch.clear();
-        for (IConstraintSystem* system : constraintSystems)
-            if (system) system->flushCommands(bodies, constraintWakeScratch);
-
-        for (const Handle h : constraintWakeScratch)
-        {
-            const ObjectDenseIndex i = bodies.indexOf(h);
-            if (i != Handle::NULL_DENSE_INDEX) wakeBody(i);
-        }
+        // Wake body a. Then wake body b by handle.
+        const Handle hB = b != NONE ? bodies.handleAt(b) : Handle{};
+        wakeBody(a);
+        wakeBody(bodies.indexOfUnchecked(hB));
     }
 
     ObjectDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, ColliderShapeType shapeType, ObjectDenseIndex shapeIndex)
@@ -681,14 +667,28 @@ namespace PS_AGONY2D
 
     void ObjectManager::flushCommands()
     {
-        if (commands.empty()) return;
-
-        for (const ObjectCommand& command : commands)
+        // Bodies/colliders.
+        if (!commands.empty())
         {
-            applyCommand(command);
+            for (const ObjectCommand& command : commands)
+            {
+                applyCommand(command);
+            }
+            commands.clear();
+            pendingPolygons.clear();
         }
-        commands.clear();
-        pendingPolygons.clear();
+        // Constraints.
+        {
+            constraintWakeScratch.clear();
+            for (IConstraintSystem* system : constraintSystems)
+                if (system) system->flushCommands(bodies, constraintWakeScratch);
+
+            for (const Handle h : constraintWakeScratch)
+            {
+                const ObjectDenseIndex i = bodies.indexOf(h);
+                if (i != Handle::NULL_DENSE_INDEX) wakeBody(i);
+            }
+        }
     }
 
     void ObjectManager::applyCommand(const ObjectCommand& c)
