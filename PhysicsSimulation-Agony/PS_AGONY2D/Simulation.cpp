@@ -313,7 +313,10 @@ namespace PS_AGONY2D
         }
 
         // Wake colliding sleeping bodies before solving.
-        wakeCollidingBodies(narrow);
+        {
+            TRACY_SCOPE_N("Wake colliding bodies");
+            objectManager.wakeIslandsOfContacts(narrow);
+        }
         wakeSleepingContactData();
         narrow = narrowPhaseCollisionDetector.getBodyCollisionData();
 
@@ -428,157 +431,30 @@ namespace PS_AGONY2D
         }
     }
 
-    // Wakes whole sleeping islands touched by a contact.
-    void Simulation::wakeCollidingBodies(std::span<const BodyCollisionData> narrow)
-    {
-        TRACY_SCOPE_N("Wake colliding bodies");
-
-        const BodySoA& bodies = objectManager.bodies;
-        const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
-        if (sleeping.empty()) return;
-
-        const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndexPtr = objectManager.colliders.bodyIndex.data();
-        const uint32_t* ECSTASY_RESTRICT sleepIdPtr = bodies.sleepIslandId.data();
-
-        // Unsigned wrap trick: one compare tests begin <= index < end.
-        const auto isSleeping = [&](ObjectDenseIndex index) { return index - sleeping.begin < sleeping.size(); };
-
-        sleepRelatedCandidates.clear();
-        for (const BodyCollisionData& data : narrow)
-        {
-            const ObjectDenseIndex colliderA = objectManager.colliders.handles.indexOfUnchecked(data.colliderA);
-            const ObjectDenseIndex colliderB = objectManager.colliders.handles.indexOfUnchecked(data.colliderB);
-
-            const ObjectDenseIndex bodyA = bodyIndexPtr[colliderA];
-            const ObjectDenseIndex bodyB = bodyIndexPtr[colliderB];
-
-            if (isSleeping(bodyA)) sleepRelatedCandidates.push_back(sleepIdPtr[bodyA]);
-            if (isSleeping(bodyB)) sleepRelatedCandidates.push_back(sleepIdPtr[bodyB]);
-        }
-        if (sleepRelatedCandidates.empty()) return;
-
-        std::sort(sleepRelatedCandidates.begin(), sleepRelatedCandidates.end());
-        sleepRelatedCandidates.erase(std::unique(sleepRelatedCandidates.begin(), sleepRelatedCandidates.end()), sleepRelatedCandidates.end());
-
-        objectManager.wakeSleepIslands(sleepRelatedCandidates);
-    }
-
     void Simulation::wakeSleepingContactData()
     {
-        const std::span<const Handle> woken = objectManager.wokenBodies;
-        if (woken.empty()) return;
-
-        {
-            TRACY_SCOPE_N("Get woken candidates colliders");
-
-            // Get colliders from body handles.
-            sleepRelatedCandidates.clear();
-            for (const Handle& handle : woken)
-            {
-                // Get body index from handle.
-                const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOf(handle);
-                if (bodyIndex == Handle::NULL_DENSE_INDEX) [[unlikely]] continue;
-
-                // Get colliders from body.
-                std::span<const ObjectDenseIndex> colliders = objectManager.bodies.colliderIndices[bodyIndex];
-
-                // Append colliders to list.
-                sleepRelatedCandidates.insert(sleepRelatedCandidates.end(), colliders.begin(), colliders.end());
-            }
-            objectManager.wokenBodies.clear();
-        }
-
-        // Put contact data to sleep.
-        narrowPhaseCollisionDetector.wakeContactData(sleepRelatedCandidates);
+        if (objectManager.wokenBodies.empty()) return;
+        narrowPhaseCollisionDetector.wakeContactData(objectManager.takeWokenColliders());
     }
 
     void Simulation::sleepContactData()
     {
-        const std::span<const Handle> slept = objectManager.sleptBodies;
-        if (slept.empty()) return;
-
-        {
-            TRACY_SCOPE_N("Get sleep candidates colliders");
-
-            // Get colliders from body handles.
-            sleepRelatedCandidates.clear();
-            for (const Handle& handle : slept)
-            {
-                // Get body index from handle.
-                const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOf(handle);
-                if (bodyIndex == Handle::NULL_DENSE_INDEX) [[unlikely]] continue;
-
-                // Get colliders from body.
-                std::span<const ObjectDenseIndex> colliders = objectManager.bodies.colliderIndices[bodyIndex];
-
-                // Append colliders to list.
-                sleepRelatedCandidates.insert(sleepRelatedCandidates.end(), colliders.begin(), colliders.end());
-            }
-            objectManager.sleptBodies.clear();
-        }
-
-        // Put contact data to sleep.
-        narrowPhaseCollisionDetector.sleepContactData(sleepRelatedCandidates);
+        if (objectManager.sleptBodies.empty()) return;
+        narrowPhaseCollisionDetector.sleepContactData(objectManager.takeSleptColliders());
     }
 
     void Simulation::updateSleeping(float deltaTimeF)
     {
         TRACY_SCOPE_N("Update sleeping");
 
-        BodySoA& bodies = objectManager.bodies;
-        const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
-        if (dynamic.empty()) return;
-
-        const Real linearSq = simulationSettings.linearSpeedSleepThreshold * simulationSettings.linearSpeedSleepThreshold;
-        const Real angular = simulationSettings.angularSpeedSleepThreshold;
-        const Real sleepTime = simulationSettings.sleepTimeThreshold;
-
-        Real* ECSTASY_RESTRICT sleepingTimerPtr = bodies.sleepingTimer.data();
-        const Real* ECSTASY_RESTRICT velXPtr = bodies.velocityX.data();
-        const Real* ECSTASY_RESTRICT velYPtr = bodies.velocityY.data();
-        const Real* ECSTASY_RESTRICT angVelPtr = bodies.angularVelocity.data();
-        const ObjectDenseIndex* ECSTASY_RESTRICT islandIdPtr = bodies.islandId.data();
-
-        // islandSleepFlags[island]: 0 = stays awake, 1 = may sleep, >= 2 = assigned sleep island id.
-        islandSleepFlags.assign(islandManager.getIslandCount(), 1u);
-        uint32_t* const flags = islandSleepFlags.data();
-
-        // Pass 1: timers + AND-reduce readiness per island.
-        for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
-        {
-            const Real linearExcess = velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i] - linearSq;
-            const Real angularExcess = std::fabs(angVelPtr[i]) - angular;
-            const bool quiet = std::fmax(linearExcess, angularExcess) <= Real(0);
-
-            const Real timer = (sleepingTimerPtr[i] + deltaTimeF) * Real(quiet);
-            sleepingTimerPtr[i] = timer;
-
-            flags[islandIdPtr[i]] &= uint32_t(quiet) & uint32_t(timer >= sleepTime); // 0 or 1.
-        }
-
-        // Held bodies keep their whole island awake.
-        for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
-        {
-            const ObjectDenseIndex index = bodies.indexOfUnchecked(held.body);
-            if (index - dynamic.begin < dynamic.size()) flags[islandIdPtr[index]] = 0;
-        }
-
-        // Pass 2: collect members of sleeping islands.
-        sleepRelatedCandidates.clear();
-        for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
-        {
-            uint32_t& f = flags[islandIdPtr[i]];
-            if (f == 0) continue;
-            if (f == 1) f = objectManager.newSleepIslandId();
-            sleepRelatedCandidates.push_back(i);
-        }
-        if (sleepRelatedCandidates.empty()) return;
-
-        for (size_t k = 0; k < sleepRelatedCandidates.size(); k++)
-        {
-            const ObjectDenseIndex index = sleepRelatedCandidates[k];
-            objectManager.sleepBody(index, flags[bodies.islandId[index]]);
-        }
+        objectManager.updateSleeping(
+            deltaTimeF,
+            simulationSettings.linearSpeedSleepThreshold,
+            simulationSettings.angularSpeedSleepThreshold,
+            simulationSettings.sleepTimeThreshold,
+            islandManager,
+            mainBodyHolder
+        );
     }
 
     void Simulation::refreshSpatialData()
@@ -889,8 +765,7 @@ namespace PS_AGONY2D
         data.other =
             getVectorMemoryUsage(broadPhaseColliders) +
             getVectorMemoryUsage(narrowPhaseColliders) +
-            getVectorMemoryUsage(sleepRelatedCandidates) +
-            getVectorMemoryUsage(islandSleepFlags)
+            objectManager.getSleepMemoryUsage()
             ;
     }
 }

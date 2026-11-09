@@ -6,6 +6,8 @@
 #include "PS_AGONY2D/Types/Material.h"
 
 #include "PS_AGONY2D/SimulationImpl/AllConstraintSystem.h"
+#include "PS_AGONY2D/IslandManager.h"
+#include "PS_AGONY2D/Interactivity/BodyHolder.h"
 
 #include <cstdint>
 #include <optional>
@@ -132,13 +134,50 @@ namespace PS_AGONY2D
 		//
 		// Sleeping islands: bodies put to sleep together share a sleepIslandId (>= 2); pass it as sleepIslandId, or 0
 		// for a standalone body (fresh id). wakeBody wakes the body's WHOLE island, so other bodies change index too:
-		// only the returned index is valid afterwards. When sleeping many bodies, call in DESCENDING index order.
+		// only the returned index is valid afterwards. Single calls only: batches go through updateSleeping and
+		// wakeSleepIslands, which order the moves by SLEEPING_AFTER_DYNAMIC.
 		ObjectDenseIndex sleepBody(ObjectDenseIndex bodyIndex, uint32_t sleepIslandId = 0);
 		ObjectDenseIndex wakeBody(ObjectDenseIndex bodyIndex);
 
 		// Wakes every Sleeping body whose sleepIslandId is in the list (sorted, unique, no zeros). One scan of the
 		// Sleeping range regardless of list size.
 		void wakeSleepIslands(std::span<const uint32_t> sortedUniqueIds);
+
+		// Wakes the sleeping islands of every body in the contacts. Contact needs colliderA and colliderB handles.
+		template<class ContactRange>
+		void wakeIslandsOfContacts(const ContactRange& contacts)
+		{
+			const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
+			if (sleeping.empty()) return;
+
+			const ObjectDenseIndex* const bodyIndexPtr = colliders.bodyIndex.data();
+			const uint32_t* const sleepIdPtr = bodies.sleepIslandId.data();
+
+			wakeIdScratch.clear();
+			for (const auto& contact : contacts)
+			{
+				const ObjectDenseIndex bodyA = bodyIndexPtr[colliders.handles.indexOfUnchecked(contact.colliderA)];
+				const ObjectDenseIndex bodyB = bodyIndexPtr[colliders.handles.indexOfUnchecked(contact.colliderB)];
+
+				if (bodyA - sleeping.begin < sleeping.size()) wakeIdScratch.push_back(sleepIdPtr[bodyA]);
+				if (bodyB - sleeping.begin < sleeping.size()) wakeIdScratch.push_back(sleepIdPtr[bodyB]);
+			}
+			wakeCollectedIslandIds();
+		}
+
+		// Advances sleep timers of Dynamic bodies and sleeps every island whose bodies are all quiet long enough.
+		// Islands containing held bodies stay awake.
+		void updateSleeping(
+			float deltaTime, Real linearSpeedThreshold, Real angularSpeedThreshold, float sleepTimeThreshold,
+			const IslandManager& islandManager, const Interactivity::BodyHolder& holder
+		);
+
+		// Colliders of the bodies in wokenBodies / sleptBodies. Clears the matching list.
+		// The returned vector is reused by the next take call.
+		std::span<const ObjectDenseIndex> takeWokenColliders();
+		std::span<const ObjectDenseIndex> takeSleptColliders();
+
+		size_t getSleepMemoryUsage() const noexcept;
 
 		// Unique among live sleeping islands. Never returns 0 or 1.
 		uint32_t newSleepIslandId() noexcept
@@ -200,6 +239,10 @@ namespace PS_AGONY2D
 
 		uint32_t nextSleepIslandId = 1;
 		std::vector<ObjectDenseIndex> wakeScratch;
+		std::vector<uint32_t> wakeIdScratch;
+		std::vector<ObjectDenseIndex> sleepScratch;
+		std::vector<uint32_t> islandSleepFlags; // 0 = stays awake, 1 = may sleep, >= 2 = assigned sleep island id.
+		std::vector<ObjectDenseIndex> colliderScratch;
 		std::vector<Handle> constraintWakeScratch;
 
 		// Wakes both bodies (indices move: re-resolved by handle). False if either handle is stale.
@@ -228,9 +271,15 @@ namespace PS_AGONY2D
 		void moveBodyColliders(ObjectDenseIndex bodyIndex, BodyGroup from, BodyGroup to);
 		// Wakes exactly one body (no island logic). Returns its new index.
 		ObjectDenseIndex wakeOne(ObjectDenseIndex bodyIndex);
+		// Sorts and dedups wakeIdScratch, then wakes those islands.
+		void wakeCollectedIslandIds();
+		std::span<const ObjectDenseIndex> collectColliders(std::vector<Handle>& bodyHandles);
+		// Moves a body across the boundary shared by two adjacent groups with a single swap. Returns the new index.
+		template<BodyGroup FROM, BodyGroup TO>
+		ObjectDenseIndex moveBodyToAdjacentGroup(ObjectDenseIndex bodyIndex);
 		std::vector<ObjectDenseIndex>& colliderListFor(BodyGroup group) noexcept;
 
-		// Body group machinery. Body memory order is [Dynamic][Static][Sleeping][Unused].
+		// Body group machinery. Body memory order follows BodyGroup.
 		// swapBodies: swaps two bodies and re-points their colliders. Constraint body indices are not remapped.
 		void swapBodies(ObjectDenseIndex a, ObjectDenseIndex b);
 

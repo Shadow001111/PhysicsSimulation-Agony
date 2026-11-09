@@ -154,13 +154,9 @@ namespace PS_AGONY2D
 		std::vector<ObjectDenseIndex> broadPhaseColliders;
 		std::vector<std::pair<ObjectDenseIndex, Real>> narrowPhaseColliders;
 
-		// Sleep.
-		std::vector<ObjectDenseIndex> sleepRelatedCandidates;
-
 		// Islands.
 		std::span<const ObjectPair> islandBodyCollisionEdges{};
 		IslandManager islandManager;
-		std::vector<uint32_t> islandSleepFlags;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -244,8 +240,6 @@ namespace PS_AGONY2D
 
 		// Held bodies are modified by the holder every step, so they must be awake before integration.
 		void wakeHeldBodies();
-
-		void wakeCollidingBodies(std::span<const BodyCollisionData> narrow);
 
 		// Consume and clear objectManager.wokenBodies / sleptBodies.
 		// Saved contact data is restored on wake (warm starting) and stored on sleep.
