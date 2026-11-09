@@ -96,7 +96,8 @@ namespace PS_AGONY2D
 	}
 
 	ColliderSoAViewer::ColliderSoAViewer(const ColliderSoA& data) noexcept :
-		count(data.getCount())
+		count(data.getCount()),
+		handles(&data.handles)
 	{
 		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)

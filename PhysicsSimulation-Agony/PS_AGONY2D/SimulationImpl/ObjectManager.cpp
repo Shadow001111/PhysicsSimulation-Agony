@@ -606,14 +606,6 @@ namespace PS_AGONY2D
                 polygons.colliderIndices[movedShapeIdx] = colliderIdx;
             else if (movedShapeType == ColliderShapeType::Capsule)
                 capsules.colliderIndices[movedShapeIdx] = colliderIdx;
-
-            deletedColliders.emplace_back(
-                static_cast<ObjectDenseIndex>(colliderIdx), static_cast<ObjectDenseIndex>(oldBackCollider)
-            );
-        }
-        else
-        {
-            deletedColliders.emplace_back(static_cast<ObjectDenseIndex>(colliderIdx), static_cast<ObjectDenseIndex>(colliderIdx));
         }
 
         colliderSlot.pop_back();

@@ -65,6 +65,8 @@ namespace PS_AGONY2D
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
 		#undef DECLARE_VIEWER_FIELD
 
+		const HandleTable* handles = nullptr;
+
 		ColliderSoAViewer() = default;
 		explicit ColliderSoAViewer(const ColliderSoA& data) noexcept;
 

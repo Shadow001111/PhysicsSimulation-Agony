@@ -189,10 +189,7 @@ namespace PS_AGONY2D
         // Set data viewers.
         setDataViewers();
 
-        // Remap warm-starting data if a collider was deleted.
-        narrowPhaseCollisionDetector.remapPersistentContactData(objectManager.deletedColliders);
-        objectManager.deletedColliders.clear();
-
+        //
         wakeHeldBodies();
         integrateAndApplyConstraints(deltaTime);
 
@@ -448,8 +445,12 @@ namespace PS_AGONY2D
         sleepRelatedCandidates.clear();
         for (const BodyCollisionData& data : narrow)
         {
-            const ObjectDenseIndex bodyA = bodyIndexPtr[data.colliderA];
-            const ObjectDenseIndex bodyB = bodyIndexPtr[data.colliderB];
+            const ObjectDenseIndex colliderA = objectManager.colliders.handles.indexOfUnchecked(data.colliderA);
+            const ObjectDenseIndex colliderB = objectManager.colliders.handles.indexOfUnchecked(data.colliderB);
+
+            const ObjectDenseIndex bodyA = bodyIndexPtr[colliderA];
+            const ObjectDenseIndex bodyB = bodyIndexPtr[colliderB];
+
             if (isSleeping(bodyA)) sleepRelatedCandidates.push_back(sleepIdPtr[bodyA]);
             if (isSleeping(bodyB)) sleepRelatedCandidates.push_back(sleepIdPtr[bodyB]);
         }

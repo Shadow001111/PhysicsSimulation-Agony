@@ -6,6 +6,7 @@
 #include "PS_AGONY2D/Types/Types.h"
 #include "PS_AGONY2D/Types/ExecutionPolicy.h"
 
+#include <algorithm>
 #include <atomic>
 #include <array>
 #include <span>
@@ -18,11 +19,18 @@ namespace PS_AGONY2D
 		Real tangentImpulseAccumulator = 0;
 	};
 
-	// bodyA/bodyB are the OWNING bodies of colliderA/colliderB, resolved once at generation
-	// time so downstream solvers (which only ever act on bodies) never re-resolve them.
+	// Persistent manifold between two colliders, identified by handles (stable under swap-remove).
+	// Collision methods fill it through the index constructor: the collider storage then holds dense indices
+	// (indexA/indexB), and processPairs replaces them with handles before the data leaves the narrow phase.
 	struct BodyCollisionData
 	{
-		ObjectDenseIndex colliderA, colliderB;
+		static_assert(sizeof(ObjectDenseIndex) == sizeof(uint32_t));
+
+		union
+		{
+			struct { Handle colliderA, colliderB; };
+			struct { ObjectDenseIndex indexA; uint32_t paddingA; ObjectDenseIndex indexB; uint32_t paddingB; };
+		};
 		Vec2 normal;
 		Real penetration;
 		uint32_t contactCount;
@@ -30,19 +38,20 @@ namespace PS_AGONY2D
 		uint32_t contactIds[2];
 		std::array<PersistentImpulses, 2> persistentContactData{};
 
-		BodyCollisionData() = default;
+		BodyCollisionData() noexcept : colliderA(), colliderB() {}
 
 		BodyCollisionData(
-			ObjectDenseIndex colliderA, ObjectDenseIndex colliderB,
+			ObjectDenseIndex colliderIndexA, ObjectDenseIndex colliderIndexB,
 			Vec2 normal,
 			Real depth,
 			uint32_t contactCount,
 			Vec2 contactPoint1, Vec2 contactPoint2,
 			uint32_t contactId1, uint32_t contactId2
 		) :
-			colliderA(colliderA), colliderB(colliderB),
 			normal(normal), penetration(depth), contactCount(contactCount)
 		{
+			indexA = colliderIndexA;
+			indexB = colliderIndexB;
 			contactPoints[0] = contactPoint1;
 			contactPoints[1] = contactPoint2;
 			contactIds[0] = contactId1;
@@ -119,7 +128,12 @@ namespace PS_AGONY2D
 
 		static constexpr uint8_t FLAG_IN_SET = 1; // Scratch: collider is in the current sleep/wake set.
 		static constexpr uint8_t FLAG_ASLEEP = 2; // Persistent: collider is asleep (set by sleep, cleared by wake).
-		std::vector<uint8_t> colliderFlags;
+		struct SlotFlags
+		{
+			uint32_t generation = 0; // Flags are valid only for the handle generation they were set for.
+			uint8_t flags = 0;
+		};
+		std::vector<SlotFlags> slotFlags; // Indexed by collider Handle::slot.
 
 		// 'previousCollisionArray' was compacted/appended since 'contactCache' was built. Rebuilt lazily in findCollisions.
 		bool contactCacheDirty = false;
@@ -178,11 +192,6 @@ namespace PS_AGONY2D
 		// Manifolds whose partner is still asleep stay stored (no islands).
 		void wakeContactData(std::span<const ObjectDenseIndex> colliderIndices);
 
-		// 'deletedColliders' is the collider swap-remove log (same shape as ObjectDeletion,
-		// but every index in it is a collider index, not a body index).
-		// TODO: Must fix/delete data in 'sleepPersistentContactData', to not leave data lying forever.
-		void remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders);
-
 		void resetCollisionData();
 
 		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionArray; }
@@ -190,28 +199,38 @@ namespace PS_AGONY2D
 
 		size_t getMemoryUsage() const;
 	private:
-		void markColliders(std::span<const ObjectDenseIndex> colliderIndices);
-		void unmarkColliders(std::span<const ObjectDenseIndex> colliderIndices);
-		bool isMarked(ObjectDenseIndex i) const noexcept { return size_t(i) < colliderFlags.size() && (colliderFlags[size_t(i)] & FLAG_IN_SET); }
-		bool isAsleep(ObjectDenseIndex i) const noexcept { return size_t(i) < colliderFlags.size() && (colliderFlags[size_t(i)] & FLAG_ASLEEP); }
+		void updateColliderFlags(std::span<const ObjectDenseIndex> colliderIndices, uint8_t setMask, uint8_t clearMask);
+		bool hasFlag(Handle h, uint8_t flag) const noexcept
+		{
+			return h.slot < slotFlags.size() && slotFlags[h.slot].generation == h.generation && (slotFlags[h.slot].flags & flag) != 0;
+		}
+		bool isMarked(Handle h) const noexcept { return hasFlag(h, FLAG_IN_SET); }
+		bool isAsleep(Handle h) const noexcept { return hasFlag(h, FLAG_ASLEEP); }
+		bool isAlive(const BodyCollisionData& d) const noexcept { return colliders.handles->isValid(d.colliderA) && colliders.handles->isValid(d.colliderB); }
+
+		// Order-independent: the same collider pair gives the same key whatever the dense order is.
+		static uint64_t makePairKey(Handle a, Handle b) noexcept
+		{
+			return (uint64_t(std::min(a.slot, b.slot)) << 32) | uint64_t(std::max(a.slot, b.slot));
+		}
 
 		void findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs);
 		void findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount);
 
-		// Appends results to 'out' and applies warm-starting to the appended range only.
+		// Appends results to 'out', converts their collider indices to handles and applies warm-starting to the appended range only.
 		void processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out);
 
 		// Moves persistent contact data from previous frame (read-only lookups, thread-safe).
-		// (Copies persistent impulses from previous to current frame, only matching contacts).
+		// (Copies persistent impulses from previous to current frame, only matching contacts of pairs with the same collider order).
 		void movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> chunkCollisionData);
 
-		void collisionCircleCircle	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
-		void collisionCircleBox		(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
-		void collisionCirclePolygon	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
-		void collisionCircleCapsule	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
-		void collisionBoxBox		(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
-		void collisionBoxPolygon	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
-		void collisionBoxCapsule	(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCircleCircle(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCircleBox(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCirclePolygon(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionCircleCapsule(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionBoxBox(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionBoxPolygon(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
+		void collisionBoxCapsule(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionPolygonPolygon(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionPolygonCapsule(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionCapsuleCapsule(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);

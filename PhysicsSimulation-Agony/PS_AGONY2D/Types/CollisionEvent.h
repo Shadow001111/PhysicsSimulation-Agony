@@ -13,6 +13,7 @@ namespace PS_AGONY2D
 	inline constexpr Real NO_COLLISION_EVENT_THRESHOLD = std::numeric_limits<Real>::max();
 
 	// One event per opted-in collider side, from that side's perspective.
+	// TODO: Use handles.
 	struct CollisionEvent
 	{
 		ObjectDenseIndex self, other;

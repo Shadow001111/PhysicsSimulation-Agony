@@ -29,8 +29,8 @@ namespace PS_AGONY2D
 		collidingBodyPairs.resize(collisionData.size());
 		for (size_t i = 0; i < collisionData.size(); i++)
 		{
-			collidingBodyPairs[i].a = bodyOwnerPtr[collisionData[i].colliderA];
-			collidingBodyPairs[i].b = bodyOwnerPtr[collisionData[i].colliderB];
+			collidingBodyPairs[i].a = bodyOwnerPtr[colliders.handles->indexOfUnchecked(collisionData[i].colliderA)];
+			collidingBodyPairs[i].b = bodyOwnerPtr[colliders.handles->indexOfUnchecked(collisionData[i].colliderB)];
 		}
 		return collidingBodyPairs;
 	}
@@ -95,7 +95,7 @@ namespace PS_AGONY2D
 				solvingPlan,
 				collidingBodyPairs,
 				claimRange,
-				bodies->range(BodyGroup::Static), false,
+				staticRange, false,
 				workerCount,
 				sizeof(Real)
 			);
@@ -262,8 +262,11 @@ namespace PS_AGONY2D
 		{
 			const auto& data = sourcePtr[order ? order[c] : c];
 
-			const ObjectDenseIndex bodyA = bodyIndexPtr[data.colliderA];
-			const ObjectDenseIndex bodyB = bodyIndexPtr[data.colliderB];
+			const ObjectDenseIndex colliderA = colliders.handles->indexOfUnchecked(data.colliderA);
+			const ObjectDenseIndex colliderB = colliders.handles->indexOfUnchecked(data.colliderB);
+
+			const ObjectDenseIndex bodyA = bodyIndexPtr[colliderA];
+			const ObjectDenseIndex bodyB = bodyIndexPtr[colliderB];
 
 			const Vec2 positionA = { positionXPtr[bodyA], positionYPtr[bodyA] };
 			const Vec2 positionB = { positionXPtr[bodyB], positionYPtr[bodyB] };
@@ -294,8 +297,8 @@ namespace PS_AGONY2D
 				auto& velocityConstraint = velocityConstraintContainer[c];
 				auto& frictionData = frictionDataContainer[c];
 
-				const MaterialIndex materialIndexA = colliderMaterialIndexPtr[data.colliderA];
-				const MaterialIndex materialIndexB = colliderMaterialIndexPtr[data.colliderB];
+				const MaterialIndex materialIndexA = colliderMaterialIndexPtr[colliderA];
+				const MaterialIndex materialIndexB = colliderMaterialIndexPtr[colliderB];
 				const Material* materialA = materials + materialIndexA;
 				const Material* materialB = materials + materialIndexB;
 
@@ -356,11 +359,11 @@ namespace PS_AGONY2D
 
 				if (impactImpulse > Real(0)) // && recordEvents
 				{
-					const CollisionCallbackIndex callbackA = colliderCallbackIdPtr[data.colliderA];
-					const CollisionCallbackIndex callbackB = colliderCallbackIdPtr[data.colliderB];
+					const CollisionCallbackIndex callbackA = colliderCallbackIdPtr[colliderA];
+					const CollisionCallbackIndex callbackB = colliderCallbackIdPtr[colliderB];
 
-					const bool fireA = callbackA != 0 && impactImpulse >= colliderEventThresholdPtr[data.colliderA];
-					const bool fireB = callbackB != 0 && impactImpulse >= colliderEventThresholdPtr[data.colliderB];
+					const bool fireA = callbackA != 0 && impactImpulse >= colliderEventThresholdPtr[colliderA];
+					const bool fireB = callbackB != 0 && impactImpulse >= colliderEventThresholdPtr[colliderB];
 
 					if (fireA || fireB)
 					{
@@ -370,7 +373,7 @@ namespace PS_AGONY2D
 
 						if (fireA)
 							collisionEvents.emplace_back(
-								data.colliderA, data.colliderB,
+								colliderA, colliderB,
 								bodyA, bodyB,
 								eventPoint, data.normal,
 								impactImpulse,
@@ -378,7 +381,7 @@ namespace PS_AGONY2D
 							);
 						if (fireB)
 							collisionEvents.emplace_back(
-								data.colliderB, data.colliderA,
+								colliderB, colliderA,
 								bodyB, bodyA,
 								eventPoint,
 								-data.normal,

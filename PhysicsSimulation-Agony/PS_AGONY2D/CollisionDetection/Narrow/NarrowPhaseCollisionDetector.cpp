@@ -10,8 +10,6 @@
 #include <tuple>
 #include <algorithm>
 #include <xmmintrin.h>
-#include <robin_hood.h>
-#include <iostream>
 
 /*
  * NARROW PHASE: DESIGN NOTES
@@ -65,14 +63,14 @@ namespace PS_AGONY2D
                 mat((size_t)typeA, (size_t)typeB) = func;
             };
 
-        add(ColliderShapeType::Circle , ColliderShapeType::Circle , &NarrowPhaseCollisionDetector::collisionCircleCircle  );
-        add(ColliderShapeType::Circle , ColliderShapeType::Box    , &NarrowPhaseCollisionDetector::collisionCircleBox     );
-        add(ColliderShapeType::Circle , ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionCirclePolygon );
-        add(ColliderShapeType::Circle , ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionCircleCapsule );
+        add(ColliderShapeType::Circle, ColliderShapeType::Circle, &NarrowPhaseCollisionDetector::collisionCircleCircle);
+        add(ColliderShapeType::Circle, ColliderShapeType::Box, &NarrowPhaseCollisionDetector::collisionCircleBox);
+        add(ColliderShapeType::Circle, ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionCirclePolygon);
+        add(ColliderShapeType::Circle, ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionCircleCapsule);
 
-        add(ColliderShapeType::Box    , ColliderShapeType::Box    , &NarrowPhaseCollisionDetector::collisionBoxBox        );
-        add(ColliderShapeType::Box    , ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionBoxPolygon    );
-        add(ColliderShapeType::Box    , ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionBoxCapsule    );
+        add(ColliderShapeType::Box, ColliderShapeType::Box, &NarrowPhaseCollisionDetector::collisionBoxBox);
+        add(ColliderShapeType::Box, ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionBoxPolygon);
+        add(ColliderShapeType::Box, ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionBoxCapsule);
 
         add(ColliderShapeType::Polygon, ColliderShapeType::Polygon, &NarrowPhaseCollisionDetector::collisionPolygonPolygon);
         add(ColliderShapeType::Polygon, ColliderShapeType::Capsule, &NarrowPhaseCollisionDetector::collisionPolygonCapsule);
@@ -285,8 +283,7 @@ namespace PS_AGONY2D
         for (size_t i = 0; i < prevCount; i++)
         {
             const BodyCollisionData& prevData = prevPtr[i];
-            // Dead (deleted collider) or no contacts: nothing to warm-start.
-            if (prevData.colliderA == INVALID_COLLIDER_INDEX || prevData.contactCount == 0) continue;
+            if (prevData.contactCount == 0) continue;
 
             // Zero accumulators are identical to a lookup miss: don't store them.
             const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(prevData.persistentContactData.data()));
@@ -295,21 +292,25 @@ namespace PS_AGONY2D
             const bool any = impulseMask != 0;
             if (!any) continue;
 
-            contactCache.insert(ContactCache::makeKey(prevData.colliderA, prevData.colliderB), uint32_t(i));
+            contactCache.insert(makePairKey(prevData.colliderA, prevData.colliderB), uint32_t(i));
         }
     }
 
-    void NarrowPhaseCollisionDetector::markColliders(std::span<const ObjectDenseIndex> colliderIndices)
+    void NarrowPhaseCollisionDetector::updateColliderFlags(std::span<const ObjectDenseIndex> colliderIndices, uint8_t setMask, uint8_t clearMask)
     {
-        size_t maxIndex = 0;
-        for (ObjectDenseIndex i : colliderIndices) maxIndex = std::max(maxIndex, size_t(i));
-        if (colliderFlags.size() < maxIndex + 1) colliderFlags.resize(maxIndex + 1, 0);
-        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] |= FLAG_IN_SET;
-    }
+        const HandleTable& handles = *colliders.handles;
 
-    void NarrowPhaseCollisionDetector::unmarkColliders(std::span<const ObjectDenseIndex> colliderIndices)
-    {
-        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] &= uint8_t(~FLAG_IN_SET);
+        uint32_t maxSlot = 0;
+        for (ObjectDenseIndex i : colliderIndices) maxSlot = std::max(maxSlot, handles.handleAt(i).slot);
+        if (slotFlags.size() <= maxSlot) slotFlags.resize(size_t(maxSlot) + 1);
+
+        for (ObjectDenseIndex i : colliderIndices)
+        {
+            const Handle h = handles.handleAt(i);
+            SlotFlags& f = slotFlags[h.slot];
+            if (f.generation != h.generation) f = { h.generation, 0 };
+            f.flags = uint8_t((f.flags | setMask) & ~clearMask);
+        }
     }
 
     void NarrowPhaseCollisionDetector::sleepContactData(std::span<const ObjectDenseIndex> colliderIndices)
@@ -319,40 +320,39 @@ namespace PS_AGONY2D
         if (colliderIndices.empty()) return;
 
         // Flags first: they must be set even when there is nothing to move.
-        markColliders(colliderIndices);
-        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] |= FLAG_ASLEEP;
+        updateColliderFlags(colliderIndices, FLAG_IN_SET | FLAG_ASLEEP, 0);
 
         if (previousCollisionArray.empty())
         {
-            unmarkColliders(colliderIndices);
+            updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
             return;
         }
 
-        // Single stable compaction pass: preserves order.
+        // Single stable compaction pass: preserves order. Manifolds of deleted colliders are dropped.
         BodyCollisionData* ECSTASY_RESTRICT data = previousCollisionArray.data();
         const size_t count = previousCollisionArray.size();
         size_t write = 0;
         for (size_t r = 0; r < count; r++)
         {
             const BodyCollisionData& d = data[r];
-            if (isMarked(d.colliderA) || isMarked(d.colliderB))
+            const bool alive = isAlive(d);
+            if (alive && !isMarked(d.colliderA) && !isMarked(d.colliderB))
             {
-                // Dead (deleted collider) or empty manifolds are simply dropped.
-                if (d.colliderA != INVALID_COLLIDER_INDEX && d.contactCount > 0)
-                    sleepingCollisionArray.push_back(d);
-                continue; // Removed from the active array.
+                if (write != r) data[write] = d;
+                write++;
+                continue;
             }
-            if (write != r) data[write] = d;
-            write++;
+            if (alive && d.contactCount > 0)
+                sleepingCollisionArray.push_back(d);
         }
 
         if (write != count)
         {
             previousCollisionArray.resize(write);
-            contactCacheDirty = true; // Indices shifted.
+            contactCacheDirty = true;
         }
 
-        unmarkColliders(colliderIndices);
+        updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
     }
 
     void NarrowPhaseCollisionDetector::wakeContactData(std::span<const ObjectDenseIndex> colliderIndices)
@@ -362,23 +362,24 @@ namespace PS_AGONY2D
         if (colliderIndices.empty()) return;
 
         // Woken colliders are no longer asleep, so isAsleep() below only reports partners that stay asleep.
-        markColliders(colliderIndices);
-        for (ObjectDenseIndex i : colliderIndices) colliderFlags[size_t(i)] &= uint8_t(~FLAG_ASLEEP);
+        updateColliderFlags(colliderIndices, FLAG_IN_SET, FLAG_ASLEEP);
 
         if (sleepingCollisionArray.empty())
         {
-            unmarkColliders(colliderIndices);
+            updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
             return;
         }
 
         bool cacheBuilt = false;
 
-        // Single stable pass: restored entries are consumed (duplicates included), others kept.
+        // Single stable pass: restored entries are consumed (duplicates included), manifolds of deleted colliders
+        // are dropped, others kept.
         const size_t count = sleepingCollisionArray.size();
         size_t write = 0;
         for (size_t r = 0; r < count; r++)
         {
             const BodyCollisionData& s = sleepingCollisionArray[r];
+            if (!isAlive(s)) continue;
 
             const bool touched = isMarked(s.colliderA) || isMarked(s.colliderB);
             if (!touched)
@@ -396,31 +397,35 @@ namespace PS_AGONY2D
                 const BodyCollisionData* ECSTASY_RESTRICT cur = previousCollisionArray.data();
                 for (size_t i = 0; i < n; i++)
                 {
-                    if (cur[i].colliderA == INVALID_COLLIDER_INDEX || cur[i].contactCount == 0) continue;
-                    wakeCache.insert(ContactCache::makeKey(cur[i].colliderA, cur[i].colliderB), uint32_t(i));
+                    if (cur[i].contactCount == 0) continue;
+                    wakeCache.insert(makePairKey(cur[i].colliderA, cur[i].colliderB), uint32_t(i));
                 }
                 cacheBuilt = true;
             }
 
-            const auto key = ContactCache::makeKey(s.colliderA, s.colliderB);
+            const uint64_t key = makePairKey(s.colliderA, s.colliderB);
             const uint32_t idx = wakeCache.find(key);
 
             if (idx != ContactCache::NONE)
             {
                 // Pair was generated this frame: it keeps its fresh geometry, take the impulses.
+                // A flipped collider order means different normal and ids: nothing to take.
                 BodyCollisionData& c = previousCollisionArray[idx];
-                for (uint32_t i = 0; i < c.contactCount; i++)
+                if (c.colliderA == s.colliderA && c.colliderB == s.colliderB)
                 {
-                    for (uint32_t j = 0; j < s.contactCount; j++)
+                    for (uint32_t i = 0; i < c.contactCount; i++)
                     {
-                        if (c.contactIds[i] == s.contactIds[j])
+                        for (uint32_t j = 0; j < s.contactCount; j++)
                         {
-                            c.persistentContactData[i] = s.persistentContactData[j];
-                            break;
+                            if (c.contactIds[i] == s.contactIds[j])
+                            {
+                                c.persistentContactData[i] = s.persistentContactData[j];
+                                break;
+                            }
                         }
                     }
                 }
-                continue; // Consumed.
+                continue;
             }
 
             if (isAsleep(s.colliderA) || isAsleep(s.colliderB))
@@ -438,94 +443,7 @@ namespace PS_AGONY2D
         }
         sleepingCollisionArray.resize(write);
 
-        unmarkColliders(colliderIndices);
-    }
-
-    // TODO: Check if it needs to remap sleeping data.
-    void NarrowPhaseCollisionDetector::remapPersistentContactData(std::span<const ObjectDeletion> deletedColliders)
-    {
-        if (deletedColliders.empty() || previousCollisionArray.empty())
-        {
-            return;
-        }
-
-        TRACY_SCOPE_N("Remap persistent contact data");
-
-        // Compose the whole deletion log once, tracking only touched indices.
-        // slotToEntity: slot -> ORIGINAL index of the collider currently in that slot,
-        // or INVALID_COLLIDER_INDEX if the slot holds a collider created after the cache was built
-        // (or was vacated). Slots never touched are identity.
-        robin_hood::unordered_flat_map<ObjectDenseIndex, ObjectDenseIndex> slotToEntity;
-        robin_hood::unordered_flat_set<ObjectDenseIndex> dead;
-        slotToEntity.reserve(deletedColliders.size() * 2);
-        dead.reserve(deletedColliders.size());
-
-        auto entityAt = [&](ObjectDenseIndex slot) -> ObjectDenseIndex
-            {
-                const auto it = slotToEntity.find(slot);
-                return it == slotToEntity.end() ? slot : it->second;
-            };
-
-        for (const auto& deletion : deletedColliders)
-        {
-            const ObjectDenseIndex deletedIndex = deletion.deletedIndex;
-            const ObjectDenseIndex swappedFromIndex = deletion.swappedFromIndex;
-
-            const ObjectDenseIndex victim = entityAt(deletedIndex);
-            if (victim != INVALID_COLLIDER_INDEX) dead.insert(victim);
-
-            if (swappedFromIndex != INVALID_COLLIDER_INDEX && swappedFromIndex != deletedIndex)
-            {
-                const ObjectDenseIndex moved = entityAt(swappedFromIndex);
-                slotToEntity[deletedIndex] = moved;
-                slotToEntity[swappedFromIndex] = INVALID_COLLIDER_INDEX; // Vacated; a later create may reuse it.
-            }
-            else
-            {
-                slotToEntity[deletedIndex] = INVALID_COLLIDER_INDEX;
-            }
-        }
-
-        // original index -> final index (INVALID_COLLIDER_INDEX if deleted). Untouched indices are absent.
-        robin_hood::unordered_flat_map<ObjectDenseIndex, ObjectDenseIndex> remap;
-        remap.reserve(dead.size() + slotToEntity.size());
-        for (const ObjectDenseIndex e : dead) remap[e] = INVALID_COLLIDER_INDEX;
-        for (const auto& [slot, entity] : slotToEntity)
-        {
-            if (entity != INVALID_COLLIDER_INDEX && entity != slot) remap[entity] = slot;
-        }
-
-        // Rewrite the keys stored in the previous results, then rebuild the table.
-        for (BodyCollisionData& d : previousCollisionArray)
-        {
-            ObjectDenseIndex a = d.colliderA;
-            ObjectDenseIndex b = d.colliderB;
-
-            const auto ra = remap.find(a);
-            const auto rb = remap.find(b);
-            if (ra == remap.end() && rb == remap.end()) continue;
-
-            if (ra != remap.end()) a = ra->second;
-            if (rb != remap.end()) b = rb->second;
-
-            if (a == INVALID_COLLIDER_INDEX || b == INVALID_COLLIDER_INDEX)
-            {
-                d.colliderA = INVALID_COLLIDER_INDEX; // Dead: skipped by rebuildContactCache.
-                continue;
-            }
-
-            // Re-sort the indices to preserve narrow-phase invariants.
-            const ColliderShapeType typeA = colliders.shapeType[a];
-            const ColliderShapeType typeB = colliders.shapeType[b];
-            if (typeA > typeB || (typeA == typeB && b > a))
-            {
-                std::swap(a, b);
-            }
-            d.colliderA = a;
-            d.colliderB = b;
-        }
-
-        rebuildContactCache();
+        updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
     }
 
     void NarrowPhaseCollisionDetector::resetCollisionData()
@@ -555,7 +473,7 @@ namespace PS_AGONY2D
 
         // The rest.
         total += contactCache.memoryUsage();
-        total += getVectorMemoryUsage(colliderFlags) + wakeCache.memoryUsage();
+        total += getVectorMemoryUsage(slotFlags) + wakeCache.memoryUsage();
         return total;
     }
 
@@ -752,6 +670,22 @@ namespace PS_AGONY2D
                 }
             }
         }
+
+        // Collision methods stored dense indices in the collider fields: replace them with handles.
+        {
+            const HandleTable& handles = *colliders.handles;
+            BodyCollisionData* ECSTASY_RESTRICT resultPtr = out.data();
+            const size_t resultEnd = out.size();
+            for (size_t r = firstResult; r < resultEnd; r++)
+            {
+                BodyCollisionData& d = resultPtr[r];
+                const ObjectDenseIndex indexA = d.indexA;
+                const ObjectDenseIndex indexB = d.indexB;
+                d.colliderA = handles.handleAt(indexA);
+                d.colliderB = handles.handleAt(indexB);
+            }
+        }
+
         if (!contactCache.empty())
         {
             movePreviousContactData(firstResult, out);
@@ -768,18 +702,19 @@ namespace PS_AGONY2D
 
         constexpr size_t LOOKAHEAD = 8;
         for (size_t r = firstResult; r < std::min(firstResult + LOOKAHEAD, end); r++)
-            contactCache.prefetch(ContactCache::makeKey(resultPtr[r].colliderA, resultPtr[r].colliderB));
+            contactCache.prefetch(makePairKey(resultPtr[r].colliderA, resultPtr[r].colliderB));
 
         for (size_t r = firstResult; r < end; r++)
         {
             if (r + LOOKAHEAD < end)
-                contactCache.prefetch(ContactCache::makeKey(resultPtr[r + LOOKAHEAD].colliderA, resultPtr[r + LOOKAHEAD].colliderB));
+                contactCache.prefetch(makePairKey(resultPtr[r + LOOKAHEAD].colliderA, resultPtr[r + LOOKAHEAD].colliderB));
 
             BodyCollisionData& currData = resultPtr[r];
-            const uint32_t idx = contactCache.find(ContactCache::makeKey(currData.colliderA, currData.colliderB));
+            const uint32_t idx = contactCache.find(makePairKey(currData.colliderA, currData.colliderB));
             if (idx == ContactCache::NONE) continue;
 
             const BodyCollisionData& prevData = prevDataPtr[idx];
+            if (prevData.colliderA != currData.colliderA || prevData.colliderB != currData.colliderB) continue;
             const uint32_t contactCount = prevData.contactCount;
 
             // Match current contacts with previous frame contacts using contactIds.
