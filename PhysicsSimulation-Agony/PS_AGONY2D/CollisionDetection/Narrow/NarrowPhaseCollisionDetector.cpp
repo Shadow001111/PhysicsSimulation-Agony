@@ -10,6 +10,7 @@
 #include <tuple>
 #include <algorithm>
 #include <xmmintrin.h>
+#include <iostream>
 
 /*
  * NARROW PHASE: DESIGN NOTES
@@ -283,7 +284,6 @@ namespace PS_AGONY2D
         for (size_t i = 0; i < prevCount; i++)
         {
             const BodyCollisionData& prevData = prevPtr[i];
-            if (prevData.contactCount == 0) continue;
 
             // Zero accumulators are identical to a lookup miss: don't store them.
             const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(prevData.persistentContactData.data()));
@@ -336,14 +336,15 @@ namespace PS_AGONY2D
         {
             const BodyCollisionData& d = data[r];
             const bool alive = isAlive(d);
-            if (alive && !isMarked(d.colliderA) && !isMarked(d.colliderB))
+            if (!alive) continue;
+
+            if (isMarked(d.colliderA) || isMarked(d.colliderB))
             {
-                if (write != r) data[write] = d;
-                write++;
+                sleepingCollisionArray.push_back(d);
                 continue;
             }
-            if (alive && d.contactCount > 0)
-                sleepingCollisionArray.push_back(d);
+            if (write != r) data[write] = d;
+            write++;
         }
 
         if (write != count)
@@ -397,7 +398,6 @@ namespace PS_AGONY2D
                 const BodyCollisionData* ECSTASY_RESTRICT cur = previousCollisionArray.data();
                 for (size_t i = 0; i < n; i++)
                 {
-                    if (cur[i].contactCount == 0) continue;
                     wakeCache.insert(makePairKey(cur[i].colliderA, cur[i].colliderB), uint32_t(i));
                 }
                 cacheBuilt = true;
@@ -715,15 +715,15 @@ namespace PS_AGONY2D
 
             const BodyCollisionData& prevData = prevDataPtr[idx];
             if (prevData.colliderA != currData.colliderA || prevData.colliderB != currData.colliderB) continue;
-            const uint32_t contactCount = prevData.contactCount;
+            const uint32_t prevContactCount = prevData.contactCount;
 
             // Match current contacts with previous frame contacts using contactIds.
             for (uint32_t i = 0; i < currData.contactCount; i++)
             {
                 const uint32_t id = currData.contactIds[i];
-                if (contactCount > 0 && id == prevData.contactIds[0])
+                if (prevContactCount > 0 && id == prevData.contactIds[0])
                     currData.persistentContactData[i] = prevData.persistentContactData[0];
-                else if (contactCount > 1 && id == prevData.contactIds[1])
+                else if (prevContactCount > 1 && id == prevData.contactIds[1])
                     currData.persistentContactData[i] = prevData.persistentContactData[1];
             }
         }
