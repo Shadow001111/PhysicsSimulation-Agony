@@ -11,6 +11,7 @@
 
 //#include <iostream>
 #include <cmath>
+#include <ranges>
 
 namespace PS_AGONY2D
 {
@@ -231,9 +232,9 @@ namespace PS_AGONY2D
         }
 
         //
+        flushCommands();
         updateSleeping(float(deltaTime));
         sleepContactData();
-        flushCommands();
     }
 
     void Simulation::setDataViewers()
@@ -573,9 +574,7 @@ namespace PS_AGONY2D
         }
         if (sleepRelatedCandidates.empty()) return;
 
-        // Descending: sleeping swaps with the last Dynamic slot (>= its index), so lower candidates stay valid.
-        // islandId travels with the body through swaps, so it still maps to the right flag.
-        for (size_t k = sleepRelatedCandidates.size(); k-- > 0;)
+        for (size_t k = 0; k < sleepRelatedCandidates.size(); k++)
         {
             const ObjectDenseIndex index = sleepRelatedCandidates[k];
             objectManager.sleepBody(index, flags[bodies.islandId[index]]);

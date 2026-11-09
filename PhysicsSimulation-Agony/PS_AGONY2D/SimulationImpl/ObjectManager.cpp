@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <ranges>
 
 namespace PS_AGONY2D
 {
@@ -1174,21 +1175,10 @@ namespace PS_AGONY2D
         const uint32_t* sleepId = bodies.sleepIslandId.data();
 
         wakeScratch.clear();
-        if (ids.size() == 1)
-        {
-            const uint32_t id = ids[0];
-            for (ObjectDenseIndex i = sleeping.begin; i < sleeping.end; ++i)
-                if (sleepId[i] == id) wakeScratch.push_back(i);
-        }
-        else
-        {
-            for (ObjectDenseIndex i = sleeping.begin; i < sleeping.end; ++i)
-                if (std::binary_search(ids.begin(), ids.end(), sleepId[i])) wakeScratch.push_back(i);
-        }
+        for (ObjectDenseIndex i = sleeping.begin; i < sleeping.end; i++)
+            if (std::binary_search(ids.begin(), ids.end(), sleepId[i])) wakeScratch.push_back(i);
 
-        // Ascending: waking swaps the body with the first Sleeping slot (<= its index), which can never hold
-        // a still-pending candidate, so the remaining indices stay valid. (Sleeping is the opposite: descending.)
-        for (const ObjectDenseIndex i : wakeScratch)
+        for (const ObjectDenseIndex i : wakeScratch | std::views::reverse)
             wakeOne(i);
     }
 
