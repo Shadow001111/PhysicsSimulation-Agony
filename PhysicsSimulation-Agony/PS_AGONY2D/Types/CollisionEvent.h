@@ -1,6 +1,8 @@
 #pragma once
 #include "Types.h"
 
+#include "PS_AGONY2D/HandleTable.h"
+
 #include <cstdint>
 #include <limits>
 
@@ -13,11 +15,10 @@ namespace PS_AGONY2D
 	inline constexpr Real NO_COLLISION_EVENT_THRESHOLD = std::numeric_limits<Real>::max();
 
 	// One event per opted-in collider side, from that side's perspective.
-	// TODO: Use handles.
 	struct CollisionEvent
 	{
-		ObjectDenseIndex self, other;
-		ObjectDenseIndex selfBody, otherBody;
+		Handle self, other;
+		Handle selfBody, otherBody;
 		Vec2 point;            // Average of the manifold's contact points.
 		Vec2 normal;           // Points from self towards other.
 		Real impulse;          // Impact impulse: max over contacts of (approach speed * normal effective mass), pre-solve.

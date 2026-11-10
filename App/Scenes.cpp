@@ -1235,14 +1235,14 @@ static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, PS_AGONY2D::S
 
     auto& objects = simulation.objects();
 
-    const auto data = objects.getBodyData(event.selfBody);
+    const auto data = objects.getBodyDataH(event.selfBody);
     if (!data) return;
 
     const float radius = float(data->mass); // Mass equals radius by construction.
     const PS_AGONY2D::Vec2 position = data->offset;
     const PS_AGONY2D::Vec2 velocity = data->velocity;
 
-    objects.destroyBody(objects.getBodyHandle(event.selfBody));
+    objects.destroyBody(event.selfBody);
 
     // Children sit side by side along the contact tangent inside the parent's footprint, so they don't overlap.
     const float half = radius * 0.5f;

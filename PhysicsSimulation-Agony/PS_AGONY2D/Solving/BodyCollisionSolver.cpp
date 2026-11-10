@@ -371,18 +371,21 @@ namespace PS_AGONY2D
 							? (data.contactPoints[0] + data.contactPoints[1]) * Real(0.5)
 							: data.contactPoints[0];
 
+						const Handle handleA = bodies->handles.handleAt(bodyA);
+						const Handle handleB = bodies->handles.handleAt(bodyB);
+
 						if (fireA)
 							collisionEvents.emplace_back(
-								colliderA, colliderB,
-								bodyA, bodyB,
+								data.colliderA, data.colliderB,
+								handleA, handleB,
 								eventPoint, data.normal,
 								impactImpulse,
 								callbackA
 							);
 						if (fireB)
 							collisionEvents.emplace_back(
-								colliderB, colliderA,
-								bodyB, bodyA,
+								data.colliderB, data.colliderA,
+								handleB, handleA,
 								eventPoint,
 								-data.normal,
 								impactImpulse,
