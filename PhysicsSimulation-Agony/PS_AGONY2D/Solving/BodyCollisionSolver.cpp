@@ -277,7 +277,7 @@ namespace PS_AGONY2D
 			const Vec2 centerOfMassA = positionA + localCOMA;
 			const Vec2 centerOfMassB = positionB + localCOMB;
 
-			// Anchors cancel out (translation-only drift), so only the initial relative position along the normal matters.
+			// Anchors cancel out, so only the initial relative position along the normal matters.
 			{
 				VelocityHotData& velocityHot = velocityHotContainer[c];
 				velocityHot.bodyA = bodyA;
@@ -297,10 +297,8 @@ namespace PS_AGONY2D
 				auto& velocityConstraint = velocityConstraintContainer[c];
 				auto& frictionData = frictionDataContainer[c];
 
-				const MaterialIndex materialIndexA = colliderMaterialIndexPtr[colliderA];
-				const MaterialIndex materialIndexB = colliderMaterialIndexPtr[colliderB];
-				const Material* materialA = materials + materialIndexA;
-				const Material* materialB = materials + materialIndexB;
+				const Material* materialA = materials + colliderMaterialIndexPtr[colliderA];
+				const Material* materialB = materials + colliderMaterialIndexPtr[colliderB];
 
 				const Real elasticity = (materialA->elasticity + materialB->elasticity) * Real(0.5);
 				frictionData.staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
@@ -357,42 +355,42 @@ namespace PS_AGONY2D
 						impactImpulse = std::fmax(impactImpulse, negVelocityAlongNormal * point.normalMass);
 				}
 
-				if (impactImpulse > Real(0)) // && recordEvents
-				{
-					const CollisionCallbackIndex callbackA = colliderCallbackIdPtr[colliderA];
-					const CollisionCallbackIndex callbackB = colliderCallbackIdPtr[colliderB];
+				// Collision event.
+				if (impactImpulse <= Real(0)) continue; // || !recordEvents.
 
-					const bool fireA = callbackA != 0 && impactImpulse >= colliderEventThresholdPtr[colliderA];
-					const bool fireB = callbackB != 0 && impactImpulse >= colliderEventThresholdPtr[colliderB];
+				const CollisionCallbackIndex callbackA = colliderCallbackIdPtr[colliderA];
+				const CollisionCallbackIndex callbackB = colliderCallbackIdPtr[colliderB];
 
-					if (fireA || fireB)
-					{
-						const Vec2 eventPoint = data.contactCount > 1
-							? (data.contactPoints[0] + data.contactPoints[1]) * Real(0.5)
-							: data.contactPoints[0];
+				const bool fireA = callbackA != 0 && impactImpulse >= colliderEventThresholdPtr[colliderA];
+				const bool fireB = callbackB != 0 && impactImpulse >= colliderEventThresholdPtr[colliderB];
 
-						const Handle handleA = bodies->handles.handleAt(bodyA);
-						const Handle handleB = bodies->handles.handleAt(bodyB);
+				if (!fireA && !fireB) continue;
 
-						if (fireA)
-							collisionEvents.emplace_back(
-								data.colliderA, data.colliderB,
-								handleA, handleB,
-								eventPoint, data.normal,
-								impactImpulse,
-								callbackA
-							);
-						if (fireB)
-							collisionEvents.emplace_back(
-								data.colliderB, data.colliderA,
-								handleB, handleA,
-								eventPoint,
-								-data.normal,
-								impactImpulse,
-								callbackB
-							);
-					}
-				}
+				const Vec2 eventPoint = data.contactCount > 1 ?
+					(data.contactPoints[0] + data.contactPoints[1]) * Real(0.5) :
+					data.contactPoints[0];
+
+				const Handle handleA = bodies->handles.handleAt(bodyA);
+				const Handle handleB = bodies->handles.handleAt(bodyB);
+
+				if (fireA)
+					collisionEvents.emplace_back(
+						data.colliderA, data.colliderB,
+						handleA, handleB,
+						eventPoint,
+						data.normal,
+						impactImpulse,
+						callbackA
+					);
+				if (fireB)
+					collisionEvents.emplace_back(
+						data.colliderB, data.colliderA,
+						handleB, handleA,
+						eventPoint,
+						-data.normal,
+						impactImpulse,
+						callbackB
+					);
 			}
 		}
 	}

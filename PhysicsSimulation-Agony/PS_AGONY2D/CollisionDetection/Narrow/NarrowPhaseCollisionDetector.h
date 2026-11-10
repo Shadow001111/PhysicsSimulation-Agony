@@ -150,7 +150,7 @@ namespace PS_AGONY2D
 		// Both paths use the same fixed-size chunking, merged in chunk order.
 		// Requires the input pair order to be deterministic as well.
 		static constexpr bool DETERMINISTIC = true;
-		static constexpr size_t DETERMINISTIC_CHUNK_SIZE = 2048;
+		static constexpr size_t DETERMINISTIC_CHUNK_SIZE = 1024;// 2048;
 
 		NarrowPhaseCollisionDetector() = default;
 		~NarrowPhaseCollisionDetector() = default;

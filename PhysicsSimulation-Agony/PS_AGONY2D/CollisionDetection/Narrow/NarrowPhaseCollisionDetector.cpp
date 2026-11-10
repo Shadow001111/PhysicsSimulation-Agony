@@ -601,10 +601,7 @@ namespace PS_AGONY2D
             );
         }
 
-        {
-            TRACY_SCOPE_N("Participate in work");
-            workerFunc(true);
-        }
+        workerFunc(true);
         {
             TRACY_SCOPE_N("Wait for workers to finish and combine data");
             mergeReady(true);
