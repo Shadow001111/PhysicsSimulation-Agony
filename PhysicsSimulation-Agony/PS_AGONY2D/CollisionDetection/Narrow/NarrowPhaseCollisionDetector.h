@@ -121,19 +121,26 @@ namespace PS_AGONY2D
 		CacheLineAlignedVector<BodyCollisionData> previousCollisionArray;
 		ContactCache contactCache;
 
-		// Full manifolds touching sleeping colliders. Kept intact (geometry, ids, impulses), so a woken body
-		// can be solved immediately instead of waiting for the narrow phase to regenerate the contact.
-		CacheLineAlignedVector<BodyCollisionData> sleepingCollisionArray;
-		ContactCache wakeCache; // Lazily built over 'previousCollisionArray' in wakeContactData.
+		// Full manifolds of sleeping islands, indexed by sleep island id - 2. Kept intact (geometry, ids, impulses), so a
+		// woken island can be solved immediately instead of waiting for the narrow phase to regenerate its contacts.
+		// A woken island's vector is cleared but keeps its capacity.
+		std::vector<std::vector<BodyCollisionData>> islandManifolds;
 
-		static constexpr uint8_t FLAG_IN_SET = 1; // Scratch: collider is in the current sleep/wake set.
-		static constexpr uint8_t FLAG_ASLEEP = 2; // Persistent: collider is asleep (set by sleep, cleared by wake).
-		struct SlotFlags
+		// Per collider slot: island it was put to sleep in by the sleep pass numbered 'epoch'. Entries of older passes
+		// (or older handle generations) are ignored, so nothing has to be cleared on wake.
+		struct SlotIsland
 		{
-			uint32_t generation = 0; // Flags are valid only for the handle generation they were set for.
-			uint8_t flags = 0;
+			uint32_t generation = 0;
+			uint32_t epoch = 0;
+			uint32_t islandId = 0;
 		};
-		std::vector<SlotFlags> slotFlags; // Indexed by collider Handle::slot.
+		std::vector<SlotIsland> slotIslands; // Indexed by collider Handle::slot.
+		uint32_t sleepEpoch = 0;
+
+		// Wake scratch: manifolds of the woken islands, a table over their pair keys and a consumed mask.
+		std::vector<BodyCollisionData> wakeStaging;
+		std::vector<uint8_t> wakeConsumed;
+		ContactCache wakeCache;
 
 		// 'previousCollisionArray' was compacted/appended since 'contactCache' was built. Rebuilt lazily in findCollisions.
 		bool contactCacheDirty = false;
@@ -183,14 +190,15 @@ namespace PS_AGONY2D
 
 		void rebuildContactCache();
 
-		// Moves every manifold touching the given colliders from 'previousCollisionArray' to the sleeping array.
-		void sleepContactData(std::span<const ObjectDenseIndex> colliderIndices);
+		// Moves every manifold touching the given colliders from 'previousCollisionArray' to their island's storage.
+		// 'islandIds' is parallel to 'colliderIndices': the sleep island id of each collider's body.
+		void sleepContactData(std::span<const ObjectDenseIndex> colliderIndices, std::span<const uint32_t> islandIds);
 
-		// Restores sleeping manifolds touching the given colliders (call after the narrow phase, before solving).
+		// Restores the stored manifolds of the given islands (call after the narrow phase, before solving).
 		// Pair already generated this frame: impulses are copied into it. Otherwise the stored manifold is appended
 		// to 'previousCollisionArray' (may reallocate: re-fetch the span via getBodyCollisionData()).
-		// Manifolds whose partner is still asleep stay stored (no islands).
-		void wakeContactData(std::span<const ObjectDenseIndex> colliderIndices);
+		// Cost is proportional to the woken manifolds plus one light pass over 'previousCollisionArray'.
+		void wakeContactData(std::span<const uint32_t> islandIds);
 
 		void resetCollisionData();
 
@@ -199,13 +207,6 @@ namespace PS_AGONY2D
 
 		size_t getMemoryUsage() const;
 	private:
-		void updateColliderFlags(std::span<const ObjectDenseIndex> colliderIndices, uint8_t setMask, uint8_t clearMask);
-		bool hasFlag(Handle h, uint8_t flag) const noexcept
-		{
-			return h.slot < slotFlags.size() && slotFlags[h.slot].generation == h.generation && (slotFlags[h.slot].flags & flag) != 0;
-		}
-		bool isMarked(Handle h) const noexcept { return hasFlag(h, FLAG_IN_SET); }
-		bool isAsleep(Handle h) const noexcept { return hasFlag(h, FLAG_ASLEEP); }
 		bool isAlive(const BodyCollisionData& d) const noexcept { return colliders.handles->isValid(d.colliderA) && colliders.handles->isValid(d.colliderB); }
 
 		// Order-independent: the same collider pair gives the same key whatever the dense order is.

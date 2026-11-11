@@ -433,14 +433,15 @@ namespace PS_AGONY2D
 
     void Simulation::wakeSleepingContactData()
     {
-        if (objectManager.wokenBodies.empty()) return;
-        narrowPhaseCollisionDetector.wakeContactData(objectManager.takeWokenColliders());
+        if (!objectManager.hasWokenIslands()) return;
+        narrowPhaseCollisionDetector.wakeContactData(objectManager.takeWokenIslandIds());
     }
 
     void Simulation::sleepContactData()
     {
         if (objectManager.sleptBodies.empty()) return;
-        narrowPhaseCollisionDetector.sleepContactData(objectManager.takeSleptColliders());
+        const std::span<const ObjectDenseIndex> colliders = objectManager.takeSleptColliders();
+        narrowPhaseCollisionDetector.sleepContactData(colliders, objectManager.sleptColliderIslandIds());
     }
 
     void Simulation::updateSleeping(float deltaTimeF)

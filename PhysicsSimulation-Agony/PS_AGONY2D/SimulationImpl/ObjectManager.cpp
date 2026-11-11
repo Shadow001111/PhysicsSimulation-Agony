@@ -1185,7 +1185,9 @@ namespace PS_AGONY2D
             moveConstraintToGroup(attachment.type, attachment.objectIndex, ConstraintGroup::Sleeping);
         }
 
-        sleptBodies.push_back(bodies.handleAt(b));
+        const Handle handle = bodies.handleAt(b);
+        sleepIslands[sleepIslandId - 2].bodies.push_back(handle);
+        sleptBodies.push_back(handle);
         return b;
     }
 
@@ -1205,32 +1207,69 @@ namespace PS_AGONY2D
             moveConstraintToGroup(attachment.type, attachment.objectIndex, ConstraintGroup::Active);
         }
 
-        wokenBodies.push_back(bodies.handleAt(b));
         return b;
+    }
+
+    uint32_t ObjectManager::newSleepIslandId()
+    {
+        uint32_t slot;
+        if (!freeIslandSlots.empty())
+        {
+            slot = freeIslandSlots.back();
+            freeIslandSlots.pop_back();
+        }
+        else
+        {
+            slot = static_cast<uint32_t>(sleepIslands.size());
+            sleepIslands.emplace_back();
+        }
+        sleepIslands[slot].live = true;
+        return slot + 2;
     }
 
     void ObjectManager::wakeSleepIslands(std::span<const uint32_t> ids)
     {
-        const IndexRange sleeping = bodies.range(BodyGroup::Sleeping);
-        if (ids.empty() || sleeping.empty()) return;
-
-        const uint32_t* sleepId = bodies.sleepIslandId.data();
+        if (ids.empty() || bodies.range(BodyGroup::Sleeping).empty()) return;
 
         wakeScratch.clear();
-        for (ObjectDenseIndex i = sleeping.begin; i < sleeping.end; i++)
-            if (std::binary_search(ids.begin(), ids.end(), sleepId[i])) wakeScratch.push_back(i);
+        for (const uint32_t id : ids)
+        {
+            const size_t slot = size_t(id) - 2; // id < 2 wraps and fails the bound check.
+            if (slot >= sleepIslands.size()) [[unlikely]] continue;
 
+            SleepIsland& island = sleepIslands[slot];
+            if (!island.live) continue; // Duplicate id, already woken.
+
+            for (const Handle h : island.bodies)
+            {
+                const ObjectDenseIndex index = bodies.indexOf(h);
+                if (index != Handle::NULL_DENSE_INDEX) [[likely]] wakeScratch.push_back(index);
+            }
+            island.bodies.clear();
+            island.live = false;
+            pendingFreeIslandSlots.push_back(static_cast<uint32_t>(slot));
+            wokenIslandIds.push_back(id);
+        }
+
+        // Indices are resolved once and ordered, so each move swaps only with the boundary-side body.
+        std::sort(wakeScratch.begin(), wakeScratch.end());
         forEachNearestBoundaryFirst<false>(wakeScratch, [this](ObjectDenseIndex i) { wakeOne(i); });
     }
 
     void ObjectManager::wakeCollectedIslandIds()
     {
         if (wakeIdScratch.empty()) return;
-
-        std::sort(wakeIdScratch.begin(), wakeIdScratch.end());
-        wakeIdScratch.erase(std::unique(wakeIdScratch.begin(), wakeIdScratch.end()), wakeIdScratch.end());
-
         wakeSleepIslands(wakeIdScratch);
+    }
+
+    std::span<const uint32_t> ObjectManager::takeWokenIslandIds()
+    {
+        wokenIslandIdsTaken.swap(wokenIslandIds);
+        wokenIslandIds.clear();
+
+        freeIslandSlots.insert(freeIslandSlots.end(), pendingFreeIslandSlots.begin(), pendingFreeIslandSlots.end());
+        pendingFreeIslandSlots.clear();
+        return wokenIslandIdsTaken;
     }
 
     ObjectDenseIndex ObjectManager::wakeBody(ObjectDenseIndex b)
@@ -1299,39 +1338,41 @@ namespace PS_AGONY2D
             });
     }
 
-    std::span<const ObjectDenseIndex> ObjectManager::collectColliders(std::vector<Handle>& bodyHandles)
+    std::span<const ObjectDenseIndex> ObjectManager::takeSleptColliders()
     {
         colliderScratch.clear();
-        for (const Handle& handle : bodyHandles)
+        sleptIslandIdScratch.clear();
+        for (const Handle& handle : sleptBodies)
         {
             const ObjectDenseIndex bodyIndex = bodies.indexOf(handle);
             if (bodyIndex == Handle::NULL_DENSE_INDEX) [[unlikely]] continue;
+            if (!bodies.inGroup(bodyIndex, BodyGroup::Sleeping)) continue; // Woken again before the drain.
 
+            const uint32_t islandId = bodies.sleepIslandId[bodyIndex];
             std::span<const ObjectDenseIndex> owned = bodies.colliderIndices[bodyIndex];
             colliderScratch.insert(colliderScratch.end(), owned.begin(), owned.end());
+            sleptIslandIdScratch.insert(sleptIslandIdScratch.end(), owned.size(), islandId);
         }
-        bodyHandles.clear();
+        sleptBodies.clear();
         return colliderScratch;
-    }
-
-    std::span<const ObjectDenseIndex> ObjectManager::takeWokenColliders()
-    {
-        return collectColliders(wokenBodies);
-    }
-
-    std::span<const ObjectDenseIndex> ObjectManager::takeSleptColliders()
-    {
-        return collectColliders(sleptBodies);
     }
 
     size_t ObjectManager::getSleepMemoryUsage() const noexcept
     {
-        return
+        size_t total =
             getVectorMemoryUsage(wakeScratch) +
             getVectorMemoryUsage(wakeIdScratch) +
             getVectorMemoryUsage(sleepScratch) +
             getVectorMemoryUsage(islandSleepFlags) +
-            getVectorMemoryUsage(colliderScratch);
+            getVectorMemoryUsage(colliderScratch) +
+            getVectorMemoryUsage(sleptIslandIdScratch) +
+            getVectorMemoryUsage(wokenIslandIds) +
+            getVectorMemoryUsage(wokenIslandIdsTaken) +
+            getVectorMemoryUsage(freeIslandSlots) +
+            getVectorMemoryUsage(pendingFreeIslandSlots) +
+            getVectorMemoryUsage(sleepIslands);
+        for (const SleepIsland& island : sleepIslands) total += getVectorMemoryUsage(island.bodies);
+        return total;
     }
 
     std::optional<ColliderData> ObjectManager::getColliderData(ObjectDenseIndex i) const noexcept

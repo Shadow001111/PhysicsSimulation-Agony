@@ -296,37 +296,53 @@ namespace PS_AGONY2D
         }
     }
 
-    void NarrowPhaseCollisionDetector::updateColliderFlags(std::span<const ObjectDenseIndex> colliderIndices, uint8_t setMask, uint8_t clearMask)
-    {
-        const HandleTable& handles = *colliders.handles;
-
-        uint32_t maxSlot = 0;
-        for (ObjectDenseIndex i : colliderIndices) maxSlot = std::max(maxSlot, handles.handleAt(i).slot);
-        if (slotFlags.size() <= maxSlot) slotFlags.resize(size_t(maxSlot) + 1);
-
-        for (ObjectDenseIndex i : colliderIndices)
-        {
-            const Handle h = handles.handleAt(i);
-            SlotFlags& f = slotFlags[h.slot];
-            if (f.generation != h.generation) f = { h.generation, 0 };
-            f.flags = uint8_t((f.flags | setMask) & ~clearMask);
-        }
-    }
-
-    void NarrowPhaseCollisionDetector::sleepContactData(std::span<const ObjectDenseIndex> colliderIndices)
+    void NarrowPhaseCollisionDetector::sleepContactData(
+        std::span<const ObjectDenseIndex> colliderIndices, std::span<const uint32_t> islandIds
+    )
     {
         TRACY_SCOPE_N("Sleep contact data");
 
-        if (colliderIndices.empty()) return;
+        const size_t colliderCount = colliderIndices.size();
+        if (colliderCount == 0 || islandIds.size() != colliderCount) return;
 
-        // Flags first: they must be set even when there is nothing to move.
-        updateColliderFlags(colliderIndices, FLAG_IN_SET | FLAG_ASLEEP, 0);
+        const HandleTable& handles = *colliders.handles;
 
-        if (previousCollisionArray.empty())
+        // New pass: entries written by older passes become invisible.
+        if (++sleepEpoch == 0)
         {
-            updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
-            return;
+            for (SlotIsland& e : slotIslands) e.epoch = 0;
+            sleepEpoch = 1;
         }
+
+        uint32_t maxSlot = 0, maxId = 0;
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            maxSlot = std::max(maxSlot, handles.handleAt(colliderIndices[i]).slot);
+            maxId = std::max(maxId, islandIds[i]);
+        }
+        if (slotIslands.size() <= maxSlot) slotIslands.resize(size_t(maxSlot) + 1);
+        if (maxId >= 2 && islandManifolds.size() < size_t(maxId) - 1) islandManifolds.resize(size_t(maxId) - 1);
+
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            const uint32_t id = islandIds[i];
+            if (id < 2) [[unlikely]] continue;
+
+            const Handle h = handles.handleAt(colliderIndices[i]);
+            slotIslands[h.slot] = { h.generation, sleepEpoch, id };
+        }
+
+        if (previousCollisionArray.empty()) return;
+
+        const SlotIsland* const islands = slotIslands.data();
+        const size_t islandSlotCount = slotIslands.size();
+        const uint32_t epoch = sleepEpoch;
+        const auto islandOf = [=](Handle h) noexcept -> uint32_t
+            {
+                if (h.slot >= islandSlotCount) return 0;
+                const SlotIsland& e = islands[h.slot];
+                return (e.generation == h.generation && e.epoch == epoch) ? e.islandId : 0;
+            };
 
         // Single stable compaction pass: preserves order. Manifolds of deleted colliders are dropped.
         BodyCollisionData* ECSTASY_RESTRICT data = previousCollisionArray.data();
@@ -335,12 +351,13 @@ namespace PS_AGONY2D
         for (size_t r = 0; r < count; r++)
         {
             const BodyCollisionData& d = data[r];
-            const bool alive = isAlive(d);
-            if (!alive) continue;
+            if (!isAlive(d)) continue;
 
-            if (isMarked(d.colliderA) || isMarked(d.colliderB))
+            uint32_t id = islandOf(d.colliderA);
+            if (id == 0) id = islandOf(d.colliderB);
+            if (id != 0)
             {
-                sleepingCollisionArray.push_back(d);
+                islandManifolds[id - 2].push_back(d);
                 continue;
             }
             if (write != r) data[write] = d;
@@ -352,98 +369,74 @@ namespace PS_AGONY2D
             previousCollisionArray.resize(write);
             contactCacheDirty = true;
         }
-
-        updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
     }
 
-    void NarrowPhaseCollisionDetector::wakeContactData(std::span<const ObjectDenseIndex> colliderIndices)
+    void NarrowPhaseCollisionDetector::wakeContactData(std::span<const uint32_t> islandIds)
     {
         TRACY_SCOPE_N("Wake contact data");
 
-        if (colliderIndices.empty()) return;
-
-        // Woken colliders are no longer asleep, so isAsleep() below only reports partners that stay asleep.
-        updateColliderFlags(colliderIndices, FLAG_IN_SET, FLAG_ASLEEP);
-
-        if (sleepingCollisionArray.empty())
+        // Stage the woken islands' manifolds (in the given island order: deterministic). Deleted colliders are dropped.
+        wakeStaging.clear();
+        for (const uint32_t id : islandIds)
         {
-            updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
-            return;
+            const size_t slot = size_t(id) - 2; // id < 2 wraps and fails the bound check.
+            if (slot >= islandManifolds.size()) [[unlikely]] continue;
+
+            std::vector<BodyCollisionData>& stored = islandManifolds[slot];
+            for (const BodyCollisionData& s : stored)
+            {
+                if (isAlive(s)) wakeStaging.push_back(s);
+            }
+            stored.clear();
         }
 
-        bool cacheBuilt = false;
+        const size_t stagedCount = wakeStaging.size();
+        if (stagedCount == 0) return;
 
-        // Single stable pass: restored entries are consumed (duplicates included), manifolds of deleted colliders
-        // are dropped, others kept.
-        const size_t count = sleepingCollisionArray.size();
-        size_t write = 0;
-        for (size_t r = 0; r < count; r++)
+        // Small table over the staged pair keys. Duplicate pairs: the first one wins, the rest are dropped.
+        wakeConsumed.assign(stagedCount, uint8_t(0));
+        wakeCache.reset(stagedCount);
+        for (size_t i = 0; i < stagedCount; i++)
         {
-            const BodyCollisionData& s = sleepingCollisionArray[r];
-            if (!isAlive(s)) continue;
+            const uint64_t key = makePairKey(wakeStaging[i].colliderA, wakeStaging[i].colliderB);
+            if (wakeCache.find(key) == ContactCache::NONE) wakeCache.insert(key, uint32_t(i));
+            else wakeConsumed[i] = 1;
+        }
 
-            const bool touched = isMarked(s.colliderA) || isMarked(s.colliderB);
-            if (!touched)
-            {
-                if (write != r) sleepingCollisionArray[write] = s;
-                write++;
-                continue;
-            }
+        // One read-only pass over this frame's manifolds: pairs generated this frame keep their fresh geometry and
+        // take the stored impulses. A flipped collider order means different normal and ids: nothing to take.
+        BodyCollisionData* ECSTASY_RESTRICT cur = previousCollisionArray.data();
+        const size_t currentCount = previousCollisionArray.size();
+        for (size_t i = 0; i < currentCount; i++)
+        {
+            BodyCollisionData& c = cur[i];
+            const uint32_t idx = wakeCache.find(makePairKey(c.colliderA, c.colliderB));
+            if (idx == ContactCache::NONE) continue;
 
-            if (!cacheBuilt)
+            wakeConsumed[idx] = 1;
+            const BodyCollisionData& s = wakeStaging[idx];
+            if (c.colliderA != s.colliderA || c.colliderB != s.colliderB) continue;
+
+            for (uint32_t a = 0; a < c.contactCount; a++)
             {
-                // Capacity covers the entries appended below.
-                const size_t n = previousCollisionArray.size();
-                wakeCache.reset(n + count);
-                const BodyCollisionData* ECSTASY_RESTRICT cur = previousCollisionArray.data();
-                for (size_t i = 0; i < n; i++)
+                for (uint32_t b = 0; b < s.contactCount; b++)
                 {
-                    wakeCache.insert(makePairKey(cur[i].colliderA, cur[i].colliderB), uint32_t(i));
-                }
-                cacheBuilt = true;
-            }
-
-            const uint64_t key = makePairKey(s.colliderA, s.colliderB);
-            const uint32_t idx = wakeCache.find(key);
-
-            if (idx != ContactCache::NONE)
-            {
-                // Pair was generated this frame: it keeps its fresh geometry, take the impulses.
-                // A flipped collider order means different normal and ids: nothing to take.
-                BodyCollisionData& c = previousCollisionArray[idx];
-                if (c.colliderA == s.colliderA && c.colliderB == s.colliderB)
-                {
-                    for (uint32_t i = 0; i < c.contactCount; i++)
+                    if (c.contactIds[a] == s.contactIds[b])
                     {
-                        for (uint32_t j = 0; j < s.contactCount; j++)
-                        {
-                            if (c.contactIds[i] == s.contactIds[j])
-                            {
-                                c.persistentContactData[i] = s.persistentContactData[j];
-                                break;
-                            }
-                        }
+                        c.persistentContactData[a] = s.persistentContactData[b];
+                        break;
                     }
                 }
-                continue;
             }
+        }
 
-            if (isAsleep(s.colliderA) || isAsleep(s.colliderB))
-            {
-                // Partner still asleep (no islands): keep it stored.
-                if (write != r) sleepingCollisionArray[write] = s;
-                write++;
-                continue;
-            }
-
-            // Not generated this frame (partner static, or broad phase skipped the pair): restore the whole manifold.
-            wakeCache.insert(key, uint32_t(previousCollisionArray.size()));
-            previousCollisionArray.push_back(s);
+        // Not generated this frame (partner static, or broad phase skipped the pair): restore the whole manifold.
+        for (size_t i = 0; i < stagedCount; i++)
+        {
+            if (wakeConsumed[i]) continue;
+            previousCollisionArray.push_back(wakeStaging[i]);
             contactCacheDirty = true;
         }
-        sleepingCollisionArray.resize(write);
-
-        updateColliderFlags(colliderIndices, 0, FLAG_IN_SET);
     }
 
     void NarrowPhaseCollisionDetector::resetCollisionData()
@@ -458,7 +451,8 @@ namespace PS_AGONY2D
         // Collision arrays.
         total += getVectorMemoryUsage(currentCollisionArray);
         total += getVectorMemoryUsage(previousCollisionArray);
-        total += getVectorMemoryUsage(sleepingCollisionArray);
+        for (const auto& stored : islandManifolds) total += getVectorMemoryUsage(stored);
+        total += getVectorMemoryUsage(islandManifolds);
 
         // Chunks.
         total += getVectorMemoryUsage(chunks);
@@ -473,7 +467,8 @@ namespace PS_AGONY2D
 
         // The rest.
         total += contactCache.memoryUsage();
-        total += getVectorMemoryUsage(slotFlags) + wakeCache.memoryUsage();
+        total += getVectorMemoryUsage(slotIslands) + wakeCache.memoryUsage();
+        total += getVectorMemoryUsage(wakeStaging) + getVectorMemoryUsage(wakeConsumed);
         return total;
     }
 

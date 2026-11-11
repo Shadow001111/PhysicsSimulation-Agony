@@ -60,9 +60,8 @@ namespace PS_AGONY2D
 		PolygonSoA polygons;
 		CapsuleSoA capsules;
 
-		// Bodies that changed sleep state since Simulation last drained them. Handles may be stale if destroyed later.
+		// Bodies put to sleep since Simulation last drained them. Handles may be stale if destroyed later.
 		std::vector<Handle> sleptBodies;
-		std::vector<Handle> wokenBodies;
 
 		const std::vector<Material>& materials;
 		ConstraintSystemArray& constraintSystems;
@@ -139,8 +138,9 @@ namespace PS_AGONY2D
 		ObjectDenseIndex sleepBody(ObjectDenseIndex bodyIndex, uint32_t sleepIslandId = 0);
 		ObjectDenseIndex wakeBody(ObjectDenseIndex bodyIndex);
 
-		// Wakes every Sleeping body whose sleepIslandId is in the list (sorted, unique, no zeros). One scan of the
-		// Sleeping range regardless of list size.
+		// Wakes the given sleeping islands (ids >= 2, any order, duplicates and dead ids are skipped).
+		// Cost is proportional to the woken bodies only: members come from the island's own list.
+		// Woken ids are queued for takeWokenIslandIds.
 		void wakeSleepIslands(std::span<const uint32_t> sortedUniqueIds);
 
 		// Wakes the sleeping islands of every body in the contacts. Contact needs colliderA and colliderB handles.
@@ -159,8 +159,8 @@ namespace PS_AGONY2D
 				const ObjectDenseIndex bodyA = bodyIndexPtr[colliders.handles.indexOfUnchecked(contact.colliderA)];
 				const ObjectDenseIndex bodyB = bodyIndexPtr[colliders.handles.indexOfUnchecked(contact.colliderB)];
 
-				if (bodyA - sleeping.begin < sleeping.size()) wakeIdScratch.push_back(sleepIdPtr[bodyA]);
-				if (bodyB - sleeping.begin < sleeping.size()) wakeIdScratch.push_back(sleepIdPtr[bodyB]);
+				if (bodyA - sleeping.begin < sleeping.size()) pushWakeId(sleepIdPtr[bodyA]);
+				if (bodyB - sleeping.begin < sleeping.size()) pushWakeId(sleepIdPtr[bodyB]);
 			}
 			wakeCollectedIslandIds();
 		}
@@ -172,19 +172,21 @@ namespace PS_AGONY2D
 			const IslandManager& islandManager, const Interactivity::BodyHolder& holder
 		);
 
-		// Colliders of the bodies in wokenBodies / sleptBodies. Clears the matching list.
-		// The returned vector is reused by the next take call.
-		std::span<const ObjectDenseIndex> takeWokenColliders();
+		// Island ids woken since the last call, in wake order. Also releases the ids for reuse, so the caller must
+		// consume the list (clear the island's stored data) before the next sleep pass. Reused by the next call.
+		std::span<const uint32_t> takeWokenIslandIds();
+		bool hasWokenIslands() const noexcept { return !wokenIslandIds.empty(); }
+
+		// Colliders of the bodies in sleptBodies that are still asleep. Clears sleptBodies.
+		// sleptColliderIslandIds() is parallel to the result (sleep island id of each collider's body).
+		// Both are reused by the next call.
 		std::span<const ObjectDenseIndex> takeSleptColliders();
+		std::span<const uint32_t> sleptColliderIslandIds() const noexcept { return sleptIslandIdScratch; }
 
 		size_t getSleepMemoryUsage() const noexcept;
 
-		// Unique among live sleeping islands. Never returns 0 or 1.
-		uint32_t newSleepIslandId() noexcept
-		{
-			if (++nextSleepIslandId < 2) nextSleepIslandId = 2;
-			return nextSleepIslandId;
-		}
+		// Unique among live sleeping islands (id = pool slot + 2, recycled after the wake is drained). Never 0 or 1.
+		uint32_t newSleepIslandId();
 
 		void destroyBody(Handle handle) { pushCommand(ObjectCommandType::DestroyBody, handle); }
 		void destroyCollider(Handle handle) { pushCommand(ObjectCommandType::DestroyCollider, handle); }
@@ -237,7 +239,18 @@ namespace PS_AGONY2D
 		std::vector<ObjectCommand> commands;
 		std::vector<PolygonGeometry> pendingPolygons;
 
-		uint32_t nextSleepIslandId = 1;
+		struct SleepIsland
+		{
+			std::vector<Handle> bodies; // Members, by handle (dense indices move).
+			bool live = false;
+		};
+		std::vector<SleepIsland> sleepIslands; // Indexed by sleepIslandId - 2.
+		std::vector<uint32_t> freeIslandSlots;
+		std::vector<uint32_t> pendingFreeIslandSlots; // Woken, released by takeWokenIslandIds.
+		std::vector<uint32_t> wokenIslandIds;
+		std::vector<uint32_t> wokenIslandIdsTaken;
+		std::vector<uint32_t> sleptIslandIdScratch;
+		void pushWakeId(uint32_t id) { if (wakeIdScratch.empty() || wakeIdScratch.back() != id) wakeIdScratch.push_back(id); }
 		std::vector<ObjectDenseIndex> wakeScratch;
 		std::vector<uint32_t> wakeIdScratch;
 		std::vector<ObjectDenseIndex> sleepScratch;
@@ -271,9 +284,8 @@ namespace PS_AGONY2D
 		void moveBodyColliders(ObjectDenseIndex bodyIndex, BodyGroup from, BodyGroup to);
 		// Wakes exactly one body (no island logic). Returns its new index.
 		ObjectDenseIndex wakeOne(ObjectDenseIndex bodyIndex);
-		// Sorts and dedups wakeIdScratch, then wakes those islands.
+		// Wakes the islands in wakeIdScratch (duplicates are skipped).
 		void wakeCollectedIslandIds();
-		std::span<const ObjectDenseIndex> collectColliders(std::vector<Handle>& bodyHandles);
 		// Moves a body across the boundary shared by two adjacent groups with a single swap. Returns the new index.
 		template<BodyGroup FROM, BodyGroup TO>
 		ObjectDenseIndex moveBodyToAdjacentGroup(ObjectDenseIndex bodyIndex);
