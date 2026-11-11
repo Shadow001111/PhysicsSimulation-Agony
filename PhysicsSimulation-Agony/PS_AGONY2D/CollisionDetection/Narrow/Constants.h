@@ -44,7 +44,7 @@ namespace PS_AGONY2D
     constexpr Real CAPSULE_PARALLEL_SIN_SQUARED = Real(1e-3);    // Below this, capsule axes count as parallel (2 contacts).
 
     // Box as a convex polygon: counter-clockwise, normal i belongs to edge i -> i + 1.
-    const Vec2 BOX_NORMALS[4] = {
+    alignas(CACHE_LINE_ALIGNMENT) const Vec2 BOX_NORMALS[4] = {
         Vec2(Real(0), Real(-1)),
         Vec2(Real(1), Real(0)),
         Vec2(Real(0), Real(1)),

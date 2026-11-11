@@ -220,9 +220,10 @@ namespace PS_AGONY2D
 		// Appends results to 'out', converts their collider indices to handles and applies warm-starting to the appended range only.
 		void processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out);
 
-		// Moves persistent contact data from previous frame (read-only lookups, thread-safe).
-		// (Copies persistent impulses from previous to current frame, only matching contacts of pairs with the same collider order).
-		void movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> chunkCollisionData);
+		// Converts dense collider indices to handles for results [firstResult, end) and, if the cache is not empty,
+		// copies persistent impulses from the previous frame (read-only lookups, thread-safe).
+		// Only contacts of pairs with the same collider order and matching contact ids are copied.
+		void finalizeResults(size_t firstResult, std::span<BodyCollisionData> results);
 
 		void collisionCircleCircle(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);

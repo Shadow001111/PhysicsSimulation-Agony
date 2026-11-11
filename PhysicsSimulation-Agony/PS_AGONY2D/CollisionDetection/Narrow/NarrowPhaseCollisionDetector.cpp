@@ -479,8 +479,6 @@ namespace PS_AGONY2D
 
     void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs)
     {
-        TRACY_SCOPE_N("Single-threaded narrow phase");
-
         if (chunks.empty()) chunks.resize(1);
         ChunkData& cd = chunks[0];
 
@@ -510,8 +508,6 @@ namespace PS_AGONY2D
             findCollisionsSingleThreaded(colliderPairs);
             return;
         }
-
-        TRACY_SCOPE_N("Multi-threaded narrow phase");
 
         size_t chunkCount, chunkSize;
         if constexpr (DETERMINISTIC)
@@ -643,6 +639,7 @@ namespace PS_AGONY2D
                 }
                 else if (typeA == typeB && colliderIndexB > colliderIndexA)
                 {
+                    // TODO: Maybe do it with handle slots, not dense indices.
                     std::swap(colliderIndexA, colliderIndexB);
                 }
 
@@ -668,46 +665,68 @@ namespace PS_AGONY2D
             }
         }
 
-        // Collision methods stored dense indices in the collider fields: replace them with handles.
-        {
-            const HandleTable& handles = *colliders.handles;
-            BodyCollisionData* ECSTASY_RESTRICT resultPtr = out.data();
-            const size_t resultEnd = out.size();
-            for (size_t r = firstResult; r < resultEnd; r++)
+        finalizeResults(firstResult, out);
+    }
+
+    void NarrowPhaseCollisionDetector::finalizeResults(size_t firstResult, std::span<BodyCollisionData> results)
+    {
+        TRACY_SCOPE_N("Finalize results");
+
+        const HandleTable& handles = *colliders.handles;
+        BodyCollisionData* ECSTASY_RESTRICT resultPtr = results.data();
+        const size_t end = results.size();
+
+        // Overwrites the index view of the union with handles.
+        auto toHandles = [&handles](BodyCollisionData& d)
             {
-                BodyCollisionData& d = resultPtr[r];
                 const ObjectDenseIndex indexA = d.indexA;
                 const ObjectDenseIndex indexB = d.indexB;
                 d.colliderA = handles.handleAt(indexA);
                 d.colliderB = handles.handleAt(indexB);
-            }
-        }
+            };
 
-        if (!contactCache.empty())
+        if (contactCache.empty())
         {
-            movePreviousContactData(firstResult, out);
+            for (size_t r = firstResult; r < end; r++) toHandles(resultPtr[r]);
+            return;
         }
-    }
-
-    void NarrowPhaseCollisionDetector::movePreviousContactData(size_t firstResult, std::span<BodyCollisionData> chunkCollisionData)
-    {
-        TRACY_SCOPE_N("Move previous contact data");
 
         const BodyCollisionData* ECSTASY_RESTRICT prevDataPtr = previousCollisionArray.data();
-        BodyCollisionData* ECSTASY_RESTRICT resultPtr = chunkCollisionData.data();
-        const size_t end = chunkCollisionData.size();
 
-        constexpr size_t LOOKAHEAD = 8;
-        for (size_t r = firstResult; r < std::min(firstResult + LOOKAHEAD, end); r++)
-            contactCache.prefetch(makePairKey(resultPtr[r].colliderA, resultPtr[r].colliderB));
+        // Pair keys computed LOOKAHEAD results ahead (right after their handle conversion) and kept in a ring,
+        // so each key is computed once: it is used for the prefetch now and for the lookup later.
+        constexpr size_t LOOKAHEAD = 8; // Power of two.
+        constexpr size_t RING_MASK = LOOKAHEAD - 1;
+        uint64_t keys[LOOKAHEAD];
+
+        const size_t warmupEnd = std::min(firstResult + LOOKAHEAD, end);
+        for (size_t r = firstResult; r < warmupEnd; r++)
+        {
+            BodyCollisionData& d = resultPtr[r];
+            toHandles(d);
+            const uint64_t key = makePairKey(d.colliderA, d.colliderB);
+            keys[(r - firstResult) & RING_MASK] = key;
+            contactCache.prefetch(key);
+        }
 
         for (size_t r = firstResult; r < end; r++)
         {
-            if (r + LOOKAHEAD < end)
-                contactCache.prefetch(makePairKey(resultPtr[r + LOOKAHEAD].colliderA, resultPtr[r + LOOKAHEAD].colliderB));
+            // Slot of 'r' equals the slot of 'r + LOOKAHEAD': read the key, then reuse the slot.
+            const size_t slot = (r - firstResult) & RING_MASK;
+            const uint64_t key = keys[slot];
+
+            const size_t ahead = r + LOOKAHEAD;
+            if (ahead < end)
+            {
+                BodyCollisionData& n = resultPtr[ahead];
+                toHandles(n);
+                const uint64_t nextKey = makePairKey(n.colliderA, n.colliderB);
+                keys[slot] = nextKey;
+                contactCache.prefetch(nextKey);
+            }
 
             BodyCollisionData& currData = resultPtr[r];
-            const uint32_t idx = contactCache.find(makePairKey(currData.colliderA, currData.colliderB));
+            const uint32_t idx = contactCache.find(key);
             if (idx == ContactCache::NONE) continue;
 
             const BodyCollisionData& prevData = prevDataPtr[idx];
