@@ -17,15 +17,6 @@ namespace PS_AGONY2D
 {
     using RealSimd = Ecstasy::Core::Simd<Real>;
 
-    // TODO: I decided to come up with an ideal simulation code plan:
-    // No remaping is desired, better build safe, but perfomant.
-    // 'physicsStep':
-    //     1) Advance internal timer.
-    //     2) Reset/clear data. Enable settings, that depend on commands(on collision, new callback may be created).
-    //     3) If no body exist, skip.
-    //     4) Update data viewers to avoid dangling pointers on reallocation.
-    //     5) 
-
 
     Simulation::Simulation() :
         objectManager(materialManager.getMaterials(), constraintSystems)
@@ -422,10 +413,13 @@ namespace PS_AGONY2D
 
     void Simulation::wakeHeldBodies()
     {
+        float* ECSTASY_RESTRICT sleepTimerPtr = objectManager.bodies.sleepingTimer.data();
         for (const Interactivity::BodyHolder::HeldBody& held : mainBodyHolder.heldBodies)
         {
             const ObjectDenseIndex bodyIndex = objectManager.bodies.indexOfUnchecked(held.body);
             if (bodyIndex >= objectManager.bodies.getCount()) continue;
+
+            sleepTimerPtr[bodyIndex] = 0.0f;
 
             objectManager.wakeBody(bodyIndex);
         }
