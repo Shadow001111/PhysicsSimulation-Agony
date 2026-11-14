@@ -296,53 +296,17 @@ namespace PS_AGONY2D
         }
     }
 
-    void NarrowPhaseCollisionDetector::sleepContactData(
-        std::span<const ObjectDenseIndex> colliderIndices, std::span<const uint32_t> islandIds
-    )
+    void NarrowPhaseCollisionDetector::sleepContactData(IndexRange sleepingBodies)
     {
         TRACY_SCOPE_N("Sleep contact data");
 
-        const size_t colliderCount = colliderIndices.size();
-        if (colliderCount == 0 || islandIds.size() != colliderCount) return;
+        if (sleepingBodies.empty() || previousCollisionArray.empty()) return;
 
         const HandleTable& handles = *colliders.handles;
-
-        // New pass: entries written by older passes become invisible.
-        if (++sleepEpoch == 0)
-        {
-            for (SlotIsland& e : slotIslands) e.epoch = 0;
-            sleepEpoch = 1;
-        }
-
-        uint32_t maxSlot = 0, maxId = 0;
-        for (size_t i = 0; i < colliderCount; i++)
-        {
-            maxSlot = std::max(maxSlot, handles.handleAt(colliderIndices[i]).slot);
-            maxId = std::max(maxId, islandIds[i]);
-        }
-        if (slotIslands.size() <= maxSlot) slotIslands.resize(size_t(maxSlot) + 1);
-        if (maxId >= 2 && islandManifolds.size() < size_t(maxId) - 1) islandManifolds.resize(size_t(maxId) - 1);
-
-        for (size_t i = 0; i < colliderCount; i++)
-        {
-            const uint32_t id = islandIds[i];
-            if (id < 2) [[unlikely]] continue;
-
-            const Handle h = handles.handleAt(colliderIndices[i]);
-            slotIslands[h.slot] = { h.generation, sleepEpoch, id };
-        }
-
-        if (previousCollisionArray.empty()) return;
-
-        const SlotIsland* const islands = slotIslands.data();
-        const size_t islandSlotCount = slotIslands.size();
-        const uint32_t epoch = sleepEpoch;
-        const auto islandOf = [=](Handle h) noexcept -> uint32_t
-            {
-                if (h.slot >= islandSlotCount) return 0;
-                const SlotIsland& e = islands[h.slot];
-                return (e.generation == h.generation && e.epoch == epoch) ? e.islandId : 0;
-            };
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderBody = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT sleepIslandIdPtr = bodies.sleepIslandId;
+        const uint32_t sleepBegin = static_cast<uint32_t>(sleepingBodies.begin);
+        const uint32_t sleepSize = static_cast<uint32_t>(sleepingBodies.size());
 
         // Single stable compaction pass: preserves order. Manifolds of deleted colliders are dropped.
         BodyCollisionData* ECSTASY_RESTRICT data = previousCollisionArray.data();
@@ -351,13 +315,23 @@ namespace PS_AGONY2D
         for (size_t r = 0; r < count; r++)
         {
             const BodyCollisionData& d = data[r];
-            if (!isAlive(d)) continue;
 
-            uint32_t id = islandOf(d.colliderA);
-            if (id == 0) id = islandOf(d.colliderB);
+            const uint32_t indexA = handles.indexOf(d.colliderA);
+            const uint32_t indexB = handles.indexOf(d.colliderB);
+            if ((indexA == Handle::NULL_DENSE_INDEX) || (indexB == Handle::NULL_DENSE_INDEX)) continue;
+
+            // Unsigned wrap rejects bodies below the range as well.
+            const uint32_t bodyA = colliderBody[indexA];
+            const uint32_t bodyB = colliderBody[indexB];
+            uint32_t id = 0;
+            if (bodyA - sleepBegin < sleepSize) id = sleepIslandIdPtr[bodyA];
+            else if (bodyB - sleepBegin < sleepSize) id = sleepIslandIdPtr[bodyB];
+
             if (id != 0)
             {
-                islandManifolds[id - 2].push_back(d);
+                const size_t slot = size_t(id) - FIRST_SLEEP_ISLAND_ID;
+                if (slot >= islandManifolds.size()) [[unlikely]] islandManifolds.resize(slot + 1);
+                islandManifolds[slot].push_back(d);
                 continue;
             }
             if (write != r) data[write] = d;
@@ -379,7 +353,7 @@ namespace PS_AGONY2D
         wakeStaging.clear();
         for (const uint32_t id : islandIds)
         {
-            const size_t slot = size_t(id) - 2; // id < 2 wraps and fails the bound check.
+            const size_t slot = size_t(id) - FIRST_SLEEP_ISLAND_ID; // id < FIRST wraps and fails the bound check.
             if (slot >= islandManifolds.size()) [[unlikely]] continue;
 
             std::vector<BodyCollisionData>& stored = islandManifolds[slot];
@@ -442,6 +416,7 @@ namespace PS_AGONY2D
     void NarrowPhaseCollisionDetector::resetCollisionData()
     {
         previousCollisionArray.clear();
+        contactCacheDirty = true; // The cache indexes the array that was just cleared.
     }
 
     size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
@@ -467,7 +442,7 @@ namespace PS_AGONY2D
 
         // The rest.
         total += contactCache.memoryUsage();
-        total += getVectorMemoryUsage(slotIslands) + wakeCache.memoryUsage();
+        total += wakeCache.memoryUsage();
         total += getVectorMemoryUsage(wakeStaging) + getVectorMemoryUsage(wakeConsumed);
         return total;
     }

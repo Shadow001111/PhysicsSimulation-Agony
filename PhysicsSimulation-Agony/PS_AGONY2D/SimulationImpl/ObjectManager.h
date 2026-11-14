@@ -60,8 +60,8 @@ namespace PS_AGONY2D
 		PolygonSoA polygons;
 		CapsuleSoA capsules;
 
-		// Bodies put to sleep since Simulation last drained them. Handles may be stale if destroyed later.
-		std::vector<Handle> sleptBodies;
+		// Set by sleepBody, cleared by consumeSleptFlag.
+		bool sleptSincePass = false;
 
 		const std::vector<Material>& materials;
 		ConstraintSystemArray& constraintSystems;
@@ -177,11 +177,8 @@ namespace PS_AGONY2D
 		std::span<const uint32_t> takeWokenIslandIds();
 		bool hasWokenIslands() const noexcept { return !wokenIslandIds.empty(); }
 
-		// Colliders of the bodies in sleptBodies that are still asleep. Clears sleptBodies.
-		// sleptColliderIslandIds() is parallel to the result (sleep island id of each collider's body).
-		// Both are reused by the next call.
-		std::span<const ObjectDenseIndex> takeSleptColliders();
-		std::span<const uint32_t> sleptColliderIslandIds() const noexcept { return sleptIslandIdScratch; }
+		// True if any body was put to sleep since the last call (its contact data has to be stashed). Clears the flag.
+		bool consumeSleptFlag() noexcept { const bool v = sleptSincePass; sleptSincePass = false; return v; }
 
 		size_t getSleepMemoryUsage() const noexcept;
 
@@ -249,13 +246,11 @@ namespace PS_AGONY2D
 		std::vector<uint32_t> pendingFreeIslandSlots; // Woken, released by takeWokenIslandIds.
 		std::vector<uint32_t> wokenIslandIds;
 		std::vector<uint32_t> wokenIslandIdsTaken;
-		std::vector<uint32_t> sleptIslandIdScratch;
 		void pushWakeId(uint32_t id) { if (wakeIdScratch.empty() || wakeIdScratch.back() != id) wakeIdScratch.push_back(id); }
 		std::vector<ObjectDenseIndex> wakeScratch;
 		std::vector<uint32_t> wakeIdScratch;
 		std::vector<ObjectDenseIndex> sleepScratch;
 		std::vector<uint32_t> islandSleepFlags; // 0 = stays awake, 1 = may sleep, >= 2 = assigned sleep island id.
-		std::vector<ObjectDenseIndex> colliderScratch;
 		std::vector<Handle> constraintWakeScratch;
 
 		// Wakes both bodies (indices move: re-resolved by handle). False if either handle is stale.

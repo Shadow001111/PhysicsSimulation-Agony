@@ -45,12 +45,15 @@ namespace PS_AGONY2D
     // TODO: Remove above comment if it will get fixed.
     enum class BodyGroup : uint8_t { Static, Sleeping, Dynamic, Unused };
 
-    inline constexpr bool SLEEPING_AFTER_DYNAMIC = BodyGroup::Sleeping > BodyGroup::Dynamic;
     static_assert(
         size_t(BodyGroup::Sleeping) + 1 == size_t(BodyGroup::Dynamic) ||
         size_t(BodyGroup::Dynamic) + 1 == size_t(BodyGroup::Sleeping),
         "Sleeping and Dynamic groups must be adjacent."
         );
+
+    inline constexpr bool SLEEPING_AFTER_DYNAMIC = BodyGroup::Sleeping > BodyGroup::Dynamic;
+
+    inline constexpr uint32_t FIRST_SLEEP_ISLAND_ID = 2;
 
     struct BodyData
     {

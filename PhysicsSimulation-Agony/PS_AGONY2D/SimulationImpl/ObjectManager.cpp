@@ -492,7 +492,7 @@ namespace PS_AGONY2D
         // Wake body a. Then wake body b by handle.
         const Handle hB = b != NONE ? bodies.handleAt(b) : Handle{};
         wakeBody(a);
-        wakeBody(bodies.indexOfUnchecked(hB));
+        if (b != NONE) wakeBody(bodies.indexOfUnchecked(hB));
     }
 
     ObjectDenseIndex ObjectManager::createColliderInternal(ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation, MaterialIndex materialIndex, ColliderShapeType shapeType, ObjectDenseIndex shapeIndex)
@@ -1186,8 +1186,8 @@ namespace PS_AGONY2D
         }
 
         const Handle handle = bodies.handleAt(b);
-        sleepIslands[sleepIslandId - 2].bodies.push_back(handle);
-        sleptBodies.push_back(handle);
+        sleepIslands[sleepIslandId - FIRST_SLEEP_ISLAND_ID].bodies.push_back(handle);
+        sleptSincePass = true;
         return b;
     }
 
@@ -1224,7 +1224,7 @@ namespace PS_AGONY2D
             sleepIslands.emplace_back();
         }
         sleepIslands[slot].live = true;
-        return slot + 2;
+        return slot + FIRST_SLEEP_ISLAND_ID;
     }
 
     void ObjectManager::wakeSleepIslands(std::span<const uint32_t> ids)
@@ -1234,7 +1234,7 @@ namespace PS_AGONY2D
         wakeScratch.clear();
         for (const uint32_t id : ids)
         {
-            const size_t slot = size_t(id) - 2; // id < 2 wraps and fails the bound check.
+            const size_t slot = size_t(id) - FIRST_SLEEP_ISLAND_ID; // id < FIRST wraps and fails the bound check.
             if (slot >= sleepIslands.size()) [[unlikely]] continue;
 
             SleepIsland& island = sleepIslands[slot];
@@ -1301,8 +1301,11 @@ namespace PS_AGONY2D
         const Real* const angVelPtr = bodies.angularVelocity.data();
         const ObjectDenseIndex* const islandIdPtr = bodies.islandId.data();
 
-        islandSleepFlags.assign(islandManager.getIslandCount(), 1u);
+        // Bodies woken after the islands were built (commands) have NO_ISLAND: they map to a trailing slot that stays 0.
+        const uint32_t islandCount = islandManager.getIslandCount();
+        islandSleepFlags.assign(size_t(islandCount) + 1, 1u);
         uint32_t* const flags = islandSleepFlags.data();
+        flags[islandCount] = 0;
 
         // Timers, and AND-reduce readiness per island.
         for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
@@ -1314,19 +1317,19 @@ namespace PS_AGONY2D
             const float timer = (sleepingTimerPtr[i] + deltaTime) * float(quiet);
             sleepingTimerPtr[i] = timer;
 
-            flags[islandIdPtr[i]] &= uint32_t(quiet) & uint32_t(timer >= sleepTimeThreshold);
+            flags[std::min<uint32_t>(islandIdPtr[i], islandCount)] &= uint32_t(quiet) & uint32_t(timer >= sleepTimeThreshold);
         }
 
         for (const Interactivity::BodyHolder::HeldBody& held : holder.heldBodies)
         {
             const ObjectDenseIndex index = bodies.indexOfUnchecked(held.body);
-            if (index - dynamic.begin < dynamic.size()) flags[islandIdPtr[index]] = 0;
+            if (index - dynamic.begin < dynamic.size()) flags[std::min<uint32_t>(islandIdPtr[index], islandCount)] = 0;
         }
 
         sleepScratch.clear();
         for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
         {
-            uint32_t& flag = flags[islandIdPtr[i]];
+            uint32_t& flag = flags[std::min<uint32_t>(islandIdPtr[i], islandCount)];
             if (flag == 0) continue;
             if (flag == 1) flag = newSleepIslandId();
             sleepScratch.push_back(i);
@@ -1338,25 +1341,6 @@ namespace PS_AGONY2D
             });
     }
 
-    std::span<const ObjectDenseIndex> ObjectManager::takeSleptColliders()
-    {
-        colliderScratch.clear();
-        sleptIslandIdScratch.clear();
-        for (const Handle& handle : sleptBodies)
-        {
-            const ObjectDenseIndex bodyIndex = bodies.indexOf(handle);
-            if (bodyIndex == Handle::NULL_DENSE_INDEX) [[unlikely]] continue;
-            if (!bodies.inGroup(bodyIndex, BodyGroup::Sleeping)) continue; // Woken again before the drain.
-
-            const uint32_t islandId = bodies.sleepIslandId[bodyIndex];
-            std::span<const ObjectDenseIndex> owned = bodies.colliderIndices[bodyIndex];
-            colliderScratch.insert(colliderScratch.end(), owned.begin(), owned.end());
-            sleptIslandIdScratch.insert(sleptIslandIdScratch.end(), owned.size(), islandId);
-        }
-        sleptBodies.clear();
-        return colliderScratch;
-    }
-
     size_t ObjectManager::getSleepMemoryUsage() const noexcept
     {
         size_t total =
@@ -1364,8 +1348,6 @@ namespace PS_AGONY2D
             getVectorMemoryUsage(wakeIdScratch) +
             getVectorMemoryUsage(sleepScratch) +
             getVectorMemoryUsage(islandSleepFlags) +
-            getVectorMemoryUsage(colliderScratch) +
-            getVectorMemoryUsage(sleptIslandIdScratch) +
             getVectorMemoryUsage(wokenIslandIds) +
             getVectorMemoryUsage(wokenIslandIdsTaken) +
             getVectorMemoryUsage(freeIslandSlots) +

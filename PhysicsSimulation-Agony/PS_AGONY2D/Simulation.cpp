@@ -331,6 +331,7 @@ namespace PS_AGONY2D
     void Simulation::flushCommands()
     {
         objectManager.flushCommands();
+        setDataViewers();
 
         wakeSleepingContactData();
         sleepContactData();
@@ -433,9 +434,8 @@ namespace PS_AGONY2D
 
     void Simulation::sleepContactData()
     {
-        if (objectManager.sleptBodies.empty()) return;
-        const std::span<const ObjectDenseIndex> colliders = objectManager.takeSleptColliders();
-        narrowPhaseCollisionDetector.sleepContactData(colliders, objectManager.sleptColliderIslandIds());
+        if (!objectManager.consumeSleptFlag()) return;
+        narrowPhaseCollisionDetector.sleepContactData(objectManager.bodies.range(BodyGroup::Sleeping));
     }
 
     void Simulation::updateSleeping(float deltaTimeF)

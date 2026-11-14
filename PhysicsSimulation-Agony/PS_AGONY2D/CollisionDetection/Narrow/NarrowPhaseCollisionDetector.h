@@ -126,17 +126,6 @@ namespace PS_AGONY2D
 		// A woken island's vector is cleared but keeps its capacity.
 		std::vector<std::vector<BodyCollisionData>> islandManifolds;
 
-		// Per collider slot: island it was put to sleep in by the sleep pass numbered 'epoch'. Entries of older passes
-		// (or older handle generations) are ignored, so nothing has to be cleared on wake.
-		struct SlotIsland
-		{
-			uint32_t generation = 0;
-			uint32_t epoch = 0;
-			uint32_t islandId = 0;
-		};
-		std::vector<SlotIsland> slotIslands; // Indexed by collider Handle::slot.
-		uint32_t sleepEpoch = 0;
-
 		// Wake scratch: manifolds of the woken islands, a table over their pair keys and a consumed mask.
 		std::vector<BodyCollisionData> wakeStaging;
 		std::vector<uint8_t> wakeConsumed;
@@ -190,9 +179,9 @@ namespace PS_AGONY2D
 
 		void rebuildContactCache();
 
-		// Moves every manifold touching the given colliders from 'previousCollisionArray' to their island's storage.
-		// 'islandIds' is parallel to 'colliderIndices': the sleep island id of each collider's body.
-		void sleepContactData(std::span<const ObjectDenseIndex> colliderIndices, std::span<const uint32_t> islandIds);
+		// Moves every manifold touching a body of the Sleeping group from 'previousCollisionArray' to its sleep island's
+		// storage (island id = bodies.sleepIslandId). Manifolds of deleted colliders are dropped.
+		void sleepContactData(IndexRange sleepingBodies);
 
 		// Restores the stored manifolds of the given islands (call after the narrow phase, before solving).
 		// Pair already generated this frame: impulses are copied into it. Otherwise the stored manifold is appended
