@@ -413,6 +413,51 @@ namespace PS_AGONY2D
         }
     }
 
+    void NarrowPhaseCollisionDetector::takeContactsOfColliders(
+        std::span<const Handle> colliderHandles,
+        std::vector<uint32_t>& outSleepIslandIds,
+        std::vector<Handle>& outAwakePartners)
+    {
+        if (colliderHandles.empty()) return;
+
+        size_t maxSlot = 0;
+        for (const Handle h : colliderHandles) maxSlot = std::max(maxSlot, size_t(h.slot));
+        if (editedColliderMask.size() <= maxSlot) editedColliderMask.resize(maxSlot + 1, uint8_t(0));
+
+        uint8_t* const mask = editedColliderMask.data();
+        const size_t maskSize = editedColliderMask.size();
+        for (const Handle h : colliderHandles) mask[h.slot] = 1;
+
+        const auto edited = [mask, maskSize](Handle h) noexcept { return size_t(h.slot) < maskSize && mask[h.slot] != 0; };
+
+        for (size_t slot = 0; slot < islandManifolds.size(); slot++)
+        {
+            std::vector<BodyCollisionData>& stored = islandManifolds[slot];
+            size_t write = 0;
+            const size_t count = stored.size();
+            for (size_t r = 0; r < count; r++)
+            {
+                if (edited(stored[r].colliderA) || edited(stored[r].colliderB)) continue;
+                if (write != r) stored[write] = stored[r];
+                write++;
+            }
+            if (write == count) continue;
+
+            stored.erase(stored.begin() + write, stored.end());
+            outSleepIslandIds.push_back(static_cast<uint32_t>(slot + FIRST_SLEEP_ISLAND_ID));
+        }
+
+        for (const BodyCollisionData& d : previousCollisionArray)
+        {
+            const bool editedA = edited(d.colliderA);
+            const bool editedB = edited(d.colliderB);
+            if (editedA == editedB) continue;
+            outAwakePartners.push_back(editedA ? d.colliderB : d.colliderA);
+        }
+
+        for (const Handle h : colliderHandles) mask[h.slot] = 0;
+    }
+
     void NarrowPhaseCollisionDetector::resetCollisionData()
     {
         previousCollisionArray.clear();
@@ -428,6 +473,7 @@ namespace PS_AGONY2D
         total += getVectorMemoryUsage(previousCollisionArray);
         for (const auto& stored : islandManifolds) total += getVectorMemoryUsage(stored);
         total += getVectorMemoryUsage(islandManifolds);
+        total += getVectorMemoryUsage(editedColliderMask);
 
         // Chunks.
         total += getVectorMemoryUsage(chunks);

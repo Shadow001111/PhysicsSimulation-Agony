@@ -331,10 +331,37 @@ namespace PS_AGONY2D
     void Simulation::flushCommands()
     {
         objectManager.flushCommands();
+        wakeIslandsOfEditedStatics();
         setDataViewers();
 
         wakeSleepingContactData();
         sleepContactData();
+    }
+
+    void Simulation::wakeIslandsOfEditedStatics()
+    {
+        const std::span<const Handle> edited = objectManager.getEditedStaticColliders();
+        if (edited.empty()) return;
+
+        TRACY_SCOPE_N("Wake on static change");
+
+        // TODO: Static colliders created or moved onto sleeping bodies are not detected: no contact exists yet.
+        staticEditIslandIds.clear();
+        staticEditPartners.clear();
+        narrowPhaseCollisionDetector.takeContactsOfColliders(edited, staticEditIslandIds, staticEditPartners);
+        objectManager.clearEditedStaticColliders();
+
+        objectManager.wakeSleepIslands(staticEditIslandIds);
+
+        BodySoA& bodies = objectManager.bodies;
+        for (const Handle partner : staticEditPartners)
+        {
+            const ObjectDenseIndex colliderIndex = objectManager.colliders.indexOf(partner);
+            if (colliderIndex == Handle::NULL_DENSE_INDEX) continue;
+
+            const ObjectDenseIndex bodyIndex = objectManager.colliders.bodyIndex[colliderIndex];
+            if (bodies.inGroup(bodyIndex, BodyGroup::Dynamic)) bodies.sleepingTimer[bodyIndex] = 0.0f;
+        }
     }
 
     void Simulation::updateDebugData(Real deltaTime, uint32_t stepCount)

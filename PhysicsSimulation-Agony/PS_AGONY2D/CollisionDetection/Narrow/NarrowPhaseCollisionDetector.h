@@ -131,6 +131,9 @@ namespace PS_AGONY2D
 		std::vector<uint8_t> wakeConsumed;
 		ContactCache wakeCache;
 
+		// Scratch for takeContactsOfColliders, indexed by handle slot. All zeros between calls.
+		std::vector<uint8_t> editedColliderMask;
+
 		// 'previousCollisionArray' was compacted/appended since 'contactCache' was built. Rebuilt lazily in findCollisions.
 		bool contactCacheDirty = false;
 
@@ -188,6 +191,16 @@ namespace PS_AGONY2D
 		// to 'previousCollisionArray' (may reallocate: re-fetch the span via getBodyCollisionData()).
 		// Cost is proportional to the woken manifolds plus one light pass over 'previousCollisionArray'.
 		void wakeContactData(std::span<const uint32_t> islandIds);
+
+		// For colliders whose shape, transform or existence changed (their saved contacts are invalid).
+		// Sleeping islands: manifolds touching the colliders are erased and the ids of the affected islands are appended
+		// to 'outSleepIslandIds' (ascending, unique). The caller wakes them.
+		// Awake manifolds are kept; the other collider of each touching manifold is appended to 'outAwakePartners'.
+		void takeContactsOfColliders(
+			std::span<const Handle> colliderHandles,
+			std::vector<uint32_t>& outSleepIslandIds,
+			std::vector<Handle>& outAwakePartners
+		);
 
 		void resetCollisionData();
 

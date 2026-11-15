@@ -80,6 +80,10 @@ namespace PS_AGONY2D
 		std::span<const ObjectDenseIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
 		std::span<const ObjectDenseIndex> getSleepingColliderIDs() const noexcept { return sleepingColliderIDs; }
 
+		// Static colliders modified or destroyed since the last clear (by handle). Their saved contacts are stale.
+		std::span<const Handle> getEditedStaticColliders() const noexcept { return editedStaticColliders; }
+		void clearEditedStaticColliders() noexcept { editedStaticColliders.clear(); }
+
 		explicit ObjectManager(
 			const std::vector<Material>& materials,
 			ConstraintSystemArray& constraintSystems
@@ -252,6 +256,11 @@ namespace PS_AGONY2D
 		std::vector<ObjectDenseIndex> sleepScratch;
 		std::vector<uint32_t> islandSleepFlags; // 0 = stays awake, 1 = may sleep, >= 2 = assigned sleep island id.
 		std::vector<Handle> constraintWakeScratch;
+		std::vector<Handle> editedStaticColliders;
+
+		// No-ops unless the owning body is Static.
+		void markStaticColliderEdited(ObjectDenseIndex colliderIndex);
+		void markStaticBodyEdited(ObjectDenseIndex bodyIndex);
 
 		// Wakes both bodies (indices move: re-resolved by handle). False if either handle is stale.
 		bool wakeAndResolvePair(Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b);

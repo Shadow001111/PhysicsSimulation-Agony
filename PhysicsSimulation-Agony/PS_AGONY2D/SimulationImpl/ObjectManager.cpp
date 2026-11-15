@@ -528,8 +528,22 @@ namespace PS_AGONY2D
         return newCollider;
     }
 
+    void ObjectManager::markStaticColliderEdited(ObjectDenseIndex colliderIndex)
+    {
+        if (!bodies.inGroup(colliders.bodyIndex[colliderIndex], BodyGroup::Static)) return;
+        editedStaticColliders.push_back(colliders.handles.handleAt(colliderIndex));
+    }
+
+    void ObjectManager::markStaticBodyEdited(ObjectDenseIndex bodyIndex)
+    {
+        if (!bodies.inGroup(bodyIndex, BodyGroup::Static)) return;
+        for (const ObjectDenseIndex colliderIndex : bodies.colliderIndices[bodyIndex])
+            editedStaticColliders.push_back(colliders.handles.handleAt(colliderIndex));
+    }
+
     void ObjectManager::destroyColliderInternal(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIdx)
     {
+        markStaticColliderEdited(colliderIdx);
         spatialDirty = true;
 
         const ColliderShapeType shapeType = colliders.shapeType[colliderIdx];
@@ -712,6 +726,19 @@ namespace PS_AGONY2D
             ObjectDenseIndex bodyIndex = bodies.indexOf(c.handle);
             if (bodyIndex == Handle::NULL_DENSE_INDEX) return;
 
+            switch (c.type)
+            {
+            case T::SetBodyPosition:
+            case T::SetBodyRotation:
+            case T::SetBodyMass:
+            case T::SetBodyLocalCenterOfMass:
+            case T::SetBodyMassFromDensity:
+                markStaticBodyEdited(bodyIndex);
+                break;
+            default:
+                break;
+            }
+
             if (c.type != T::DestroyBody)
                 bodyIndex = wakeBody(bodyIndex);
 
@@ -784,6 +811,7 @@ namespace PS_AGONY2D
 
         const ObjectDenseIndex colliderIndex = colliders.indexOf(c.handle);
         if (colliderIndex == Handle::NULL_DENSE_INDEX) return;
+        markStaticColliderEdited(colliderIndex);
         wakeBody(colliders.bodyIndex[colliderIndex]);
         const ObjectDenseIndex shapeIndex = colliders.shapeIndex[colliderIndex];
         const ColliderShapeType shapeType = colliders.shapeType[colliderIndex];

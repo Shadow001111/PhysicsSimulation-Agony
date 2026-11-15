@@ -157,6 +157,10 @@ namespace PS_AGONY2D
 		// Islands.
 		std::span<const ObjectPair> islandBodyCollisionEdges{};
 		IslandManager islandManager;
+
+		// Static edit wake scratch.
+		std::vector<uint32_t> staticEditIslandIds;
+		std::vector<Handle> staticEditPartners;
 	public:
 		Simulation();
 		~Simulation() = default;
@@ -220,6 +224,10 @@ namespace PS_AGONY2D
 		void collisionStep();
 
 		void flushCommands();
+
+		// Static bodies are not part of islands: islands resting on an edited static collider are woken through
+		// its saved contacts, and awake bodies touching it are kept from falling asleep this step.
+		void wakeIslandsOfEditedStatics();
 
 		void updateDebugData(Real deltaTime, uint32_t stepCount);
 
