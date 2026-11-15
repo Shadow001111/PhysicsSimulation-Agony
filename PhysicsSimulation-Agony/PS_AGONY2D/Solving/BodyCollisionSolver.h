@@ -37,13 +37,14 @@ namespace PS_AGONY2D
 
 		// Lean per-constraint streams: the solver loops never touch the full BodyCollisionData
 		// (colliders, contact points, ids, penetration). Built once in computeConstraintData.
-		// TODO: also cache invMassA/B and invInertiaA/B here to avoid per-iteration body gathers (not measured yet).
 		struct VelocityHotData
 		{
 			ObjectDenseIndex bodyA, bodyB;
 			Vec2 normal;
 			uint32_t contactCount;
 			std::array<PersistentImpulses, 2> impulses; // Working copy; scattered back to the detector's data at the end.
+			Real invMassA, invMassB;
+			Real invInertiaA, invInertiaB;
 		};
 
 		struct PositionHotData

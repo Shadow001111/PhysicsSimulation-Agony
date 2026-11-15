@@ -276,6 +276,11 @@ namespace PS_AGONY2D
 			const Vec2 centerOfMassA = positionA + localCOMA;
 			const Vec2 centerOfMassB = positionB + localCOMB;
 
+			const Real invMassA = invMassPtr[bodyA];
+			const Real invMassB = invMassPtr[bodyB];
+			const Real invInertiaA = invInertiaPtr[bodyA];
+			const Real invInertiaB = invInertiaPtr[bodyB];
+
 			// Anchors cancel out, so only the initial relative position along the normal matters.
 			{
 				VelocityHotData& velocityHot = velocityHotContainer[c];
@@ -284,6 +289,10 @@ namespace PS_AGONY2D
 				velocityHot.normal = data.normal;
 				velocityHot.contactCount = data.contactCount;
 				velocityHot.impulses = data.persistentContactData;
+				velocityHot.invMassA = invMassA;
+				velocityHot.invMassB = invMassB;
+				velocityHot.invInertiaA = invInertiaA;
+				velocityHot.invInertiaB = invInertiaB;
 			}
 			{
 				PositionHotData& positionHot = positionHotContainer[c];
@@ -303,10 +312,6 @@ namespace PS_AGONY2D
 				frictionData.staticFriction = std::sqrt(std::fmax(Real(0), materialA->staticFriction * materialB->staticFriction));
 				frictionData.dynamicFriction = std::sqrt(std::fmax(Real(0), materialA->dynamicFriction * materialB->dynamicFriction));
 
-				const Real invMassA = invMassPtr[bodyA];
-				const Real invMassB = invMassPtr[bodyB];
-				const Real invInertiaA = invInertiaPtr[bodyA];
-				const Real invInertiaB = invInertiaPtr[bodyB];
 				const Real effectiveMass = invMassA + invMassB;
 				Real impactImpulse = Real(0);
 
@@ -441,13 +446,6 @@ namespace PS_AGONY2D
 			const ObjectDenseIndex bodyIndexA = collisionData.bodyA;
 			const ObjectDenseIndex bodyIndexB = collisionData.bodyB;
 
-			// Get body data.
-			const Real invMassA = invMassPtr[bodyIndexA];
-			const Real invMassB = invMassPtr[bodyIndexB];
-
-			const Real invInertiaA = invInertiaPtr[bodyIndexA];
-			const Real invInertiaB = invInertiaPtr[bodyIndexB];
-
 			Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
 			Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
 			Real angularVelocityA = angularVelocityPtr[bodyIndexA];
@@ -457,6 +455,11 @@ namespace PS_AGONY2D
 			const uint32_t contactCount = collisionData.contactCount;
 
 			const Vec2 tangent = { -normal.y, normal.x };
+
+			const Real invMassA = collisionData.invMassA;
+			const Real invMassB = collisionData.invMassB;
+			const Real invInertiaA = collisionData.invInertiaA;
+			const Real invInertiaB = collisionData.invInertiaB;
 
 			std::array<Real, 2> n{};
 			std::array<Real, 2> t{};
@@ -519,10 +522,10 @@ namespace PS_AGONY2D
 			const ObjectDenseIndex bodyIndexA = collisionData.bodyA;
 			const ObjectDenseIndex bodyIndexB = collisionData.bodyB;
 
-			const Real invMassA = invMassPtr[bodyIndexA];
-			const Real invMassB = invMassPtr[bodyIndexB];
-			const Real invInertiaA = invInertiaPtr[bodyIndexA];
-			const Real invInertiaB = invInertiaPtr[bodyIndexB];
+			const Real invMassA = collisionData.invMassA;
+			const Real invMassB = collisionData.invMassB;
+			const Real invInertiaA = collisionData.invInertiaA;
+			const Real invInertiaB = collisionData.invInertiaB;
 
 			Vec2 linearVelocityA = { velocityXPtr[bodyIndexA], velocityYPtr[bodyIndexA] };
 			Vec2 linearVelocityB = { velocityXPtr[bodyIndexB], velocityYPtr[bodyIndexB] };
