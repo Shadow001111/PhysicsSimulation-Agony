@@ -775,7 +775,7 @@ namespace PS_AGONY2D
 
         data.bodyCollisionSolver = bodyCollisionSolver.getMemoryUsage();
 
-        for (size_t i = 0; i < constraintSystems.size(); ++i)
+        for (size_t i = 0; i < constraintSystems.size(); i++)
         {
             data.constraintData[i] = constraintSystems[i]->getMemoryUsage();
         }
@@ -787,7 +787,9 @@ namespace PS_AGONY2D
         data.other =
             getVectorMemoryUsage(broadPhaseColliders) +
             getVectorMemoryUsage(narrowPhaseColliders) +
-            objectManager.getSleepMemoryUsage()
+            objectManager.getSleepMemoryUsage() +
+            getVectorMemoryUsage(staticEditIslandIds) +
+            getVectorMemoryUsage(staticEditPartners)
             ;
     }
 }
