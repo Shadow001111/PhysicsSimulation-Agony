@@ -1297,7 +1297,7 @@ void loadScene(PS_AGONY2D::Simulation& simulation, int scene)
 
     if (scene == 0)
     {
-        load_LargeWorld(simulation, randomGenerator, {}, 1500);
+        load_LargeWorld(simulation, randomGenerator, {}, 2500);
     }
     else if (scene == 1)
     {

@@ -19,7 +19,8 @@ namespace PS_AGONY2D
 		{
 			struct ContactData
 			{
-				Vec2 rAPerp, rBPerp;
+				Real rAn, rBn; // dot(rAPerp, n), dot(rBPerp, n).
+				Real rAt, rBt; // dot(rAPerp, t), dot(rBPerp, t).
 				Real normalMass;
 				Real tangentMass;
 				Real velocityBias;
