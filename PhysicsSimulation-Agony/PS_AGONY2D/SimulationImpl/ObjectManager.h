@@ -68,17 +68,6 @@ namespace PS_AGONY2D
 
 		// Set when a collider is created/destroyed. Cleared by Simulation once the BVH trees are rebuilt.
 		bool spatialDirty = false;
-	private:
-		// Persistent collider ID lists.
-		// A collider lives in exactly one list, chosen by its body's isStatic flag (moved when mass toggles 0 <-> nonzero).
-		std::vector<ObjectDenseIndex> dynamicColliderIDs;
-		std::vector<ObjectDenseIndex> staticColliderIDs;
-		std::vector<ObjectDenseIndex> sleepingColliderIDs;
-		std::vector<ObjectDenseIndex> colliderSlot; // colliderIndex -> position inside its list.
-	public:
-		std::span<const ObjectDenseIndex> getDynamicColliderIDs() const noexcept { return dynamicColliderIDs; }
-		std::span<const ObjectDenseIndex> getStaticColliderIDs() const noexcept { return staticColliderIDs; }
-		std::span<const ObjectDenseIndex> getSleepingColliderIDs() const noexcept { return sleepingColliderIDs; }
 
 		// Static colliders modified or destroyed since the last clear (by handle). Their saved contacts are stale.
 		std::span<const Handle> getEditedStaticColliders() const noexcept { return editedStaticColliders; }
@@ -285,7 +274,8 @@ namespace PS_AGONY2D
 		void applyBodyMass(ObjectDenseIndex bodyIndex, Real newMass);
 		void applyBodyMassFromDensity(ObjectDenseIndex bodyIndex, Real density);
 		void recomputeBodyInertia(ObjectDenseIndex bodyIndex);
-		void moveBodyColliders(ObjectDenseIndex bodyIndex, BodyGroup from, BodyGroup to);
+		// Moves every collider of the body (and their shapes) to the group.
+		void moveBodyColliders(ObjectDenseIndex bodyIndex, BodyGroup to);
 		// Wakes exactly one body (no island logic). Returns its new index.
 		ObjectDenseIndex wakeOne(ObjectDenseIndex bodyIndex);
 		// Wakes the islands in wakeIdScratch (duplicates are skipped).
@@ -293,7 +283,20 @@ namespace PS_AGONY2D
 		// Moves a body across the boundary shared by two adjacent groups with a single swap. Returns the new index.
 		template<BodyGroup FROM, BodyGroup TO>
 		ObjectDenseIndex moveBodyToAdjacentGroup(ObjectDenseIndex bodyIndex);
-		std::vector<ObjectDenseIndex>& colliderListFor(BodyGroup group) noexcept;
+
+		// Collider/shape group machinery (same scheme as bodies, see moveBodyToGroup).
+		// swapColliders: swaps two colliders and re-points owner bodies' lists and shape back-references.
+		void swapColliders(ObjectDenseIndex a, ObjectDenseIndex b);
+		// swapShapes: swaps two entries of one shape SoA and re-points their colliders.
+		void swapShapes(ColliderShapeType type, ObjectDenseIndex a, ObjectDenseIndex b);
+		GroupRanges& shapeGroups(ColliderShapeType type) noexcept;
+		size_t shapeCount(ColliderShapeType type) const noexcept;
+		void popBackShape(ColliderShapeType type);
+		// Moves a collider and its shape across group boundaries (boundary swaps). Returns the new collider index.
+		ObjectDenseIndex moveColliderToGroup(ObjectDenseIndex colliderIndex, BodyGroup target);
+		// Moves a just-appended collider (+ its already appended shape) from Unused to its body's group. Returns the new collider index.
+		ObjectDenseIndex placeNewCollider(ObjectDenseIndex colliderIndex);
+		std::vector<Handle> colliderMoveScratch;
 
 		// Body group machinery. Body memory order follows BodyGroup.
 		// swapBodies: swaps two bodies and re-points their colliders. Constraint body indices are not remapped.

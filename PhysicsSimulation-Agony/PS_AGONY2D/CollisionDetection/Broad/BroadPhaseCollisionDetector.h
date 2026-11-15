@@ -38,7 +38,7 @@ namespace PS_AGONY2D
 	struct TreesUpdateParams
 	{
 		std::array<TreeUpdate, 3> types{};
-		std::array<std::span<const ObjectDenseIndex>, 3> ids{};
+		std::array<IndexRange, 3> ranges{};
 	};
 
 	// NOTE: This detector operates over COLLIDER AABBs, not body AABBs.
@@ -170,7 +170,7 @@ namespace PS_AGONY2D
 
 		size_t getMemoryUsage() const;
 	private:
-		void updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, std::span<const ObjectDenseIndex> ids);
+		void updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, IndexRange colliderRange);
 
 		void queryPairs();
 		void queryPairsThreaded();

@@ -398,9 +398,9 @@ namespace PS_AGONY2D
     void Simulation::rebuildSpatialData()
     {
         computeBodyWorldCenters(objectManager.bodies.liveRange());
-        computeColliderWorldPositions();
-        computeColliderWorldRotations();
-        buildColliderAABBs();
+        computeColliderWorldPositions(objectManager.colliders.liveRange());
+        computeColliderWorldRotations(objectManager.colliders.liveRange());
+        buildColliderAABBs(true);
 
         // Rebuild/refit trees.
 
@@ -410,9 +410,9 @@ namespace PS_AGONY2D
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Static)] = TreeUpdate::Refit;
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = TreeUpdate::Rebuild;
 
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = objectManager.getDynamicColliderIDs();
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Static)] = objectManager.getStaticColliderIDs();
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.getSleepingColliderIDs();
+        params.ranges[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = objectManager.colliders.range(BodyGroup::Dynamic);
+        params.ranges[size_t(BroadPhaseInternal::BvhTreeType::Static)] = objectManager.colliders.range(BodyGroup::Static);
+        params.ranges[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.colliders.range(BodyGroup::Sleeping);
 
         broadPhaseCollisionDetector.updateTrees(params);
 
@@ -422,9 +422,9 @@ namespace PS_AGONY2D
     void Simulation::updateDynamicSpatialData()
     {
         computeBodyWorldCenters(objectManager.bodies.range(BodyGroup::Dynamic));
-        computeColliderWorldPositions();
-        computeColliderWorldRotations();
-        buildColliderAABBs();
+        computeColliderWorldPositions(objectManager.colliders.range(BodyGroup::Dynamic));
+        computeColliderWorldRotations(objectManager.colliders.range(BodyGroup::Dynamic));
+        buildColliderAABBs(false);
 
         TreesUpdateParams params{};
 
@@ -432,9 +432,10 @@ namespace PS_AGONY2D
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Static)] = TreeUpdate::None;
         params.types[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = TreeUpdate::None;
 
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = objectManager.getDynamicColliderIDs();
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Static)] = objectManager.getStaticColliderIDs();
-        params.ids[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.getSleepingColliderIDs();
+        // TODO: BroadPhase must take IndexRange (contiguous collider ranges) instead of ID spans.
+        params.ranges[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)] = objectManager.colliders.range(BodyGroup::Dynamic);
+        params.ranges[size_t(BroadPhaseInternal::BvhTreeType::Static)] = objectManager.colliders.range(BodyGroup::Static);
+        params.ranges[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)] = objectManager.colliders.range(BodyGroup::Sleeping);
 
         broadPhaseCollisionDetector.updateTrees(params);
     }
@@ -530,20 +531,27 @@ namespace PS_AGONY2D
 
         // That's for renderer to have actual information.
         computeBodyWorldCenters(objectManager.bodies.range(BodyGroup::Dynamic));
-        computeColliderWorldPositions();
-        computeColliderWorldRotations();
-        buildColliderAABBs();
+        computeColliderWorldPositions(objectManager.colliders.range(BodyGroup::Dynamic));
+        computeColliderWorldRotations(objectManager.colliders.range(BodyGroup::Dynamic));
+        buildColliderAABBs(false);
 
         broadPhaseCollisionDetector.refitTrees(BroadPhaseInternal::BvhTreeTypeFlag::Dynamic);
     }
 
-    void Simulation::buildColliderAABBs()
+    void Simulation::buildColliderAABBs(bool includeStaticAndSleeping)
     {
         TRACY_SCOPE_NC("Build collider AABBs", PS_AGONY2D::Profiling::Color::Green);
-        buildCircleAABBs(objectManager.colliders, objectManager.circles);
-        buildBoxAABBs(objectManager.colliders, objectManager.boxes);
-        buildPolygonAABBs(objectManager.colliders, objectManager.polygons);
-        buildCapsuleAABBs(objectManager.colliders, objectManager.capsules);
+
+        // Ranges are in SHAPE index space.
+        const auto shapeRange = [includeStaticAndSleeping](const auto& shapes)
+            {
+                return includeStaticAndSleeping ? shapes.liveRange() : shapes.range(BodyGroup::Dynamic);
+            };
+        ObjectManager& om = objectManager;
+        buildCircleAABBs(om.colliders, om.circles, shapeRange(om.circles));
+        buildBoxAABBs(om.colliders, om.boxes, shapeRange(om.boxes));
+        buildPolygonAABBs(om.colliders, om.polygons, shapeRange(om.polygons));
+        buildCapsuleAABBs(om.colliders, om.capsules, shapeRange(om.capsules));
     }
 
     void Simulation::computeBodyWorldCenters(IndexRange range)
@@ -591,7 +599,7 @@ namespace PS_AGONY2D
         }
     }
 
-    void Simulation::computeColliderWorldPositions()
+    void Simulation::computeColliderWorldPositions(IndexRange colliderRange)
     {
         TRACY_SCOPE_N("Compute collider world positions");
 
@@ -610,8 +618,7 @@ namespace PS_AGONY2D
         // Position uses the BODY's rotation only (an offset defined in body-local
         // space); the collider's own local rotation affects its orientation, not
         // where its origin sits relative to the body.
-        const size_t colliderCount = objectManager.colliders.getCount();
-        for (size_t i = 0; i < colliderCount; i++)
+        for (size_t i = colliderRange.begin; i < colliderRange.end; i++)
         {
             const ObjectDenseIndex body = ownerPtr[i];
             const Real offX = localOffXPtr[i];
@@ -627,12 +634,11 @@ namespace PS_AGONY2D
         }
     }
 
-    void Simulation::computeColliderWorldRotations()
+    void Simulation::computeColliderWorldRotations(IndexRange colliderRange)
     {
         TRACY_SCOPE_N("Compute collider world rotations");
 
-        const size_t colliderCount = objectManager.colliders.getCount();
-        if (colliderCount == 0) return;
+        if (colliderRange.empty()) return;
 
         // worldRotation = bodyRotation + localRotation.
         {
@@ -641,7 +647,7 @@ namespace PS_AGONY2D
             const Real* ECSTASY_RESTRICT localRotationPtr = objectManager.colliders.localRotation.data();
             Real* ECSTASY_RESTRICT worldRotationPtr = objectManager.colliders.worldRotation.data();
 
-            for (size_t i = 0; i < colliderCount; i++)
+            for (size_t i = colliderRange.begin; i < colliderRange.end; i++)
             {
                 const ObjectDenseIndex body = ownerPtr[i];
                 worldRotationPtr[i] = bodyRotationPtr[body] + localRotationPtr[i];
@@ -649,14 +655,15 @@ namespace PS_AGONY2D
         }
 
         // Wrap rotations to [0, 2pi) range.
-        wrapColliderRotations(objectManager.colliders);
+        // TODO: wrapColliderRotations must take (colliders, IndexRange) and wrap that range only.
+        wrapColliderRotations(objectManager.colliders, colliderRange);
 
         // Compute cos/sin.
         FastCosSin::order5Array(
-            objectManager.colliders.worldRotation.data(),
-            objectManager.colliders.worldRotationCos.data(),
-            objectManager.colliders.worldRotationSin.data(),
-            colliderCount
+            objectManager.colliders.worldRotation.data() + colliderRange.begin,
+            objectManager.colliders.worldRotationCos.data() + colliderRange.begin,
+            objectManager.colliders.worldRotationSin.data() + colliderRange.begin,
+            colliderRange.size()
         );
     }
 

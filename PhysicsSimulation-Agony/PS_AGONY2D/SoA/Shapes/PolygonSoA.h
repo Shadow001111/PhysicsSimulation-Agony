@@ -1,6 +1,8 @@
 #pragma once
 #include "PS_AGONY2D/ContainerUtilities.h"
+#include "PS_AGONY2D/GroupRanges.h"
 #include "PS_AGONY2D/Types/Types.h"
+#include <utility>
 #include <memory>
 #include <vector>
 
@@ -57,6 +59,19 @@ namespace PS_AGONY2D
 			ObjectDenseIndex colliderIndex,
 			PolygonGeometry&& polygonGeometry
 		);
+
+		// Dense order follows BodyGroup of the owning collider. Changed by ObjectManager group moves only.
+		GroupRanges groups;
+		IndexRange range(BodyGroup group) const noexcept { return groups.range(group, getCount()); }
+		IndexRange liveRange() const noexcept { return groups.liveRange(); }
+
+		// Swaps two entries in every field. Does not touch groups or collider back-references.
+		void swap(ObjectDenseIndex a, ObjectDenseIndex b)
+		{
+			#define SWAP_FIELD_AB(name, type) std::swap(name[a], name[b]);
+			PS_AGONY_POLYGON_SOA_SCALAR_FIELDS(SWAP_FIELD_AB)
+			#undef SWAP_FIELD_AB
+		}
 
 		void swapWithBack(ObjectDenseIndex index);
 		void popBack();

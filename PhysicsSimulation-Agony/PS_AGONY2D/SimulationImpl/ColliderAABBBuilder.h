@@ -8,9 +8,9 @@
 
 namespace PS_AGONY2D
 {
-	void buildCircleAABBs (ColliderSoA& colliders, const CircleSoA& circles);
-	void buildBoxAABBs	  (ColliderSoA& colliders, const BoxSoA& boxes);
-	void buildPolygonAABBs(ColliderSoA& colliders, const PolygonSoA& polygons);
-	void buildCapsuleAABBs(ColliderSoA& colliders, const CapsuleSoA& capsules);
+	void buildCircleAABBs (ColliderSoA& colliders, const CircleSoA& circles	 , IndexRange shapeRange);
+	void buildBoxAABBs	  (ColliderSoA& colliders, const BoxSoA& boxes		 , IndexRange shapeRange);
+	void buildPolygonAABBs(ColliderSoA& colliders, const PolygonSoA& polygons, IndexRange shapeRange);
+	void buildCapsuleAABBs(ColliderSoA& colliders, const CapsuleSoA& capsules, IndexRange shapeRange);
 }
 

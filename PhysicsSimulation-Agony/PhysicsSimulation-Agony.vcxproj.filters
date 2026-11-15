@@ -380,5 +380,8 @@
     <ClInclude Include="PS_AGONY2D\SimulationImpl\ConstraintSystems\MotorConstraintSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="PS_AGONY2D\GroupRanges.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,12 +1,10 @@
 #include "LeftOutFunctions.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
-#include "Ecstasy/Core/Portablity.h"
-#include "Ecstasy/Core/Simd.h"
-
 #include "PS_AGONY2D/Constants.h"
 
-#include <algorithm>
+#include "Ecstasy/Core/Portablity.h"
+#include "Ecstasy/Core/Simd.h"
 
 namespace PS_AGONY2D
 {
@@ -61,7 +59,7 @@ namespace PS_AGONY2D
         }
     }
 
-    void wrapColliderRotations(ColliderSoA& colliders)
+    void wrapColliderRotations(ColliderSoA& colliders, IndexRange range)
     {
         TRACY_SCOPE_NC("Wrap collider rotations", PS_AGONY2D::Profiling::Color::Cyan);
 
@@ -73,11 +71,10 @@ namespace PS_AGONY2D
         const RealSimd invTwoPIV(Real(1) / Constants::TWO_PI);
 
         // Wrap.
-        const size_t colliderCount = colliders.getCount();
-        size_t i = 0;
-        for (; i + RealSimd::lanes <= colliderCount; i += RealSimd::lanes)
+        size_t i = range.begin;
+        for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
         {
-            RealSimd rot = RealSimd::load(rotationPtr + i);
+            RealSimd rot = RealSimd::loadu(rotationPtr + i);
 
             RealSimd wrapCount = RealSimd::roundTowardsZero(rot * invTwoPIV);
             rot = RealSimd::negMulAdd(
@@ -89,9 +86,9 @@ namespace PS_AGONY2D
             RealSimd isRotNegativeMask = rot < RealSimd(0);
             rot += isRotNegativeMask & twoPIV;
 
-            rot.store(rotationPtr + i);
+            rot.storeu(rotationPtr + i);
         }
-        for (; i < colliderCount; i++)
+        for (; i < range.end; i++)
         {
             Real rot = rotationPtr[i];
             Real wrapCount = std::trunc(rot * Constants::INV_TWO_PI);

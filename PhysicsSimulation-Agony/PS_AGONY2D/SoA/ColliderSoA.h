@@ -1,6 +1,7 @@
 #pragma once
 #include "PS_AGONY2D/ContainerUtilities.h"
 #include "PS_AGONY2D/HandleTable.h"
+#include "PS_AGONY2D/GroupRanges.h"
 #include "PS_AGONY2D/Types/Types.h"
 #include "PS_AGONY2D/Types/CollisionEvent.h"
 
@@ -35,6 +36,11 @@ namespace PS_AGONY2D
 
 		HandleTable handles;
 
+		// Dense order follows BodyGroup of the owner body. Changed by ObjectManager group moves only.
+		GroupRanges groups;
+		IndexRange range(BodyGroup group) const noexcept { return groups.range(group, getCount()); }
+		IndexRange liveRange() const noexcept { return groups.liveRange(); }
+
 		ObjectDenseIndex append(
 			ObjectDenseIndex bodyIndexIn,
 			Vec2 localOffset,
@@ -44,6 +50,8 @@ namespace PS_AGONY2D
 			ObjectDenseIndex shapeIndexIn
 		);
 
+		// Swaps two colliders in every field (handles included). Does not touch groups or external references.
+		void swap(ObjectDenseIndex a, ObjectDenseIndex b);
 		void swapWithBack(ObjectDenseIndex index);
 		void popBack();
 		ObjectDenseIndex swapRemove(ObjectDenseIndex index);

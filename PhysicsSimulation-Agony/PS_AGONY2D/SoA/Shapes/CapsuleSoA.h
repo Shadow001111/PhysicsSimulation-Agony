@@ -1,6 +1,8 @@
 #pragma once
 #include "PS_AGONY2D/ContainerUtilities.h"
+#include "PS_AGONY2D/GroupRanges.h"
 #include "PS_AGONY2D/Types/Types.h"
+#include <utility>
 
 // Define all scalar SoA fields.
 #define PS_AGONY_CAPSULE_SOA_SCALAR_FIELDS(F) \
@@ -21,6 +23,19 @@ namespace PS_AGONY2D
 			Real halfLength,
 			Real radius
 		);
+
+		// Dense order follows BodyGroup of the owning collider. Changed by ObjectManager group moves only.
+		GroupRanges groups;
+		IndexRange range(BodyGroup group) const noexcept { return groups.range(group, getCount()); }
+		IndexRange liveRange() const noexcept { return groups.liveRange(); }
+
+		// Swaps two entries in every field. Does not touch groups or collider back-references.
+		void swap(ObjectDenseIndex a, ObjectDenseIndex b)
+		{
+			#define SWAP_FIELD_AB(name, type) std::swap(name[a], name[b]);
+			PS_AGONY_CAPSULE_SOA_SCALAR_FIELDS(SWAP_FIELD_AB)
+			#undef SWAP_FIELD_AB
+		}
 
 		void swapWithBack(ObjectDenseIndex index);
 		void popBack();

@@ -5,7 +5,7 @@
 
 namespace PS_AGONY2D
 {
-    void buildCircleAABBs(ColliderSoA& colliders, const CircleSoA& circles)
+    void buildCircleAABBs(ColliderSoA& colliders, const CircleSoA& circles, IndexRange shapeRange)
     {
         const size_t count = circles.getCount();
         if (count == 0) return;
@@ -38,10 +38,9 @@ namespace PS_AGONY2D
         }
     }
 
-    void buildBoxAABBs(ColliderSoA& colliders, const BoxSoA& boxes)
+    void buildBoxAABBs(ColliderSoA& colliders, const BoxSoA& boxes, IndexRange shapeRange)
     {
-        const size_t count = boxes.getCount();
-        if (count == 0) return;
+        if (shapeRange.empty()) return;
 
         TRACY_SCOPE_NC("Build box AABBs", PS_AGONY2D::Profiling::Color::DarkGreen);
 
@@ -59,7 +58,7 @@ namespace PS_AGONY2D
         Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabbMaxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabbMaxY.data();
 
-        for (size_t i = 0; i < count; i++)
+        for (size_t i = shapeRange.begin; i < shapeRange.end; i++)
         {
             const ObjectDenseIndex colliderIndex = colliderIndexPtr[i];
             const Real halfWidth = halfWidthPtr[i];
@@ -83,10 +82,9 @@ namespace PS_AGONY2D
         }
     }
 
-    void buildPolygonAABBs(ColliderSoA& colliders, const PolygonSoA& polygons)
+    void buildPolygonAABBs(ColliderSoA& colliders, const PolygonSoA& polygons, IndexRange shapeRange)
     {
-        const size_t count = polygons.getCount();
-        if (count == 0) return;
+        if (shapeRange.empty()) return;
 
         TRACY_SCOPE_NC("Build polygon AABBs", PS_AGONY2D::Profiling::Color::DarkGreen);
 
@@ -103,7 +101,7 @@ namespace PS_AGONY2D
         Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabbMaxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabbMaxY.data();
 
-        for (size_t i = 0; i < count; i++)
+        for (size_t i = shapeRange.begin; i < shapeRange.end; i++)
         {
             const ObjectDenseIndex colliderIndex = colliderIndexPtr[i];
             const PolygonGeometry& geometry = geometryPtr[i];
@@ -138,10 +136,9 @@ namespace PS_AGONY2D
         }
     }
 
-    void buildCapsuleAABBs(ColliderSoA& colliders, const CapsuleSoA& capsules)
+    void buildCapsuleAABBs(ColliderSoA& colliders, const CapsuleSoA& capsules, IndexRange shapeRange)
     {
-        const size_t count = capsules.getCount();
-        if (count == 0) return;
+        if (shapeRange.empty()) return;
 
         TRACY_SCOPE_NC("Build capsule AABBs", PS_AGONY2D::Profiling::Color::DarkGreen);
 
@@ -159,7 +156,7 @@ namespace PS_AGONY2D
         Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabbMaxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabbMaxY.data();
 
-        for (size_t i = 0; i < count; i++)
+        for (size_t i = shapeRange.begin; i < shapeRange.end; i++)
         {
             const ObjectDenseIndex colliderIndex = colliderIndexPtr[i];
             const Real halfLength = halfLengthPtr[i];

@@ -47,6 +47,16 @@ namespace PS_AGONY2D
 		return newIndex;
 	}
 
+	void ColliderSoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
+	{
+		if (a == b) [[unlikely]] return;
+		handles.swap(a, b); // TODO: Requires HandleTable::swap(a, b) (same as BodySoA::swap uses).
+
+		#define SWAP_FIELD_AB(name, type) std::swap(name[a], name[b]);
+		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(SWAP_FIELD_AB)
+		#undef SWAP_FIELD_AB
+	}
+
 	void ColliderSoA::swapWithBack(ObjectDenseIndex index)
 	{
 		if (index >= bodyIndex.size()) [[unlikely]]

@@ -80,7 +80,7 @@ namespace PS_AGONY2D
         );
         circles.append(newCollider, radius);
 
-        return newCollider;
+        return placeNewCollider(newCollider);
     }
 
     std::optional<ObjectDenseIndex> ObjectManager::createBoxCollider(const BoxColliderCreateParams& params)
@@ -103,7 +103,7 @@ namespace PS_AGONY2D
         );
         boxes.append(newCollider, width * Real(0.5), height * Real(0.5));
 
-        return newCollider;
+        return placeNewCollider(newCollider);
     }
 
     std::optional<PolygonColliderCreateResult> ObjectManager::createPolygonCollider(const PolygonColliderCreateParams& params)
@@ -148,9 +148,10 @@ namespace PS_AGONY2D
         }
 
         const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
-        const ObjectDenseIndex firstCollider = createConvexPolygonColliderInternal(
+        // Placing later pieces moves colliders between groups, so track the first piece by handle.
+        const Handle firstHandle = colliders.handleAt(createConvexPolygonColliderInternal(
             bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
-        );
+        ));
         for (size_t i = 1; i < convexPieces.size(); ++i)
         {
             createConvexPolygonColliderInternal(
@@ -158,7 +159,8 @@ namespace PS_AGONY2D
             );
         }
 
-        return PolygonColliderCreateResult{ firstCollider, convexPieces.size() };
+        // NOTE: pieces are no longer guaranteed to have consecutive dense indices (grouping moves colliders).
+        return PolygonColliderCreateResult{ colliders.indexOfUnchecked(firstHandle), convexPieces.size() };
     }
 
     std::optional<ObjectDenseIndex> ObjectManager::createCapsuleCollider(const CapsuleColliderCreateParams& params)
@@ -192,7 +194,7 @@ namespace PS_AGONY2D
         );
         capsules.append(newCollider, length * Real(0.5), radius);
 
-        return newCollider;
+        return placeNewCollider(newCollider);
     }
 
     std::optional<ObjectDenseIndex> ObjectManager::createCircle(const CircleCreateParams& params)
@@ -503,11 +505,7 @@ namespace PS_AGONY2D
         bodies.addCollider(bodyIndex, newCollider);
         spatialDirty = true;
 
-        std::vector<ObjectDenseIndex>& list = colliderListFor(bodies.groupOf(bodyIndex));
-        colliderSlot.resize(colliders.getCount());
-        colliderSlot[newCollider] = static_cast<uint32_t>(list.size());
-        list.push_back(static_cast<ObjectDenseIndex>(newCollider));
-
+        // The caller appends the shape, then calls placeNewCollider (moves collider and shape into the body's group).
         return newCollider;
     }
 
@@ -525,7 +523,7 @@ namespace PS_AGONY2D
         );
         polygons.append(newCollider, std::move(geometry));
 
-        return newCollider;
+        return placeNewCollider(newCollider);
     }
 
     void ObjectManager::markStaticColliderEdited(ObjectDenseIndex colliderIndex)
@@ -546,103 +544,13 @@ namespace PS_AGONY2D
         markStaticColliderEdited(colliderIdx);
         spatialDirty = true;
 
+        // Move to the Unused tail (collider and shape both become the last element), then pop. No swap-remove fixups needed.
         const ColliderShapeType shapeType = colliders.shapeType[colliderIdx];
-        const ObjectDenseIndex shapeIdx = colliders.shapeIndex[colliderIdx];
+        colliderIdx = moveColliderToGroup(colliderIdx, BodyGroup::Unused);
 
-        // Remove from the underlying shape SoA (swap-remove), fixing up the collider
-        // that now occupies shapeIdx (if any) to point at its new slot.
-        if (shapeType == ColliderShapeType::Circle)
-        {
-            const size_t last = circles.getCount() - 1;
-            if (shapeIdx != last)
-            {
-                std::swap(circles.colliderIndices[shapeIdx], circles.colliderIndices[last]);
-                std::swap(circles.radius[shapeIdx], circles.radius[last]);
-                colliders.shapeIndex[circles.colliderIndices[shapeIdx]] = static_cast<ObjectDenseIndex>(shapeIdx);
-            }
-            circles.colliderIndices.pop_back();
-            circles.radius.pop_back();
-        }
-        else if (shapeType == ColliderShapeType::Box)
-        {
-            const size_t last = boxes.getCount() - 1;
-            if (shapeIdx != last)
-            {
-                std::swap(boxes.colliderIndices[shapeIdx], boxes.colliderIndices[last]);
-                std::swap(boxes.halfWidth[shapeIdx], boxes.halfWidth[last]);
-                std::swap(boxes.halfHeight[shapeIdx], boxes.halfHeight[last]);
-                colliders.shapeIndex[boxes.colliderIndices[shapeIdx]] = static_cast<ObjectDenseIndex>(shapeIdx);
-            }
-            boxes.colliderIndices.pop_back();
-            boxes.halfWidth.pop_back();
-            boxes.halfHeight.pop_back();
-        }
-        else if (shapeType == ColliderShapeType::Polygon)
-        {
-            const size_t last = polygons.getCount() - 1;
-            if (shapeIdx != last)
-            {
-                std::swap(polygons.colliderIndices[shapeIdx], polygons.colliderIndices[last]);
-                std::swap(polygons.geometry[shapeIdx], polygons.geometry[last]);
-                colliders.shapeIndex[polygons.colliderIndices[shapeIdx]] = static_cast<ObjectDenseIndex>(shapeIdx);
-            }
-            polygons.colliderIndices.pop_back();
-            polygons.geometry.pop_back();
-        }
-        else if (shapeType == ColliderShapeType::Capsule)
-        {
-            const size_t last = capsules.getCount() - 1;
-            if (shapeIdx != last)
-            {
-                std::swap(capsules.colliderIndices[shapeIdx], capsules.colliderIndices[last]);
-                std::swap(capsules.halfLength[shapeIdx], capsules.halfLength[last]);
-                std::swap(capsules.radius[shapeIdx], capsules.radius[last]);
-                colliders.shapeIndex[capsules.colliderIndices[shapeIdx]] = static_cast<ObjectDenseIndex>(shapeIdx);
-            }
-            capsules.colliderIndices.pop_back();
-            capsules.halfLength.pop_back();
-            capsules.radius.pop_back();
-        }
-
-        // Remove from the persistent ID list (swap-remove, O(1)).
-        {
-            std::vector<ObjectDenseIndex>& list = colliderListFor(bodies.groupOf(bodyIndex));
-            const uint32_t slot = colliderSlot[colliderIdx];
-            const ObjectDenseIndex lastID = list.back();
-            list[slot] = lastID;
-            colliderSlot[lastID] = slot;
-            list.pop_back();
-        }
-
-        // Remove from ColliderSoA itself.
         bodies.removeCollider(bodyIndex, colliderIdx);
-        const ObjectDenseIndex oldBackCollider = colliders.swapRemove(colliderIdx);
-        if (oldBackCollider != colliderIdx)
-        {
-            const ObjectDenseIndex swappedOwner = colliders.bodyIndex[colliderIdx];
-            bodies.removeCollider(swappedOwner, static_cast<ObjectDenseIndex>(oldBackCollider));
-            bodies.addCollider(swappedOwner, colliderIdx);
-
-            // Moved collider: oldBackCollider -> colliderIdx in its ID list.
-            std::vector<ObjectDenseIndex>& movedList = colliderListFor(bodies.groupOf(swappedOwner));
-            const uint32_t movedSlot = colliderSlot[oldBackCollider];
-            movedList[movedSlot] = static_cast<ObjectDenseIndex>(colliderIdx);
-            colliderSlot[colliderIdx] = movedSlot;
-
-            // Fix the shape SoA's back-reference: it still points at the collider's old index.
-            const ColliderShapeType movedShapeType = colliders.shapeType[colliderIdx];
-            const ObjectDenseIndex movedShapeIdx = colliders.shapeIndex[colliderIdx];
-            if (movedShapeType == ColliderShapeType::Circle)
-                circles.colliderIndices[movedShapeIdx] = colliderIdx;
-            else if (movedShapeType == ColliderShapeType::Box)
-                boxes.colliderIndices[movedShapeIdx] = colliderIdx;
-            else if (movedShapeType == ColliderShapeType::Polygon)
-                polygons.colliderIndices[movedShapeIdx] = colliderIdx;
-            else if (movedShapeType == ColliderShapeType::Capsule)
-                capsules.colliderIndices[movedShapeIdx] = colliderIdx;
-        }
-
-        colliderSlot.pop_back();
+        popBackShape(shapeType);
+        colliders.popBack();
     }
 
     namespace
@@ -902,7 +810,7 @@ namespace PS_AGONY2D
         if (from != to)
         {
             b = moveBodyToGroup(b, to);
-            moveBodyColliders(b, from, to);
+            moveBodyColliders(b, to);
             refreshBodyConstraintGroups(b);
         }
     }
@@ -979,34 +887,158 @@ namespace PS_AGONY2D
         bodies.invInertia[b] = inertia > Real(0) ? Real(1) / inertia : Real(0);
     }
 
-    std::vector<ObjectDenseIndex>& ObjectManager::colliderListFor(BodyGroup group) noexcept
+    namespace
     {
-        switch (group)
+        // Moves 'index' to group 'target' with boundary swaps. 'swapFn(a, b)' must swap two dense entries.
+        // Only one element may live in Unused at a time (the one being created/destroyed).
+        template<class SwapFn>
+        ObjectDenseIndex moveInGroups(GroupRanges& ranges, ObjectDenseIndex index, BodyGroup target, SwapFn&& swapFn)
         {
-        case BodyGroup::Static:   return staticColliderIDs;
-        case BodyGroup::Sleeping: return sleepingColliderIDs;
-        default:                  return dynamicColliderIDs;
+            uint32_t* starts = ranges.starts;
+            uint32_t g = static_cast<uint32_t>(ranges.groupOf(index));
+            const uint32_t to = static_cast<uint32_t>(target);
+
+            while (g != to)
+            {
+                if (g < to)
+                {
+                    const ObjectDenseIndex last = starts[g + 1] - 1;
+                    swapFn(index, last);
+                    index = last;
+                    starts[g + 1]--;
+                    g++;
+                }
+                else
+                {
+                    const ObjectDenseIndex first = starts[g];
+                    swapFn(index, first);
+                    index = first;
+                    starts[g]++;
+                    g--;
+                }
+            }
+            return index;
         }
     }
 
-    void ObjectManager::moveBodyColliders(ObjectDenseIndex b, BodyGroup fromGroup, BodyGroup toGroup)
+    void ObjectManager::swapColliders(ObjectDenseIndex a, ObjectDenseIndex b)
     {
-        std::vector<ObjectDenseIndex>& from = colliderListFor(fromGroup);
-        std::vector<ObjectDenseIndex>& to = colliderListFor(toGroup);
+        if (a == b) return;
 
-        for (const ObjectDenseIndex ci : bodies.colliderIndices[b])
+        colliders.swap(a, b);
+
+        // Owner lists: collider data moved, so each owner's entry changes. Same owner: the set is unchanged.
+        const ObjectDenseIndex ownerA = colliders.bodyIndex[a];
+        const ObjectDenseIndex ownerB = colliders.bodyIndex[b];
+        if (ownerA != ownerB)
         {
-            // O(1) swap-remove from the old list.
-            const uint32_t slot = colliderSlot[ci];
-            const ObjectDenseIndex lastID = from.back();
-            from[slot] = lastID;
-            colliderSlot[lastID] = slot;
-            from.pop_back();
-
-            colliderSlot[ci] = static_cast<uint32_t>(to.size());
-            to.push_back(static_cast<ObjectDenseIndex>(ci));
+            // Collider now at a belongs to ownerA and was at b before.
+            for (ObjectDenseIndex& ci : bodies.colliderIndices[ownerA]) if (ci == b) { ci = a; break; }
+            for (ObjectDenseIndex& ci : bodies.colliderIndices[ownerB]) if (ci == a) { ci = b; break; }
         }
+
+        // Shape back-references.
+        const auto fixShape = [this](ObjectDenseIndex c)
+            {
+                const ObjectDenseIndex s = colliders.shapeIndex[c];
+                switch (colliders.shapeType[c])
+                {
+                case ColliderShapeType::Circle:  circles.colliderIndices[s] = c; break;
+                case ColliderShapeType::Box:     boxes.colliderIndices[s] = c; break;
+                case ColliderShapeType::Polygon: polygons.colliderIndices[s] = c; break;
+                case ColliderShapeType::Capsule: capsules.colliderIndices[s] = c; break;
+                default: break;
+                }
+            };
+        fixShape(a);
+        fixShape(b);
+    }
+
+    void ObjectManager::swapShapes(ColliderShapeType type, ObjectDenseIndex a, ObjectDenseIndex b)
+    {
+        if (a == b) return;
+
+        const auto swapEntries = [this, a, b](auto& soa)
+            {
+                soa.swap(a, b);
+                colliders.shapeIndex[soa.colliderIndices[a]] = a;
+                colliders.shapeIndex[soa.colliderIndices[b]] = b;
+            };
+        switch (type)
+        {
+        case ColliderShapeType::Circle:  swapEntries(circles); break;
+        case ColliderShapeType::Box:     swapEntries(boxes); break;
+        case ColliderShapeType::Polygon: swapEntries(polygons); break;
+        case ColliderShapeType::Capsule: swapEntries(capsules); break;
+        default: break;
+        }
+    }
+
+    GroupRanges& ObjectManager::shapeGroups(ColliderShapeType type) noexcept
+    {
+        switch (type)
+        {
+        case ColliderShapeType::Circle:  return circles.groups;
+        case ColliderShapeType::Box:     return boxes.groups;
+        case ColliderShapeType::Polygon: return polygons.groups;
+        default:                         return capsules.groups;
+        }
+    }
+
+    size_t ObjectManager::shapeCount(ColliderShapeType type) const noexcept
+    {
+        switch (type)
+        {
+        case ColliderShapeType::Circle:  return circles.getCount();
+        case ColliderShapeType::Box:     return boxes.getCount();
+        case ColliderShapeType::Polygon: return polygons.getCount();
+        default:                         return capsules.getCount();
+        }
+    }
+
+    void ObjectManager::popBackShape(ColliderShapeType type)
+    {
+        switch (type)
+        {
+        case ColliderShapeType::Circle:  circles.popBack(); break;
+        case ColliderShapeType::Box:     boxes.popBack(); break;
+        case ColliderShapeType::Polygon: polygons.popBack(); break;
+        case ColliderShapeType::Capsule: capsules.popBack(); break;
+        default: break;
+        }
+    }
+
+    ObjectDenseIndex ObjectManager::moveColliderToGroup(ObjectDenseIndex c, BodyGroup target)
+    {
+        c = moveInGroups(colliders.groups, c, target, [this](ObjectDenseIndex a, ObjectDenseIndex b) { swapColliders(a, b); });
+
+        const ColliderShapeType type = colliders.shapeType[c];
+        moveInGroups(shapeGroups(type), colliders.shapeIndex[c], target,
+            [this, type](ObjectDenseIndex a, ObjectDenseIndex b) { swapShapes(type, a, b); });
+
+        return c;
+    }
+
+    ObjectDenseIndex ObjectManager::placeNewCollider(ObjectDenseIndex c)
+    {
+        return moveColliderToGroup(c, bodies.groupOf(colliders.bodyIndex[c]));
+    }
+
+    void ObjectManager::moveBodyColliders(ObjectDenseIndex b, BodyGroup to)
+    {
         spatialDirty = true;
+
+        const std::vector<ObjectDenseIndex>& list = bodies.colliderIndices[b];
+        if (list.size() == 1)
+        {
+            moveColliderToGroup(list[0], to);
+            return;
+        }
+
+        // Moves swap colliders (possibly of this same body), so walk by handle.
+        colliderMoveScratch.clear();
+        for (const ObjectDenseIndex ci : list) colliderMoveScratch.push_back(colliders.handleAt(ci));
+        for (const Handle h : colliderMoveScratch) moveColliderToGroup(colliders.indexOfUnchecked(h), to);
     }
 
     void ObjectManager::swapBodies(ObjectDenseIndex a, ObjectDenseIndex b)
@@ -1206,7 +1238,7 @@ namespace PS_AGONY2D
 
         b = moveBodyToAdjacentGroup<BodyGroup::Dynamic, BodyGroup::Sleeping>(b);
 
-        moveBodyColliders(b, BodyGroup::Dynamic, BodyGroup::Sleeping);
+        moveBodyColliders(b, BodyGroup::Sleeping);
 
         for (BodyAttachment& attachment : bodies.attachments[b])
         {
@@ -1228,7 +1260,7 @@ namespace PS_AGONY2D
 
         b = moveBodyToAdjacentGroup<BodyGroup::Sleeping, BodyGroup::Dynamic>(b);
 
-        moveBodyColliders(b, BodyGroup::Sleeping, BodyGroup::Dynamic);
+        moveBodyColliders(b, BodyGroup::Dynamic);
 
         for (BodyAttachment& attachment : bodies.attachments[b])
         {

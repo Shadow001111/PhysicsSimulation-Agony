@@ -43,7 +43,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 	{
 	public:
 		// Rebuilds the tree over 'ids' (collider indices into 'aabbs').
-		void build(const AABBSoAViewer& aabbs, std::span<const ObjectDenseIndex> ids);
+		void build(const AABBSoAViewer& aabbs, IndexRange colliderRange);
 
 		// Refits to the current AABBs. Membership must match the last build().
 		void refit(const AABBSoAViewer& aabbs);
@@ -93,10 +93,10 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
 
-		Bounds gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ObjectDenseIndex> ids);
+		Bounds gatherCentroids(const AABBSoAViewer& aabbs, IndexRange colliderRange);
 		void transformCentroids(uint32_t count, const Bounds& bounds);
 		void computeMortonCodes(uint32_t count);
-		void sortByMortonCodes(std::span<const ObjectDenseIndex> ids);
+		void sortByMortonCodes(IndexRange colliderRange);
 		uint32_t buildNodes(uint32_t count); // Returns leaf count.
 		void fitNodes(const AABBSoAViewer& aabbs, bool isRebuild);
 

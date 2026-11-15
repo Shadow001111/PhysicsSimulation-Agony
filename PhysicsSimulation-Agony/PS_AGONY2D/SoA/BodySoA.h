@@ -1,6 +1,7 @@
 #pragma once
 #include "PS_AGONY2D/ContainerUtilities.h"
 #include "PS_AGONY2D/HandleTable.h"
+#include "PS_AGONY2D/GroupRanges.h"
 #include "PS_AGONY2D/Types/Types.h"
 
 #include <cstdint>
@@ -40,19 +41,6 @@
 
 namespace PS_AGONY2D
 {
-    // Ordered in ascending order by change frequency to reduce swap count.
-    // Keeping sleeping and dynamic bodies together because constraints still act on sleeping bodies, so solving planner can claim single big range.
-    // TODO: Remove above comment if it will get fixed.
-    enum class BodyGroup : uint8_t { Static, Sleeping, Dynamic, Unused };
-
-    static_assert(
-        size_t(BodyGroup::Sleeping) + 1 == size_t(BodyGroup::Dynamic) ||
-        size_t(BodyGroup::Dynamic) + 1 == size_t(BodyGroup::Sleeping),
-        "Sleeping and Dynamic groups must be adjacent."
-        );
-
-    inline constexpr bool SLEEPING_AFTER_DYNAMIC = BodyGroup::Sleeping > BodyGroup::Dynamic;
-
     inline constexpr uint32_t FIRST_SLEEP_ISLAND_ID = 2;
 
     struct BodyData

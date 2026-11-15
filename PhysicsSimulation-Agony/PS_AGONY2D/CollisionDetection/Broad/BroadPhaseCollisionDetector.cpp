@@ -89,9 +89,9 @@ namespace PS_AGONY2D
 	{
 		TRACY_SCOPE_N("Update broad-phase trees");
 
-		for (size_t i = 0; i < params.ids.size(); i++)
+		for (size_t i = 0; i < params.ranges.size(); i++)
 		{
-			updateTree(trees[i], params.types[i], params.ids[i]);
+			updateTree(trees[i], params.types[i], params.ranges[i]);
 		}
 	}
 
@@ -176,17 +176,17 @@ namespace PS_AGONY2D
 		return total;
 	}
 
-	void BroadPhaseCollisionDetector::updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, std::span<const ObjectDenseIndex> ids)
+	void BroadPhaseCollisionDetector::updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, IndexRange colliderRange)
 	{
 		if (updateType == TreeUpdate::None) return;
 
 		const bool rebuild =
 			updateType == TreeUpdate::Rebuild ||
-			tree.colliderCount() != ids.size();
+			tree.colliderCount() != colliderRange.size();
 
 		if (rebuild)
 		{
-			tree.build(collidersAABB, ids);
+			tree.build(collidersAABB, colliderRange);
 		}
 		else
 		{

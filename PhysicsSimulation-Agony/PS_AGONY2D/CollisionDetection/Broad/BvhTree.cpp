@@ -73,26 +73,26 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		};
 	}
 
-	void BvhTree::build(const AABBSoAViewer& aabbs, std::span<const ObjectDenseIndex> ids)
+	void BvhTree::build(const AABBSoAViewer& aabbs, IndexRange colliderRange)
 	{
 		TRACY_SCOPE_N("Build tree");
 
-		if (ids.empty())
+		if (colliderRange.empty())
 		{
 			clear();
 			return;
 		}
 
-		const uint32_t count = static_cast<uint32_t>(ids.size());
+		const uint32_t count = static_cast<uint32_t>(colliderRange.size());
 
 		nodes.clear();
 		nodes.reserve(count / 4 + 1);
 		colliderIndices.resize(count);
 
-		const Bounds bounds = gatherCentroids(aabbs, ids);
+		const Bounds bounds = gatherCentroids(aabbs, colliderRange);
 		transformCentroids(count, bounds);
 		computeMortonCodes(count);
-		sortByMortonCodes(ids);
+		sortByMortonCodes(colliderRange);
 
 		const uint32_t leafCount = buildNodes(count); // Handles count == 1 (single leaf).
 
@@ -143,21 +143,20 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		return total;
 	}
 
-	// Gathers 2*centroid (min + max) through 'ids' into contiguous arrays and returns the
-	// bounds of the gathered AABBs. This is the only indirected pass of the build.
-	BvhTree::Bounds BvhTree::gatherCentroids(const AABBSoAViewer& aabbs, std::span<const ObjectDenseIndex> ids)
+	// Gathers 2*centroid (min + max) and returns the
+	// bounds of the gathered AABBs.
+	BvhTree::Bounds BvhTree::gatherCentroids(const AABBSoAViewer& aabbs, IndexRange colliderRange)
 	{
 		TRACY_SCOPE_N("Gather centroids");
 
-		const size_t count = ids.size();
+		const size_t count = colliderRange.size();
 		centroidX.resize(count);
 		centroidY.resize(count);
 
-		const Real* ECSTASY_RESTRICT minXPtr = aabbs.minX;
-		const Real* ECSTASY_RESTRICT maxXPtr = aabbs.maxX;
-		const Real* ECSTASY_RESTRICT minYPtr = aabbs.minY;
-		const Real* ECSTASY_RESTRICT maxYPtr = aabbs.maxY;
-		const ObjectDenseIndex* ECSTASY_RESTRICT idsPtr = ids.data();
+		const Real* ECSTASY_RESTRICT minXPtr = aabbs.minX + colliderRange.begin;
+		const Real* ECSTASY_RESTRICT maxXPtr = aabbs.maxX + colliderRange.begin;
+		const Real* ECSTASY_RESTRICT minYPtr = aabbs.minY + colliderRange.begin;
+		const Real* ECSTASY_RESTRICT maxYPtr = aabbs.maxY + colliderRange.begin;
 
 		Real* ECSTASY_RESTRICT sumXPtr = centroidX.data();
 		Real* ECSTASY_RESTRICT sumYPtr = centroidY.data();
@@ -166,13 +165,13 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			std::numeric_limits<Real>::max(), -std::numeric_limits<Real>::max(),
 			std::numeric_limits<Real>::max(), -std::numeric_limits<Real>::max() };
 
+		// TODO: Write manual SIMD.
 		for (size_t i = 0; i < count; i++)
 		{
-			const ObjectDenseIndex id = idsPtr[i];
-			const Real minX = minXPtr[id];
-			const Real maxX = maxXPtr[id];
-			const Real minY = minYPtr[id];
-			const Real maxY = maxYPtr[id];
+			const Real minX = minXPtr[i];
+			const Real maxX = maxXPtr[i];
+			const Real minY = minYPtr[i];
+			const Real maxY = maxYPtr[i];
 
 			sumXPtr[i] = minX + maxX;
 			sumYPtr[i] = minY + maxY;
@@ -260,7 +259,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		}
 	}
 
-	void BvhTree::sortByMortonCodes(std::span<const ObjectDenseIndex> ids)
+	void BvhTree::sortByMortonCodes(IndexRange colliderRange)
 	{
 		TRACY_SCOPE_N("Sort indices by morton codes");
 
@@ -268,7 +267,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		constexpr uint32_t RADIX_SIZE = 1u << RADIX_BITS;
 		constexpr uint32_t RADIX_MASK = RADIX_SIZE - 1u;
 
-		const uint32_t count = static_cast<uint32_t>(ids.size());
+		const uint32_t count = static_cast<uint32_t>(colliderRange.size());
 
 		uint32_t* ECSTASY_RESTRICT mortonCodePtr = mortonCodes.data();
 
@@ -281,7 +280,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		for (uint32_t i = 0; i < count; i++)
 		{
 			a[i].key = mortonCodePtr[i];
-			a[i].index = i;
+			a[i].index = colliderRange.begin + i;
 		}
 
 		alignas(64) uint32_t counts[4][RADIX_SIZE] = {};
@@ -326,11 +325,10 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		// Write sorted collider indices and keys back.
 		ObjectDenseIndex* ECSTASY_RESTRICT outIndexPtr = colliderIndices.data();
-		const ObjectDenseIndex* ECSTASY_RESTRICT idsPtr = ids.data();
 		for (uint32_t i = 0; i < count; i++)
 		{
 			const PackedIndex item = a[i];
-			outIndexPtr[i] = idsPtr[item.index];
+			outIndexPtr[i] = item.index;
 			mortonCodePtr[i] = item.key;
 		}
 	}

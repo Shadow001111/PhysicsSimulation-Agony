@@ -305,6 +305,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\ContactCache.h" />
+    <ClInclude Include="PS_AGONY2D\GroupRanges.h" />
     <ClInclude Include="PS_AGONY2D\IslandManager.h" />
     <ClInclude Include="PS_AGONY2D\SimulationAPIs\ConstraintAPI.h" />
     <ClInclude Include="PS_AGONY2D\HandleTable.h" />
