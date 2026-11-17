@@ -102,7 +102,7 @@ namespace PS_AGONY_EDITOR
 					if (ImGui::DragFloat("Local rotation", &lr, 0.01f)) api.setColliderLocalRotation(ch, lr);
 
 					int mat = static_cast<int>(cd->materialIndex);
-					if (ImGui::InputInt("Material", &mat)) api.setColliderMaterial(ch, static_cast<MaterialIndex>(std::max(mat, 0)));
+					if (materialCombo(sim, "Material", mat)) api.setColliderMaterial(ch, static_cast<MaterialIndex>(mat));
 
 					if (cd->shapeType == ColliderShapeType::Circle)
 					{

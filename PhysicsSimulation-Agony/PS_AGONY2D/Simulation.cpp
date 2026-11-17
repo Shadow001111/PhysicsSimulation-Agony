@@ -80,17 +80,48 @@ namespace PS_AGONY2D
         if (!materialManager.destroy(materialIndex))
             return false;
 
+        wakeCollidersUsingMaterial(materialIndex);
+
         MaterialIndex* const colliderMaterials = objectManager.colliders.materialIndex.data();
         const size_t colliderCount = objectManager.colliders.getCount();
         for (size_t i = 0; i < colliderCount; i++)
         {
             if (colliderMaterials[i] == materialIndex)
-            {
                 colliderMaterials[i] = 0;
-                objectManager.wakeBody(objectManager.colliders.bodyIndex[i]);
-            }
         }
         return true;
+    }
+
+    bool Simulation::setMaterial(MaterialIndex materialIndex, const Material& material)
+    {
+        if (!materialManager.set(materialIndex, material))
+            return false;
+
+        wakeCollidersUsingMaterial(materialIndex);
+        return true;
+    }
+
+    void Simulation::wakeCollidersUsingMaterial(MaterialIndex materialIndex)
+    {
+        ObjectManager& om = objectManager;
+        const size_t colliderCount = om.colliders.getCount();
+        const MaterialIndex* const colliderMaterials = om.colliders.materialIndex.data();
+        const ObjectDenseIndex* const ownerPtr = om.colliders.bodyIndex.data();
+        const uint32_t* const sleepIdPtr = om.bodies.sleepIslandId.data();
+        const IndexRange sleeping = om.bodies.range(BodyGroup::Sleeping);
+
+        staticEditIslandIds.clear();
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            if (colliderMaterials[i] != materialIndex) continue;
+
+            const ObjectDenseIndex body = ownerPtr[i];
+            if (body - sleeping.begin < sleeping.size()) staticEditIslandIds.push_back(sleepIdPtr[body]);
+            else om.markColliderEdited(static_cast<ObjectDenseIndex>(i)); // No-op unless static.
+        }
+
+        // Duplicates and dead ids are skipped.
+        om.wakeSleepIslands(staticEditIslandIds);
     }
 
     std::optional<CollisionCallbackIndex> Simulation::createCollisionCallback(CollisionCallback function, void* userData)

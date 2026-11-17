@@ -131,6 +131,7 @@ namespace PS_AGONY_EDITOR
 			if (ImGui::IsKeyPressed(ImGuiKey_1, false)) tool = Tool::Select;
 			if (ImGui::IsKeyPressed(ImGuiKey_2, false)) tool = Tool::Create;
 			if (ImGui::IsKeyPressed(ImGuiKey_3, false)) tool = Tool::Constraint;
+			if (ImGui::IsKeyPressed(ImGuiKey_4, false)) tool = Tool::Materials;
 			if (ImGui::IsKeyPressed(ImGuiKey_G, false)) snapEnabled = !snapEnabled;
 			if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && dragMode == DragMode::None) deleteSelected(sim);
 			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && tool == Tool::Select) selected.clear();
@@ -145,6 +146,7 @@ namespace PS_AGONY_EDITOR
 		case Tool::Select: updateSelect(sim, overUI, deltaTime); break;
 		case Tool::Create: updateCreate(sim, overUI); break;
 		case Tool::Constraint: updateConstraint(sim, overUI); break;
+		case Tool::Materials: break;
 		}
 	}
 

@@ -18,7 +18,7 @@ namespace PS_AGONY_EDITOR
 	class Editor
 	{
 	public:
-		enum class Tool : uint8_t { Select, Create, Constraint };
+		enum class Tool : uint8_t { Select, Create, Constraint, Materials };
 		enum class CreateShape : uint8_t { Circle, Box, Capsule, RegularPolygon, FreePolygon };
 		enum class DragMode : uint8_t { None, Holder };
 
@@ -82,7 +82,7 @@ namespace PS_AGONY_EDITOR
 		// Defaults for new constraints. Kind index == ConstraintType.
 		float springStiffness = 100.0f;
 		float springDamping = 1.0f;
-		float jointStiffness = 0.0f;
+		float jointStiffness = 50.0f;
 		float jointDamping = 0.0f;
 		float motorSpeed = 1.0f;
 		float motorTorque = 100.0f;
@@ -133,7 +133,10 @@ namespace PS_AGONY_EDITOR
 		void drawConstraintEditor(Simulation& sim, ConstraintType type, Handle h);
 
 		void drawToolbar(Simulation& sim);
-		void drawCreatePanel();
+		void drawCreatePanel(Simulation& sim);
+		void drawMaterials(Simulation& sim);
+		// Combo over alive materials. Returns true when the selection changed.
+		bool materialCombo(Simulation& sim, const char* label, int& materialIndex);
 		void drawInspector(Simulation& sim);
 		void drawConstraintPanel(Simulation& sim);
 		void drawOverlay(Simulation& sim);

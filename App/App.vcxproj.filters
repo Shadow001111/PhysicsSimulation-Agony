@@ -72,6 +72,9 @@
     <ClCompile Include="Editor\Editor_UI.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Editor\Editor_Materials.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\thirdparty\imgui\imconfig.h">

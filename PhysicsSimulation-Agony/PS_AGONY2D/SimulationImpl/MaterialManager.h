@@ -2,6 +2,7 @@
 #include "PS_AGONY2D/Types/Material.h"
 #include "PS_AGONY2D/Types/Types.h"
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -24,21 +25,40 @@ namespace PS_AGONY2D
 			alive.push_back(1);
 		}
 
+		// Elasticity in [0, 1], frictions >= 0. fmin/fmax: safe under fp:fast.
+		static Material sanitize(Material m) noexcept
+		{
+			m.elasticity = std::fmin(std::fmax(m.elasticity, Real(0)), Real(1));
+			m.staticFriction = std::fmax(m.staticFriction, Real(0));
+			m.dynamicFriction = std::fmax(m.dynamicFriction, Real(0));
+			return m;
+		}
+
 		MaterialIndex create(const Material& material)
 		{
 			if (!freeList.empty())
 			{
 				const MaterialIndex index = freeList.back();
 				freeList.pop_back();
-				materials[index] = material;
+				materials[index] = sanitize(material);
 				alive[index] = 1;
 				return index;
 			}
 
 			const MaterialIndex index = static_cast<MaterialIndex>(materials.size());
-			materials.push_back(material);
+			materials.push_back(sanitize(material));
 			alive.push_back(1);
 			return index;
+		}
+
+		// Returns false for out-of-range and dead slots.
+		bool set(MaterialIndex index, const Material& material)
+		{
+			if (!isAlive(index))
+				return false;
+
+			materials[index] = sanitize(material);
+			return true;
 		}
 
 		// Returns false for the default material, out-of-range and already dead slots.

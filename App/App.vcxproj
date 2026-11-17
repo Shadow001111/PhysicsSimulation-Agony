@@ -247,6 +247,7 @@
     <ClCompile Include="Editor\Editor_Core.cpp" />
     <ClCompile Include="Editor\Editor_Create.cpp" />
     <ClCompile Include="Editor\Editor_Inspector.cpp" />
+    <ClCompile Include="Editor\Editor_Materials.cpp" />
     <ClCompile Include="Editor\Editor_Overlay.cpp" />
     <ClCompile Include="Editor\Editor_Select.cpp" />
     <ClCompile Include="Editor\Editor_UI.cpp" />

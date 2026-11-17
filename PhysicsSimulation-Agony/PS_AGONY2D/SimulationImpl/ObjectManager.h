@@ -73,6 +73,9 @@ namespace PS_AGONY2D
 		std::span<const Handle> getEditedStaticColliders() const noexcept { return editedStaticColliders; }
 		void clearEditedStaticColliders() noexcept { editedStaticColliders.clear(); }
 
+		// Marks the collider as edited if its body is Static (no-op otherwise), so islands resting on it wake.
+		void markColliderEdited(ObjectDenseIndex colliderIndex) { markStaticColliderEdited(colliderIndex); }
+
 		explicit ObjectManager(
 			const std::vector<Material>& materials,
 			ConstraintSystemArray& constraintSystems

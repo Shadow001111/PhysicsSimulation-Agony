@@ -159,7 +159,7 @@ namespace PS_AGONY_EDITOR
 	}
 
 	// Edits create tool parameters.
-	void Editor::drawCreatePanel()
+	void Editor::drawCreatePanel(Simulation& sim)
 	{
 		ImGui::Combo("Shape", reinterpret_cast<int*>(&shape), "Circle\0Box\0Capsule\0Regular polygon\0Free polygon\0");
 
@@ -190,8 +190,7 @@ namespace PS_AGONY_EDITOR
 		ImGui::EndDisabled();
 		ImGui::DragFloat("Rotation", &rotation, 0.02f);
 		ImGui::DragFloat("Angular velocity", &angularVelocity, 0.05f);
-		ImGui::InputInt("Material", &materialIndex);
-		materialIndex = std::max(materialIndex, 0);
+		materialCombo(sim, "Material", materialIndex);
 		ImGui::BeginDisabled(isStatic);
 		ImGui::DragFloat("Launch scale", &launchScale, 0.05f, 0.0f, 50.0f);
 		ImGui::EndDisabled();

@@ -177,7 +177,16 @@ namespace PS_AGONY2D
 		MaterialIndex createMaterial(const Material& material);
 
 		// Colliders using this material fall back to the default material (0). Returns false if not destroyable.
+		// Wakes the islands of all colliders using it.
 		bool destroyMaterial(MaterialIndex materialIndex);
+
+		// Values are clamped (elasticity [0, 1], frictions >= 0). Wakes the islands of all colliders using it.
+		// Returns false for dead or out-of-range slots.
+		bool setMaterial(MaterialIndex materialIndex, const Material& material);
+
+		size_t getMaterialCount() const noexcept { return materialManager.getMaterials().size(); }
+		bool isMaterialAlive(MaterialIndex materialIndex) const noexcept { return materialManager.isAlive(materialIndex); }
+		const Material& getMaterial(MaterialIndex materialIndex) const noexcept { return materialManager.get(materialIndex); }
 
 		// Collision callbacks. Fired at the end of a physics step, per collider side, when the impact impulse
 		// (approach speed * effective mass) reaches the collider's threshold.
@@ -228,6 +237,10 @@ namespace PS_AGONY2D
 		// Static bodies are not part of islands: islands resting on an edited static collider are woken through
 		// its saved contacts, and awake bodies touching it are kept from falling asleep this step.
 		void wakeIslandsOfEditedStatics();
+
+		// Wakes sleeping islands of bodies with a collider using the material. Static colliders using it are marked
+		// edited, so islands resting on them wake at the next flush.
+		void wakeCollidersUsingMaterial(MaterialIndex materialIndex);
 
 		void updateDebugData(Real deltaTime, uint32_t stepCount);
 

@@ -14,9 +14,10 @@ namespace PS_AGONY_EDITOR
 		drawToolbar(sim);
 		ImGui::Separator();
 
-		if (tool == Tool::Create) drawCreatePanel();
+		if (tool == Tool::Create) drawCreatePanel(sim);
 		if (tool == Tool::Constraint) drawConstraintPanel(sim);
 		if (tool == Tool::Select) drawInspector(sim);
+		if (tool == Tool::Materials) drawMaterials(sim);
 
 		if (statusTimer > 0.0f) ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "%s", status.c_str());
 		if (previewError != nullptr) ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Polygon: %s", previewError);
@@ -33,6 +34,8 @@ namespace PS_AGONY_EDITOR
 		if (ImGui::RadioButton("Create (2)", tool == Tool::Create)) tool = Tool::Create;
 		ImGui::SameLine();
 		if (ImGui::RadioButton("Constraint (3)", tool == Tool::Constraint)) tool = Tool::Constraint;
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Materials (4)", tool == Tool::Materials)) tool = Tool::Materials;
 
 		ImGui::Checkbox("Snap (G)", &snapEnabled);
 		ImGui::SameLine();
