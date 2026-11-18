@@ -39,6 +39,8 @@ namespace PS_AGONY2D
 		this->aabbMaxX.push_back(0);
 		this->aabbMaxY.push_back(0);
 
+		this->minExtent.push_back(0);
+
 		this->callbackId.push_back(0);
 		this->eventThreshold.push_back(NO_COLLISION_EVENT_THRESHOLD);
 

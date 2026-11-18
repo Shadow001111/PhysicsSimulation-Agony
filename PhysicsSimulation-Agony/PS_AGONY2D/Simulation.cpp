@@ -209,11 +209,17 @@ namespace PS_AGONY2D
             return;
         }
 
-        // Set data viewers.
+        wakeHeldBodies();
         setDataViewers();
 
-        //
-        wakeHeldBodies();
+        // Continuous collision: remember the pre-integration pose (after wakes, they reorder bodies).
+        const bool continuousCollision = simulationSettings.continuousCollisionEnabled;
+        if (continuousCollision)
+        {
+            continuousCollisionDetector.settings = simulationSettings.ccdSettings;
+            continuousCollisionDetector.snapshotPoses(objectManager.bodies, objectManager.colliders);
+        }
+
         integrateAndApplyConstraints(deltaTime);
 
         // Computing important data.
@@ -224,6 +230,27 @@ namespace PS_AGONY2D
         // Full pass only after structural changes (create/destroy/sleep/commands); otherwise dynamic bodies only.
         if (objectManager.spatialDirty) rebuildSpatialData();
         else updateDynamicSpatialData();
+
+        // Fast dynamic vs static: move tunneling bodies back to their time of impact, then refresh their AABBs.
+        if (continuousCollision)
+        {
+            const auto* staticTreePtr = broadPhaseCollisionDetector.getTree(BroadPhaseInternal::BvhTreeType::Static);
+            if (staticTreePtr) [[likely]]
+            {
+                bool const anyHit = continuousCollisionDetector.resolve(
+                    objectManager.bodies, objectManager.colliders,
+                    objectManager.circles,
+                    objectManager.boxes,
+                    objectManager.polygons,
+                    objectManager.capsules,
+                    *staticTreePtr);
+                if (anyHit)
+                {
+                    buildColliderAABBs(false);
+                    broadPhaseCollisionDetector.refitTrees(BroadPhaseInternal::BvhTreeTypeFlag::Dynamic);
+                }
+            }
+        }
 
         // Invalidate island body collision edges. 'collisionStep' will update it if collisions exist.
         islandBodyCollisionEdges = {};
@@ -821,6 +848,8 @@ namespace PS_AGONY2D
         data.solvingPlanner = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
 
         data.islandManager = islandManager.getMemoryUsage();
+
+        data.ccd = continuousCollisionDetector.getMemoryUsage();
 
         data.other =
             getVectorMemoryUsage(broadPhaseColliders) +

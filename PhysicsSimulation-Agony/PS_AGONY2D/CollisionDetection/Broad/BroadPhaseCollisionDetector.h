@@ -168,6 +168,16 @@ namespace PS_AGONY2D
 		template <typename ShapeQuery>
 		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, BroadPhaseInternal::BvhTreeTypeFlag flags, std::vector<AABB>& outAABBs) const;
 
+		// Returns nullptr if type is invalid.
+		const BroadPhaseInternal::BvhTree* getTree(BroadPhaseInternal::BvhTreeType type) const noexcept
+		{
+			if (size_t(type) < size_t(BroadPhaseInternal::BvhTreeType::COUNT)) [[likely]]
+			{
+				return &trees[size_t(type)];
+			}
+			return nullptr;
+		}
+
 		size_t getMemoryUsage() const;
 	private:
 		void updateTree(BroadPhaseInternal::BvhTree& tree, TreeUpdate updateType, IndexRange colliderRange);

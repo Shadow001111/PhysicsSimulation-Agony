@@ -79,6 +79,7 @@ namespace PS_AGONY2D
             bodyIndex, params.localOffset, params.localRotation, materialIndex, ColliderShapeType::Circle, newShapeIndex
         );
         circles.append(newCollider, radius);
+        colliders.minExtent[newCollider] = radius;
 
         return placeNewCollider(newCollider);
     }
@@ -101,7 +102,10 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newCollider = createColliderInternal(
             bodyIndex, params.localOffset, params.localRotation, materialIndex, ColliderShapeType::Box, newShapeIndex
         );
-        boxes.append(newCollider, width * Real(0.5), height * Real(0.5));
+        const Real halfWidth = width * Real(0.5);
+        const Real halfHeight = height * Real(0.5);
+        boxes.append(newCollider, halfWidth, halfHeight);
+        colliders.minExtent[newCollider] = std::fmin(halfWidth, halfHeight);
 
         return placeNewCollider(newCollider);
     }
@@ -193,6 +197,7 @@ namespace PS_AGONY2D
             bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Capsule, newShapeIndex
         );
         capsules.append(newCollider, length * Real(0.5), radius);
+        colliders.minExtent[newCollider] = radius;
 
         return placeNewCollider(newCollider);
     }
@@ -517,11 +522,13 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(polygons.getCount());
 
         PolygonGeometry geometry{ convexVertices };
+        const Real minExtent = PhysicsGeometry::calculatePolygonInRadius(geometry);
 
         const ObjectDenseIndex newCollider = createColliderInternal(
             bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Polygon, newShapeIndex
         );
         polygons.append(newCollider, std::move(geometry));
+        colliders.minExtent[newCollider] = minExtent;
 
         return placeNewCollider(newCollider);
     }
@@ -747,6 +754,7 @@ namespace PS_AGONY2D
         case T::SetCircleRadius:
             if (shapeType != ColliderShapeType::Circle) break;
             circles.radius[shapeIndex] = std::fmax(Real(0), c.a);
+            colliders.minExtent[colliderIndex] = circles.radius[shapeIndex];
             spatialDirty = true;
             break;
 
@@ -754,6 +762,7 @@ namespace PS_AGONY2D
             if (shapeType != ColliderShapeType::Box) break;
             boxes.halfWidth[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             boxes.halfHeight[shapeIndex] = std::fmax(Real(0), c.b) * Real(0.5);
+            colliders.minExtent[colliderIndex] = std::fmin(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]);
             spatialDirty = true;
             break;
 
@@ -761,12 +770,14 @@ namespace PS_AGONY2D
             if (shapeType != ColliderShapeType::Capsule) break;
             capsules.halfLength[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             capsules.radius[shapeIndex] = std::fmax(Real(0), c.b);
+            colliders.minExtent[colliderIndex] = capsules.radius[shapeIndex];
             spatialDirty = true;
             break;
 
         case T::SetPolygonGeometry:
             if (shapeType != ColliderShapeType::Polygon) break;
             polygons.geometry[shapeIndex] = std::move(pendingPolygons[c.index]);
+            colliders.minExtent[colliderIndex] = PhysicsGeometry::calculatePolygonInRadius(polygons.geometry[shapeIndex]);
             spatialDirty = true;
             break;
 

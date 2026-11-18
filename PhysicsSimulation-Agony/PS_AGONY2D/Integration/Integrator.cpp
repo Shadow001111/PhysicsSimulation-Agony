@@ -11,7 +11,7 @@ namespace PS_AGONY2D::Integrator
     using RealSimd = Ecstasy::Core::Simd<Real>;
     constexpr size_t LANES = RealSimd::lanes;
 
-    void integrateVelocities_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
+    void integrateVelocities_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings)
     {
         TRACY_SCOPE_NC("Integrate velocities (semi-implicit)", PS_AGONY2D::Profiling::Color::Red);
 
@@ -52,7 +52,7 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void integrateKinematics_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
+    void integrateKinematics_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings)
     {
         TRACY_SCOPE_NC("Integrate kinematics (semi-implicit)", PS_AGONY2D::Profiling::Color::Blue);
 
@@ -96,7 +96,7 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void integratePhase1_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
+    void integratePhase1_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings)
     {
         TRACY_SCOPE_NC("Integrate phase1 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
@@ -138,7 +138,7 @@ namespace PS_AGONY2D::Integrator
         }
     }
 
-    void integratePhase2_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
+    void integratePhase2_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings)
     {
         TRACY_SCOPE_NC("Integrate phase2 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
@@ -209,7 +209,7 @@ namespace PS_AGONY2D::Integrator
     }
 
     // TODO: Remove functions below from this file.
-    void dampAngularVelocities(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings)
+    void dampAngularVelocities(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings)
     {
         if (!(settings.angularVelocityDamping >= 0 && settings.angularVelocityDamping < 1))
         {

@@ -53,6 +53,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		bool empty() const noexcept { return nodes.empty(); }
 		size_t colliderCount() const noexcept { return colliderIndices.size(); }
 		size_t nodeCount() const noexcept { return nodes.size(); }
+		const BvhNode* nodeData() const noexcept { return nodes.data(); }
+		const ObjectDenseIndex* colliderIndexData() const noexcept { return colliderIndices.data(); }
 
 		BvhTreeView view() const noexcept;
 

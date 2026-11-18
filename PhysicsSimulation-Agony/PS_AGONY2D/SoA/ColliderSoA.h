@@ -23,6 +23,7 @@
 	F(aabbMinY, Real) \
 	F(aabbMaxX, Real) \
 	F(aabbMaxY, Real) \
+	F(minExtent, Real) \
 	F(callbackId, CollisionCallbackIndex) \
 	F(eventThreshold, Real)
 

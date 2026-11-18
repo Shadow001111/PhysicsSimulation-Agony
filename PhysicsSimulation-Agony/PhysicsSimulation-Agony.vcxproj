@@ -257,6 +257,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\tracy\public\TracyClient.cpp" />
+    <ClCompile Include="PS_AGONY2D\CollisionDetection\CCD\ContinuousCollisionDetector.cpp" />
     <ClCompile Include="PS_AGONY2D\IslandManager.cpp" />
     <ClCompile Include="PS_AGONY2D\SimulationImpl\ColliderAABBBuilder.cpp" />
     <ClCompile Include="PS_AGONY2D\SimulationImpl\LeftOutFunctions.cpp" />
@@ -305,6 +306,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PS_AGONY2D\CollisionDetection\Narrow\ContactCache.h" />
+    <ClInclude Include="PS_AGONY2D\CollisionDetection\CCD\ContinuousCollisionDetector.h" />
     <ClInclude Include="PS_AGONY2D\GroupRanges.h" />
     <ClInclude Include="PS_AGONY2D\IslandManager.h" />
     <ClInclude Include="PS_AGONY2D\SimulationAPIs\ConstraintAPI.h" />

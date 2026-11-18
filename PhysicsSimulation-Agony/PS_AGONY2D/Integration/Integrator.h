@@ -11,20 +11,20 @@ namespace PS_AGONY2D::Integrator
 		COUNT
 	};
 
-	struct IntegrationSettings
+	struct Settings
 	{
 		Vec2 gravity{ 0.0, -9.81 };
 		Real angularVelocityDamping = 1.0; // Per second.
 		IntegratorType integratorType = IntegratorType::VelocityVerlet;
 	};
 
-	void integrateVelocities_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings);
-	void integrateKinematics_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings);
+	void integrateVelocities_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings);
+	void integrateKinematics_SemiImplicit(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings);
 
-	void integratePhase1_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings);
-	void integratePhase2_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings);
+	void integratePhase1_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings);
+	void integratePhase2_VelocityVerlet(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings);
 
-	void dampAngularVelocities(BodySoA& bodies, IndexRange range, Real deltaTime, const IntegrationSettings& settings);
+	void dampAngularVelocities(BodySoA& bodies, IndexRange range, Real deltaTime, const Settings& settings);
 
 	void computeRotationCosSin(BodySoA& bodies, IndexRange range);
 

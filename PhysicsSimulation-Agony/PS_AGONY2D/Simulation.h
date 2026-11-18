@@ -7,6 +7,7 @@
 
 #include "CollisionDetection/Broad/BroadPhaseCollisionDetector.h"
 #include "CollisionDetection/Narrow/NarrowPhaseCollisionDetector.h"
+#include "CollisionDetection/CCD/ContinuousCollisionDetector.h"
 
 #include "Solving/ConstraintScheduler.h"
 #include "Solving/BodyCollisionSolver.h"
@@ -62,6 +63,8 @@ namespace PS_AGONY2D
 
 				size_t islandManager = 0;
 
+				size_t ccd = 0;
+
 				size_t other = 0;
 			};
 
@@ -90,7 +93,11 @@ namespace PS_AGONY2D
 			bool collisionEventsEnabled = true;
 
 			// Integration.
-			Integrator::IntegrationSettings integratorSettings;
+			Integrator::Settings integratorSettings;
+
+			// Continuous collision (fast dynamic vs static). Zero cost when disabled.
+			bool continuousCollisionEnabled = true;
+			ContinuousCollisionDetector::Settings ccdSettings;
 
 			// Sleep.
 			Real linearSpeedSleepThreshold = 0.1f;
@@ -129,6 +136,7 @@ namespace PS_AGONY2D
 		// Phases.
 		BroadPhaseCollisionDetector broadPhaseCollisionDetector;
 		NarrowPhaseCollisionDetector narrowPhaseCollisionDetector;
+		ContinuousCollisionDetector continuousCollisionDetector;
 
 		// Solvers.
 		BodyCollisionSolver bodyCollisionSolver;

@@ -19,6 +19,8 @@
 #include <thread>
 #include <sstream>
 #include <format>
+#include <string_view>
+#include <cstdio>
 
 static std::string formatSizeBinary(size_t value)
 {
@@ -48,6 +50,340 @@ struct DebugData
     PS_AGONY2D::Simulation::DebugData simulationDebugData;
 };
 
+static void helpMarker(const char* text)
+{
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", text);
+    }
+}
+
+static bool sliderReal(const char* label, PS_AGONY2D::Real& value, float min, float max, const char* format)
+{
+    float v = static_cast<float>(value);
+    if (ImGui::SliderFloat(label, &v, min, max, format))
+    {
+        value = static_cast<PS_AGONY2D::Real>(v);
+        return true;
+    }
+    return false;
+}
+
+template<typename Color>
+static void colorToggle(const char* label, bool& value, const char* colorId, Color& color)
+{
+    ImGui::Checkbox(label, &value);
+    if (value)
+    {
+        ImGui::SameLine(160.0f);
+        ImGui::ColorEdit3(colorId, &color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
+    }
+}
+
+static void renderPerformancePanel(PS_AGONY2D::Simulation& simulation, const DebugData& debugData)
+{
+    const auto& simulationData = debugData.simulationDebugData;
+
+    const float smoothedDelta = debugData.smoothedDelta;
+    const float FPS = smoothedDelta > 0.0f ? 1.0f / smoothedDelta : 0.0f;
+    ImGui::Text("FPS: %.1f (%.1f ms)", FPS, smoothedDelta * 1000.0f);
+
+    float upsPercent = (simulationData.updatesSupposedToHappen > 0)
+        ? (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen
+        : 0.0f;
+    upsPercent = std::fmin(upsPercent, 1.0f);
+
+    const bool lagging = upsPercent < 0.8f;
+    if (lagging)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+    }
+    ImGui::Text("UPS: %u / %u (%.1f%%)",
+        simulationData.updatesHappened,
+        simulationData.updatesSupposedToHappen,
+        upsPercent * 100.0f);
+    if (lagging)
+    {
+        ImGui::PopStyleColor();
+    }
+
+    bool paused = simulation.isPaused();
+    if (ImGui::Checkbox("Pause Simulation (P)", &paused))
+    {
+        simulation.setPause(paused);
+    }
+}
+
+static void renderTimingSettings(PS_AGONY2D::Simulation::SimulationSettings& settings)
+{
+    ImGui::SeparatorText("Timing");
+
+    sliderReal("Time scale", settings.clockSettings.timeScale, 0.0f, 1.0f, "%.3f");
+
+    float hz = static_cast<float>(1.0 / settings.clockSettings.updateInterval);
+    if (ImGui::SliderFloat("Update rate", &hz, 10.0f, 1000.0f, "%.0f Hz"))
+    {
+        settings.clockSettings.updateInterval = static_cast<PS_AGONY2D::Real>(1.0f / hz);
+    }
+}
+
+static void renderSolverSettings(PS_AGONY2D::Simulation& simulation, PS_AGONY2D::Simulation::SimulationSettings& settings)
+{
+    ImGui::SeparatorText("Solver");
+
+    int velIter = static_cast<int>(settings.collisionVelocitySolvingIterations);
+    if (ImGui::SliderInt("Velocity iterations", &velIter, 1, 50))
+    {
+        settings.collisionVelocitySolvingIterations = static_cast<uint32_t>(velIter);
+    }
+
+    int posIter = static_cast<int>(settings.collisionPositionSolvingIterations);
+    if (ImGui::SliderInt("Position iterations", &posIter, 1, 50))
+    {
+        settings.collisionPositionSolvingIterations = static_cast<uint32_t>(posIter);
+    }
+
+    for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+    {
+        auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
+        int iters = static_cast<int>(system.iterations);
+
+        const std::string_view name(system.getName());
+        char label[64];
+        std::snprintf(label, sizeof(label), "%.*s iterations", static_cast<int>(name.size()), name.data());
+
+        if (ImGui::SliderInt(label, &iters, 1, 50))
+        {
+            system.iterations = static_cast<uint32_t>(iters);
+        }
+    }
+}
+
+template<typename CCDSettings>
+static void renderCCDSettings(CCDSettings& ccd)
+{
+    ImGui::Indent();
+
+    sliderReal("Fast factor", ccd.fastFactor, 0.1f, 10.0f, "%.2f");
+    helpMarker("Body is 'fast' when displacement > factor * min extent.");
+
+    sliderReal("Core fraction", ccd.coreFraction, 0.05f, 1.0f, "%.2f");
+    helpMarker("Core radius / min extent. Below 1, sliding on a surface never 'hits'.");
+
+    ImGui::Unindent();
+}
+
+static void renderCollisionSettings(PS_AGONY2D::Simulation::SimulationSettings& settings)
+{
+    ImGui::SeparatorText("Collision");
+
+    ImGui::Checkbox("Collision events", &settings.collisionEventsEnabled);
+    ImGui::Checkbox("CCD", &settings.continuousCollisionEnabled);
+    if (settings.continuousCollisionEnabled)
+    {
+        renderCCDSettings(settings.ccdSettings);
+    }
+}
+
+static void renderIntegratorSettings(PS_AGONY2D::Simulation::SimulationSettings& settings)
+{
+    ImGui::SeparatorText("Integrator");
+
+    const auto current = settings.integratorSettings.integratorType;
+    if (ImGui::BeginCombo("Type", PS_AGONY2D::Integrator::integratorTypeToString(current)))
+    {
+        for (int i = 0; i < static_cast<int>(PS_AGONY2D::Integrator::IntegratorType::COUNT); i++)
+        {
+            const auto value = PS_AGONY2D::Integrator::IntegratorType(i);
+            const bool isSelected = (current == value);
+
+            if (ImGui::Selectable(PS_AGONY2D::Integrator::integratorTypeToString(value), isSelected))
+            {
+                settings.integratorSettings.integratorType = value;
+            }
+            if (isSelected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
+
+static void renderSimulationSettings(PS_AGONY2D::Simulation& simulation)
+{
+    auto& settings = simulation.getSimulationSettings();
+
+    renderTimingSettings(settings);
+    renderSolverSettings(simulation, settings);
+    renderCollisionSettings(settings);
+    renderIntegratorSettings(settings);
+}
+
+static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const DebugData& debugData)
+{
+    auto& settings = simulation.getSimulationSettings();
+    const auto& simulationData = debugData.simulationDebugData;
+
+    ImGui::Checkbox("Track body collision solver errors", &settings.trackBodyCollisionSolverConstraintErrors);
+    if (settings.trackBodyCollisionSolverConstraintErrors)
+    {
+        ImGui::Text("Velocity E: %.4f", simulationData.bodyCollisionSolverVelocityError);
+        ImGui::Text("Position E: %.4f", simulationData.bodyCollisionSolverPositionError);
+    }
+    else
+    {
+        ImGui::TextDisabled("Disabled.");
+    }
+}
+
+static void renderRenderOptions(PS_AGONY_RENDER::RenderOptions& renderOptions)
+{
+    ImGui::SeparatorText("Colliders");
+    ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
+    ImGui::Checkbox("Contact points", &renderOptions.contactPoints);
+    colorToggle("Outline colliders", renderOptions.outlineColliders, "##OutlineColor", renderOptions.outlineColor);
+
+    ImGui::SeparatorText("Broad-phase AABBs");
+    colorToggle("Dynamic", renderOptions.broadPhaseDynamicAABBs, "##DynamicAABBColor", renderOptions.broadPhaseDynamicAABBColor);
+    colorToggle("Static", renderOptions.broadPhaseStaticAABBs, "##StaticAABBColor", renderOptions.broadPhaseStaticAABBColor);
+    colorToggle("Sleeping", renderOptions.broadPhaseSleepingAABBs, "##SleepingAABBColor", renderOptions.broadPhaseSleepingAABBColor);
+}
+
+struct MemoryTotals
+{
+    size_t shapes = 0;
+    size_t constraints = 0;
+    size_t solvers = 0;
+    size_t total = 0;
+};
+
+static MemoryTotals computeMemoryTotals(PS_AGONY2D::Simulation& simulation, const auto& memory)
+{
+    MemoryTotals t;
+
+    t.shapes = memory.circleData + memory.boxData + memory.polygonData + memory.capsuleData;
+    t.solvers = memory.bodyCollisionSolver;
+
+    for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+    {
+        t.constraints += memory.constraintData[i];
+        t.solvers += simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i)).getSolverMemoryUsage();
+    }
+
+    t.total =
+        memory.bodyData +
+        memory.colliderData +
+        t.shapes +
+        memory.materialData +
+        memory.collisionCallback +
+        memory.broadPhaseDetector +
+        memory.narrowPhaseDetector +
+        t.solvers +
+        t.constraints +
+        memory.solvingPlanner +
+        memory.islandManager +
+        memory.ccd +
+        memory.other;
+
+    return t;
+}
+
+static void addMemoryRow(const char* name, size_t bytes, size_t total, bool indent = false)
+{
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    if (indent)
+    {
+        ImGui::Indent(12.0f);
+        ImGui::TextDisabled("* %s", name);
+        ImGui::Unindent(12.0f);
+    }
+    else
+    {
+        ImGui::TextUnformatted(name);
+    }
+
+    ImGui::TableSetColumnIndex(1);
+    ImGui::TextUnformatted(formatSizeBinary(bytes).c_str());
+
+    ImGui::TableSetColumnIndex(2);
+    const double percentage = total > 0 ? (static_cast<double>(bytes) / static_cast<double>(total)) * 100.0 : 0.0;
+    ImGui::Text("%.1f%%", percentage);
+}
+
+static void renderMemoryMetrics(
+    PS_AGONY2D::Simulation& simulation,
+    PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
+    const DebugData& debugData
+)
+{
+    ImGui::SeparatorText("Renderer");
+    ImGui::Text("RAM:  %s", formatSizeBinary(simulationRenderer.getMemoryUsage()).c_str());
+    ImGui::Text("VRAM: %s", formatSizeBinary(simulationRenderer.getVideoMemoryUsage()).c_str());
+
+    ImGui::SeparatorText("Simulation");
+
+    const auto& memory = debugData.simulationDebugData.memoryUsage;
+    const MemoryTotals totals = computeMemoryTotals(simulation, memory);
+    ImGui::Text("Total: %s", formatSizeBinary(totals.total).c_str());
+
+    if (!ImGui::BeginTable("MemoryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+    {
+        return;
+    }
+
+    ImGui::TableSetupColumn("Component", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Allocated Size", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+    ImGui::TableSetupColumn("% Total", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+    ImGui::TableHeadersRow();
+
+    const size_t total = totals.total;
+
+    addMemoryRow("Bodies", memory.bodyData, total);
+    addMemoryRow("Colliders", memory.colliderData, total);
+
+    addMemoryRow("Shapes", totals.shapes, total);
+    addMemoryRow("Circles", memory.circleData, total, true);
+    addMemoryRow("Boxes", memory.boxData, total, true);
+    addMemoryRow("Polygons", memory.polygonData, total, true);
+    addMemoryRow("Capsules", memory.capsuleData, total, true);
+
+    addMemoryRow("Constraints", totals.constraints, total);
+    for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+    {
+        const std::string_view name(simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i)).getName());
+        char label[64];
+        std::snprintf(label, sizeof(label), "%.*ss", static_cast<int>(name.size()), name.data());
+        addMemoryRow(label, memory.constraintData[i], total, true);
+    }
+
+    addMemoryRow("Broad Phase Detector", memory.broadPhaseDetector, total);
+    addMemoryRow("Narrow Phase Detector", memory.narrowPhaseDetector, total);
+    addMemoryRow("Materials", memory.materialData, total);
+    addMemoryRow("Collision Callbacks", memory.collisionCallback, total);
+
+    addMemoryRow("Solvers", totals.solvers, total);
+    addMemoryRow("Body Collision Solver", memory.bodyCollisionSolver, total, true);
+    for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+    {
+        const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
+        const std::string_view name(system.getName());
+        char label[64];
+        std::snprintf(label, sizeof(label), "%.*s Solver", static_cast<int>(name.size()), name.data());
+        addMemoryRow(label, system.getSolverMemoryUsage(), total, true);
+    }
+
+    addMemoryRow("Solving Planner", memory.solvingPlanner, total);
+    addMemoryRow("Island manager", memory.islandManager, total);
+    addMemoryRow("CCD", memory.ccd, total);
+    addMemoryRow("Other", memory.other, total);
+
+    ImGui::EndTable();
+}
+
 static void renderGUI(
     PS_AGONY2D::Simulation& simulation,
     PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
@@ -55,273 +391,38 @@ static void renderGUI(
     const DebugData& debugData
 )
 {
-    ImGui::Begin("Simulation Diagnostics");
-
-    const auto& simulationData = debugData.simulationDebugData;
-
-    // App performance.
-    if (ImGui::CollapsingHeader("Application Performance", ImGuiTreeNodeFlags_DefaultOpen))
+    if (!ImGui::Begin("Simulation Diagnostics"))
     {
-        const float smoothedDelta = debugData.smoothedDelta;
-        const float FPS = smoothedDelta > 0.0f ? 1.0f / smoothedDelta : 0.0f;
-        ImGui::Text("FPS: %.1f (%.1f ms)", FPS, smoothedDelta * 1000.0f);
-
-        float upsPercent = (simulationData.updatesSupposedToHappen > 0)
-            ? (float)simulationData.updatesHappened / (float)simulationData.updatesSupposedToHappen
-            : 0.0f;
-        upsPercent = std::fmin(upsPercent, 1.0f);
-
-        ImGui::Text("UPS: %u / %u (%.1f%%)",
-            simulationData.updatesHappened,
-            simulationData.updatesSupposedToHappen,
-            upsPercent * 100.0f);
-
-        ImGui::Separator();
-        bool paused = simulation.isPaused();
-        if (ImGui::Checkbox("Pause Simulation (P)", &paused))
-            simulation.setPause(paused);
+        ImGui::End();
+        return;
     }
 
-    // Simulation settings.
-    auto& settings = simulation.getSimulationSettings();
-    if (ImGui::CollapsingHeader("Simulation Settings", ImGuiTreeNodeFlags_DefaultOpen))
+    renderPerformancePanel(simulation, debugData);
+    ImGui::Spacing();
+
+    if (ImGui::BeginTabBar("##MainTabs"))
     {
-        float timeScale = static_cast<float>(settings.clockSettings.timeScale);
-        if (ImGui::SliderFloat("Time scale", &timeScale, 0.0f, 1.0f, "%.3f"))
+        if (ImGui::BeginTabItem("Simulation"))
         {
-            settings.clockSettings.timeScale = static_cast<PS_AGONY2D::Real>(timeScale);
+            renderSimulationSettings(simulation);
+            ImGui::EndTabItem();
         }
-
-        float hz = static_cast<float>(1.0 / settings.clockSettings.updateInterval);
-        if (ImGui::SliderFloat("Update Rate (Hz)", &hz, 10.0f, 1000.0f, "%.0f Hz"))
+        if (ImGui::BeginTabItem("Diagnostics"))
         {
-            settings.clockSettings.updateInterval = static_cast<PS_AGONY2D::Real>(1.0f / hz);
+            renderPhysicsDiagnostics(simulation, debugData);
+            ImGui::EndTabItem();
         }
-
-        int velIter = static_cast<int>(settings.collisionVelocitySolvingIterations);
-        if (ImGui::SliderInt("Velocity Iterations", &velIter, 1, 50))
+        if (ImGui::BeginTabItem("Rendering"))
         {
-            settings.collisionVelocitySolvingIterations = static_cast<uint32_t>(velIter);
+            renderRenderOptions(renderOptions);
+            ImGui::EndTabItem();
         }
-
-        int posIter = static_cast<int>(settings.collisionPositionSolvingIterations);
-        if (ImGui::SliderInt("Position Iterations", &posIter, 1, 50))
+        if (ImGui::BeginTabItem("Memory"))
         {
-            settings.collisionPositionSolvingIterations = static_cast<uint32_t>(posIter);
+            renderMemoryMetrics(simulation, simulationRenderer, debugData);
+            ImGui::EndTabItem();
         }
-
-        for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
-        {
-            auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
-            int iters = int(system.iterations);
-
-            const std::string label = std::string(system.getName()) + " Iterations";
-            if (ImGui::SliderInt(label.c_str(), &iters, 1, 50))
-            {
-                system.iterations = static_cast<uint32_t>(iters);
-            }
-        }
-
-        ImGui::Checkbox("Collision Events", &settings.collisionEventsEnabled);
-
-        auto integratorType = settings.integratorSettings.integratorType;
-        const char* previewValue = PS_AGONY2D::Integrator::integratorTypeToString(integratorType);
-        if (ImGui::BeginCombo("Integrator type", previewValue))
-        {
-            // Loop through all values of the enum.
-            for (int i = 0; i < static_cast<int>(PS_AGONY2D::Integrator::IntegratorType::COUNT); i++)
-            {
-                auto enumValue = PS_AGONY2D::Integrator::IntegratorType(i);
-                bool isSelected = (integratorType == enumValue);
-
-                // Draw the selectable item.
-                if (ImGui::Selectable(PS_AGONY2D::Integrator::integratorTypeToString(enumValue), isSelected))
-                {
-                    integratorType = enumValue;
-                }
-            }
-
-            ImGui::EndCombo();
-        }
-        settings.integratorSettings.integratorType = integratorType;
-    }
-
-    // Physics diagnostics.
-    if (ImGui::CollapsingHeader("Physics Diagnostics", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Track body collision solver constraint errors", &settings.trackBodyCollisionSolverConstraintErrors);
-        if (settings.trackBodyCollisionSolverConstraintErrors)
-        {
-            ImGui::Text("Velocity E: %.4f", simulationData.bodyCollisionSolverVelocityError);
-            ImGui::Text("Position E: %.4f", simulationData.bodyCollisionSolverPositionError);
-        }
-        else
-        {
-            ImGui::TextDisabled("Disabled.");
-        }
-    }
-
-    // Render options.
-    if (ImGui::CollapsingHeader("Render Options", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
-
-        ImGui::Text("Broad-phase AABBs:");
-        ImGui::Indent();
-        {
-            ImGui::Checkbox("Dynamic ", &renderOptions.broadPhaseDynamicAABBs);
-            if (renderOptions.broadPhaseDynamicAABBs)
-            {
-                ImGui::SameLine();
-                ImGui::ColorEdit3("##DynamicAABBColor", &renderOptions.broadPhaseDynamicAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
-            }
-
-            ImGui::Checkbox("Static  ", &renderOptions.broadPhaseStaticAABBs);
-            if (renderOptions.broadPhaseStaticAABBs)
-            {
-                ImGui::SameLine();
-                ImGui::ColorEdit3("##StaticAABBColor", &renderOptions.broadPhaseStaticAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
-            }
-
-            ImGui::Checkbox("Sleeping", &renderOptions.broadPhaseSleepingAABBs);
-            if (renderOptions.broadPhaseSleepingAABBs)
-            {
-                ImGui::SameLine();
-                ImGui::ColorEdit3("##SleepingAABBColor", &renderOptions.broadPhaseSleepingAABBColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
-            }
-        }
-        ImGui::Unindent();
-
-        ImGui::Checkbox("Contact Points", &renderOptions.contactPoints);
-
-        ImGui::Checkbox("Outline Colliders", &renderOptions.outlineColliders);
-        if (renderOptions.outlineColliders)
-        {
-            ImGui::SameLine();
-            ImGui::ColorEdit3("##OutlineColor", &renderOptions.outlineColor.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip);
-        }
-    }
-
-    // Renderer memory hierarchy.
-    if (ImGui::CollapsingHeader("Renderer Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::Text("RAM:  %s", formatSizeBinary(simulationRenderer.getMemoryUsage()).c_str());
-        ImGui::Text("VRAM: %s", formatSizeBinary(simulationRenderer.getVideoMemoryUsage()).c_str());
-    }
-
-    // Simulation memory hierarchy.
-    if (ImGui::CollapsingHeader("Simulation Memory Metrics", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        const auto& memory = simulationData.memoryUsage;
-
-        const size_t shapeTotal =
-            memory.circleData +
-            memory.boxData +
-            memory.polygonData +
-            memory.capsuleData;
-
-        size_t constraintsTotal = 0;
-        size_t solversTotal = memory.bodyCollisionSolver;
-
-        for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
-        {
-            constraintsTotal += memory.constraintData[i];
-
-            solversTotal += simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i)).getSolverMemoryUsage();
-        }
-
-        const size_t totalMemory =
-            memory.bodyData +
-            memory.colliderData +
-            shapeTotal +
-            memory.materialData +
-            memory.collisionCallback +
-            memory.broadPhaseDetector +
-            memory.narrowPhaseDetector +
-            solversTotal +
-            constraintsTotal +
-            memory.solvingPlanner +
-            memory.islandManager +
-            memory.other;
-
-        ImGui::Text("Total: %s", formatSizeBinary(totalMemory).c_str());
-        ImGui::Separator();
-
-        if (ImGui::BeginTable("MemoryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
-        {
-            ImGui::TableSetupColumn("Component", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Allocated Size", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-            ImGui::TableSetupColumn("% Total", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-            ImGui::TableHeadersRow();
-
-            // Helper to quickly format table rows cleanly with support for hierarchical indenting.
-            auto addMemoryRow = [&](const char* name, size_t bytes, bool indent = false) {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                if (indent)
-                {
-                    ImGui::Indent(12.0f);
-                    ImGui::TextDisabled("* %s", name);
-                    ImGui::Unindent(12.0f);
-                }
-                else
-                {
-                    ImGui::TextUnformatted(name);
-                }
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextUnformatted(formatSizeBinary(bytes).c_str());
-
-                ImGui::TableSetColumnIndex(2);
-                double percentage = totalMemory > 0 ? (static_cast<double>(bytes) / totalMemory) * 100.0 : 0.0;
-                ImGui::Text("%.1f%%", percentage);
-                };
-
-            addMemoryRow("Bodies", memory.bodyData);
-            addMemoryRow("Colliders", memory.colliderData);
-
-            addMemoryRow("Shapes", shapeTotal);
-            addMemoryRow("Circles", memory.circleData, true);
-            addMemoryRow("Boxes", memory.boxData, true);
-            addMemoryRow("Polygons", memory.polygonData, true);
-            addMemoryRow("Capsules", memory.capsuleData, true);
-
-            {
-                addMemoryRow("Constraints", constraintsTotal);
-                for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
-                {
-                    const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
-                    const std::string label = std::string(system.getName()) + "s";
-
-                    addMemoryRow(label.c_str(), memory.constraintData[i], true);
-                }
-            }
-
-            addMemoryRow("Broad Phase Detector", memory.broadPhaseDetector);
-            addMemoryRow("Narrow Phase Detector", memory.narrowPhaseDetector);
-            addMemoryRow("Materials", memory.materialData);
-            addMemoryRow("Collision Callbacks", memory.collisionCallback);
-
-            {
-                addMemoryRow("Solvers", solversTotal);
-                addMemoryRow("Body Collision Solver", memory.bodyCollisionSolver, true);
-                for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
-                {
-                    const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
-                    const std::string label = std::string(system.getName()) + " Solver";
-
-                    addMemoryRow(label.c_str(), system.getSolverMemoryUsage(), true);
-                }
-            }
-
-            addMemoryRow("Solving Planner", memory.solvingPlanner);
-
-            addMemoryRow("Island manager", memory.islandManager);
-
-            addMemoryRow("Other", memory.other);
-
-            ImGui::EndTable();
-        }
+        ImGui::EndTabBar();
     }
 
     ImGui::End();
@@ -464,7 +565,7 @@ static int gameFunc()
 
     PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 1);
+    loadScene(simulation, 0);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;

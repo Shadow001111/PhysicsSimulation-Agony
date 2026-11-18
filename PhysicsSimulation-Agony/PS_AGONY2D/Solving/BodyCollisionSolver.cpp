@@ -432,8 +432,6 @@ namespace PS_AGONY2D
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
-		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		// Main loop.
 		const size_t collisionCount = collisionDataSpan.size();
@@ -510,8 +508,6 @@ namespace PS_AGONY2D
 		Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
 		Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
-		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 
 		const size_t collisionCount = collisionDataSpan.size();
 		for (size_t c = 0; c < collisionCount; c++)

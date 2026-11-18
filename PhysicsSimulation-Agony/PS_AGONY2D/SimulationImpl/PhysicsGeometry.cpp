@@ -166,6 +166,20 @@ namespace PS_AGONY2D::PhysicsGeometry
         return std::fmax(Real(0), twiceArea * Real(0.5));
     }
 
+    Real calculatePolygonInRadius(const PolygonGeometry& geometry)
+    {
+        const Vec2* vertices = geometry.vertices();
+        const Vec2* normals = geometry.normals();
+        const size_t count = geometry.size();
+
+        Real inRadius = std::numeric_limits<Real>::max();
+        for (size_t i = 0; i < count; i++)
+        {
+            inRadius = std::fmin(inRadius, glm::dot(normals[i], vertices[i]));
+        }
+        return std::fmax(inRadius, Real(0));
+    }
+
     std::optional<std::vector<Vec2>> preparePolygonOutline(std::span<const Vec2> vertices)
     {
         std::vector<Vec2> out = filterDuplicateVertices(vertices);
