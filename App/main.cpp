@@ -565,7 +565,7 @@ static int gameFunc()
 
     PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 0);
+    loadScene(simulation, 6);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;

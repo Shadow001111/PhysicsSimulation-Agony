@@ -34,9 +34,16 @@ namespace PS_AGONY2D
 		PolygonGeometry(PolygonGeometry&&) = default;
 		PolygonGeometry& operator=(PolygonGeometry&&) = default;
 
+		Vec2* vertices() noexcept { return dataPtr.get(); }
+		Vec2* normals() noexcept { return dataPtr.get() + verticesCount; }
+
 		const Vec2* vertices() const noexcept { return dataPtr.get(); }
 		const Vec2* normals() const noexcept { return dataPtr.get() + verticesCount; }
+
 		size_t size() const noexcept { return verticesCount; }
+
+		Vec2* begin() noexcept { return vertices(); }
+		Vec2* end() noexcept { return vertices() + verticesCount; }
 
 		const Vec2* begin() const noexcept { return vertices(); }
 		const Vec2* end() const noexcept { return vertices() + verticesCount; }

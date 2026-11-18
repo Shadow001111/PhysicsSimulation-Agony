@@ -1290,6 +1290,168 @@ static void load_CollisionCallbackTest(PS_AGONY2D::Simulation& simulation)
     spawnSplitCircle(context, simulation, { 0.0f, 8.0f }, { 0.0f, 0.0f }, startRadius);
 }
 
+void load_CCDPerfTest(
+    PS_AGONY2D::Simulation& simulation,
+    Ecstasy::Core::Random::Generator& randomGenerator,
+    const int totalBodies
+)
+{
+    auto& objects = simulation.objects();
+
+    PS_AGONY2D::Material ccdMaterial = {
+        .elasticity = 1.0f,
+        .staticFriction = 0.0f,
+        .dynamicFriction = 0.0f
+    };
+    PS_AGONY2D::MaterialIndex materialIndex = simulation.createMaterial(ccdMaterial);
+
+    const float bodySize = 0.6f;
+    const float cellWidth = bodySize + 0.2f;
+    const float cellHeight = bodySize + 0.4f;
+    const float floorThickness = 0.1f;
+    const float barrierThickness = 0.05f;
+
+    const float innerWidth = totalBodies * cellWidth + (totalBodies + 1) * barrierThickness;
+    const float innerHalfWidth = innerWidth * 0.5f;
+    const float innerHeight = cellHeight;
+    const float innerHalfHeight = innerHeight * 0.5f;
+
+    objects.createBox({
+        .base.position = { 0.0f, -floorThickness * 0.5f },
+        .base.mass = 0,
+        .base.materialIndex = materialIndex,
+        .size = { innerWidth, floorThickness }
+        });
+
+    objects.createBox({
+        .base.position = { 0.0f, innerHeight + floorThickness * 0.5f },
+        .base.mass = 0,
+        .base.materialIndex = materialIndex,
+        .size = { innerWidth, floorThickness }
+        });
+
+    objects.createBox({
+        .base.position = { -innerHalfWidth + barrierThickness * 0.5f, innerHalfHeight },
+        .base.mass = 0,
+        .base.materialIndex = materialIndex,
+        .size = { barrierThickness, innerHeight }
+        });
+
+    objects.createBox({
+        .base.position = { innerHalfWidth - barrierThickness * 0.5f, innerHalfHeight },
+        .base.mass = 0,
+        .base.materialIndex = materialIndex,
+        .size = { barrierThickness, innerHeight }
+        });
+
+    for (int i = 0; i <= totalBodies; i++)
+    {
+        const float x = -innerHalfWidth + barrierThickness * 0.5f + i * (cellWidth + barrierThickness);
+        objects.createBox({
+            .base.position = { x, innerHalfHeight },
+            .base.mass = 0,
+            .base.materialIndex = materialIndex,
+            .size = { barrierThickness, innerHeight }
+            });
+    }
+
+    constexpr int outerLayerCount = 3;
+    for (int l = 1; l <= outerLayerCount; l++)
+    {
+        const float expansion = l * bodySize;
+        const float layerWidth = innerWidth + expansion * 2.0f;
+        const float layerHeight = innerHeight + expansion * 2.0f;
+        const float layerHalfWidth = layerWidth * 0.5f;
+        const float layerCenterY = innerHalfHeight;
+
+        objects.createBox({
+            .base.position = { 0.0f, -expansion - floorThickness * 0.5f },
+            .base.mass = 0,
+            .base.materialIndex = materialIndex,
+            .size = { layerWidth, floorThickness }
+            });
+
+        objects.createBox({
+            .base.position = { 0.0f, innerHeight + expansion + floorThickness * 0.5f },
+            .base.mass = 0,
+            .base.materialIndex = materialIndex,
+            .size = { layerWidth, floorThickness }
+            });
+
+        objects.createBox({
+            .base.position = { -layerHalfWidth + barrierThickness * 0.5f, layerCenterY },
+            .base.mass = 0,
+            .base.materialIndex = materialIndex,
+            .size = { barrierThickness, layerHeight }
+            });
+
+        objects.createBox({
+            .base.position = { layerHalfWidth - barrierThickness * 0.5f, layerCenterY },
+            .base.mass = 0,
+            .base.materialIndex = materialIndex,
+            .size = { barrierThickness, layerHeight }
+            });
+    }
+
+    const PS_AGONY2D::Vec2 initialVelocity = { 0.0f, 50.0f };
+
+    for (int i = 0; i < totalBodies; i++)
+    {
+        const float cellCenterX = -innerHalfWidth + barrierThickness + i * (cellWidth + barrierThickness) + cellWidth * 0.5f;
+        const float cellCenterY = innerHalfHeight;
+        const int type = i % 4;
+
+        if (type == 0)
+        {
+            const float radius = bodySize * 0.35f;
+            objects.createCircle({
+                .base.position = { cellCenterX, cellCenterY },
+                .base.velocity = initialVelocity,
+                .base.mass = 3.14159f * radius * radius,
+                .base.materialIndex = materialIndex,
+                .radius = radius
+                });
+        }
+        else if (type == 1)
+        {
+            const float w = bodySize * 0.6f;
+            const float h = bodySize * 0.6f;
+            objects.createBox({
+                .base.position = { cellCenterX, cellCenterY },
+                .base.velocity = initialVelocity,
+                .base.mass = w * h,
+                .base.materialIndex = materialIndex,
+                .size = { w, h }
+                });
+        }
+        else if (type == 2)
+        {
+            const float radius = bodySize * 0.4f;
+            auto localVertices = makeConvexPolygon(randomGenerator, 4, radius);
+            objects.createPolygon({
+                .base.position = { cellCenterX, cellCenterY },
+                .base.velocity = initialVelocity,
+                .base.mass = 1.0f,
+                .base.materialIndex = materialIndex,
+                .localVertices = { localVertices.data(), localVertices.size() }
+                });
+        }
+        else
+        {
+            const float length = bodySize * 0.3f;
+            const float radius = bodySize * 0.2f;
+            objects.createCapsule({
+                .base.position = { cellCenterX, cellCenterY },
+                .base.velocity = initialVelocity,
+                .base.mass = 1.0f,
+                .base.materialIndex = materialIndex,
+                .length = length,
+                .radius = radius
+                });
+        }
+    }
+}
+
 void loadScene(PS_AGONY2D::Simulation& simulation, int scene)
 {
     Ecstasy::Core::Random::Generator randomGenerator{};
@@ -1318,5 +1480,9 @@ void loadScene(PS_AGONY2D::Simulation& simulation, int scene)
     else if (scene == 5)
     {
         load_CollisionCallbackTest(simulation);
+    }
+    else if (scene == 6)
+    {
+        load_CCDPerfTest(simulation, randomGenerator, 2500);
     }
 }

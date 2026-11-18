@@ -521,6 +521,15 @@ namespace PS_AGONY2D
     {
         const ObjectDenseIndex newShapeIndex = static_cast<ObjectDenseIndex>(polygons.getCount());
 
+        // Recenter on the piece centroid (always inside a convex piece) and move the shift into localOffset.
+        // Guarantees origin-inside, which CCD relies on (minExtent = in-radius about the origin).
+        // Collider frame -> body frame: localOffset + R(localRotation) * v.
+        const Vec2 centroid = PhysicsGeometry::calculatePolygonInertia(Real(1), convexVertices, std::nullopt).second;
+        for (Vec2& v : convexVertices) v -= centroid;
+        const Real cosL = std::cos(localRotation);
+        const Real sinL = std::sin(localRotation);
+        localOffset += Vec2(cosL * centroid.x - sinL * centroid.y, sinL * centroid.x + cosL * centroid.y);
+
         PolygonGeometry geometry{ convexVertices };
         const Real minExtent = PhysicsGeometry::calculatePolygonInRadius(geometry);
 
@@ -599,6 +608,7 @@ namespace PS_AGONY2D
         if (!outline) return false;
         if (outline->size() > MAX_POLYGON_VERTEX_COUNT) return false;
         if (!PhysicsGeometry::isConvexPolygon(*outline)) return false;
+        // NOTE: on apply the geometry is recentered on its centroid and the shift is added to the collider's local offset.
 
         const uint32_t slot = static_cast<uint32_t>(pendingPolygons.size());
         pendingPolygons.emplace_back(std::move(*outline));
@@ -775,11 +785,22 @@ namespace PS_AGONY2D
             break;
 
         case T::SetPolygonGeometry:
+        {
             if (shapeType != ColliderShapeType::Polygon) break;
-            polygons.geometry[shapeIndex] = std::move(pendingPolygons[c.index]);
+            // Recenter on the centroid (inside a convex polygon) so CCD always applies; the shift goes into the
+            // collider's local offset (rotated by its current local rotation), so the visual placement is unchanged.
+            auto& pending = pendingPolygons[c.index];
+            const Vec2 centroid = PhysicsGeometry::calculatePolygonInertia(Real(1), pending, std::nullopt).second;
+            for (Vec2& v : pending) v -= centroid;
+            const Real cosL = std::cos(colliders.localRotation[colliderIndex]);
+            const Real sinL = std::sin(colliders.localRotation[colliderIndex]);
+            colliders.localOffsetX[colliderIndex] += cosL * centroid.x - sinL * centroid.y;
+            colliders.localOffsetY[colliderIndex] += sinL * centroid.x + cosL * centroid.y;
+            polygons.geometry[shapeIndex] = std::move(pending);
             colliders.minExtent[colliderIndex] = PhysicsGeometry::calculatePolygonInRadius(polygons.geometry[shapeIndex]);
             spatialDirty = true;
             break;
+        }
 
         default:
             break;

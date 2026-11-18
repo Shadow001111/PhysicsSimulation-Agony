@@ -1,6 +1,7 @@
 #include "ContinuousCollisionDetector.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
+#include "PS_AGONY2D/Limits.h"
 
 #include "Ecstasy/Core/Portablity.h"
 
@@ -43,21 +44,22 @@ namespace PS_AGONY2D
 			const PolygonGeometry* polygons;
 		};
 
-		// Ray (start m relative to circle center, direction d, dd = dot(d, d) > 0) vs circle. Entering root only.
-		__forceinline Real castCircle(Real mx, Real my, Real dx, Real dy, Real dd, Real radius)
+		__forceinline Real castCircle(Real mx, Real my, Real dx, Real dy, Real dd, Real radius, Real best)
 		{
 			const Real c = mx * mx + my * my - radius * radius;
 			const Real b = mx * dx + my * dy;
 			if (c <= Real(0) || b >= Real(0)) return NO_HIT; // Inside or moving away.
 
+			// t >= c / (-2b). Reject before sqrt.
+			if (c >= -Real(2) * b * best) return NO_HIT;
+
 			const Real disc = b * b - dd * c;
 			if (disc < Real(0)) return NO_HIT;
 
-			return (-b - std::sqrt(disc)) / dd;
+			return c / (std::sqrt(disc) - b);
 		}
 
-		// TODO: Improve.
-		Real castBox(Vec2 q0, Vec2 dl, Real dd, Real hw, Real hh, Real radius)
+		Real castBox(Vec2 q0, Vec2 dl, Real dd, Real hw, Real hh, Real radius, Real best)
 		{
 			// Mirror into the +x/+y quadrant.
 			const Real sx = std::copysign(Real(1), q0.x);
@@ -73,22 +75,21 @@ namespace PS_AGONY2D
 			const Real gapY = qy - h;
 			if (gapX <= Real(0) && gapY <= Real(0)) return NO_HIT; // Starts inside.
 
-			// Slab entry time per axis: 0 when already between its planes, never when moving away.
+			// Slab entry time per axis: 0 when already between its planes, never when moving away or not before 'best'.
 			Real tx = Real(0);
 			if (gapX > Real(0))
 			{
-				if (vx >= Real(0)) return NO_HIT;
+				if (vx >= Real(0) || gapX >= best * -vx) return NO_HIT;
 				tx = gapX / -vx;
 			}
 			Real ty = Real(0);
 			if (gapY > Real(0))
 			{
-				if (vy >= Real(0)) return NO_HIT;
+				if (vy >= Real(0) || gapY >= best * -vy) return NO_HIT;
 				ty = gapY / -vy;
 			}
 
-			const Real t = std::fmax(tx, ty);
-			if (t > Real(1)) return NO_HIT;
+			const Real t = std::fmax(tx, ty); // Already < best.
 
 			// Entry point. Only the axis that did not set 't' needs a range check.
 			const Real px = qx + vx * t;
@@ -98,22 +99,22 @@ namespace PS_AGONY2D
 			// Entry inside a corner square: the rounded corner decides, one circle only.
 			if (std::fabs(px) > hw && std::fabs(py) > hh)
 			{
-				return castCircle(qx - std::copysign(hw, px), qy - std::copysign(hh, py), vx, vy, dd, radius);
+				return castCircle(qx - std::copysign(hw, px), qy - std::copysign(hh, py), vx, vy, dd, radius, best);
 			}
 			return t;
 		}
 
 		// Ray vs the face of an edge offset by 'radius' along its outward normal, limited to the edge span.
-		__forceinline Real castEdge(Vec2 q0, Vec2 dl, Vec2 a, Vec2 b, Vec2 normal, Real radius)
+		__forceinline Real castEdge(Vec2 q0, Vec2 dl, Vec2 a, Vec2 b, Vec2 normal, Real radius, Real best)
 		{
 			const Real approach = glm::dot(normal, dl);
 			if (approach >= Real(0)) return NO_HIT;
 
 			const Real gap = glm::dot(normal, q0 - a) - radius;
 			if (gap < Real(0)) return NO_HIT;
+			if (gap >= best * -approach) return NO_HIT; // t >= best, no division.
 
 			const Real t = gap / -approach;
-			if (t > Real(1)) return NO_HIT;
 
 			const Vec2 ab = b - a;
 			const Real u = glm::dot(q0 + dl * t - a, ab);
@@ -122,60 +123,115 @@ namespace PS_AGONY2D
 			return t;
 		}
 
-		Real castPolygon(Vec2 q0, Vec2 dl, Real dd, const PolygonGeometry& g, Real radius)
+		// Convex polygon inflated by 'radius': intersect the offset half-planes (tEnter / tExit), then let the rounded corner decide.
+		// Returns the time of impact < best, otherwise NO_HIT.
+		Real castPolygon(Vec2 q0, Vec2 dl, Real dd, const PolygonGeometry& g, Real radius, Real best)
 		{
 			const Vec2* vertices = g.vertices();
 			const Vec2* normals = g.normals();
 			const size_t count = g.size();
 
-			Real t = NO_HIT;
-			size_t next = 1;
-			for (size_t i = 0; i < count; i++, next++)
-			{
-				if (next == count) next = 0;
-				t = std::fmin(t, castEdge(q0, dl, vertices[i], vertices[next], normals[i], radius));
-			}
+			Real tEnter = Real(0);
+			Real tExit = best;
+			size_t enterEdge = 0;
 
-			// An edge hit is the entry point of a convex shape, so corners matter only without one.
-			if (t < NO_HIT) return t;
+			alignas(64) Real gapArray[MAX_POLYGON_VERTEX_COUNT];
 
 			for (size_t i = 0; i < count; i++)
 			{
-				t = std::fmin(t, castCircle(q0.x - vertices[i].x, q0.y - vertices[i].y, dl.x, dl.y, dd, radius));
+				const Vec2 n = normals[i];
+				const Real speed = glm::dot(n, dl); // < 0: entering the plane, > 0: leaving it.
+				const Real gap = glm::dot(n, q0 - vertices[i]) - radius; // > 0: outside.
+
+				gapArray[i] = gap;
+
+				if (speed < Real(0))
+				{
+					if (gap > Real(0))
+					{
+						// gap = t * approach
+						// if (t * approach >= tExit * approach)
+						// if (t >= tExit)
+
+						const Real approach = -speed; // Positive, bigger than zero.
+						if (gap >= tExit * approach) return NO_HIT; // gap / approach >= tExit, no division.
+						const Real t = gap / approach;
+						if (t > tEnter)
+						{
+							tEnter = t;
+							enterEdge = i;
+						}
+					}
+				}
+				else if (gap > Real(0))
+				{
+					return NO_HIT;  // Outside and not approaching.
+				}
+				else if (speed > Real(0))
+				{
+					tExit = std::fmin(tExit, -gap / speed);
+				}
 			}
-			return t;
+
+			if (tEnter >= tExit) return NO_HIT;
+
+			// Edge that owns the entry point.
+			size_t edge = enterEdge;
+			const bool startedInside = tEnter == Real(0);
+			if (startedInside)
+			{
+				// Start inside the plane polygon: the nearest plane decides (inside the shape or in a corner zone).
+				Real maxGap = std::numeric_limits<Real>::lowest();
+				for (size_t i = 0; i < count; i++)
+				{
+					const Real gap = gapArray[i];
+					if (gap > maxGap)
+					{
+						maxGap = gap;
+						edge = i;
+					}
+				}
+			}
+
+			const Vec2 p = q0 + dl * tEnter;
+
+			const size_t next = edge + 1 == count ? 0 : edge + 1;
+			const Vec2 a = vertices[edge];
+			const Vec2 b = vertices[next];
+			const Vec2 ab = b - a;
+			const Real u = glm::dot(p - a, ab);
+
+			// Entry within the edge span: a face hit. A start there is already inside the shape.
+			if (u >= Real(0) && u <= glm::dot(ab, ab)) return startedInside ? NO_HIT : tEnter;
+
+			// Entry beyond the span: the rounded corner decides, one circle only.
+			const Vec2 corner = u < Real(0) ? a : b;
+			return castCircle(q0.x - corner.x, q0.y - corner.y, dl.x, dl.y, dd, radius, tExit);
 		}
 
-		Real castCapsule(Vec2 q0, Vec2 dl, Real dd, Real halfLength, Real capsuleRadius, Real radius)
+		Real castCapsule(Vec2 q0, Vec2 dl, Real dd, Real halfLength, Real capsuleRadius, Real radius, Real best)
 		{
 			const Real inflated = capsuleRadius + radius;
 
-			// Side slabs y = +-inflated, limited to |x| <= halfLength.
-			const auto slab = [&](Real approachSpeed, Real distance) -> Real
-				{
-					if (approachSpeed >= Real(0)) return NO_HIT;
-					const Real gap = distance - inflated;
-					if (gap < Real(0)) return NO_HIT;
+			// Slab on q0's side.
+			const Real vy = std::copysign(dl.y, q0.y);
+			const Real gap = std::fabs(q0.y) - inflated;
 
-					const Real time = gap / -approachSpeed;
-					if (time > Real(1)) return NO_HIT;
-					if (std::fabs(q0.x + dl.x * time) > halfLength) return NO_HIT;
-					return time;
-				};
+			// gap < best * -vy guarantees time < best.
+			if (vy < Real(0) && gap >= Real(0) && gap < best * -vy)
+			{
+				const Real time = gap / -vy;
+				if (std::fabs(q0.x + dl.x * time) <= halfLength) return time; // Convex entry point.
+			}
 
-			Real t = std::fmin(slab(dl.y, q0.y), slab(-dl.y, -q0.y));
-
-			// A slab hit is the entry point of a convex shape, so the end circles matter only without one.
-			if (t < NO_HIT) return t;
-
-			t = castCircle(q0.x + halfLength, q0.y, dl.x, dl.y, dd, inflated);
-			return std::fmin(t, castCircle(q0.x - halfLength, q0.y, dl.x, dl.y, dd, inflated));
+			// castCircle may return a time above best, so clamp.
+			const Real t = std::fmin(castCircle(q0.x + halfLength, q0.y, dl.x, dl.y, dd, inflated, best), best);
+			return std::fmin(castCircle(q0.x - halfLength, q0.y, dl.x, dl.y, dd, inflated, t), t);
 		}
 
-		// Earliest hit time of the core (world start p0, world displacement d) against static collider 'c'.
-		Real castCore(const StaticShapes& s, ObjectDenseIndex colliderIndex, Vec2 start, Vec2 d, Real dd, Real coreRadius)
+		// Earliest hit time of the core against static collider 'colliderIndex'. Only hits earlier than 'best' matter.
+		Real castCore(const StaticShapes& s, ObjectDenseIndex colliderIndex, Vec2 start, Vec2 d, Real dd, Real coreRadius, Real best)
 		{
-			// shapes, staticCollider, start, d, dd, coreRadius
 			const Real cs = s.cosR[colliderIndex];
 			const Real sn = s.sinR[colliderIndex];
 			const Real rx = start.x - s.posX[colliderIndex];
@@ -189,13 +245,13 @@ namespace PS_AGONY2D
 			switch (s.type[colliderIndex])
 			{
 			case ColliderShapeType::Circle:
-				return castCircle(q0.x, q0.y, dl.x, dl.y, dd, s.circleRadius[shape] + coreRadius);
+				return castCircle(q0.x, q0.y, dl.x, dl.y, dd, s.circleRadius[shape] + coreRadius, best);
 			case ColliderShapeType::Box:
-				return castBox(q0, dl, dd, s.boxHalfWidth[shape], s.boxHalfHeight[shape], coreRadius);
-			case ColliderShapeType::Capsule:
-				return castCapsule(q0, dl, dd, s.capsuleHalfLength[shape], s.capsuleRadius[shape], coreRadius);
+				return castBox(q0, dl, dd, s.boxHalfWidth[shape], s.boxHalfHeight[shape], coreRadius, best);
 			case ColliderShapeType::Polygon:
-				return castPolygon(q0, dl, dd, s.polygons[shape], coreRadius);
+				return castPolygon(q0, dl, dd, s.polygons[shape], coreRadius, best);
+			case ColliderShapeType::Capsule:
+				return castCapsule(q0, dl, dd, s.capsuleHalfLength[shape], s.capsuleRadius[shape], coreRadius, best);
 			}
 			return NO_HIT;
 		}
@@ -243,6 +299,9 @@ namespace PS_AGONY2D
 	{
 		using Node = BroadPhaseInternal::BvhNode;
 
+		const IndexRange shapeRange = soa.range(BodyGroup::Dynamic);
+		const ObjectDenseIndex bodyRangeBegin = bodies.range(BodyGroup::Dynamic).begin;
+
 		const ObjectDenseIndex* ECSTASY_RESTRICT ownerPtr = colliders.bodyIndex.data();
 		const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
 		const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
@@ -264,13 +323,10 @@ namespace PS_AGONY2D
 
 		const Node* ECSTASY_RESTRICT nodes = data.nodes;
 		const ObjectDenseIndex* ECSTASY_RESTRICT treeColliders = data.treeColliders;
-		Real* ECSTASY_RESTRICT hitTimePtr = bodyHitTime.data();
+		Real* ECSTASY_RESTRICT shiftedHitTimePtr = bodyHitTime.data() - bodyRangeBegin;
 
 		const Real fastFactor = settings.fastFactor;
 		const Real coreFraction = settings.coreFraction;
-
-		const IndexRange shapeRange = soa.range(BodyGroup::Dynamic);
-		const ObjectDenseIndex bodyRangeBegin = bodies.range(BodyGroup::Dynamic).begin;
 
 		uint32_t stack[TRAVERSAL_STACK_SIZE];
 
@@ -301,21 +357,8 @@ namespace PS_AGONY2D
 			const Real dd = glm::dot(d, d);
 			if (dd <= thresholdSq) continue;
 
-			// Polygon origin (local 0,0) must lie inside the polygon: dot(n_i, 0 - v_i) <= 0 for all edges.
-			if constexpr (std::is_same_v<std::remove_cv_t<ShapeSoA>, PolygonSoA>)
-			{
-				const PolygonGeometry& g = soa.geometry[shapeIndex];
-				const Vec2* vertices = g.vertices();
-				const Vec2* normals = g.normals();
-				const size_t count = g.size();
-
-				Real minInside = std::numeric_limits<Real>::max();
-				for (size_t i = 0; i < count; i++)
-				{
-					minInside = std::fmin(minInside, glm::dot(normals[i], vertices[i]));
-				}
-				if (minInside < Real(0)) continue;
-			}
+			// No polygon origin-inside check needed: minExtent is the polygon in-radius about the collider origin,
+			// which is 0 when the origin is outside (skipped above).
 
 			const Real coreRadius = coreFraction * minExtent;
 
@@ -326,7 +369,7 @@ namespace PS_AGONY2D
 			const Real sweepMaxY = std::fmax(start.y, end.y) + coreRadius;
 
 			// Static tree traversal.
-			Real bestTime = NO_HIT;
+			Real bestTime = 1;
 			uint32_t stackSize = 0;
 			stack[stackSize++] = 0;
 
@@ -349,13 +392,13 @@ namespace PS_AGONY2D
 					if (aabbMaxXPtr[staticCollider] < sweepMinX || aabbMinXPtr[staticCollider] > sweepMaxX ||
 						aabbMaxYPtr[staticCollider] < sweepMinY || aabbMinYPtr[staticCollider] > sweepMaxY) continue;
 
-					bestTime = std::fmin(bestTime, castCore(data.shapes, staticCollider, start, d, dd, coreRadius));
+					bestTime = std::fmin(bestTime, castCore(data.shapes, staticCollider, start, d, dd, coreRadius, bestTime));
 				}
 			}
 
 			if (bestTime < Real(1))
 			{
-				Real& t = hitTimePtr[body - bodyRangeBegin];
+				Real& t = shiftedHitTimePtr[body];
 				if (t >= Real(1)) hitBodies.push_back(body); // First hit of this body.
 				t = std::fmin(t, bestTime);
 			}
@@ -397,40 +440,62 @@ namespace PS_AGONY2D
 		if (bodyHitTime.size() < bodyRange.size()) bodyHitTime.resize(bodyRange.size(), Real(1));
 
 		// TODO: Try rewriting in stages to use SIMD.
-		// TODO: Pass bestTime into castCore and the cast functions, and early-out when gap / approach already exceeds it. This also skips sqrt calls.
-		// TODO: In tree traversal, replace the swept - AABB node test with a ray - vs - AABB slab test(nodes inflated by coreRadius).Diagonal fast movers get a much tighter sweep than the AABB.Also prune nodes whose entry time is greater than bestTime, and push the nearer child last so it is visited first.
-		// TODO: Polygon: replace the per - edge and per - vertex casts with half - plane clipping(tEnter / tExit), and do the vertex circles only for corner hits.
+		// TODO: In tree traversal, replace the swept - AABB node test with a ray - vs - AABB slab test(nodes inflated by coreRadius).
+		//		 Diagonal fast movers get a much tighter sweep than the AABB.
+		//		 Also prune nodes whose entry time is greater than bestTime, and push the nearer child last so it is visited first.
+		//	     (Tried that, but didn't work out)(Probably because bodies didn't move in diagonal, must retry).
 
-		processShapeRange(circles, bodies, colliders, data);
-		processShapeRange(boxes, bodies, colliders, data);
-		processShapeRange(polygons, bodies, colliders, data);
-		processShapeRange(capsules, bodies, colliders, data);
+		{
+			TRACY_SCOPE_N("CCD: Circles");
+			processShapeRange(circles, bodies, colliders, data);
+		}
+		{
+			TRACY_SCOPE_N("CCD: Boxes");
+			processShapeRange(boxes, bodies, colliders, data);
+		}
+		{
+			TRACY_SCOPE_N("CCD: Polygons");
+			processShapeRange(polygons, bodies, colliders, data);
+		}
+		{
+			TRACY_SCOPE_N("CCD: Capsules");
+			processShapeRange(capsules, bodies, colliders, data);
+		}
 
 		if (hitBodies.empty()) return false;
 
 		// Move bodies back along their own displacement. Translation only: rotation (cos/sin) stays valid.
-		for (const ObjectDenseIndex body : hitBodies)
+		Real* ECSTASY_RESTRICT shiftedHitTimePtr = bodyHitTime.data() - bodyRange.begin;
+		Real* ECSTASY_RESTRICT offsetXPtr = bodies.offsetX.data();
+		Real* ECSTASY_RESTRICT offsetYPtr = bodies.offsetY.data();
+		Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
+		Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
+		Real* ECSTASY_RESTRICT worldCenterXPtr = bodies.worldCenterX.data();
+		Real* ECSTASY_RESTRICT worldCenterYPtr = bodies.worldCenterY.data();
+		const Real* ECSTASY_RESTRICT prevOffsetXPtr = prevOffsetX.data();
+		const Real* ECSTASY_RESTRICT prevOffsetYPtr = prevOffsetY.data();
 		{
-			const ObjectDenseIndex bodyLocalIndex = body - bodyRange.begin;
-
-			const Real back = bodyHitTime[bodyLocalIndex] - Real(1);
-			bodyHitTime[bodyLocalIndex] = Real(1); // Restore invariant.
-
-			const Real shiftX = (bodies.offsetX[body] - prevOffsetX[body]) * back;
-			const Real shiftY = (bodies.offsetY[body] - prevOffsetY[body]) * back;
-
-			bodies.offsetX[body] += shiftX;
-			bodies.offsetY[body] += shiftY;
-			bodies.worldCenterX[body] += shiftX;
-			bodies.worldCenterY[body] += shiftY;
-
-			for (const ObjectDenseIndex collider : bodies.colliderIndices[body])
+			TRACY_SCOPE_N("CCD: Shift hit bodies");
+			for (const ObjectDenseIndex body : hitBodies)
 			{
-				colliders.worldPosX[collider] += shiftX;
-				colliders.worldPosY[collider] += shiftY;
+				const Real back = shiftedHitTimePtr[body] - Real(1);
+				shiftedHitTimePtr[body] = Real(1); // Restore invariant.
+
+				const Real shiftX = (offsetXPtr[body] - prevOffsetXPtr[body]) * back;
+				const Real shiftY = (offsetYPtr[body] - prevOffsetYPtr[body]) * back;
+
+				offsetXPtr[body] += shiftX;
+				offsetYPtr[body] += shiftY;
+				worldCenterXPtr[body] += shiftX;
+				worldCenterYPtr[body] += shiftY;
+
+				for (const ObjectDenseIndex collider : bodies.colliderIndices[body])
+				{
+					worldPosXPtr[collider] += shiftX;
+					worldPosYPtr[collider] += shiftY;
+				}
 			}
 		}
-
 		return true;
 	}
 
