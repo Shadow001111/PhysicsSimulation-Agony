@@ -3,6 +3,7 @@
 
 #include "PS_AGONY2D/ObjectSoA.h"
 #include "PS_AGONY2D/SymmetricMatrix.h"
+#include "PS_AGONY2D/MemoryUsageTracking.h"
 #include "PS_AGONY2D/Types/Types.h"
 #include "PS_AGONY2D/Types/ExecutionPolicy.h"
 
@@ -207,7 +208,7 @@ namespace PS_AGONY2D
 		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionArray; }
 		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return previousCollisionArray; }
 
-		size_t getMemoryUsage() const;
+		void collectMemoryUsage(MemoryUsageTracking& memoryTracking, uint32_t parentNodeIndex) const;
 	private:
 		bool isAlive(const BodyCollisionData& d) const noexcept { return colliders.handles->isValid(d.colliderA) && colliders.handles->isValid(d.colliderB); }
 

@@ -464,33 +464,38 @@ namespace PS_AGONY2D
         contactCacheDirty = true; // The cache indexes the array that was just cleared.
     }
 
-    size_t NarrowPhaseCollisionDetector::getMemoryUsage() const
+    void NarrowPhaseCollisionDetector::collectMemoryUsage(MemoryUsageTracking& memoryTracking, uint32_t parentNodeIndex) const
     {
-        size_t total = 0;
+        const uint32_t root = memoryTracking.createNode("Narrow phase", 0, parentNodeIndex);
 
-        // Collision arrays.
-        total += getVectorMemoryUsage(currentCollisionArray);
-        total += getVectorMemoryUsage(previousCollisionArray);
-        for (const auto& stored : islandManifolds) total += getVectorMemoryUsage(stored);
-        total += getVectorMemoryUsage(islandManifolds);
-        total += getVectorMemoryUsage(editedColliderMask);
+        memoryTracking.createNode("Current collision array", getVectorMemoryUsage(currentCollisionArray), root);
+        memoryTracking.createNode("Previous collision array", getVectorMemoryUsage(previousCollisionArray), root);
 
-        // Chunks.
-        total += getVectorMemoryUsage(chunks);
+        size_t chunkBytes = getVectorMemoryUsage(chunks);
         for (const auto& chunkData : chunks)
         {
             for (const auto& vec : chunkData.pairs.getDirectAccess())
             {
-                total += getVectorMemoryUsage(vec);
+                chunkBytes += getVectorMemoryUsage(vec);
             }
-            total += getVectorMemoryUsage(chunkData.results);
+            chunkBytes += getVectorMemoryUsage(chunkData.results);
         }
+        memoryTracking.createNode("Chunks", chunkBytes, root);
 
-        // The rest.
-        total += contactCache.memoryUsage();
-        total += wakeCache.memoryUsage();
-        total += getVectorMemoryUsage(wakeStaging) + getVectorMemoryUsage(wakeConsumed);
-        return total;
+        size_t islandManifoldBytes = getVectorMemoryUsage(islandManifolds);
+        for (const auto& stored : islandManifolds)
+        {
+            islandManifoldBytes += getVectorMemoryUsage(stored);
+        }
+        memoryTracking.createNode("Island manifolds", islandManifoldBytes, root);
+
+        memoryTracking.createNode("Edited collider mask", getVectorMemoryUsage(editedColliderMask), root);
+
+        memoryTracking.createNode("Contact cache", contactCache.memoryUsage(), root);
+
+        memoryTracking.createNode("Wake cache", wakeCache.memoryUsage(), root);
+
+        memoryTracking.createNode("Wake", getVectorMemoryUsage(wakeStaging) + getVectorMemoryUsage(wakeConsumed), root);
     }
 
     void NarrowPhaseCollisionDetector::findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs)

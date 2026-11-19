@@ -212,8 +212,9 @@ namespace PS_AGONY2D
             );
         }
 
-        memoryTracking.createNode("Broad phase detector", broadPhaseCollisionDetector.getMemoryUsage(), root);
-        memoryTracking.createNode("Narrow phase detector", narrowPhaseCollisionDetector.getMemoryUsage(), root);
+        memoryTracking.createNode("Broad phase", broadPhaseCollisionDetector.getMemoryUsage(), root);
+
+        narrowPhaseCollisionDetector.collectMemoryUsage(memoryTracking, root);
 
         memoryTracking.createNode("Materials", materialManager.getMemoryUsage(), root);
         memoryTracking.createNode("Collision callbacks", collisionCallbackManager.getMemoryUsage(), root);
