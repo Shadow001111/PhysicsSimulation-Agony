@@ -84,7 +84,7 @@ namespace PS_AGONY2D
 		virtual IConstraintSolver& getSolver() noexcept = 0;
 
 		virtual size_t getCount() const noexcept = 0;
-		virtual size_t getMemoryUsage() const noexcept = 0;
+		virtual size_t getSoAMemoryUsage() const noexcept = 0;
 		virtual size_t getSolverMemoryUsage() const noexcept = 0;
 
 		virtual ConstraintType getType() const noexcept = 0;
@@ -237,7 +237,7 @@ namespace PS_AGONY2D
 		Handle handleAt(ObjectDenseIndex index) const noexcept { return soa.handleAt(index); }
 
 		size_t getCount() const noexcept final { return soa.getCount(); }
-		size_t getMemoryUsage() const noexcept final { return soa.getMemoryUsage(); }
+		size_t getSoAMemoryUsage() const noexcept final { return soa.getMemoryUsage(); }
 		size_t getSolverMemoryUsage() const noexcept final { return solver.getMemoryUsage(); }
 
 		ConstraintType getType() const noexcept final { return Type; }

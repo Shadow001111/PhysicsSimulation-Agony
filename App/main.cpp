@@ -2,12 +2,13 @@
 #include "EcstasyThreadingBackend.h"
 
 #include "PS_AGONY2D/Simulation.h"
+#include "PS_AGONY2D/MemoryUsageTracking.h"
+#include "PS_AGONY2D/Profiling/TracyProfiler.h"
 
 #include "Editor/Editor.h"
 
 #include "Render/SimulationRenderer.h"
 
-#include "PS_AGONY2D/Profiling/TracyProfiler.h"
 #include "Ecstasy/Graphics/WindowManager.h"
 
 #include "imgui.h"
@@ -21,6 +22,7 @@
 #include <format>
 #include <string_view>
 #include <cstdio>
+#include <cmath>
 
 static std::string formatSizeBinary(size_t value)
 {
@@ -314,72 +316,57 @@ static void addMemoryRow(const char* name, size_t bytes, size_t total, bool inde
     ImGui::Text("%.1f%%", percentage);
 }
 
-static void renderMemoryMetrics(
-    PS_AGONY2D::Simulation& simulation,
-    PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
-    const DebugData& debugData
-)
+static void renderMemoryExperimental(const PS_AGONY2D::MemoryUsageTracking& tracking)
 {
-    ImGui::SeparatorText("Renderer");
-    ImGui::Text("RAM:  %s", formatSizeBinary(simulationRenderer.getMemoryUsage()).c_str());
-    ImGui::Text("VRAM: %s", formatSizeBinary(simulationRenderer.getVideoMemoryUsage()).c_str());
-
-    ImGui::SeparatorText("Simulation");
-
-    const auto& memory = debugData.simulationDebugData.memoryUsage;
-    const MemoryTotals totals = computeMemoryTotals(simulation, memory);
-    ImGui::Text("Total: %s", formatSizeBinary(totals.total).c_str());
-
-    if (!ImGui::BeginTable("MemoryTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+    if (!ImGui::BeginTable("MemoryExperimentalTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
     {
         return;
     }
 
     ImGui::TableSetupColumn("Component", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Allocated Size", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+    ImGui::TableSetupColumn("Own", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+    ImGui::TableSetupColumn("Total", ImGuiTableColumnFlags_WidthFixed, 110.0f);
     ImGui::TableSetupColumn("% Total", ImGuiTableColumnFlags_WidthFixed, 60.0f);
     ImGui::TableHeadersRow();
 
-    const size_t total = totals.total;
+    double percentScale = 0.0; // 100 / root total. First item is the root.
+    bool isRoot = true;
 
-    addMemoryRow("Bodies", memory.bodyData, total);
-    addMemoryRow("Colliders", memory.colliderData, total);
-
-    addMemoryRow("Shapes", totals.shapes, total);
-    addMemoryRow("Circles", memory.circleData, total, true);
-    addMemoryRow("Boxes", memory.boxData, total, true);
-    addMemoryRow("Polygons", memory.polygonData, total, true);
-    addMemoryRow("Capsules", memory.capsuleData, total, true);
-
-    addMemoryRow("Constraints", totals.constraints, total);
-    for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+    for (const auto& item : tracking)
     {
-        const std::string_view name(simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i)).getName());
-        char label[64];
-        std::snprintf(label, sizeof(label), "%.*ss", static_cast<int>(name.size()), name.data());
-        addMemoryRow(label, memory.constraintData[i], total, true);
+        const auto& node = item.node;
+        const size_t total = node.ownBytes + node.childrenSumBytes;
+        if (isRoot)
+        {
+            percentScale = total > 0 ? 100.0 / static_cast<double>(total) : 0.0;
+            isRoot = false;
+        }
+
+        const char* name = node.string ? node.string : "?";
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        if (item.depth > 0)
+        {
+            const float indent = 12.0f * static_cast<float>(item.depth);
+            ImGui::Indent(indent);
+            ImGui::TextDisabled("* %s", name);
+            ImGui::Unindent(indent);
+        }
+        else
+        {
+            ImGui::TextUnformatted(name);
+        }
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextUnformatted(formatSizeBinary(node.ownBytes).c_str());
+
+        ImGui::TableSetColumnIndex(2);
+        ImGui::TextUnformatted(formatSizeBinary(total).c_str());
+
+        ImGui::TableSetColumnIndex(3);
+        ImGui::Text("%.1f%%", std::fmin(static_cast<double>(total) * percentScale, 100.0));
     }
-
-    addMemoryRow("Broad Phase Detector", memory.broadPhaseDetector, total);
-    addMemoryRow("Narrow Phase Detector", memory.narrowPhaseDetector, total);
-    addMemoryRow("Materials", memory.materialData, total);
-    addMemoryRow("Collision Callbacks", memory.collisionCallback, total);
-
-    addMemoryRow("Solvers", totals.solvers, total);
-    addMemoryRow("Body Collision Solver", memory.bodyCollisionSolver, total, true);
-    for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
-    {
-        const auto& system = simulation.getConstraintSystem(PS_AGONY2D::ConstraintType(i));
-        const std::string_view name(system.getName());
-        char label[64];
-        std::snprintf(label, sizeof(label), "%.*s Solver", static_cast<int>(name.size()), name.data());
-        addMemoryRow(label, system.getSolverMemoryUsage(), total, true);
-    }
-
-    addMemoryRow("Solving Planner", memory.solvingPlanner, total);
-    addMemoryRow("Island manager", memory.islandManager, total);
-    addMemoryRow("CCD", memory.ccd, total);
-    addMemoryRow("Other", memory.other, total);
 
     ImGui::EndTable();
 }
@@ -388,7 +375,8 @@ static void renderGUI(
     PS_AGONY2D::Simulation& simulation,
     PS_AGONY_RENDER::SimulationRenderer& simulationRenderer,
     PS_AGONY_RENDER::RenderOptions& renderOptions,
-    const DebugData& debugData
+    const DebugData& debugData,
+    const PS_AGONY2D::MemoryUsageTracking& memoryTracking
 )
 {
     if (!ImGui::Begin("Simulation Diagnostics"))
@@ -419,7 +407,7 @@ static void renderGUI(
         }
         if (ImGui::BeginTabItem("Memory"))
         {
-            renderMemoryMetrics(simulation, simulationRenderer, debugData);
+            renderMemoryExperimental(memoryTracking);
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -565,7 +553,7 @@ static int gameFunc()
 
     PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 6);
+    loadScene(simulation, 1);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;
@@ -583,6 +571,7 @@ static int gameFunc()
 
     // Debug data.
     DebugData debugData;
+    PS_AGONY2D::MemoryUsageTracking memoryTracking;
 
     // Main loop.
     double lastTime = glfwGetTime();
@@ -602,6 +591,9 @@ static int gameFunc()
 
         // Check if window is visible.
         const bool iconified = wnd.isZeroSize();
+
+        // Reset debug data.
+        memoryTracking.reset();
 
         // Time logic.
         const double time = glfwGetTime();
@@ -640,6 +632,7 @@ static int gameFunc()
         simulation.update(deltaTime);
         if (!simulation.isPaused())
             debugData.simulationDebugData = simulation.getDebugData();
+        simulation.collectMemoryUsage(memoryTracking, 0);
 
         // Smooth debug data.
         {
@@ -685,7 +678,8 @@ static int gameFunc()
             }
 
             // Build GUI window commands.
-            renderGUI(simulation, simulationRenderer, renderOptions, debugData);
+            memoryTracking.finalize();
+            renderGUI(simulation, simulationRenderer, renderOptions, debugData, memoryTracking);
             editor.drawUI(simulation, simulationRenderer);
 
             // Render simulation to FBO.

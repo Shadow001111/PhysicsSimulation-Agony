@@ -1,6 +1,7 @@
 #pragma once
 #include "IslandManager.h"
 #include "Constants.h"
+#include "MemoryUsageTracking.h"
 
 #include "Types/Material.h"
 #include "Types/Types.h"
@@ -37,43 +38,9 @@ namespace PS_AGONY2D
 	public:
 		struct DebugData
 		{
-			struct MemoryUsage
-			{
-				size_t bodyData = 0;
-
-				size_t colliderData = 0;
-
-				size_t circleData = 0;
-				size_t boxData = 0;
-				size_t polygonData = 0;
-				size_t capsuleData = 0;
-
-				size_t materialData = 0;
-
-				size_t collisionCallback = 0;
-
-				size_t broadPhaseDetector = 0;
-				size_t narrowPhaseDetector = 0;
-
-				size_t bodyCollisionSolver = 0;
-
-				std::array<size_t, size_t(ConstraintType::COUNT)> constraintData{};
-
-				size_t solvingPlanner = 0;
-
-				size_t islandManager = 0;
-
-				size_t ccd = 0;
-
-				size_t other = 0;
-			};
-
 			// UPS.
 			uint32_t updatesHappened = 0;
 			uint32_t updatesSupposedToHappen = 0;
-
-			// Memory.
-			MemoryUsage memoryUsage{};
 
 			// Solving errors.
 			Real bodyCollisionSolverVelocityError = 0;
@@ -217,6 +184,7 @@ namespace PS_AGONY2D
 
 		SimulationSettings& getSimulationSettings() noexcept { return simulationSettings; }
 		DebugData getDebugData() const noexcept { return debugDataSnaphot; }
+		void collectMemoryUsage(MemoryUsageTracking& memoryTracking, uint32_t parentNodeIndex) const;
 
 		IConstraintSystem& getConstraintSystem(ConstraintType type) noexcept { return *constraintSystems[size_t(type)]; }
 		const IConstraintSystem& getConstraintSystem(ConstraintType type) const noexcept { return *constraintSystems[size_t(type)]; }
@@ -284,7 +252,5 @@ namespace PS_AGONY2D
 		void computeColliderWorldRotations(IndexRange colliderRange);
 
 		void applyBodyHolderConstraint(Real deltaTime, const Interactivity::BodyHolder& holder);
-
-		void collectMemoryUsage(DebugData::MemoryUsage& data) const;
 	};
 }

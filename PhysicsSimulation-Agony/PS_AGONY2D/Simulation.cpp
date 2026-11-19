@@ -188,6 +188,66 @@ namespace PS_AGONY2D
         }
     }
 
+    void Simulation::collectMemoryUsage(MemoryUsageTracking& memoryTracking, uint32_t parentNodeIndex) const
+    {
+        const uint32_t root = memoryTracking.createNode("Simulation", 0, parentNodeIndex);
+
+        memoryTracking.createNode("Bodies", objectManager.bodies.getMemoryUsage(), root);
+        memoryTracking.createNode("Colliders", objectManager.colliders.getMemoryUsage(), root);
+
+        const uint32_t shapes = memoryTracking.createNode("Shapes", 0, root);
+        memoryTracking.createNode("Circles", objectManager.circles.getMemoryUsage(), shapes);
+        memoryTracking.createNode("Boxes", objectManager.boxes.getMemoryUsage(), shapes);
+        memoryTracking.createNode("Polygons", objectManager.polygons.getMemoryUsage(), shapes);
+        memoryTracking.createNode("Capsules", objectManager.capsules.getMemoryUsage(), shapes);
+
+        const uint32_t constraints = memoryTracking.createNode("Constraints", 0, root);
+        for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+        {
+            const auto& system = getConstraintSystem(PS_AGONY2D::ConstraintType(i));
+            memoryTracking.createNode(
+                system.getName(),
+                system.getSoAMemoryUsage(),
+                constraints
+            );
+        }
+
+        memoryTracking.createNode("Broad phase detector", broadPhaseCollisionDetector.getMemoryUsage(), root);
+        memoryTracking.createNode("Narrow phase detector", narrowPhaseCollisionDetector.getMemoryUsage(), root);
+
+        memoryTracking.createNode("Materials", materialManager.getMemoryUsage(), root);
+        memoryTracking.createNode("Collision callbacks", collisionCallbackManager.getMemoryUsage(), root);
+
+        const uint32_t solvers = memoryTracking.createNode("Solvers", 0, root);
+        memoryTracking.createNode("Body collision", bodyCollisionSolver.getMemoryUsage(), solvers);
+        for (int i = 0; i < int(PS_AGONY2D::ConstraintType::COUNT); i++)
+        {
+            const auto& system = getConstraintSystem(PS_AGONY2D::ConstraintType(i));
+            memoryTracking.createNode(
+                system.getName(),
+                system.getSolverMemoryUsage(),
+                solvers
+            );
+        }
+
+        memoryTracking.createNode("Solving planner", SolvingPlanner::threadLocal().getMemoryUsage(), root);
+
+        memoryTracking.createNode("Constraint scheduler", constraintScheduler.getMemoryUsage(), root);
+
+        memoryTracking.createNode("Island manager", islandManager.getMemoryUsage(), root);
+
+        memoryTracking.createNode("CCD", continuousCollisionDetector.getMemoryUsage(), root);
+
+        const size_t otherBytes =
+            getVectorMemoryUsage(broadPhaseColliders) +
+            getVectorMemoryUsage(narrowPhaseColliders) +
+            objectManager.getSleepMemoryUsage() +
+            getVectorMemoryUsage(staticEditIslandIds) +
+            getVectorMemoryUsage(staticEditPartners)
+            ;
+        memoryTracking.createNode("Other", otherBytes, root);
+    }
+
     void Simulation::physicsStep(Real deltaTime)
     {
         // Update timer.
@@ -434,8 +494,6 @@ namespace PS_AGONY2D
             debugDataResetTimeAccumulator = 0.0;
 
             runtimeDebugData.updatesHappened = 0;
-
-            collectMemoryUsage(debugDataSnaphot.memoryUsage);
         }
 
         runtimeDebugData.updatesHappened += stepCount / DEBUG_DATA_SWITCH_INTERVAL;
@@ -818,45 +876,5 @@ namespace PS_AGONY2D
             // Apply strong angular velocity damping.
             objectManager.bodies.angularVelocity[bodyIndex] *= angularDamping;
         }
-    }
-
-    void Simulation::collectMemoryUsage(DebugData::MemoryUsage& data) const
-    {
-        data.bodyData = objectManager.bodies.getMemoryUsage();
-
-        data.colliderData = objectManager.colliders.getMemoryUsage();
-
-        data.circleData = objectManager.circles.getMemoryUsage();
-        data.boxData = objectManager.boxes.getMemoryUsage();
-        data.polygonData = objectManager.polygons.getMemoryUsage();
-        data.capsuleData = objectManager.capsules.getMemoryUsage();
-
-        data.materialData = materialManager.getMemoryUsage();
-
-        data.collisionCallback = collisionCallbackManager.getMemoryUsage();
-
-        data.broadPhaseDetector = broadPhaseCollisionDetector.getMemoryUsage();
-        data.narrowPhaseDetector = narrowPhaseCollisionDetector.getMemoryUsage();
-
-        data.bodyCollisionSolver = bodyCollisionSolver.getMemoryUsage();
-
-        for (size_t i = 0; i < constraintSystems.size(); i++)
-        {
-            data.constraintData[i] = constraintSystems[i]->getMemoryUsage();
-        }
-
-        data.solvingPlanner = SolvingPlanner::threadLocal().getMemoryUsage() + constraintScheduler.getMemoryUsage();
-
-        data.islandManager = islandManager.getMemoryUsage();
-
-        data.ccd = continuousCollisionDetector.getMemoryUsage();
-
-        data.other =
-            getVectorMemoryUsage(broadPhaseColliders) +
-            getVectorMemoryUsage(narrowPhaseColliders) +
-            objectManager.getSleepMemoryUsage() +
-            getVectorMemoryUsage(staticEditIslandIds) +
-            getVectorMemoryUsage(staticEditPartners)
-            ;
     }
 }
