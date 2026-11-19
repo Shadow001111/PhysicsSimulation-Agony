@@ -28,6 +28,14 @@ namespace PS_AGONY2D
 		constexpr Real NO_HIT = Real(2);
 		constexpr uint64_t TRAVERSAL_STACK_SIZE = BroadPhaseInternal::MAX_STACK_CAPACITY;
 
+		using DebugData = ContinuousCollisionDetector::DebugData;
+
+		template<typename T>
+		__forceinline void bump(T& counter)
+		{
+			if constexpr (ContinuousCollisionDetector::COLLECT_STATS) ++counter;
+		}
+
 		struct StaticShapes
 		{
 			const Real* posX;
@@ -125,7 +133,7 @@ namespace PS_AGONY2D
 
 		// Convex polygon inflated by 'radius': intersect the offset half-planes (tEnter / tExit), then let the rounded corner decide.
 		// Returns the time of impact < best, otherwise NO_HIT.
-		Real castPolygon(Vec2 q0, Vec2 dl, Real dd, const PolygonGeometry& g, Real radius, Real best)
+		Real castPolygon(Vec2 q0, Vec2 dl, Real dd, const PolygonGeometry& g, Real radius, Real best, DebugData& debug)
 		{
 			const Vec2* vertices = g.vertices();
 			const Vec2* normals = g.normals();
@@ -154,7 +162,11 @@ namespace PS_AGONY2D
 						// if (t >= tExit)
 
 						const Real approach = -speed; // Positive, bigger than zero.
-						if (gap >= tExit * approach) return NO_HIT; // gap / approach >= tExit, no division.
+						if (gap >= tExit * approach) // gap / approach >= tExit, no division.
+						{
+							bump(debug.polygon.rejectedAtEdge[i]);
+							return NO_HIT;
+						}
 						const Real t = gap / approach;
 						if (t > tEnter)
 						{
@@ -165,6 +177,7 @@ namespace PS_AGONY2D
 				}
 				else if (gap > Real(0))
 				{
+					bump(debug.polygon.rejectedAtEdge[i]);
 					return NO_HIT;  // Outside and not approaching.
 				}
 				else if (speed > Real(0))
@@ -173,7 +186,11 @@ namespace PS_AGONY2D
 				}
 			}
 
-			if (tEnter >= tExit) return NO_HIT;
+			if (tEnter >= tExit)
+			{
+				bump(debug.polygon.rejectedAfterLoop);
+				return NO_HIT;
+			}
 
 			// Edge that owns the entry point.
 			size_t edge = enterEdge;
@@ -202,7 +219,13 @@ namespace PS_AGONY2D
 			const Real u = glm::dot(p - a, ab);
 
 			// Entry within the edge span: a face hit. A start there is already inside the shape.
-			if (u >= Real(0) && u <= glm::dot(ab, ab)) return startedInside ? NO_HIT : tEnter;
+			if (u >= Real(0) && u <= glm::dot(ab, ab))
+			{
+				bump(startedInside ? debug.polygon.startedInside : debug.polygon.faceHit);
+				return startedInside ? NO_HIT : tEnter;
+			}
+
+			bump(debug.polygon.cornerCast);
 
 			// Entry beyond the span: the rounded corner decides, one circle only.
 			const Vec2 corner = u < Real(0) ? a : b;
@@ -230,7 +253,7 @@ namespace PS_AGONY2D
 		}
 
 		// Earliest hit time of the core against static collider 'colliderIndex'. Only hits earlier than 'best' matter.
-		Real castCore(const StaticShapes& s, ObjectDenseIndex colliderIndex, Vec2 start, Vec2 d, Real dd, Real coreRadius, Real best)
+		Real castCore(const StaticShapes& s, ObjectDenseIndex colliderIndex, Vec2 start, Vec2 d, Real dd, Real coreRadius, Real best, DebugData& debug)
 		{
 			const Real cs = s.cosR[colliderIndex];
 			const Real sn = s.sinR[colliderIndex];
@@ -242,18 +265,31 @@ namespace PS_AGONY2D
 			const Vec2 dl = { cs * d.x + sn * d.y, cs * d.y - sn * d.x };
 
 			const ObjectDenseIndex shape = s.shapeIndex[colliderIndex];
-			switch (s.type[colliderIndex])
+			const ColliderShapeType type = s.type[colliderIndex];
+			Real result = NO_HIT;
+			switch (type)
 			{
 			case ColliderShapeType::Circle:
-				return castCircle(q0.x, q0.y, dl.x, dl.y, dd, s.circleRadius[shape] + coreRadius, best);
+				result = castCircle(q0.x, q0.y, dl.x, dl.y, dd, s.circleRadius[shape] + coreRadius, best);
+				break;
 			case ColliderShapeType::Box:
-				return castBox(q0, dl, dd, s.boxHalfWidth[shape], s.boxHalfHeight[shape], coreRadius, best);
+				result = castBox(q0, dl, dd, s.boxHalfWidth[shape], s.boxHalfHeight[shape], coreRadius, best);
+				break;
 			case ColliderShapeType::Polygon:
-				return castPolygon(q0, dl, dd, s.polygons[shape], coreRadius, best);
+				result = castPolygon(q0, dl, dd, s.polygons[shape], coreRadius, best, debug);
+				break;
 			case ColliderShapeType::Capsule:
-				return castCapsule(q0, dl, dd, s.capsuleHalfLength[shape], s.capsuleRadius[shape], coreRadius, best);
+				result = castCapsule(q0, dl, dd, s.capsuleHalfLength[shape], s.capsuleRadius[shape], coreRadius, best);
+				break;
 			}
-			return NO_HIT;
+
+			if constexpr (ContinuousCollisionDetector::COLLECT_STATS)
+			{
+				DebugData::CastStats& stats = debug.cast[size_t(type)];
+				++stats.calls;
+				if (result >= best) ++stats.misses;
+			}
+			return result;
 		}
 	}
 
@@ -292,6 +328,7 @@ namespace PS_AGONY2D
 	template<typename ShapeSoA>
 	void ContinuousCollisionDetector::processShapeRange(
 		const ShapeSoA& soa,
+		ColliderShapeType type,
 		const BodySoA& bodies,
 		const ColliderSoA& colliders,
 		const StaticSweepData& data
@@ -330,8 +367,12 @@ namespace PS_AGONY2D
 
 		uint32_t stack[TRAVERSAL_STACK_SIZE];
 
+		DebugData::SweepStats& sweepStats = debugData.sweep[size_t(type)];
+
 		for (size_t shapeIndex = shapeRange.begin; shapeIndex < shapeRange.end; shapeIndex++)
 		{
+			bump(sweepStats.total);
+
 			const ObjectDenseIndex colliderIndex = colliderIndexPtr[shapeIndex];
 			const ObjectDenseIndex body = ownerPtr[colliderIndex];
 
@@ -340,6 +381,7 @@ namespace PS_AGONY2D
 			const Real bodyDy = offsetYPtr[body] - prevOffsetYPtr[body];
 			const Real bodyDeltaSquaredLength = bodyDx * bodyDx + bodyDy * bodyDy;
 			if (bodyDeltaSquaredLength <= MIN_DISPLACEMENT_SQ) continue;
+			bump(sweepStats.moved);
 
 			// Min extent of the shape (core circle is centered at the collider origin).
 			const Real minExtent = minExtentPtr[colliderIndex];
@@ -349,6 +391,7 @@ namespace PS_AGONY2D
 			const Real threshold = fastFactor * minExtent;
 			const Real thresholdSq = threshold * threshold;
 			if (bodyDeltaSquaredLength <= thresholdSq) continue;
+			bump(sweepStats.fastBody);
 
 			// Previous collider origin: offset + com + R(localOffset - com), with the previous rotation.
 			const Vec2 start = { prevColliderXPtr[colliderIndex], prevColliderYPtr[colliderIndex] };
@@ -356,6 +399,7 @@ namespace PS_AGONY2D
 			const Vec2 d = end - start;
 			const Real dd = glm::dot(d, d);
 			if (dd <= thresholdSq) continue;
+			bump(sweepStats.fastCollider);
 
 			// No polygon origin-inside check needed: minExtent is the polygon in-radius about the collider origin,
 			// which is 0 when the origin is outside (skipped above).
@@ -376,6 +420,7 @@ namespace PS_AGONY2D
 			while (stackSize != 0)
 			{
 				const Node& node = nodes[stack[--stackSize]];
+				bump(sweepStats.nodesVisited);
 				if (node.maxX < sweepMinX || node.minX > sweepMaxX || node.maxY < sweepMinY || node.minY > sweepMaxY) continue;
 
 				if (node.leftChildIndex != Node::INVALID_INDEX) // Has children.
@@ -386,18 +431,21 @@ namespace PS_AGONY2D
 				}
 
 				// Leaf node.
+				bump(sweepStats.leavesVisited);
 				for (uint32_t k = node.start; k < node.end; k++)
 				{
 					const ObjectDenseIndex staticCollider = treeColliders[k];
 					if (aabbMaxXPtr[staticCollider] < sweepMinX || aabbMinXPtr[staticCollider] > sweepMaxX ||
 						aabbMaxYPtr[staticCollider] < sweepMinY || aabbMinYPtr[staticCollider] > sweepMaxY) continue;
 
-					bestTime = std::fmin(bestTime, castCore(data.shapes, staticCollider, start, d, dd, coreRadius, bestTime));
+					bump(sweepStats.aabbCandidates);
+					bestTime = std::fmin(bestTime, castCore(data.shapes, staticCollider, start, d, dd, coreRadius, bestTime, debugData));
 				}
 			}
 
 			if (bestTime < Real(1))
 			{
+				bump(sweepStats.hits);
 				Real& t = shiftedHitTimePtr[body];
 				if (t >= Real(1)) hitBodies.push_back(body); // First hit of this body.
 				t = std::fmin(t, bestTime);
@@ -447,19 +495,19 @@ namespace PS_AGONY2D
 
 		{
 			TRACY_SCOPE_N("CCD: Circles");
-			processShapeRange(circles, bodies, colliders, data);
+			processShapeRange(circles, ColliderShapeType::Circle, bodies, colliders, data);
 		}
 		{
 			TRACY_SCOPE_N("CCD: Boxes");
-			processShapeRange(boxes, bodies, colliders, data);
+			processShapeRange(boxes, ColliderShapeType::Box, bodies, colliders, data);
 		}
 		{
 			TRACY_SCOPE_N("CCD: Polygons");
-			processShapeRange(polygons, bodies, colliders, data);
+			processShapeRange(polygons, ColliderShapeType::Polygon, bodies, colliders, data);
 		}
 		{
 			TRACY_SCOPE_N("CCD: Capsules");
-			processShapeRange(capsules, bodies, colliders, data);
+			processShapeRange(capsules, ColliderShapeType::Capsule, bodies, colliders, data);
 		}
 
 		if (hitBodies.empty()) return false;

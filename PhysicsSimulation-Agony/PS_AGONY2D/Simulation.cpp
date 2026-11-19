@@ -510,6 +510,10 @@ namespace PS_AGONY2D
             runtimeDebugData.bodyCollisionSolverVelocityError = errors.x;
             runtimeDebugData.bodyCollisionSolverPositionError = errors.y;
         }
+
+        // Other.
+        runtimeDebugData.ccd = continuousCollisionDetector.getDebugData();
+        continuousCollisionDetector.resetDebugData();
     }
 
     void Simulation::rebuildSpatialData()

@@ -1393,7 +1393,7 @@ void load_CCDPerfTest(
             });
     }
 
-    const PS_AGONY2D::Vec2 initialVelocity = { 0.0f, 50.0f };
+    const PS_AGONY2D::Vec2 initialVelocity = { 0.0f, 150.0f };
 
     for (int i = 0; i < totalBodies; i++)
     {

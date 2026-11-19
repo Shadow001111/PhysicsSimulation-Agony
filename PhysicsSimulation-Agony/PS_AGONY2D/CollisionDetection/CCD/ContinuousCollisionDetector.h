@@ -1,6 +1,7 @@
 #pragma once
 #include "PS_AGONY2D/ObjectSoA.h"
 #include "PS_AGONY2D/Types/Types.h"
+#include "PS_AGONY2D/Limits.h"
 #include "PS_AGONY2D/CollisionDetection/Broad/BvhTree.h"
 
 namespace PS_AGONY2D
@@ -33,7 +34,45 @@ namespace PS_AGONY2D
 
 		static constexpr Real MIN_DISPLACEMENT_SQ = Real(1e-8); // Skip (almost) stationary bodies before any other work.
 
+		static constexpr bool COLLECT_STATS = true;
+
+		struct DebugData
+		{
+			struct SweepStats
+			{
+				uint32_t total;
+				uint32_t moved;
+				uint32_t fastBody;
+				uint32_t fastCollider;
+				uint32_t hits;
+				uint32_t nodesVisited;
+				uint32_t leavesVisited;
+				uint32_t aabbCandidates;
+			};
+
+			struct CastStats
+			{
+				uint32_t calls;
+				uint32_t misses;
+			};
+
+			struct PolygonStats
+			{
+				uint32_t rejectedAtEdge[MAX_POLYGON_VERTEX_COUNT];
+				uint32_t rejectedAfterLoop;
+				uint32_t startedInside;
+				uint32_t faceHit;
+				uint32_t cornerCast;
+			};
+
+			SweepStats sweep[size_t(ColliderShapeType::COUNT)];
+			CastStats cast[size_t(ColliderShapeType::COUNT)];
+			PolygonStats polygon;
+		};
+
 		Settings settings;
+	private:
+		DebugData debugData;
 	public:
 		void snapshotPoses(const BodySoA& bodies, const ColliderSoA& colliders);
 
@@ -48,6 +87,9 @@ namespace PS_AGONY2D
 		);
 
 		size_t getMemoryUsage() const;
+
+		void resetDebugData() noexcept { debugData = DebugData{}; }
+		const DebugData& getDebugData() const noexcept { return debugData; }
 	private:
 		struct StaticSweepData;
 
@@ -55,6 +97,7 @@ namespace PS_AGONY2D
 		template<typename ShapeSoA>
 		void processShapeRange(
 			const ShapeSoA& soa,
+			ColliderShapeType type,
 			const BodySoA& bodies,
 			const ColliderSoA& colliders,
 			const StaticSweepData& data

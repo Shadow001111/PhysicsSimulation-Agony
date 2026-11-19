@@ -23,6 +23,7 @@
 #include <string_view>
 #include <cstdio>
 #include <cmath>
+#include <cfloat>
 
 static std::string formatSizeBinary(size_t value)
 {
@@ -224,6 +225,291 @@ static void renderSimulationSettings(PS_AGONY2D::Simulation& simulation)
     renderIntegratorSettings(settings);
 }
 
+static const char* shapeTypeName(PS_AGONY2D::ColliderShapeType type)
+{
+    switch (type)
+    {
+    case PS_AGONY2D::ColliderShapeType::Circle: return "Circle";
+    case PS_AGONY2D::ColliderShapeType::Box: return "Box";
+    case PS_AGONY2D::ColliderShapeType::Polygon: return "Polygon";
+    case PS_AGONY2D::ColliderShapeType::Capsule: return "Capsule";
+    }
+    return "?";
+}
+
+static void countCell(uint32_t count, uint32_t total)
+{
+    if (total == 0)
+    {
+        ImGui::TextDisabled("-");
+        return;
+    }
+    ImGui::Text("%u (%.1f%%)", count, 100.0 * static_cast<double>(count) / static_cast<double>(total));
+}
+
+static void averageCell(uint32_t sum, uint32_t count)
+{
+    if (count == 0)
+    {
+        ImGui::TextDisabled("-");
+        return;
+    }
+    ImGui::Text("%.1f", static_cast<double>(sum) / static_cast<double>(count));
+}
+
+static std::string buildCCDText(const PS_AGONY2D::ContinuousCollisionDetector::DebugData& data)
+{
+    using ShapeType = PS_AGONY2D::ColliderShapeType;
+    constexpr int shapeCount = static_cast<int>(ShapeType::COUNT);
+
+    std::string out;
+    out.reserve(2048);
+    const auto it = std::back_inserter(out);
+
+    const auto count = [&](uint32_t value, uint32_t total)
+        {
+            if (total == 0) out += '-';
+            else std::format_to(it, "{} ({:.1f}%)", value, 100.0 * static_cast<double>(value) / static_cast<double>(total));
+        };
+    const auto average = [&](uint32_t sum, uint32_t n)
+        {
+            if (n == 0) out += '-';
+            else std::format_to(it, "{:.1f}", static_cast<double>(sum) / static_cast<double>(n));
+        };
+
+    out += "CCD: dynamic colliders passing each filter (% of Total)\n";
+    out += "Shape  Total  Moved  Fast body  Fast collider  Hit\n";
+    for (int i = 0; i < shapeCount; i++)
+    {
+        const auto& sweep = data.sweep[i];
+        const uint32_t counts[] = { sweep.moved, sweep.fastBody, sweep.fastCollider, sweep.hits };
+
+        std::format_to(it, "{}  {}", shapeTypeName(ShapeType(i)), sweep.total);
+        for (const uint32_t c : counts)
+        {
+            out += "  ";
+            count(c, sweep.total);
+        }
+        out += '\n';
+    }
+
+    out += "\nCCD: static tree work per swept collider\n";
+    out += "Shape  Swept  Nodes  Leaves  AABB candidates\n";
+    for (int i = 0; i < shapeCount; i++)
+    {
+        const auto& sweep = data.sweep[i];
+
+        std::format_to(it, "{}  {}  ", shapeTypeName(ShapeType(i)), sweep.fastCollider);
+        average(sweep.nodesVisited, sweep.fastCollider);
+        out += "  ";
+        average(sweep.leavesVisited, sweep.fastCollider);
+        out += "  ";
+        average(sweep.aabbCandidates, sweep.fastCollider);
+        out += '\n';
+    }
+
+    out += "\nCCD: static cast calls and misses\n";
+    out += "Shape  Calls  Misses\n";
+    for (int i = 0; i < shapeCount; i++)
+    {
+        const auto& cast = data.cast[i];
+
+        std::format_to(it, "{}  {}  ", shapeTypeName(ShapeType(i)), cast.calls);
+        count(cast.misses, cast.calls);
+        out += '\n';
+    }
+
+    const auto& polygon = data.polygon;
+    const uint32_t calls = data.cast[static_cast<int>(ShapeType::Polygon)].calls;
+    uint32_t rejectedAtEdge = 0;
+    int lastEdge = -1;
+    for (int i = 0; i < static_cast<int>(PS_AGONY2D::MAX_POLYGON_VERTEX_COUNT); i++)
+    {
+        rejectedAtEdge += polygon.rejectedAtEdge[i];
+        if (polygon.rejectedAtEdge[i] != 0) lastEdge = i;
+    }
+
+    const auto addRow = [&](const char* name, uint32_t value)
+        {
+            out += name;
+            out += "  ";
+            count(value, calls);
+            out += '\n';
+        };
+
+    out += "\nCCD: polygon casts\n";
+    addRow("Rejected at edge", rejectedAtEdge);
+    addRow("Rejected after loop", polygon.rejectedAfterLoop);
+    addRow("Started inside", polygon.startedInside);
+    addRow("Face hit", polygon.faceHit);
+    addRow("Corner cast", polygon.cornerCast);
+
+    if (lastEdge >= 0)
+    {
+        out += "Rejections per edge index:";
+        for (int i = 0; i <= lastEdge; i++)
+        {
+            std::format_to(it, "  {}:{}", i, polygon.rejectedAtEdge[i]);
+        }
+        out += '\n';
+    }
+
+    return out;
+}
+
+static void renderCCDDiagnostics(const PS_AGONY2D::ContinuousCollisionDetector::DebugData& data)
+{
+    using Detector = PS_AGONY2D::ContinuousCollisionDetector;
+    using ShapeType = PS_AGONY2D::ColliderShapeType;
+    constexpr int shapeCount = static_cast<int>(ShapeType::COUNT);
+    constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+
+    ImGui::SeparatorText("CCD");
+
+    if constexpr (!Detector::COLLECT_STATS)
+    {
+        ImGui::TextDisabled("Disabled (ContinuousCollisionDetector::COLLECT_STATS = false).");
+    }
+    else
+    {
+        if (ImGui::Button("Copy"))
+        {
+            ImGui::SetClipboardText(buildCCDText(data).c_str());
+        }
+
+        ImGui::TextDisabled("Dynamic colliders: how many pass each filter (% of Total).");
+        if (ImGui::BeginTable("CCDFunnel", 6, tableFlags))
+        {
+            ImGui::TableSetupColumn("Shape");
+            ImGui::TableSetupColumn("Total");
+            ImGui::TableSetupColumn("Moved");
+            ImGui::TableSetupColumn("Fast body");
+            ImGui::TableSetupColumn("Fast collider");
+            ImGui::TableSetupColumn("Hit");
+            ImGui::TableHeadersRow();
+
+            for (int i = 0; i < shapeCount; i++)
+            {
+                const auto& sweep = data.sweep[i];
+                const uint32_t counts[] = { sweep.moved, sweep.fastBody, sweep.fastCollider, sweep.hits };
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(shapeTypeName(ShapeType(i)));
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%u", sweep.total);
+                for (int c = 0; c < 4; c++)
+                {
+                    ImGui::TableSetColumnIndex(c + 2);
+                    countCell(counts[c], sweep.total);
+                }
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Static tree work per swept (fast) collider.");
+        if (ImGui::BeginTable("CCDTraversal", 5, tableFlags))
+        {
+            ImGui::TableSetupColumn("Shape");
+            ImGui::TableSetupColumn("Swept");
+            ImGui::TableSetupColumn("Nodes");
+            ImGui::TableSetupColumn("Leaves");
+            ImGui::TableSetupColumn("AABB candidates");
+            ImGui::TableHeadersRow();
+
+            for (int i = 0; i < shapeCount; i++)
+            {
+                const auto& sweep = data.sweep[i];
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(shapeTypeName(ShapeType(i)));
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%u", sweep.fastCollider);
+                ImGui::TableSetColumnIndex(2);
+                averageCell(sweep.nodesVisited, sweep.fastCollider);
+                ImGui::TableSetColumnIndex(3);
+                averageCell(sweep.leavesVisited, sweep.fastCollider);
+                ImGui::TableSetColumnIndex(4);
+                averageCell(sweep.aabbCandidates, sweep.fastCollider);
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Static colliders: cast calls and misses (no earlier hit).");
+        if (ImGui::BeginTable("CCDCasts", 3, tableFlags))
+        {
+            ImGui::TableSetupColumn("Shape");
+            ImGui::TableSetupColumn("Calls");
+            ImGui::TableSetupColumn("Misses");
+            ImGui::TableHeadersRow();
+
+            for (int i = 0; i < shapeCount; i++)
+            {
+                const auto& cast = data.cast[i];
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(shapeTypeName(ShapeType(i)));
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%u", cast.calls);
+                ImGui::TableSetColumnIndex(2);
+                countCell(cast.misses, cast.calls);
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        if (ImGui::TreeNode("Polygon casts"))
+        {
+            constexpr int maxEdges = static_cast<int>(PS_AGONY2D::MAX_POLYGON_VERTEX_COUNT);
+            const auto& polygon = data.polygon;
+            const uint32_t calls = data.cast[static_cast<int>(ShapeType::Polygon)].calls;
+
+            float edgeCounts[maxEdges];
+            uint32_t rejectedAtEdge = 0;
+            int lastEdge = -1;
+            for (int i = 0; i < maxEdges; i++)
+            {
+                edgeCounts[i] = static_cast<float>(polygon.rejectedAtEdge[i]);
+                rejectedAtEdge += polygon.rejectedAtEdge[i];
+                if (polygon.rejectedAtEdge[i] != 0) lastEdge = i;
+            }
+
+            if (ImGui::BeginTable("CCDPolygon", 2, tableFlags))
+            {
+                ImGui::TableSetupColumn("Outcome");
+                ImGui::TableSetupColumn("Count");
+                ImGui::TableHeadersRow();
+
+                const auto addRow = [calls](const char* name, uint32_t count)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextUnformatted(name);
+                        ImGui::TableSetColumnIndex(1);
+                        countCell(count, calls);
+                    };
+
+                addRow("Rejected at edge", rejectedAtEdge);
+                addRow("Rejected after loop", polygon.rejectedAfterLoop);
+                addRow("Started inside", polygon.startedInside);
+                addRow("Face hit", polygon.faceHit);
+                addRow("Corner cast", polygon.cornerCast);
+                ImGui::EndTable();
+            }
+
+            if (lastEdge >= 0)
+            {
+                ImGui::PlotHistogram("##CCDEdgeRejects", edgeCounts, lastEdge + 1, 0, "Rejections per edge index", 0.0f, FLT_MAX, ImVec2(0.0f, 60.0f));
+            }
+            ImGui::TreePop();
+        }
+    }
+}
+
 static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const DebugData& debugData)
 {
     auto& settings = simulation.getSimulationSettings();
@@ -239,6 +525,8 @@ static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const D
     {
         ImGui::TextDisabled("Disabled.");
     }
+
+    renderCCDDiagnostics(simulationData.ccd);
 }
 
 static void renderRenderOptions(PS_AGONY_RENDER::RenderOptions& renderOptions)
@@ -293,30 +581,7 @@ static MemoryTotals computeMemoryTotals(PS_AGONY2D::Simulation& simulation, cons
     return t;
 }
 
-static void addMemoryRow(const char* name, size_t bytes, size_t total, bool indent = false)
-{
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    if (indent)
-    {
-        ImGui::Indent(12.0f);
-        ImGui::TextDisabled("* %s", name);
-        ImGui::Unindent(12.0f);
-    }
-    else
-    {
-        ImGui::TextUnformatted(name);
-    }
-
-    ImGui::TableSetColumnIndex(1);
-    ImGui::TextUnformatted(formatSizeBinary(bytes).c_str());
-
-    ImGui::TableSetColumnIndex(2);
-    const double percentage = total > 0 ? (static_cast<double>(bytes) / static_cast<double>(total)) * 100.0 : 0.0;
-    ImGui::Text("%.1f%%", percentage);
-}
-
-static void renderMemoryExperimental(const PS_AGONY2D::MemoryUsageTracking& tracking)
+static void renderMemory(const PS_AGONY2D::MemoryUsageTracking& tracking)
 {
     if (!ImGui::BeginTable("MemoryExperimentalTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
     {
@@ -407,7 +672,7 @@ static void renderGUI(
         }
         if (ImGui::BeginTabItem("Memory"))
         {
-            renderMemoryExperimental(memoryTracking);
+            renderMemory(memoryTracking);
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -553,7 +818,7 @@ static int gameFunc()
 
     PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 1);
+    loadScene(simulation, 6);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;
