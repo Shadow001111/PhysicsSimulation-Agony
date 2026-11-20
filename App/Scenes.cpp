@@ -1299,114 +1299,124 @@ void load_CCDPerfTest(
     auto& objects = simulation.objects();
 
     PS_AGONY2D::Material ccdMaterial = {
-        .elasticity = 1.0f,
+        .elasticity = 0.98f,
         .staticFriction = 0.0f,
         .dynamicFriction = 0.0f
     };
-    PS_AGONY2D::MaterialIndex materialIndex = simulation.createMaterial(ccdMaterial);
+    const PS_AGONY2D::MaterialIndex materialIndex = simulation.createMaterial(ccdMaterial);
 
-    const float bodySize = 0.6f;
-    const float cellWidth = bodySize + 0.2f;
-    const float cellHeight = bodySize + 0.4f;
-    const float floorThickness = 0.1f;
-    const float barrierThickness = 0.05f;
-
-    const float innerWidth = totalBodies * cellWidth + (totalBodies + 1) * barrierThickness;
-    const float innerHalfWidth = innerWidth * 0.5f;
-    const float innerHeight = cellHeight;
-    const float innerHalfHeight = innerHeight * 0.5f;
-
-    objects.createBox({
-        .base.position = { 0.0f, -floorThickness * 0.5f },
-        .base.mass = 0,
-        .base.materialIndex = materialIndex,
-        .size = { innerWidth, floorThickness }
-        });
-
-    objects.createBox({
-        .base.position = { 0.0f, innerHeight + floorThickness * 0.5f },
-        .base.mass = 0,
-        .base.materialIndex = materialIndex,
-        .size = { innerWidth, floorThickness }
-        });
-
-    objects.createBox({
-        .base.position = { -innerHalfWidth + barrierThickness * 0.5f, innerHalfHeight },
-        .base.mass = 0,
-        .base.materialIndex = materialIndex,
-        .size = { barrierThickness, innerHeight }
-        });
-
-    objects.createBox({
-        .base.position = { innerHalfWidth - barrierThickness * 0.5f, innerHalfHeight },
-        .base.mass = 0,
-        .base.materialIndex = materialIndex,
-        .size = { barrierThickness, innerHeight }
-        });
-
-    for (int i = 0; i <= totalBodies; i++)
-    {
-        const float x = -innerHalfWidth + barrierThickness * 0.5f + i * (cellWidth + barrierThickness);
-        objects.createBox({
-            .base.position = { x, innerHalfHeight },
-            .base.mass = 0,
-            .base.materialIndex = materialIndex,
-            .size = { barrierThickness, innerHeight }
-            });
-    }
-
+    constexpr float bodySize = 0.6f;
+    constexpr float slot = bodySize * 2.0f;
+    constexpr float thinThickness = 0.05f;
     constexpr int outerLayerCount = 3;
+    constexpr float speed = 150.0f;
+
+    // Local RNG (xorshift32)
+    uint32_t rngState = 0x9E3779B9u;
+    auto rand01 = [&rngState]() {
+        rngState ^= rngState << 13;
+        rngState ^= rngState >> 17;
+        rngState ^= rngState << 5;
+        return (rngState >> 8) * (1.0f / 16777216.0f);
+        };
+    auto randRange = [&](float lo, float hi) { return lo + (hi - lo) * rand01(); };
+
+    // Room layout: ~50% free space
+    const int n = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(totalBodies))));
+    const int gridDim = static_cast<int>(std::ceil(n * 1.5f));
+    const float side = gridDim * slot;
+    const float half = side * 0.5f;
+    const int obstacleCount = std::max(1, n / 2);
+
+    // Wall rings: inner face of the ring sits `offset` away from the room boundary
+    auto createRing = [&](float offset, float thickness) {
+        const float c = half + offset + thickness * 0.5f;
+        const float fullW = side + 2.0f * (offset + thickness);
+        const float innerH = side + 2.0f * offset;
+
+        objects.createBox({ .base.position = { 0.0f, -c }, .base.mass = 0, .base.materialIndex = materialIndex, .size = { fullW, thickness } });
+        objects.createBox({ .base.position = { 0.0f,  c }, .base.mass = 0, .base.materialIndex = materialIndex, .size = { fullW, thickness } });
+        objects.createBox({ .base.position = { -c, 0.0f }, .base.mass = 0, .base.materialIndex = materialIndex, .size = { thickness, innerH } });
+        objects.createBox({ .base.position = {  c, 0.0f }, .base.mass = 0, .base.materialIndex = materialIndex, .size = { thickness, innerH } });
+        };
+
+    createRing(0.0f, thinThickness);
     for (int l = 1; l <= outerLayerCount; l++)
+        createRing(l * bodySize, thinThickness);
+    createRing((outerLayerCount + 1) * bodySize, side * 2.0f);
+
+    // Shuffled cells: first obstacleCount -> obstacles, next totalBodies -> bodies
+    std::vector<int> cells(gridDim * gridDim);
+    std::iota(cells.begin(), cells.end(), 0);
+    for (int i = static_cast<int>(cells.size()) - 1; i > 0; i--)
+        std::swap(cells[i], cells[static_cast<int>(rand01() * (i + 1)) % (i + 1)]);
+
+    auto cellCenter = [&](int cell) {
+        const int cx = cell % gridDim;
+        const int cy = cell / gridDim;
+        return PS_AGONY2D::Vec2{ -half + (cx + 0.5f) * slot, -half + (cy + 0.5f) * slot };
+        };
+
+    // Obstacles (static, fit inside their own cell)
+    for (int i = 0; i < obstacleCount; i++)
     {
-        const float expansion = l * bodySize;
-        const float layerWidth = innerWidth + expansion * 2.0f;
-        const float layerHeight = innerHeight + expansion * 2.0f;
-        const float layerHalfWidth = layerWidth * 0.5f;
-        const float layerCenterY = innerHalfHeight;
+        const PS_AGONY2D::Vec2 c = cellCenter(cells[i]);
+        const int type = i % 3;
 
-        objects.createBox({
-            .base.position = { 0.0f, -expansion - floorThickness * 0.5f },
-            .base.mass = 0,
-            .base.materialIndex = materialIndex,
-            .size = { layerWidth, floorThickness }
-            });
-
-        objects.createBox({
-            .base.position = { 0.0f, innerHeight + expansion + floorThickness * 0.5f },
-            .base.mass = 0,
-            .base.materialIndex = materialIndex,
-            .size = { layerWidth, floorThickness }
-            });
-
-        objects.createBox({
-            .base.position = { -layerHalfWidth + barrierThickness * 0.5f, layerCenterY },
-            .base.mass = 0,
-            .base.materialIndex = materialIndex,
-            .size = { barrierThickness, layerHeight }
-            });
-
-        objects.createBox({
-            .base.position = { layerHalfWidth - barrierThickness * 0.5f, layerCenterY },
-            .base.mass = 0,
-            .base.materialIndex = materialIndex,
-            .size = { barrierThickness, layerHeight }
-            });
+        if (type == 0)
+        {
+            objects.createBox({
+                .base.position = c,
+                .base.mass = 0,
+                .base.materialIndex = materialIndex,
+                .size = { randRange(0.5f, 0.9f), randRange(0.5f, 0.9f) }
+                });
+        }
+        else if (type == 1)
+        {
+            objects.createCircle({
+                .base.position = c,
+                .base.mass = 0,
+                .base.materialIndex = materialIndex,
+                .radius = randRange(0.25f, 0.45f)
+                });
+        }
+        else
+        {
+            objects.createCapsule({
+                .base.position = c,
+                .base.mass = 0,
+                .base.materialIndex = materialIndex,
+                .length = bodySize * 0.6f,
+                .radius = bodySize * 0.3f
+                });
+        }
     }
 
-    const PS_AGONY2D::Vec2 initialVelocity = { 0.0f, 150.0f };
+    // Bodies (jittered inside their own cell, constant-speed diagonal velocity)
+    constexpr float jitter = (slot - bodySize) * 0.5f;
+    constexpr float degToRad = 3.14159265f / 180.0f;
 
     for (int i = 0; i < totalBodies; i++)
     {
-        const float cellCenterX = -innerHalfWidth + barrierThickness + i * (cellWidth + barrierThickness) + cellWidth * 0.5f;
-        const float cellCenterY = innerHalfHeight;
+        PS_AGONY2D::Vec2 pos = cellCenter(cells[obstacleCount + i]);
+        pos.x += randRange(-jitter, jitter);
+        pos.y += randRange(-jitter, jitter);
+
+        const float angle = randRange(20.0f, 70.0f) * degToRad;
+        const PS_AGONY2D::Vec2 velocity = {
+            std::cos(angle) * speed * (rand01() < 0.5f ? -1.0f : 1.0f),
+            std::sin(angle) * speed * (rand01() < 0.5f ? -1.0f : 1.0f)
+        };
+
         const int type = i % 4;
 
         if (type == 0)
         {
             const float radius = bodySize * 0.35f;
             objects.createCircle({
-                .base.position = { cellCenterX, cellCenterY },
-                .base.velocity = initialVelocity,
+                .base.position = pos,
+                .base.velocity = velocity,
                 .base.mass = 3.14159f * radius * radius,
                 .base.materialIndex = materialIndex,
                 .radius = radius
@@ -1414,14 +1424,13 @@ void load_CCDPerfTest(
         }
         else if (type == 1)
         {
-            const float w = bodySize * 0.6f;
-            const float h = bodySize * 0.6f;
+            const float s = bodySize * 0.6f;
             objects.createBox({
-                .base.position = { cellCenterX, cellCenterY },
-                .base.velocity = initialVelocity,
-                .base.mass = w * h,
+                .base.position = pos,
+                .base.velocity = velocity,
+                .base.mass = s * s,
                 .base.materialIndex = materialIndex,
-                .size = { w, h }
+                .size = { s, s }
                 });
         }
         else if (type == 2)
@@ -1429,8 +1438,8 @@ void load_CCDPerfTest(
             const float radius = bodySize * 0.4f;
             auto localVertices = makeConvexPolygon(randomGenerator, 4, radius);
             objects.createPolygon({
-                .base.position = { cellCenterX, cellCenterY },
-                .base.velocity = initialVelocity,
+                .base.position = pos,
+                .base.velocity = velocity,
                 .base.mass = 1.0f,
                 .base.materialIndex = materialIndex,
                 .localVertices = { localVertices.data(), localVertices.size() }
@@ -1438,15 +1447,13 @@ void load_CCDPerfTest(
         }
         else
         {
-            const float length = bodySize * 0.3f;
-            const float radius = bodySize * 0.2f;
             objects.createCapsule({
-                .base.position = { cellCenterX, cellCenterY },
-                .base.velocity = initialVelocity,
+                .base.position = pos,
+                .base.velocity = velocity,
                 .base.mass = 1.0f,
                 .base.materialIndex = materialIndex,
-                .length = length,
-                .radius = radius
+                .length = bodySize * 0.3f,
+                .radius = bodySize * 0.2f
                 });
         }
     }

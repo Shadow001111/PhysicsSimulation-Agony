@@ -45,9 +45,6 @@ namespace PS_AGONY2D
 			// Solving errors.
 			Real bodyCollisionSolverVelocityError = 0;
 			Real bodyCollisionSolverPositionError = 0;
-
-			// Other.
-			ContinuousCollisionDetector::DebugData ccd;
 		};
 
 		struct SimulationSettings

@@ -35,8 +35,8 @@ namespace PS_AGONY2D
 
         const PolygonGeometry* ECSTASY_RESTRICT polyGeometryPtr = polygons.geometry;
 
-        alignas(CACHE_LINE_ALIGNMENT) Vec2 vertsB_inA[MAX_POLYGON_VERTEX_COUNT];
-        alignas(CACHE_LINE_ALIGNMENT) Vec2 normalsB_inA[MAX_POLYGON_VERTEX_COUNT];  // B edge normals rotated into A-local.
+        alignas(std::hardware_destructive_interference_size) Vec2 vertsB_inA[MAX_POLYGON_VERTEX_COUNT];
+        alignas(std::hardware_destructive_interference_size) Vec2 normalsB_inA[MAX_POLYGON_VERTEX_COUNT];  // B edge normals rotated into A-local.
 
         for (auto [indexA, indexB] : pairs)
         {

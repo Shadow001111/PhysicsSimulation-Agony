@@ -555,8 +555,8 @@ namespace PS_AGONY2D
         // Main takes chunks too, so never launch more workers than chunkCount - 1.
         const size_t launchCount = std::min<size_t>(participants - 1, chunkCount - 1);
 
-        alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> workerChunkIndex{ 0 };
-        alignas(CACHE_LINE_ALIGNMENT) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
+        alignas(std::hardware_destructive_interference_size) std::atomic<uint32_t> workerChunkIndex{ 0 };
+        alignas(std::hardware_destructive_interference_size) std::atomic<uint32_t> destroyedWorkerCount{ 0 };
 
         size_t nextToMerge = 0;
         auto mergeReady = [&](bool blocking)

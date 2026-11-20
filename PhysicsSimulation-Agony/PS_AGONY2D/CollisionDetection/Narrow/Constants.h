@@ -18,9 +18,6 @@ namespace PS_AGONY2D
     constexpr size_t MULTITHREAD_PAIR_THRESHOLD = PAIRS_PER_WORKER * 2;
     constexpr size_t LOAD_BALANCING_FACTOR = 4;
 
-    // Memory layout.
-    constexpr size_t CACHE_LINE_ALIGNMENT = std::hardware_destructive_interference_size;
-
     // Manifolds and contact ids.
     constexpr size_t MAX_CONTACTS_PER_MANIFOLD = 2;
     constexpr uint32_t REFERENCE_BODY_TAG = 0x80000000u;
@@ -44,7 +41,7 @@ namespace PS_AGONY2D
     constexpr Real CAPSULE_PARALLEL_SIN_SQUARED = Real(1e-3);    // Below this, capsule axes count as parallel (2 contacts).
 
     // Box as a convex polygon: counter-clockwise, normal i belongs to edge i -> i + 1.
-    alignas(CACHE_LINE_ALIGNMENT) const Vec2 BOX_NORMALS[4] = {
+    alignas(std::hardware_destructive_interference_size) const Vec2 BOX_NORMALS[4] = {
         Vec2(Real(0), Real(-1)),
         Vec2(Real(1), Real(0)),
         Vec2(Real(0), Real(1)),
