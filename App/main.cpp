@@ -117,6 +117,12 @@ static void renderPerformancePanel(PS_AGONY2D::Simulation& simulation, const Deb
     {
         simulation.setPause(paused);
     }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Step"))
+    {
+        simulation.requestStep();
+    }
 }
 
 static void renderTimingSettings(PS_AGONY2D::Simulation::SimulationSettings& settings)
@@ -173,8 +179,6 @@ static void renderCCDSettings(CCDSettings& ccd)
     helpMarker("Body is 'fast' when displacement > factor * min extent.");
 
     sliderReal("Core fraction", ccd.coreFraction, 0.05f, 1.0f, "%.2f");
-    helpMarker("Core radius / min extent. Below 1, sliding on a surface never 'hits'.");
-
     ImGui::Unindent();
 }
 

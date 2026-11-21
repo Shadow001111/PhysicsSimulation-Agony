@@ -39,15 +39,16 @@ namespace PS_AGONY2D
         flushCommands();
 
         // Paused: only keep the spatial structures valid for newly created/destroyed colliders.
-        if (paused)
+        if (paused && !stepRequested)
         {
             refreshSpatialData();
+            renderAlpha = 1;
             return;
         }
 
         // Physics steps.
         clock.setSettings(simulationSettings.clockSettings);
-        const uint32_t stepCount = clock.advance(deltaTime);
+        const uint32_t stepCount = clock.advance(paused ? simulationSettings.clockSettings.updateInterval : deltaTime);
         if (stepCount > 0)
         {
             const Real fixedDeltaTime = clock.getFixedDeltaTime();
@@ -59,6 +60,8 @@ namespace PS_AGONY2D
                 physicsStep(fixedDeltaTime);
             }
             postUpdate();
+
+            updateDebugData(deltaTime, stepCount);
         }
         else
         {
@@ -67,7 +70,7 @@ namespace PS_AGONY2D
 
         renderAlpha = clock.getRenderAlpha();
 
-        updateDebugData(deltaTime, stepCount);
+        stepRequested = false;
     }
 
     MaterialIndex Simulation::createMaterial(const Material& material)

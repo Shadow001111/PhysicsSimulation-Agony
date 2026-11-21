@@ -15,12 +15,21 @@ namespace PS_AGONY2D
             Real maxDeltaTimePerUpdateCall = Real(1) / Real(20);
             Real timeScale = Real(1);
         };
+    private:
+        Settings settings;
 
+        Real accumulator = Real(0);
+        Real totalSimulationTime = Real(0);
+        Real renderAlpha = Real(0);
+
+        uint32_t lastStepCount = 1;
+        uint32_t currentStepCount = 0;
+    public:
         FixedClock() = default;
+
         explicit FixedClock(const Settings& settings) noexcept :
             settings(settings)
-        {
-        }
+        {}
 
         // Advances time, computes required sub-step count, and updates render alpha.
         uint32_t advance(Real deltaTime) noexcept
@@ -77,15 +86,5 @@ namespace PS_AGONY2D
         [[nodiscard]] Settings& getSettings() noexcept { return settings; }
         [[nodiscard]] const Settings& getSettings() const noexcept { return settings; }
         void setSettings(const Settings& settings) noexcept { this->settings = settings; }
-
-    private:
-        Settings settings;
-
-        Real accumulator = Real(0);
-        Real totalSimulationTime = Real(0);
-        Real renderAlpha = Real(0);
-
-        uint32_t lastStepCount = 1;
-        uint32_t currentStepCount = 0;
     };
 }

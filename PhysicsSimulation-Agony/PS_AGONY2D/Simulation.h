@@ -121,6 +121,7 @@ namespace PS_AGONY2D
 
 		// Pause.
 		bool paused = false;
+		bool stepRequested = false;
 
 		// Render.
 		Real renderAlpha = 0;
@@ -148,6 +149,8 @@ namespace PS_AGONY2D
 
 		void setPause(bool pause) noexcept { paused = pause; }
 		bool isPaused() const noexcept { return paused; }
+
+		void requestStep() noexcept { stepRequested = true; }
 
 		MaterialIndex createMaterial(const Material& material);
 
