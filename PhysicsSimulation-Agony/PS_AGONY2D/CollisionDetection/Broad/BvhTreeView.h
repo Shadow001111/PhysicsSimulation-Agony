@@ -1,7 +1,7 @@
 #pragma once
 #include "BvhNode.h"
 
-#include "PS_AGONY2D/ObjectSoA.h"
+#include "PS_AGONY2D/Types/Types.h"
 
 namespace PS_AGONY2D::BroadPhaseInternal
 {

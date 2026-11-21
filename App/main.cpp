@@ -169,7 +169,7 @@ static void renderCCDSettings(CCDSettings& ccd)
 {
     ImGui::Indent();
 
-    sliderReal("Fast factor", ccd.fastFactor, 0.1f, 10.0f, "%.2f");
+    sliderReal("Fast factor", ccd.fastFactor, 0.0f, 10.0f, "%.2f");
     helpMarker("Body is 'fast' when displacement > factor * min extent.");
 
     sliderReal("Core fraction", ccd.coreFraction, 0.05f, 1.0f, "%.2f");

@@ -4,6 +4,7 @@
 #include "PS_AGONY2D/Limits.h"
 
 #include "Ecstasy/Core/Portablity.h"
+#include "Ecstasy/Core/Simd.h"
 
 #include <algorithm>
 #include <cmath>
@@ -223,13 +224,13 @@ namespace PS_AGONY2D
 			const Real inflated = capsuleRadius + radius;
 
 			// Slab on q0's side.
-			const Real vy = std::copysign(dl.y, q0.y);
+			const Real nvy = -std::copysign(Real(1), q0.y) * dl.y;
 			const Real gap = std::fabs(q0.y) - inflated;
 
 			// gap < best * -vy guarantees time < best.
-			if (vy < Real(0) && gap >= Real(0) && gap < best * -vy)
+			if (nvy > Real(0) && gap >= Real(0) && gap < best * nvy)
 			{
-				const Real time = gap / -vy;
+				const Real time = gap / nvy;
 				if (std::fabs(q0.x + dl.x * time) <= halfLength) return time; // Convex entry point.
 			}
 
@@ -300,8 +301,7 @@ namespace PS_AGONY2D
 	struct ContinuousCollisionDetector::StaticSweepData
 	{
 		StaticShapes shapes;
-		const BroadPhaseInternal::BvhNode* nodes;
-		const ObjectDenseIndex* treeColliders;
+		BroadPhaseInternal::BvhTreeView treeView;
 	};
 
 	void ContinuousCollisionDetector::processShapeRange(
@@ -313,15 +313,12 @@ namespace PS_AGONY2D
 	)
 	{
 		using Node = BroadPhaseInternal::BvhNode;
+		using RealSimd = Ecstasy::Core::Simd<Real>;
 
 		const ObjectDenseIndex* ECSTASY_RESTRICT ownerPtr = colliders.bodyIndex.data();
 		const Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
 		const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
 		const Real* ECSTASY_RESTRICT minExtentPtr = colliders.minExtent.data();
-		const Real* ECSTASY_RESTRICT aabbMinXPtr = colliders.aabbMinX.data();
-		const Real* ECSTASY_RESTRICT aabbMinYPtr = colliders.aabbMinY.data();
-		const Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabbMaxX.data();
-		const Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabbMaxY.data();
 
 		const Real* ECSTASY_RESTRICT offsetXPtr = bodies.offsetX.data();
 		const Real* ECSTASY_RESTRICT offsetYPtr = bodies.offsetY.data();
@@ -331,8 +328,8 @@ namespace PS_AGONY2D
 		const Real* ECSTASY_RESTRICT prevColliderXPtr = prevColliderX.data();
 		const Real* ECSTASY_RESTRICT prevColliderYPtr = prevColliderY.data();
 
-		const Node* ECSTASY_RESTRICT nodes = data.nodes;
-		const ObjectDenseIndex* ECSTASY_RESTRICT treeColliders = data.treeColliders;
+		const Node* ECSTASY_RESTRICT nodes = data.treeView.nodes;
+		const ObjectDenseIndex* ECSTASY_RESTRICT treeColliders = data.treeView.indices;
 
 		const ObjectDenseIndex bodyRangeBegin = bodies.range(BodyGroup::Dynamic).begin;
 		Real* ECSTASY_RESTRICT shiftedHitTimePtr = bodyHitTime.data() - bodyRangeBegin;
@@ -380,6 +377,11 @@ namespace PS_AGONY2D
 			const Real sweepMinY = std::fmin(start.y, end.y) - coreRadius;
 			const Real sweepMaxY = std::fmax(start.y, end.y) + coreRadius;
 
+			const RealSimd vSweepMinX(sweepMinX);
+			const RealSimd vSweepMaxX(sweepMaxX);
+			const RealSimd vSweepMinY(sweepMinY);
+			const RealSimd vSweepMaxY(sweepMaxY);
+
 			// Static tree traversal.
 			Real bestTime = 1;
 			uint32_t stackSize = 0;
@@ -398,12 +400,32 @@ namespace PS_AGONY2D
 				}
 
 				// Leaf node.
-				for (uint32_t k = node.start; k < node.end; k++)
-				{
-					const ObjectDenseIndex staticCollider = treeColliders[k];
-					if (aabbMaxXPtr[staticCollider] < sweepMinX || aabbMinXPtr[staticCollider] > sweepMaxX ||
-						aabbMaxYPtr[staticCollider] < sweepMinY || aabbMinYPtr[staticCollider] > sweepMaxY) continue;
+				const uint32_t srcIndex = node.leafIndex * Node::KD_LEAF_SIZE;
+				const Real* ECSTASY_RESTRICT leafMinXPtr = data.treeView.leafMinX + srcIndex;
+				const Real* ECSTASY_RESTRICT leafMinYPtr = data.treeView.leafMinY + srcIndex;
+				const Real* ECSTASY_RESTRICT leafMaxXPtr = data.treeView.leafMaxX + srcIndex;
+				const Real* ECSTASY_RESTRICT leafMaxYPtr = data.treeView.leafMaxY + srcIndex;
 
+				uint32_t mask = 0;
+				for (uint32_t j = 0; j < Node::KD_LEAF_SIZE; j += RealSimd::lanes)
+				{
+					const RealSimd vMinX = RealSimd::load(leafMinXPtr + j);
+					const RealSimd vMaxX = RealSimd::load(leafMaxXPtr + j);
+					const RealSimd vMinY = RealSimd::load(leafMinYPtr + j);
+					const RealSimd vMaxY = RealSimd::load(leafMaxYPtr + j);
+
+					const RealSimd overlap =
+						(vSweepMinX < vMaxX) & (vSweepMaxX > vMinX) &
+						(vSweepMinY < vMaxY) & (vSweepMaxY > vMinY);
+
+					mask |= overlap.movemask() << j;
+				}
+				while (mask)
+				{
+					const uint32_t lane = std::countr_zero(mask);
+					mask &= mask - 1;
+
+					const ObjectDenseIndex staticCollider = treeColliders[node.start + lane];
 					bestTime = std::fmin(bestTime, castCore(data.shapes, staticCollider, start, d, dd, coreRadius, bestTime));
 				}
 			}
@@ -442,7 +464,7 @@ namespace PS_AGONY2D
 			polygons.geometry.data()
 		};
 
-		const StaticSweepData data = { shapes, staticTree.nodeData(), staticTree.colliderIndexData() };
+		const StaticSweepData data = { shapes, staticTree.view() };
 
 		hitBodies.clear();
 		const IndexRange bodyRange = bodies.range(BodyGroup::Dynamic);
