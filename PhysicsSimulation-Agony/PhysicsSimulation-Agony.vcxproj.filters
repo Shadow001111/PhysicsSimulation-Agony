@@ -396,4 +396,7 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="PS_AGONY2D\ConstexprMath.h" />
+  </ItemGroup>
 </Project>

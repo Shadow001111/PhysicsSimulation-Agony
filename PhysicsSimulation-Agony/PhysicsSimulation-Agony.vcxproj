@@ -382,6 +382,9 @@
     <ClInclude Include="PS_AGONY2D\Solving\SolverBase.h" />
     <ClInclude Include="PS_AGONY2D\Solving\SpringSolver.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="PS_AGONY2D\ConstexprMath.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

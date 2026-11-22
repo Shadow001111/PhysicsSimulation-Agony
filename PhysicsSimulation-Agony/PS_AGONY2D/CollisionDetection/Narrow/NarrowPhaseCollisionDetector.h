@@ -60,6 +60,34 @@ namespace PS_AGONY2D
 		}
 	};
 
+	// Collider transforms a manifold was computed at. Stored in arrays index-aligned with the manifold arrays.
+	struct ContactReuseData
+	{
+		Vec2 posA, posB;
+		Vec2 rotA, rotB; // (cos, sin).
+		Real penetration; // Manifold penetration at these transforms.
+		Vec2 contactPoints[2]; // Manifold contact points at these transforms.
+	};
+
+	// Per-frame outcome of the contact reuse test of every pair that had a manifold in the previous frame or none.
+	struct ContactReuseStats
+	{
+		uint32_t reused = 0;
+		uint32_t notCached = 0;
+		uint32_t handleMismatch = 0;
+		uint32_t movedLinear = 0;
+		uint32_t movedAngular = 0;
+
+		void add(const ContactReuseStats& other) noexcept
+		{
+			reused += other.reused;
+			notCached += other.notCached;
+			handleMismatch += other.handleMismatch;
+			movedLinear += other.movedLinear;
+			movedAngular += other.movedAngular;
+		}
+	};
+
 	class NarrowPhaseCollisionDetector
 	{
 		// Structures.
@@ -71,6 +99,9 @@ namespace PS_AGONY2D
 			size_t start = 0, end = 0;
 			SymmetricMatrix<CacheLineAlignedVector<ObjectPair>, BODY_TYPE_COUNT> pairs; // Pairs of COLLIDER indices.
 			CacheLineAlignedVector<BodyCollisionData> results;
+			CacheLineAlignedVector<ContactReuseData> reuse;
+			CacheLineAlignedVector<ObjectPair> remainingPairs; // Pairs left for the collision methods after contact reuse.
+			ContactReuseStats reuseStats;
 			alignas(64) std::atomic<bool> finished{ false };
 
 			ChunkData() = default;
@@ -84,6 +115,9 @@ namespace PS_AGONY2D
 				end = other.end;
 				pairs = std::move(other.pairs);
 				results = std::move(other.results);
+				reuse = std::move(other.reuse);
+				remainingPairs = std::move(other.remainingPairs);
+				reuseStats = other.reuseStats;
 			}
 
 			ChunkData& operator=(ChunkData&& other) noexcept
@@ -94,6 +128,9 @@ namespace PS_AGONY2D
 					end = other.end;
 					pairs = std::move(other.pairs);
 					results = std::move(other.results);
+					reuse = std::move(other.reuse);
+					remainingPairs = std::move(other.remainingPairs);
+					reuseStats = other.reuseStats;
 				}
 				return *this;
 			}
@@ -103,6 +140,9 @@ namespace PS_AGONY2D
 				for (auto& vec : pairs.getDirectAccess())
 					vec.clear();
 				results.clear();
+				reuse.clear();
+				remainingPairs.clear();
+				reuseStats = {};
 			}
 		};
 
@@ -121,6 +161,14 @@ namespace PS_AGONY2D
 
 		CacheLineAlignedVector<BodyCollisionData> previousCollisionArray;
 		ContactCache contactCache;
+
+		// Contact reuse snapshots. Always the same size and order as the manifold array they belong to
+		// (current/previous, island and wake storage). Unused when CONTACT_REUSE_ENABLED is false.
+		CacheLineAlignedVector<ContactReuseData> currentReuseArray;
+		CacheLineAlignedVector<ContactReuseData> previousReuseArray;
+		std::vector<std::vector<ContactReuseData>> islandReuse;
+		std::vector<ContactReuseData> wakeStagingReuse;
+		ContactReuseStats reuseStats;
 
 		// Full manifolds of sleeping islands, indexed by sleep island id - 2. Kept intact (geometry, ids, impulses), so a
 		// woken island can be solved immediately instead of waiting for the narrow phase to regenerate its contacts.
@@ -208,6 +256,9 @@ namespace PS_AGONY2D
 		std::span<BodyCollisionData> getBodyCollisionData() noexcept { return previousCollisionArray; }
 		std::span<const BodyCollisionData> getBodyCollisionData() const noexcept { return previousCollisionArray; }
 
+		// Totals of the last findCollisions call.
+		const ContactReuseStats& getContactReuseStats() const noexcept { return reuseStats; }
+
 		void collectMemoryUsage(MemoryUsageTracking& memoryTracking, uint32_t parentNodeIndex) const;
 	private:
 		bool isAlive(const BodyCollisionData& d) const noexcept { return colliders.handles->isValid(d.colliderA) && colliders.handles->isValid(d.colliderB); }
@@ -221,13 +272,28 @@ namespace PS_AGONY2D
 		void findCollisionsSingleThreaded(std::span<const ObjectPair> colliderPairs);
 		void findCollisionsMultiThreaded(std::span<const ObjectPair> colliderPairs, size_t maxWorkerCount);
 
-		// Appends results to 'out', converts their collider indices to handles and applies warm-starting to the appended range only.
-		void processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out);
+		// Appends results to 'out' (snapshots to 'outReuse'): reused manifolds first, then the computed ones, converted to handles and warm-started.
+		void processPairs(
+			std::span<const ObjectPair> pairs,
+			ChunkData& chunkData,
+			CacheLineAlignedVector<BodyCollisionData>& out,
+			CacheLineAlignedVector<ContactReuseData>& outReuse
+		);
+
+		// Appends the previous manifold (and snapshot) of every pair of the chunk that qualifies for contact reuse.
+		// Returns the pairs that still need collision methods.
+		std::span<const ObjectPair> reuseContacts(
+			std::span<const ObjectPair> pairs,
+			ChunkData& chunkData,
+			CacheLineAlignedVector<BodyCollisionData>& out,
+			CacheLineAlignedVector<ContactReuseData>& outReuse
+		);
 
 		// Converts dense collider indices to handles for results [firstResult, end) and, if the cache is not empty,
 		// copies persistent impulses from the previous frame (read-only lookups, thread-safe).
 		// Only contacts of pairs with the same collider order and matching contact ids are copied.
-		void finalizeResults(size_t firstResult, std::span<BodyCollisionData> results);
+		// Also records the collider transforms of those results in 'reuse'.
+		void finalizeResults(size_t firstResult, std::span<BodyCollisionData> results, CacheLineAlignedVector<ContactReuseData>& reuse);
 
 		void collisionCircleCircle(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);
 		void collisionCircleBox(std::span<const ObjectPair> pairs, CacheLineAlignedVector<BodyCollisionData>& outCollisionData);

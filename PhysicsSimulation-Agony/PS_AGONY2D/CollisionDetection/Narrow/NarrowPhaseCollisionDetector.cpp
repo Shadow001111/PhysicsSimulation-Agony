@@ -20,6 +20,10 @@
  *   first), then dispatches one collision method per non-empty group via 'collisionFuncs'. Every method
  *   therefore sees one shape-type combination: no per-pair type branching. Methods only append to
  *   'outCollisionData'; warm-start data is attached afterwards by contact id.
+ *   Contact reuse (CONTACT_REUSE_ENABLED): a pair with a manifold from the previous frame, whose colliders stayed
+ *   within the tolerances of the transforms that manifold was computed at, skips the collision methods and takes the
+ *   previous manifold (impulses included) as it is. Transform snapshots live in arrays index-aligned with the
+ *   manifold arrays.
  *
  * Conventions (all methods)
  *   - Normal points from A to B. Depth > 0 means penetration. Contact points lie on the surface of the shape
@@ -106,10 +110,16 @@ namespace PS_AGONY2D
         TRACY_SCOPE_N("Narrow phase");
 
         currentCollisionArray.clear();
+        if constexpr (CONTACT_REUSE_ENABLED)
+        {
+            currentReuseArray.clear();
+            reuseStats = {};
+        }
 
         if (colliderPairs.empty())
         {
             previousCollisionArray.clear();
+            if constexpr (CONTACT_REUSE_ENABLED) previousReuseArray.clear();
             contactCacheDirty = true;
             return {};
         }
@@ -118,6 +128,7 @@ namespace PS_AGONY2D
         if (contactCacheDirty) rebuildContactCache();
 
         currentCollisionArray.reserve(colliderPairs.size());
+        if constexpr (CONTACT_REUSE_ENABLED) currentReuseArray.reserve(colliderPairs.size());
 
         // Determine to use threading or not.
         bool useThreading = false;
@@ -146,6 +157,21 @@ namespace PS_AGONY2D
 
         std::swap(currentCollisionArray, previousCollisionArray);
         currentCollisionArray.clear();
+        if constexpr (CONTACT_REUSE_ENABLED)
+        {
+            std::swap(currentReuseArray, previousReuseArray);
+            currentReuseArray.clear();
+        }
+
+        if constexpr (CONTACT_REUSE_ENABLED && CONTACT_REUSE_PRINT_STATS)
+        {
+            const size_t total = previousCollisionArray.size();
+            const size_t tenthsOfPercent = total != 0 ? size_t(reuseStats.reused) * 1000 / total : 0;
+            std::cout << "Contact reuse: " << reuseStats.reused << '/' << total << " manifolds ("
+                << tenthsOfPercent / 10 << '.' << tenthsOfPercent % 10 << "%), not cached " << reuseStats.notCached
+                << ", handle mismatch " << reuseStats.handleMismatch
+                << ", moved " << reuseStats.movedLinear << " linear / " << reuseStats.movedAngular << " angular\n";
+        }
 
         return previousCollisionArray;
     }
@@ -273,8 +299,6 @@ namespace PS_AGONY2D
     {
         TRACY_SCOPE_N("Rebuild contact cache");
 
-        using Real4Simd = Ecstasy::Core::Simd<Real, sizeof(Real) * 32>;
-
         contactCacheDirty = false;
 
         const size_t prevCount = previousCollisionArray.size();
@@ -285,12 +309,17 @@ namespace PS_AGONY2D
         {
             const BodyCollisionData& prevData = prevPtr[i];
 
-            // Zero accumulators are identical to a lookup miss: don't store them.
-            const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(prevData.persistentContactData.data()));
-            uint32_t impulseMask = (impulsesV != Real4Simd::fillLanesWithZero()).movemask();
-            impulseMask &= (1u << (2u * prevData.contactCount)) - 1;
-            const bool any = impulseMask != 0;
-            if (!any) continue;
+            // Zero accumulators are identical to a lookup miss: don't store them, unless every manifold is needed for reuse.
+            if constexpr (!CONTACT_REUSE_ENABLED)
+            {
+                using Real4Simd = Ecstasy::Core::Simd<Real, sizeof(Real) * 32>;
+
+                const Real4Simd impulsesV = Real4Simd::loadu(reinterpret_cast<const Real*>(prevData.persistentContactData.data()));
+                uint32_t impulseMask = (impulsesV != Real4Simd::fillLanesWithZero()).movemask();
+                impulseMask &= (1u << (2u * prevData.contactCount)) - 1;
+                const bool any = impulseMask != 0;
+                if (!any) continue;
+            }
 
             contactCache.insert(makePairKey(prevData.colliderA, prevData.colliderB), uint32_t(i));
         }
@@ -310,6 +339,7 @@ namespace PS_AGONY2D
 
         // Single stable compaction pass: preserves order. Manifolds of deleted colliders are dropped.
         BodyCollisionData* ECSTASY_RESTRICT data = previousCollisionArray.data();
+        [[maybe_unused]] ContactReuseData* ECSTASY_RESTRICT reuse = previousReuseArray.data();
         const size_t count = previousCollisionArray.size();
         size_t write = 0;
         for (size_t r = 0; r < count; r++)
@@ -330,17 +360,27 @@ namespace PS_AGONY2D
             if (id != 0)
             {
                 const size_t slot = size_t(id) - FIRST_SLEEP_ISLAND_ID;
-                if (slot >= islandManifolds.size()) [[unlikely]] islandManifolds.resize(slot + 1);
+                if (slot >= islandManifolds.size()) [[unlikely]]
+                {
+                    islandManifolds.resize(slot + 1);
+                    if constexpr (CONTACT_REUSE_ENABLED) islandReuse.resize(slot + 1);
+                }
                 islandManifolds[slot].push_back(d);
+                if constexpr (CONTACT_REUSE_ENABLED) islandReuse[slot].push_back(reuse[r]);
                 continue;
             }
-            if (write != r) data[write] = d;
+            if (write != r)
+            {
+                data[write] = d;
+                if constexpr (CONTACT_REUSE_ENABLED) reuse[write] = reuse[r];
+            }
             write++;
         }
 
         if (write != count)
         {
             previousCollisionArray.resize(write);
+            if constexpr (CONTACT_REUSE_ENABLED) previousReuseArray.resize(write);
             contactCacheDirty = true;
         }
     }
@@ -351,17 +391,21 @@ namespace PS_AGONY2D
 
         // Stage the woken islands' manifolds (in the given island order: deterministic). Deleted colliders are dropped.
         wakeStaging.clear();
+        if constexpr (CONTACT_REUSE_ENABLED) wakeStagingReuse.clear();
         for (const uint32_t id : islandIds)
         {
             const size_t slot = size_t(id) - FIRST_SLEEP_ISLAND_ID; // id < FIRST wraps and fails the bound check.
             if (slot >= islandManifolds.size()) [[unlikely]] continue;
 
             std::vector<BodyCollisionData>& stored = islandManifolds[slot];
-            for (const BodyCollisionData& s : stored)
+            for (size_t j = 0; j < stored.size(); j++)
             {
-                if (isAlive(s)) wakeStaging.push_back(s);
+                if (!isAlive(stored[j])) continue;
+                wakeStaging.push_back(stored[j]);
+                if constexpr (CONTACT_REUSE_ENABLED) wakeStagingReuse.push_back(islandReuse[slot][j]);
             }
             stored.clear();
+            if constexpr (CONTACT_REUSE_ENABLED) islandReuse[slot].clear();
         }
 
         const size_t stagedCount = wakeStaging.size();
@@ -409,6 +453,7 @@ namespace PS_AGONY2D
         {
             if (wakeConsumed[i]) continue;
             previousCollisionArray.push_back(wakeStaging[i]);
+            if constexpr (CONTACT_REUSE_ENABLED) previousReuseArray.push_back(wakeStagingReuse[i]);
             contactCacheDirty = true;
         }
     }
@@ -433,24 +478,36 @@ namespace PS_AGONY2D
         for (size_t slot = 0; slot < islandManifolds.size(); slot++)
         {
             std::vector<BodyCollisionData>& stored = islandManifolds[slot];
+            [[maybe_unused]] ContactReuseData* storedReuse = nullptr;
+            if constexpr (CONTACT_REUSE_ENABLED) storedReuse = islandReuse[slot].data();
             size_t write = 0;
             const size_t count = stored.size();
             for (size_t r = 0; r < count; r++)
             {
                 if (edited(stored[r].colliderA) || edited(stored[r].colliderB)) continue;
-                if (write != r) stored[write] = stored[r];
+                if (write != r)
+                {
+                    stored[write] = stored[r];
+                    if constexpr (CONTACT_REUSE_ENABLED) storedReuse[write] = storedReuse[r];
+                }
                 write++;
             }
             if (write == count) continue;
 
             stored.erase(stored.begin() + write, stored.end());
+            if constexpr (CONTACT_REUSE_ENABLED) islandReuse[slot].resize(write);
             outSleepIslandIds.push_back(static_cast<uint32_t>(slot + FIRST_SLEEP_ISLAND_ID));
         }
 
-        for (const BodyCollisionData& d : previousCollisionArray)
+        for (size_t i = 0; i < previousCollisionArray.size(); i++)
         {
+            const BodyCollisionData& d = previousCollisionArray[i];
             const bool editedA = edited(d.colliderA);
             const bool editedB = edited(d.colliderB);
+            if constexpr (CONTACT_REUSE_ENABLED)
+            {
+                if (editedA || editedB) previousReuseArray[i].posA.x = CONTACT_REUSE_INVALID_POSITION;
+            }
             if (editedA == editedB) continue;
             outAwakePartners.push_back(editedA ? d.colliderB : d.colliderA);
         }
@@ -461,6 +518,7 @@ namespace PS_AGONY2D
     void NarrowPhaseCollisionDetector::resetCollisionData()
     {
         previousCollisionArray.clear();
+        if constexpr (CONTACT_REUSE_ENABLED) previousReuseArray.clear();
         contactCacheDirty = true; // The cache indexes the array that was just cleared.
     }
 
@@ -489,6 +547,15 @@ namespace PS_AGONY2D
         }
         memoryTracking.createNode("Island manifolds", islandManifoldBytes, root);
 
+        if constexpr (CONTACT_REUSE_ENABLED)
+        {
+            size_t reuseBytes = getVectorMemoryUsage(currentReuseArray) + getVectorMemoryUsage(previousReuseArray)
+                + getVectorMemoryUsage(wakeStagingReuse) + getVectorMemoryUsage(islandReuse);
+            for (const auto& stored : islandReuse) reuseBytes += getVectorMemoryUsage(stored);
+            for (const auto& chunkData : chunks) reuseBytes += getVectorMemoryUsage(chunkData.reuse);
+            memoryTracking.createNode("Contact reuse", reuseBytes, root);
+        }
+
         memoryTracking.createNode("Edited collider mask", getVectorMemoryUsage(editedColliderMask), root);
 
         memoryTracking.createNode("Contact cache", contactCache.memoryUsage(), root);
@@ -512,7 +579,8 @@ namespace PS_AGONY2D
             cd.start = start;
             cd.end = std::min(start + step, total);
             cd.clear();
-            processPairs(colliderPairs, cd, currentCollisionArray);
+            processPairs(colliderPairs, cd, currentCollisionArray, currentReuseArray);
+            if constexpr (CONTACT_REUSE_ENABLED) reuseStats.add(cd.reuseStats);
         }
     }
 
@@ -568,6 +636,11 @@ namespace PS_AGONY2D
                     else if (!cd.finished.load(std::memory_order_acquire)) return;
 
                     currentCollisionArray.insert(currentCollisionArray.end(), cd.results.begin(), cd.results.end());
+                    if constexpr (CONTACT_REUSE_ENABLED)
+                    {
+                        currentReuseArray.insert(currentReuseArray.end(), cd.reuse.begin(), cd.reuse.end());
+                        reuseStats.add(cd.reuseStats);
+                    }
                     nextToMerge++;
                 }
             };
@@ -581,7 +654,7 @@ namespace PS_AGONY2D
 
                     ChunkData& cd = chunks[chunkIndex];
                     cd.clear();
-                    processPairs(colliderPairs, cd, cd.results);
+                    processPairs(colliderPairs, cd, cd.results, cd.reuse);
 
                     cd.finished.store(true, std::memory_order_release);
                     if (isMainThread)
@@ -635,20 +708,153 @@ namespace PS_AGONY2D
         }
     }
 
-    void NarrowPhaseCollisionDetector::processPairs(std::span<const ObjectPair> pairs, ChunkData& chunkData, CacheLineAlignedVector<BodyCollisionData>& out)
+    std::span<const ObjectPair> NarrowPhaseCollisionDetector::reuseContacts(
+        std::span<const ObjectPair> pairs,
+        ChunkData& chunkData,
+        CacheLineAlignedVector<BodyCollisionData>& out,
+        CacheLineAlignedVector<ContactReuseData>& outReuse
+    )
+    {
+        TRACY_SCOPE_N("Reuse contacts");
+
+        const size_t begin = chunkData.start;
+        const size_t end = chunkData.end;
+        ContactReuseStats& stats = chunkData.reuseStats;
+
+        if (contactCache.empty())
+        {
+            stats.notCached += uint32_t(end - begin);
+            return pairs.subspan(begin, end - begin);
+        }
+
+        CacheLineAlignedVector<ObjectPair>& remaining = chunkData.remainingPairs;
+        remaining.reserve(end - begin);
+
+        const HandleTable& handles = *colliders.handles;
+        const Real* ECSTASY_RESTRICT posX = colliders.worldPosX;
+        const Real* ECSTASY_RESTRICT posY = colliders.worldPosY;
+        const Real* ECSTASY_RESTRICT rotCos = colliders.worldRotationCos;
+        const Real* ECSTASY_RESTRICT rotSin = colliders.worldRotationSin;
+        const BodyCollisionData* ECSTASY_RESTRICT prevDataPtr = previousCollisionArray.data();
+        const ContactReuseData* ECSTASY_RESTRICT prevReusePtr = previousReuseArray.data();
+
+        struct RingEntry
+        {
+            uint64_t key;
+            Handle handleA, handleB;
+        };
+
+        const auto makeEntry = [&](size_t i) noexcept
+            {
+                const ObjectPair pair = pairs[i];
+                const Handle handleA = handles.handleAt(pair.a);
+                const Handle handleB = handles.handleAt(pair.b);
+                return RingEntry{ makePairKey(handleA, handleB), handleA, handleB };
+            };
+
+        const auto defer = [&remaining](uint32_t& counter, const ObjectPair& pair)
+            {
+                counter++;
+                remaining.push_back(pair);
+            };
+
+        constexpr size_t LOOKAHEAD = 8; // Power of two.
+        constexpr size_t RING_MASK = LOOKAHEAD - 1;
+        RingEntry ring[LOOKAHEAD];
+
+        const size_t warmupEnd = std::min(begin + LOOKAHEAD, end);
+        for (size_t i = begin; i < warmupEnd; i++)
+        {
+            const RingEntry entry = makeEntry(i);
+            ring[(i - begin) & RING_MASK] = entry;
+            contactCache.prefetch(entry.key);
+        }
+
+        for (size_t i = begin; i < end; i++)
+        {
+            const size_t ringSlot = (i - begin) & RING_MASK;
+            const RingEntry entry = ring[ringSlot];
+
+            if (i + LOOKAHEAD < end)
+            {
+                const RingEntry next = makeEntry(i + LOOKAHEAD);
+                ring[ringSlot] = next;
+                contactCache.prefetch(next.key);
+            }
+
+            const ObjectPair pair = pairs[i];
+            const ObjectDenseIndex indexA = pair.a;
+            const ObjectDenseIndex indexB = pair.b;
+
+            const uint32_t idx = contactCache.find(entry.key);
+            if (idx == ContactCache::NONE) { defer(stats.notCached, pair); continue; }
+
+            // The previous manifold keeps its own collider order, which may differ from the current canonical order.
+            const BodyCollisionData& prevData = prevDataPtr[idx];
+            const bool sameOrder    = prevData.colliderA == entry.handleA && prevData.colliderB == entry.handleB;
+            const bool flippedOrder = prevData.colliderA == entry.handleB && prevData.colliderB == entry.handleA;
+            if (!(sameOrder || flippedOrder)) { defer(stats.handleMismatch, pair); continue; }
+
+            const ObjectDenseIndex prevIndexA = sameOrder ? indexA : indexB;
+            const ObjectDenseIndex prevIndexB = sameOrder ? indexB : indexA;
+
+            const ContactReuseData& snapshot = prevReusePtr[idx];
+            const Real dxA = posX[prevIndexA] - snapshot.posA.x;
+            const Real dyA = posY[prevIndexA] - snapshot.posA.y;
+            const Real dxB = posX[prevIndexB] - snapshot.posB.x;
+            const Real dyB = posY[prevIndexB] - snapshot.posB.y;
+
+            const bool linearOk =
+                dxA * dxA + dyA * dyA < CONTACT_REUSE_LINEAR_TOLERANCE_SQUARED &&
+                dxB * dxB + dyB * dyB < CONTACT_REUSE_LINEAR_TOLERANCE_SQUARED;
+            if (!linearOk) { defer(stats.movedLinear, pair); continue; }
+
+            const bool rotationOkA = rotCos[prevIndexA] * snapshot.rotA.x + rotSin[prevIndexA] * snapshot.rotA.y >= CONTACT_REUSE_ANGULAR_COS_TOLERANCE;
+            const bool rotationOkB = rotCos[prevIndexB] * snapshot.rotB.x + rotSin[prevIndexB] * snapshot.rotB.y >= CONTACT_REUSE_ANGULAR_COS_TOLERANCE;
+            if (!(rotationOkA && rotationOkB)) { defer(stats.movedAngular, pair); continue; }
+
+            out.push_back(prevData);
+            BodyCollisionData& reused = out.back();
+
+            reused.penetration = snapshot.penetration - ((dxB - dxA) * reused.normal.x + (dyB - dyA) * reused.normal.y);
+            const Vec2 shift = { (dxA + dxB) * HALF, (dyA + dyB) * HALF };
+            reused.contactPoints[0] = snapshot.contactPoints[0] + shift;
+            reused.contactPoints[1] = snapshot.contactPoints[1] + shift;
+            outReuse.push_back(snapshot);
+
+            stats.reused++;
+        }
+        return remaining;
+    }
+
+    void NarrowPhaseCollisionDetector::processPairs(
+        std::span<const ObjectPair> pairs,
+        ChunkData& chunkData,
+        CacheLineAlignedVector<BodyCollisionData>& out,
+        CacheLineAlignedVector<ContactReuseData>& outReuse
+    )
     {
         TRACY_SCOPE_N("Process pair range");
 
-        const size_t firstResult = out.size();
+        std::span<const ObjectPair> pairsToCompute;
+        if constexpr (CONTACT_REUSE_ENABLED)
+        {
+            pairsToCompute = reuseContacts(pairs, chunkData, out, outReuse);
+        }
+        else
+        {
+            pairsToCompute = pairs.subspan(chunkData.start, chunkData.end - chunkData.start);
+        }
 
         const ColliderShapeType* ECSTASY_RESTRICT shapeTypePtr = colliders.shapeType;
 
-        // Partition the given range into type-specific vectors.
+        // Partition into type-specific vectors.
         {
             TRACY_SCOPE_N("Partition");
-            for (size_t i = chunkData.start; i < chunkData.end; i++)
+
+            for (const ObjectPair pair : pairsToCompute)
             {
-                auto [colliderIndexA, colliderIndexB] = pairs[i];
+                auto [colliderIndexA, colliderIndexB] = pair;
 
                 ColliderShapeType typeA = shapeTypePtr[colliderIndexA];
                 ColliderShapeType typeB = shapeTypePtr[colliderIndexB];
@@ -668,6 +874,9 @@ namespace PS_AGONY2D
             }
         }
 
+        // Results from this index on are computed by the collision methods.
+        const size_t firstResult = out.size();
+
         // Dispatch each non-empty type group.
         const auto pairsDA = chunkData.pairs.getDirectAccess();
         const auto collisionFuncsDA = collisionFuncs.getDirectAccess();
@@ -686,10 +895,10 @@ namespace PS_AGONY2D
             }
         }
 
-        finalizeResults(firstResult, out);
+        finalizeResults(firstResult, out, outReuse);
     }
 
-    void NarrowPhaseCollisionDetector::finalizeResults(size_t firstResult, std::span<BodyCollisionData> results)
+    void NarrowPhaseCollisionDetector::finalizeResults(size_t firstResult, std::span<BodyCollisionData> results, CacheLineAlignedVector<ContactReuseData>& reuse)
     {
         TRACY_SCOPE_N("Finalize results");
 
@@ -697,18 +906,37 @@ namespace PS_AGONY2D
         BodyCollisionData* ECSTASY_RESTRICT resultPtr = results.data();
         const size_t end = results.size();
 
-        // Overwrites the index view of the union with handles.
-        auto toHandles = [&handles](BodyCollisionData& d)
+        [[maybe_unused]] ContactReuseData* ECSTASY_RESTRICT reusePtr = nullptr;
+        if constexpr (CONTACT_REUSE_ENABLED)
+        {
+            reuse.resize(end);
+            reusePtr = reuse.data();
+        }
+
+        // Snapshots the collider transforms and overwrites the index view of the union with handles.
+        auto toHandles = [&](size_t r)
             {
+                BodyCollisionData& d = resultPtr[r];
                 const ObjectDenseIndex indexA = d.indexA;
                 const ObjectDenseIndex indexB = d.indexB;
+                if constexpr (CONTACT_REUSE_ENABLED)
+                {
+                    ContactReuseData& snapshot = reusePtr[r];
+                    snapshot.posA = { colliders.worldPosX[indexA], colliders.worldPosY[indexA] };
+                    snapshot.posB = { colliders.worldPosX[indexB], colliders.worldPosY[indexB] };
+                    snapshot.rotA = { colliders.worldRotationCos[indexA], colliders.worldRotationSin[indexA] };
+                    snapshot.rotB = { colliders.worldRotationCos[indexB], colliders.worldRotationSin[indexB] };
+                    snapshot.penetration = d.penetration;
+                    snapshot.contactPoints[0] = d.contactPoints[0];
+                    snapshot.contactPoints[1] = d.contactPoints[1];
+                }
                 d.colliderA = handles.handleAt(indexA);
                 d.colliderB = handles.handleAt(indexB);
             };
 
         if (contactCache.empty())
         {
-            for (size_t r = firstResult; r < end; r++) toHandles(resultPtr[r]);
+            for (size_t r = firstResult; r < end; r++) toHandles(r);
             return;
         }
 
@@ -723,8 +951,8 @@ namespace PS_AGONY2D
         const size_t warmupEnd = std::min(firstResult + LOOKAHEAD, end);
         for (size_t r = firstResult; r < warmupEnd; r++)
         {
-            BodyCollisionData& d = resultPtr[r];
-            toHandles(d);
+            toHandles(r);
+            const BodyCollisionData& d = resultPtr[r];
             const uint64_t key = makePairKey(d.colliderA, d.colliderB);
             keys[(r - firstResult) & RING_MASK] = key;
             contactCache.prefetch(key);
@@ -739,8 +967,8 @@ namespace PS_AGONY2D
             const size_t ahead = r + LOOKAHEAD;
             if (ahead < end)
             {
-                BodyCollisionData& n = resultPtr[ahead];
-                toHandles(n);
+                toHandles(ahead);
+                const BodyCollisionData& n = resultPtr[ahead];
                 const uint64_t nextKey = makePairKey(n.colliderA, n.colliderB);
                 keys[slot] = nextKey;
                 contactCache.prefetch(nextKey);

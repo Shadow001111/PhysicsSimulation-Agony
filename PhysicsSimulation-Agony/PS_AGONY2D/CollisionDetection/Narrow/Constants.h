@@ -1,11 +1,12 @@
 #pragma once
 #include "PS_AGONY2D/Types/Types.h"
+#include "PS_AGONY2D/ConstexprMath.h"
 
 namespace PS_AGONY2D
 {
     // Numeric tolerances.
     constexpr Real ZERO_DIVISION_BOUNDARY = 1e-4;
-    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = 1e-8; // ZERO_DIVISION_BOUNDARY* ZERO_DIVISION_BOUNDARY;
+    constexpr Real ZERO_DIVISION_BOUNDARY_SQUARED = 1e-8;
     constexpr Real SAT_EPSILON = 1e-4;
     constexpr Real HALF = Real(0.5);
 
@@ -38,7 +39,16 @@ namespace PS_AGONY2D
 
     // Capsules.
     constexpr uint32_t CAPSULE_VERTEX_CONTACT_TAG = 0x40000000u; // Polygon vertex vs capsule core contact ids.
+    // TODO: Must depend on their length.
     constexpr Real CAPSULE_PARALLEL_SIN_SQUARED = Real(1e-3);    // Below this, capsule axes count as parallel (2 contacts).
+
+    // Contact reuse: a manifold whose colliders barely moved since it was computed is reused as it is.
+    constexpr bool CONTACT_REUSE_ENABLED = true;
+    constexpr bool CONTACT_REUSE_PRINT_STATS = false; // Prints the reuse statistics once per narrow phase.
+    constexpr Real CONTACT_REUSE_LINEAR_TOLERANCE = Real(5e-3); // 5 cm.
+    constexpr Real CONTACT_REUSE_LINEAR_TOLERANCE_SQUARED = CONTACT_REUSE_LINEAR_TOLERANCE * CONTACT_REUSE_LINEAR_TOLERANCE;
+    constexpr Real CONTACT_REUSE_ANGULAR_COS_TOLERANCE = ConstexprMath::cos(ConstexprMath::to_radians(0.1f)); // Cosine of tolerance.
+    constexpr Real CONTACT_REUSE_INVALID_POSITION = Real(1e15); // Snapshot position that never passes the linear check.
 
     // Box as a convex polygon: counter-clockwise, normal i belongs to edge i -> i + 1.
     alignas(std::hardware_destructive_interference_size) const Vec2 BOX_NORMALS[4] = {
@@ -46,15 +56,5 @@ namespace PS_AGONY2D
         Vec2(Real(1), Real(0)),
         Vec2(Real(0), Real(1)),
         Vec2(Real(-1), Real(0))
-    };
-
-    // Result of a capsule vs convex hull test, in world space.
-    struct CapsuleManifold
-    {
-        Vec2 normal;   // From the hull towards the capsule.
-        Real depth;
-        uint32_t contactCount;
-        Vec2 points[MAX_CONTACTS_PER_MANIFOLD]; // On the capsule surface.
-        uint32_t ids[MAX_CONTACTS_PER_MANIFOLD];
     };
 }
