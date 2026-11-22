@@ -241,26 +241,6 @@ static const char* shapeTypeName(PS_AGONY2D::ColliderShapeType type)
     return "?";
 }
 
-static void countCell(uint32_t count, uint32_t total)
-{
-    if (total == 0)
-    {
-        ImGui::TextDisabled("-");
-        return;
-    }
-    ImGui::Text("%u (%.1f%%)", count, 100.0 * static_cast<double>(count) / static_cast<double>(total));
-}
-
-static void averageCell(uint32_t sum, uint32_t count)
-{
-    if (count == 0)
-    {
-        ImGui::TextDisabled("-");
-        return;
-    }
-    ImGui::Text("%.1f", static_cast<double>(sum) / static_cast<double>(count));
-}
-
 static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const DebugData& debugData)
 {
     auto& settings = simulation.getSimulationSettings();
@@ -289,6 +269,14 @@ static void renderRenderOptions(PS_AGONY_RENDER::RenderOptions& renderOptions)
     colorToggle("Dynamic", renderOptions.broadPhaseDynamicAABBs, "##DynamicAABBColor", renderOptions.broadPhaseDynamicAABBColor);
     colorToggle("Static", renderOptions.broadPhaseStaticAABBs, "##StaticAABBColor", renderOptions.broadPhaseStaticAABBColor);
     colorToggle("Sleeping", renderOptions.broadPhaseSleepingAABBs, "##SleepingAABBColor", renderOptions.broadPhaseSleepingAABBColor);
+
+    ImGui::SeparatorText("Constraints");
+    ImGui::Checkbox("Constraint icons", &renderOptions.constraintIcons);
+    if (renderOptions.constraintIcons)
+    {
+        ImGui::SameLine(160.0f);
+        ImGui::SliderFloat("Icon size", &renderOptions.constraintIconSize, 0.1f, 10.0f);
+    }
 }
 
 struct MemoryTotals
@@ -567,7 +555,7 @@ static int gameFunc()
 
     PS_AGONY_EDITOR::Editor editor;
 
-    loadScene(simulation, 6);
+    loadScene(simulation, 1);
 
     // Simulation renderer.
     PS_AGONY_RENDER::SimulationRenderer simulationRenderer;

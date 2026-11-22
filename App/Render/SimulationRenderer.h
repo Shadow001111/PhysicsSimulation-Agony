@@ -4,16 +4,12 @@
 #include "PS_AGONY2D/ObjectSoA.h"
 #include "PS_AGONY2D/Types/Camera2D.h"
 #include "PS_AGONY2D/SimulationImpl/PolygonBuild.h"
+#include "PS_AGONY2D/Simulation.h"
 
 #include <span>
 #include <array>
 #include <vector>
 #include <optional>
-
-namespace PS_AGONY2D
-{
-	class Simulation;
-}
 
 namespace PS_AGONY_RENDER
 {
@@ -22,6 +18,9 @@ namespace PS_AGONY_RENDER
 	// Defined in SimulationRenderer_Internal.h; only forward-declared here so
 	// the public header stays free of private implementation detail.
 	struct BodyTransformContext;
+
+	template<class T>
+	using ConstraintGroupArray = std::array<T, size_t(ConstraintGroup::Unused)>;
 
 	// Must match the framebuffer attachment order.
 	namespace RenderAttachments
@@ -43,8 +42,8 @@ namespace PS_AGONY_RENDER
 
 		bool outlineColliders = true;
 
-		glm::vec3 broadPhaseDynamicAABBColor  = { 0.0f, 1.0f, 0.0f };
-		glm::vec3 broadPhaseStaticAABBColor   = { 0.2f, 0.4f, 1.0f };
+		glm::vec3 broadPhaseDynamicAABBColor = { 0.0f, 1.0f, 0.0f };
+		glm::vec3 broadPhaseStaticAABBColor = { 0.2f, 0.4f, 1.0f };
 		glm::vec3 broadPhaseSleepingAABBColor = { 0.2f, 0.2f, 0.2f };
 		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
 
@@ -54,6 +53,22 @@ namespace PS_AGONY_RENDER
 		// rotation wrap/trunc math - use when the render rate matches the
 		// sim rate and interpolation isn't needed.
 		bool interpolation = true;
+
+		// Constraint line and icon tint per constraint group.
+		ConstraintGroupArray<glm::vec3> constraintGroupColors = []
+			{
+				ConstraintGroupArray<glm::vec3> colors;
+				colors[size_t(ConstraintGroup::Inactive)] = { 0.2f, 0.4f, 1.0f };
+				colors[size_t(ConstraintGroup::Sleeping)] = { 0.4f, 0.4f, 0.4f };
+				colors[size_t(ConstraintGroup::Active)] = { 0.0f, 1.0f, 1.0f };
+				return colors;
+			}();
+
+		// Draws an icon at the midpoint of every constraint.
+		bool constraintIcons = false;
+
+		// Constraint icon side length in world units.
+		float constraintIconSize = 0.5f;
 
 		// Tint per body group, indexed by BodyGroup.
 		std::array<glm::vec3, size_t(BodyGroup::Unused)> bodyGroupColors = {
@@ -111,6 +126,7 @@ namespace PS_AGONY_RENDER
 		};
 
 		using GroupColors = std::array<uint32_t, FoundColliders::groupCount>; // Packed 0xRRGGBB per BodyGroup.
+		using ConstraintGroupColors = ConstraintGroupArray<uint32_t>; // Packed 0xRRGGBB per ConstraintGroup.
 
 		// Resources.
 		FoundColliders foundColliders;
@@ -125,7 +141,8 @@ namespace PS_AGONY_RENDER
 		std::vector<ShapeRenderer::PolygonInstanceData> polygonInstanceData;
 		std::vector<DrawArraysIndirectCommand> polygonDrawCommands;
 		std::vector<ShapeRenderer::FloatAABB> aabbInstanceData;
-		std::vector<ShapeRenderer::LineVertex> lineVertexData; // Reused scratch buffer for springs/joints/rods.
+		std::vector<ShapeRenderer::LineVertex> lineVertexData; // Reused scratch buffer for all constraint lines.
+		std::vector<ShapeRenderer::ConstraintIconInstanceData> constraintIconData;
 
 		// Polygon creator preview: rebuilt only when the inputs change.
 		struct PolygonPreviewCache
@@ -198,8 +215,6 @@ namespace PS_AGONY_RENDER
 		void renderLeafAABBs(std::span<const AABB> aabbs, const glm::vec3& color, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
 
-		void renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB);
-		void renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB);
-		void renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB);
+		void renderConstraints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB, const ConstraintGroupColors& groupColors, float iconSize);
 	};
 }

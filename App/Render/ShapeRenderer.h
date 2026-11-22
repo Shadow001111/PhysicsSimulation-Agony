@@ -64,6 +64,13 @@ namespace PS_AGONY_RENDER
 			uint32_t color;
 		};
 
+		struct ConstraintIconInstanceData
+		{
+			float x, y;
+			uint32_t color;     // Packed 0xRRGGBB.
+			uint32_t iconIndex; // Constraint type.
+		};
+
 		struct FloatAABB
 		{
 			float minX, minY;
@@ -121,6 +128,14 @@ namespace PS_AGONY_RENDER
 			Shader shader;
 		};
 
+		struct ConstraintIconRenderResources
+		{
+			VertexArray vao;
+			ImmutableBuffer vbo;
+			ImmutableBuffer instanceVbo;
+			Shader shader;
+		};
+
 		struct AABBResources
 		{
 			VertexArray vao;
@@ -142,6 +157,7 @@ namespace PS_AGONY_RENDER
 		CapsuleRenderResources capsuleResources;
 		PolygonRenderResources polygonResources;
 		LineRenderResources lineResources;
+		ConstraintIconRenderResources constraintIconResources;
 		AABBResources aabbResources;
 		OutlineRenderResources outlineResources;
 	public:
@@ -161,6 +177,8 @@ namespace PS_AGONY_RENDER
 		);
 		void renderAABBShapes(std::span<const FloatAABB> instances, const glm::vec3& color, const glm::mat4& viewProjectionMatrix);
 		void renderLines(std::span<const LineVertex> vertices, const glm::mat4& viewProjectionMatrix);
+		// iconHalfSize: half of the icon side, in world units.
+		void renderConstraintIcons(std::span<const ConstraintIconInstanceData> instances, const glm::mat4& viewProjectionMatrix, float iconHalfSize);
 
 		void renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor);
 
@@ -171,6 +189,7 @@ namespace PS_AGONY_RENDER
 		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);
 		void ensureAABBInstanceVboCapacity(size_t count);
 		void ensureLineBufferCapacity(size_t vertexCount);
+		void ensureConstraintIconInstanceVboCapacity(size_t count);
 	private:
 		template<class Resources>
 		static void ensureBoxLikeInstanceVboCapacity(Resources& resources, size_t count);

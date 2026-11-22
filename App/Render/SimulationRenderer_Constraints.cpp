@@ -4,264 +4,149 @@
 #include "PS_AGONY2D/Simulation.h"
 
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
-#include "Ecstasy/Core/Portablity.h"
 
 #include <cmath>
-#include <algorithm>
 
 namespace PS_AGONY_RENDER
 {
-    void SimulationRenderer::renderSprings(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
+    namespace
     {
-        TRACY_SCOPE_N("Render springs");
+        struct CullRect
+        {
+            float minX, minY, maxX, maxY;
+        };
+
+        using LineVertices = std::vector<ShapeRenderer::LineVertex>;
+        using IconInstances = std::vector<ShapeRenderer::ConstraintIconInstanceData>;
+
+        template<ConstraintType Type>
+        constexpr uint32_t iconOf() noexcept
+        {
+            return uint32_t(Type);
+        }
+
+        template<ConstraintType Type, class Viewer>
+        void collect(
+            const Viewer& viewer,
+            IndexRange range,
+            uint32_t color,
+            const BodyTransformContext& transformContext,
+            const CullRect& cull,
+            LineVertices& lines,
+            IconInstances* icons)
+        {
+            constexpr uint32_t icon = static_cast<uint32_t>(iconOf<Type>());
+
+            for (ObjectDenseIndex i = range.begin; i < range.end; i++)
+            {
+                const ObjectPair pair = viewer.bodyIndexPair[i];
+
+                const BodyTransformSample bodyA = transformContext.sample(pair.a);
+                const BodyTransformSample bodyB = transformContext.sample(pair.b);
+
+                const auto localA = viewer.localAnchorA[i];
+                const auto localB = viewer.localAnchorB[i];
+
+                const float worldAx = bodyA.x + (localA.x * bodyA.cosR - localA.y * bodyA.sinR);
+                const float worldAy = bodyA.y + (localA.x * bodyA.sinR + localA.y * bodyA.cosR);
+                const float worldBx = bodyB.x + (localB.x * bodyB.cosR - localB.y * bodyB.sinR);
+                const float worldBy = bodyB.y + (localB.x * bodyB.sinR + localB.y * bodyB.cosR);
+
+                float minX = std::fmin(worldAx, worldBx);
+                float maxX = std::fmax(worldAx, worldBx);
+                float minY = std::fmin(worldAy, worldBy);
+                float maxY = std::fmax(worldAy, worldBy);
+
+                if constexpr (Type == ConstraintType::RevoluteJoint)
+                {
+                    minX = std::fmin(minX, std::fmin(bodyA.x, bodyB.x));
+                    maxX = std::fmax(maxX, std::fmax(bodyA.x, bodyB.x));
+                    minY = std::fmin(minY, std::fmin(bodyA.y, bodyB.y));
+                    maxY = std::fmax(maxY, std::fmax(bodyA.y, bodyB.y));
+                }
+
+                if (maxX < cull.minX || minX > cull.maxX || maxY < cull.minY || minY > cull.maxY)
+                {
+                    continue;
+                }
+
+                if constexpr (Type == ConstraintType::RevoluteJoint)
+                {
+                    lines.push_back({ bodyA.x, bodyA.y, color });
+                    lines.push_back({ worldAx, worldAy, color });
+                    lines.push_back({ bodyB.x, bodyB.y, color });
+                    lines.push_back({ worldBx, worldBy, color });
+                }
+                else
+                {
+                    lines.push_back({ worldAx, worldAy, color });
+                    lines.push_back({ worldBx, worldBy, color });
+                }
+
+                if (icons)
+                {
+                    icons->push_back({ (worldAx + worldBx) * 0.5f, (worldAy + worldBy) * 0.5f, color, icon });
+                }
+            }
+        }
+    }
+
+    void SimulationRenderer::renderConstraints(
+        const Simulation& simulation,
+        const Mat4& viewProjectionMatrix,
+        const BodyTransformContext& transformContext,
+        const AABB& cameraAABB,
+        const ConstraintGroupColors& groupColors,
+        float iconSize)
+    {
+        TRACY_SCOPE_N("Render constraints");
 
         const auto& springs = simulation.constraints().getSprings();
-        const size_t springCount = springs.getCount();
-        if (springCount == 0) return;
-
-        const float cullMinX = static_cast<float>(cameraAABB.minX);
-        const float cullMinY = static_cast<float>(cameraAABB.minY);
-        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
-        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
-
-        lineVertexData.clear();
-        lineVertexData.reserve(springCount * 2);
-
-        for (size_t i = 0; i < springCount; i++)
-        {
-            const ObjectPair bodyIndexPair = springs.bodyIndexPair[i];
-            const ObjectDenseIndex bodyIndexA = bodyIndexPair.a;
-            const ObjectDenseIndex bodyIndexB = bodyIndexPair.b;
-
-            const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
-            const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);
-
-            // Compute world positions of spring endpoints.
-            const float worldAx = bodyA.x + (springs.localAnchorA[i].x * bodyA.cosR - springs.localAnchorA[i].y * bodyA.sinR);
-            const float worldAy = bodyA.y + (springs.localAnchorA[i].x * bodyA.sinR + springs.localAnchorA[i].y * bodyA.cosR);
-
-            const float worldBx = bodyB.x + (springs.localAnchorB[i].x * bodyB.cosR - springs.localAnchorB[i].y * bodyB.sinR);
-            const float worldBy = bodyB.y + (springs.localAnchorB[i].x * bodyB.sinR + springs.localAnchorB[i].y * bodyB.cosR);
-
-            // Cull the spring if its segment bounding box misses the camera.
-            const float segMinX = std::fmin(worldAx, worldBx);
-            const float segMaxX = std::fmax(worldAx, worldBx);
-            const float segMinY = std::fmin(worldAy, worldBy);
-            const float segMaxY = std::fmax(worldAy, worldBy);
-
-            if (segMaxX < cullMinX || segMinX > cullMaxX || segMaxY < cullMinY || segMinY > cullMaxY)
-            {
-                continue;
-            }
-
-            // Compute displacement.
-            const float dx = worldBx - worldAx;
-            const float dy = worldBy - worldAy;
-            const float currentLength = std::sqrt(dx * dx + dy * dy);
-            const float restLength = static_cast<float>(springs.restLength[i]);
-            const float displacement = currentLength - restLength;
-
-            // Compute color.
-            uint32_t color;
-            {
-                // Normalize strain into [-1.0, 1.0].
-                float t = std::clamp(displacement / restLength, -1.0f, 1.0f);
-
-                // Calculate weights for each endpoint color.
-                float wBlue = std::fmax(0.0f, -t);    // Active (< 0).
-                float wRed = std::fmax(0.0f, t);     // Active (> 0).
-                float wGrey = 1.0f - std::fabs(t);    // Active (= 0).
-
-                // Blend RGB channels.
-                uint32_t r = uint32_t(255.0f * wRed + 187.0f * wGrey);
-                uint32_t g = uint32_t(187.0f * wGrey);
-                uint32_t b = uint32_t(255.0f * wBlue + 187.0f * wGrey);
-
-                color = (r << 16) | (g << 8) | b;
-            }
-
-            ShapeRenderer::LineVertex& vA = lineVertexData.emplace_back();
-            vA.x = worldAx;
-            vA.y = worldAy;
-            vA.color = color;
-
-            ShapeRenderer::LineVertex& vB = lineVertexData.emplace_back();
-            vB.x = worldBx;
-            vB.y = worldBy;
-            vB.color = color;
-        }
-
-        shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
-    }
-
-    void SimulationRenderer::renderJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
-    {
-        TRACY_SCOPE_N("Render joints");
-
-        const auto& joints = simulation.constraints().getRevoluteJoints();
-        const size_t jointCount = joints.getCount();
-        if (jointCount == 0) return;
-
-        const float cullMinX = static_cast<float>(cameraAABB.minX);
-        const float cullMinY = static_cast<float>(cameraAABB.minY);
-        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
-        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
-
-        // Up to 2 lines per joint = 4 vertices.
-        lineVertexData.clear();
-        lineVertexData.reserve(jointCount * 4);
-
-        for (size_t i = 0; i < jointCount; i++)
-        {
-            const ObjectPair bodyIndexPair = joints.bodyIndexPair[i];
-            const ObjectDenseIndex bodyIndexA = bodyIndexPair.a;
-            const ObjectDenseIndex bodyIndexB = bodyIndexPair.b;
-
-            const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
-            const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);
-
-            // Compute world positions of joint anchors.
-            const float worldAx = bodyA.x + (joints.localAnchorA[i].x * bodyA.cosR - joints.localAnchorA[i].y * bodyA.sinR);
-            const float worldAy = bodyA.y + (joints.localAnchorA[i].x * bodyA.sinR + joints.localAnchorA[i].y * bodyA.cosR);
-
-            const float worldBx = bodyB.x + (joints.localAnchorB[i].x * bodyB.cosR - joints.localAnchorB[i].y * bodyB.sinR);
-            const float worldBy = bodyB.y + (joints.localAnchorB[i].x * bodyB.sinR + joints.localAnchorB[i].y * bodyB.cosR);
-
-            const float bodyAx = static_cast<float>(bodyA.x);
-            const float bodyAy = static_cast<float>(bodyA.y);
-            const float bodyBx = static_cast<float>(bodyB.x);
-            const float bodyBy = static_cast<float>(bodyB.y);
-
-            // Cull the whole joint (both lines) if its bounding box misses the camera.
-            const float boxMinX = std::fmin(std::fmin(bodyAx, worldAx), std::fmin(bodyBx, worldBx));
-            const float boxMaxX = std::fmax(std::fmax(bodyAx, worldAx), std::fmax(bodyBx, worldBx));
-            const float boxMinY = std::fmin(std::fmin(bodyAy, worldAy), std::fmin(bodyBy, worldBy));
-            const float boxMaxY = std::fmax(std::fmax(bodyAy, worldAy), std::fmax(bodyBy, worldBy));
-
-            if (boxMaxX < cullMinX || boxMinX > cullMaxX || boxMaxY < cullMinY || boxMinY > cullMaxY)
-            {
-                continue;
-            }
-
-            constexpr uint32_t color = 0x00FFFF;
-
-            // Line 1: Body A position to Anchor A
-            ShapeRenderer::LineVertex& vA0 = lineVertexData.emplace_back();
-            vA0.x = bodyAx;
-            vA0.y = bodyAy;
-            vA0.color = color;
-
-            ShapeRenderer::LineVertex& vA1 = lineVertexData.emplace_back();
-            vA1.x = worldAx;
-            vA1.y = worldAy;
-            vA1.color = color;
-
-            // Line 2: Body B position to Anchor B
-            ShapeRenderer::LineVertex& vB0 = lineVertexData.emplace_back();
-            vB0.x = bodyBx;
-            vB0.y = bodyBy;
-            vB0.color = color;
-
-            ShapeRenderer::LineVertex& vB1 = lineVertexData.emplace_back();
-            vB1.x = worldBx;
-            vB1.y = worldBy;
-            vB1.color = color;
-        }
-
-        shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
-    }
-
-    void SimulationRenderer::renderPrismaticJoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB)
-    {
-        TRACY_SCOPE_N("Render prismatic joints");
-
+        const auto& revoluteJoints = simulation.constraints().getRevoluteJoints();
         const auto& prismaticJoints = simulation.constraints().getPrismaticJoints();
-        const size_t prismaticJointCount = prismaticJoints.getCount();
-        if (prismaticJointCount == 0) return;
+        const auto& sliderJoints = simulation.constraints().getSliderJoints();
 
-        const float cullMinX = static_cast<float>(cameraAABB.minX);
-        const float cullMinY = static_cast<float>(cameraAABB.minY);
-        const float cullMaxX = static_cast<float>(cameraAABB.maxX);
-        const float cullMaxY = static_cast<float>(cameraAABB.maxY);
+        const size_t totalCount = springs.getCount() + revoluteJoints.getCount()
+            + prismaticJoints.getCount() + sliderJoints.getCount();
+        if (totalCount == 0) return;
 
-        // Up to 2 lines per joint = 4 vertices.
+        const IConstraintSystem& springSystem = simulation.getConstraintSystem(ConstraintType::Spring);
+        const IConstraintSystem& revoluteSystem = simulation.getConstraintSystem(ConstraintType::RevoluteJoint);
+        const IConstraintSystem& prismaticSystem = simulation.getConstraintSystem(ConstraintType::PrismaticJoint);
+        const IConstraintSystem& sliderSystem = simulation.getConstraintSystem(ConstraintType::SliderJoint);
+
+        const bool drawIcons = iconSize > 0.0f;
+
+        const CullRect cull{
+            static_cast<float>(cameraAABB.minX), static_cast<float>(cameraAABB.minY),
+            static_cast<float>(cameraAABB.maxX), static_cast<float>(cameraAABB.maxY)
+        };
+
         lineVertexData.clear();
-        lineVertexData.reserve(prismaticJointCount * 4);
-
-        constexpr uint32_t actualColor = 0xFF3333; // Reddish: anchor to anchor.
-        constexpr uint32_t targetColor = 0x3399FF; // Blueish: axis-projected, clamped.
-
-        for (size_t i = 0; i < prismaticJointCount; i++)
+        constraintIconData.clear();
+        IconInstances* icons = nullptr;
+        if (drawIcons)
         {
-            const ObjectPair bodyIndexPair = prismaticJoints.bodyIndexPair[i];
-            const ObjectDenseIndex bodyIndexA = bodyIndexPair.a;
-            const ObjectDenseIndex bodyIndexB = bodyIndexPair.b;
+            constraintIconData.reserve(totalCount);
+            icons = &constraintIconData;
+        }
 
-            const BodyTransformSample bodyA = transformContext.sample(bodyIndexA);
-            const BodyTransformSample bodyB = transformContext.sample(bodyIndexB);
+        for (size_t g = 0; g < groupColors.size(); g++)
+        {
+            const ConstraintGroup group = static_cast<ConstraintGroup>(g);
+            const uint32_t color = groupColors[g];
 
-            // Compute world positions of joint anchors.
-            const float worldAx = bodyA.x + (prismaticJoints.localAnchorA[i].x * bodyA.cosR - prismaticJoints.localAnchorA[i].y * bodyA.sinR);
-            const float worldAy = bodyA.y + (prismaticJoints.localAnchorA[i].x * bodyA.sinR + prismaticJoints.localAnchorA[i].y * bodyA.cosR);
-
-            const float worldBx = bodyB.x + (prismaticJoints.localAnchorB[i].x * bodyB.cosR - prismaticJoints.localAnchorB[i].y * bodyB.sinR);
-            const float worldBy = bodyB.y + (prismaticJoints.localAnchorB[i].x * bodyB.sinR + prismaticJoints.localAnchorB[i].y * bodyB.cosR);
-
-            // Compute world-space slider axis (attached to body A, so it rotates with A).
-            const float axisX = static_cast<float>(prismaticJoints.localAxisA[i].x * bodyA.cosR - prismaticJoints.localAxisA[i].y * bodyA.sinR);
-            const float axisY = static_cast<float>(prismaticJoints.localAxisA[i].x * bodyA.sinR + prismaticJoints.localAxisA[i].y * bodyA.cosR);
-
-            // Project anchor-to-anchor displacement onto the axis, clamp to the joint's limit.
-            const float dx = worldBx - worldAx;
-            const float dy = worldBy - worldAy;
-            float projection = dx * axisX + dy * axisY;
-
-            if (prismaticJoints.enableLimit[i])
-            {
-                projection = std::clamp(
-                    projection,
-                    static_cast<float>(prismaticJoints.lowerLimit[i]),
-                    static_cast<float>(prismaticJoints.upperLimit[i])
-                );
-            }
-
-            const float targetX = worldAx + axisX * projection;
-            const float targetY = worldAy + axisY * projection;
-
-            // Cull the whole joint (both lines) if its bounding box misses the camera.
-            const float boxMinX = std::fmin(std::fmin(worldAx, worldBx), targetX);
-            const float boxMaxX = std::fmax(std::fmax(worldAx, worldBx), targetX);
-            const float boxMinY = std::fmin(std::fmin(worldAy, worldBy), targetY);
-            const float boxMaxY = std::fmax(std::fmax(worldAy, worldBy), targetY);
-
-            if (boxMaxX < cullMinX || boxMinX > cullMaxX || boxMaxY < cullMinY || boxMinY > cullMaxY)
-            {
-                continue;
-            }
-
-            // Line 1: Anchor A to Anchor B (actual).
-            ShapeRenderer::LineVertex& vA0 = lineVertexData.emplace_back();
-            vA0.x = worldAx;
-            vA0.y = worldAy;
-            vA0.color = actualColor;
-
-            ShapeRenderer::LineVertex& vA1 = lineVertexData.emplace_back();
-            vA1.x = worldBx;
-            vA1.y = worldBy;
-            vA1.color = actualColor;
-
-            // Line 2: Anchor A to axis-projected, clamped point (target).
-            ShapeRenderer::LineVertex& vB0 = lineVertexData.emplace_back();
-            vB0.x = worldAx;
-            vB0.y = worldAy;
-            vB0.color = targetColor;
-
-            ShapeRenderer::LineVertex& vB1 = lineVertexData.emplace_back();
-            vB1.x = targetX;
-            vB1.y = targetY;
-            vB1.color = targetColor;
+            collect<ConstraintType::Spring>(springs, springSystem.range(group), color, transformContext, cull, lineVertexData, icons);
+            collect<ConstraintType::RevoluteJoint>(revoluteJoints, revoluteSystem.range(group), color, transformContext, cull, lineVertexData, icons);
+            collect<ConstraintType::PrismaticJoint>(prismaticJoints, prismaticSystem.range(group), color, transformContext, cull, lineVertexData, icons);
+            collect<ConstraintType::SliderJoint>(sliderJoints, sliderSystem.range(group), color, transformContext, cull, lineVertexData, icons);
         }
 
         shapeRenderer.renderLines(lineVertexData, viewProjectionMatrix);
+
+        if (drawIcons)
+        {
+            shapeRenderer.renderConstraintIcons(constraintIconData, viewProjectionMatrix, iconSize * 0.5f);
+        }
     }
 }

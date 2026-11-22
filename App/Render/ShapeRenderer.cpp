@@ -81,6 +81,16 @@ namespace PS_AGONY_RENDER
             lineResources.shader.create(sources);
         }
 
+        // Constraint icons.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/constraint_icon.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/constraint_icon.frag" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/constraint_icon_shapes.frag" }
+            };
+            constraintIconResources.shader.create(sources);
+        }
+
         // Outline post-process.
         {
             std::vector<Shader::ShaderSource> sources = {
@@ -212,6 +222,28 @@ namespace PS_AGONY_RENDER
         // Lines.
         {
             lineResources.vao.create();
+        }
+
+        // Constraint icons.
+        {
+            const float vertices[] =
+            {
+                -1.0f, -1.0f,
+                 1.0f, -1.0f,
+                 1.0f,  1.0f,
+                -1.0f,  1.0f
+            };
+
+            constraintIconResources.vbo.create();
+            constraintIconResources.vbo.allocateStorage(sizeof(vertices), 0, vertices);
+
+            constraintIconResources.vao.create();
+            constraintIconResources.vao.bindVertexBuffer(0, constraintIconResources.vbo.getID(), 0, sizeof(float) * 2);
+
+            constraintIconResources.vao.enableAttribute(0);
+            constraintIconResources.vao.setFloatAttribute(0, 2, 0, 0);
+
+            ensureConstraintIconInstanceVboCapacity(64);
         }
 
         // Outline pass - no vertex data needed, full-screen triangle via gl_VertexID.
@@ -620,6 +652,56 @@ namespace PS_AGONY_RENDER
 
         // Draw.
         glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(count));
+    }
+
+    void ShapeRenderer::ensureConstraintIconInstanceVboCapacity(size_t count)
+    {
+        constexpr size_t SIZEOF_INSTANCE = sizeof(ConstraintIconInstanceData);
+
+        auto& vao = constraintIconResources.vao;
+        auto& instanceVbo = constraintIconResources.instanceVbo;
+
+        const size_t neededCapacity = count * SIZEOF_INSTANCE;
+        if (neededCapacity <= instanceVbo.getCapacity()) return;
+
+        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
+
+        instanceVbo.create();
+        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+
+        vao.enableAttribute(1);
+        vao.setFloatAttribute(1, 2, 0, 1);
+        vao.setAttributeDivisor(1, 1);
+
+        vao.enableAttribute(2);
+        vao.setIntAttribute(2, 1, sizeof(float) * 2, 1);
+        vao.setAttributeDivisor(2, 1);
+
+        vao.enableAttribute(3);
+        vao.setIntAttribute(3, 1, sizeof(float) * 3, 1);
+        vao.setAttributeDivisor(3, 1);
+    }
+
+    void ShapeRenderer::renderConstraintIcons(std::span<const ConstraintIconInstanceData> instances, const glm::mat4& viewProjectionMatrix, float iconHalfSize)
+    {
+        TRACY_SCOPE_N("Render constraint icons");
+
+        const size_t count = instances.size();
+        if (count == 0) return;
+
+        ensureConstraintIconInstanceVboCapacity(count);
+
+        constraintIconResources.instanceVbo.write(instances.data(), count * sizeof(ConstraintIconInstanceData));
+
+        constraintIconResources.shader.use();
+        constraintIconResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+        constraintIconResources.shader.setFloat("iconHalfSize", iconHalfSize);
+
+        constraintIconResources.vao.bind();
+
+        glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, static_cast<GLsizei>(count));
     }
 
     void ShapeRenderer::renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor)

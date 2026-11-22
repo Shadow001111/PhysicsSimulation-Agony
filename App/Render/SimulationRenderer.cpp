@@ -77,9 +77,22 @@ namespace PS_AGONY_RENDER
             renderOutlines(idTextureID, renderOptions.outlineColor);
         }
 
-        renderSprings(simulation, viewProjectionMatrix, transformContext, cameraAABB);
-        renderJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);
-        renderPrismaticJoints(simulation, viewProjectionMatrix, transformContext, cameraAABB);
+        {
+            ConstraintGroupColors constraintColors;
+            for (size_t g = 0; g < constraintColors.size(); g++)
+            {
+                constraintColors[g] = packColor(renderOptions.constraintGroupColors[g]);
+            }
+
+            renderConstraints(
+                simulation,
+                viewProjectionMatrix,
+                transformContext,
+                cameraAABB,
+                constraintColors,
+                renderOptions.constraintIcons ? renderOptions.constraintIconSize : 0.0f
+            );
+        }
 
         if (renderOptions.colliderAABBs)
         {
