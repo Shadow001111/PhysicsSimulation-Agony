@@ -7,8 +7,7 @@ namespace PS_AGONY2D
 {
     void buildCircleAABBs(ColliderSoA& colliders, const CircleSoA& circles, IndexRange shapeRange)
     {
-        const size_t count = circles.getCount();
-        if (count == 0) return;
+        if (shapeRange.empty()) return;
 
         TRACY_SCOPE_NC("Build circle AABBs", PS_AGONY2D::Profiling::Color::DarkGreen);
 
@@ -23,7 +22,7 @@ namespace PS_AGONY2D
         Real* ECSTASY_RESTRICT aabbMaxXPtr = colliders.aabbMaxX.data();
         Real* ECSTASY_RESTRICT aabbMaxYPtr = colliders.aabbMaxY.data();
 
-        for (size_t i = 0; i < count; i++)
+        for (size_t i = shapeRange.begin; i < shapeRange.end; i++)
         {
             const ObjectDenseIndex colliderIndex = colliderIndexPtr[i];
             const Real radius = radiusPtr[i];
