@@ -6,15 +6,28 @@
 #include "PS_AGONY2D/Profiling/TracyProfiler.h"
 
 #include <algorithm>
-#include <cmath>
+#include <utility>
 
 namespace PS_AGONY_RENDER
 {
+    namespace
+    {
+        constexpr uint32_t previewColor = 0x00FF00;
+
+        size_t videoMemoryUsage(const ShapeRenderer::ShapeRenderResources& resources) noexcept
+        {
+            return resources.vbo.getCapacity() + resources.instanceVbo.getCapacity();
+        }
+    }
+
     void SimulationRenderer::init()
     {
-        TRACY_SCOPE_N("SimulationRenderer init");
-
         shapeRenderer.init();
+    }
+
+    void SimulationRenderer::updateViewProjectionMatrix()
+    {
+        viewProjectionMatrix = camera.getProjectionMatrix() * camera.getViewMatrix();
     }
 
     void SimulationRenderer::renderSimulation(
@@ -27,7 +40,6 @@ namespace PS_AGONY_RENDER
     {
         TRACY_SCOPE_N("Render simulation");
 
-        // Set references.
         bodies = simulation.objects().getBodies();
         colliders = simulation.objects().getColliders();
         circles = simulation.objects().getCircles();
@@ -35,126 +47,105 @@ namespace PS_AGONY_RENDER
         capsules = simulation.objects().getCapsules();
         polygons = simulation.objects().getPolygons();
 
-        // Camera.
-        const Mat4 viewMatrix = camera.getViewMatrix();
-        const Mat4 projectionMatrix = camera.getProjectionMatrix();
-        const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+        updateViewProjectionMatrix();
 
-        // Built once per frame and threaded through every render function below,
-        // instead of each one re-fetching the same body pointers and redoing the
-        // same lerp/wrap math. When renderOptions.interpolation is false, sampling
-        // a body transform skips that math entirely (see BodyTransformContext::sample).
         const BodyTransformContext transformContext = BodyTransformContext::make(bodies, simRenderAlpha, renderOptions.bodies.interpolation);
 
-        // Fetch colliders which overlap camera AABB.
         queryCollidersForRender(simulation, cameraAABB);
 
-        // Render.
         GroupColors groupColors;
         for (size_t g = 0; g < FoundColliders::groupCount; g++)
         {
             groupColors[g] = packColor(renderOptions.bodies.groupColors[g]);
         }
-        renderColliders(viewProjectionMatrix, transformContext, groupColors);
+        renderColliders(transformContext, groupColors);
 
         // Color-only from here: avoids a feedback loop when sampling the id texture.
         glDrawBuffers(1, &RenderAttachments::colorDrawBuffer);
 
         if (renderOptions.colliders.outline)
         {
-            renderOutlines(idTextureID, renderOptions.colliders.outlineColor);
+            shapeRenderer.renderOutlines(idTextureID, renderOptions.colliders.outlineColor);
         }
 
+        ConstraintGroupColors constraintColors;
+        for (size_t g = 0; g < constraintColors.size(); g++)
         {
-            ConstraintGroupColors constraintColors;
-            for (size_t g = 0; g < constraintColors.size(); g++)
-            {
-                constraintColors[g] = packColor(renderOptions.constraints.groupColors[g]);
-            }
-
-            renderConstraints(
-                simulation,
-                viewProjectionMatrix,
-                transformContext,
-                cameraAABB,
-                constraintColors,
-                renderOptions.constraints.icons ? renderOptions.constraints.iconSize : 0.0f
-            );
+            constraintColors[g] = packColor(renderOptions.constraints.groupColors[g]);
         }
+        renderConstraints(
+            simulation,
+            transformContext,
+            cameraAABB,
+            constraintColors,
+            renderOptions.constraints.icons ? renderOptions.constraints.iconSize : 0.0f
+        );
 
         if (renderOptions.colliders.aabbs)
         {
-            renderColliderAABBs(foundColliders.raw, viewProjectionMatrix);
+            renderColliderAABBs(foundColliders.raw);
         }
         if (renderOptions.colliders.minExtent)
         {
-            renderColliderExtents(foundColliders.raw, renderOptions.colliders.minExtentColor, colliders.minExtent, viewProjectionMatrix, transformContext);
+            renderColliderExtents(foundColliders.raw, renderOptions.colliders.minExtentColor, colliders.minExtent, transformContext);
         }
         if (renderOptions.colliders.maxExtent)
         {
-            renderColliderExtents(foundColliders.raw, renderOptions.colliders.maxExtentColor, colliders.maxExtent, viewProjectionMatrix, transformContext);
+            renderColliderExtents(foundColliders.raw, renderOptions.colliders.maxExtentColor, colliders.maxExtent, transformContext);
         }
 
-        {
-            TRACY_SCOPE_N("Broad phase leaf AABBs");
+        renderBroadPhaseAABBs(simulation, cameraAABB, renderOptions.broadphaseAABBs);
 
-            const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
-            const BroadPhaseInternal::AABBQuery query(cameraAABB);
-
-            if (renderOptions.broadphaseAABBs.enabled[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)])
-            {
-                queriedAABBs.clear();
-                bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Dynamic, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadphaseAABBs.colors[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)], viewProjectionMatrix);
-            }
-            if (renderOptions.broadphaseAABBs.enabled[size_t(BroadPhaseInternal::BvhTreeType::Static)])
-            {
-                queriedAABBs.clear();
-                bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Static, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadphaseAABBs.colors[size_t(BroadPhaseInternal::BvhTreeType::Static)], viewProjectionMatrix);
-            }
-            if (renderOptions.broadphaseAABBs.enabled[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)])
-            {
-                queriedAABBs.clear();
-                bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Sleeping, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadphaseAABBs.colors[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)], viewProjectionMatrix);
-            }
-        }
         if (renderOptions.contactPoints)
         {
-            renderContactPoints(simulation, viewProjectionMatrix, cameraAABB);
+            renderContactPoints(simulation, cameraAABB);
         }
+    }
 
-        //renderBodyCentersOfMass(viewProjectionMatrix, cameraAABB); // Red.
-        //renderBodyTruePositions(viewProjectionMatrix, cameraAABB); // Green.
-        //renderBodyPositions(viewProjectionMatrix, cameraAABB); // Blue.
+    void SimulationRenderer::renderBroadPhaseAABBs(const Simulation& simulation, const AABB& cameraAABB, const RenderOptions::BroadPhaseAABBs& options)
+    {
+        TRACY_SCOPE_N("Broad phase leaf AABBs");
+
+        using TreeType = BroadPhaseInternal::BvhTreeType;
+        using TreeFlag = BroadPhaseInternal::BvhTreeTypeFlag;
+
+        constexpr std::pair<TreeType, TreeFlag> trees[] = {
+            { TreeType::Dynamic, TreeFlag::Dynamic },
+            { TreeType::Static, TreeFlag::Static },
+            { TreeType::Sleeping, TreeFlag::Sleeping }
+        };
+
+        const auto& detector = simulation.getBroadPhaseCollisionDetector();
+        const BroadPhaseInternal::AABBQuery query(cameraAABB);
+
+        for (const auto& [type, flag] : trees)
+        {
+            if (!options.enabled[size_t(type)]) continue;
+
+            queriedAABBs.clear();
+            detector.queryLeafNodeAABBsInShape(query, flag, queriedAABBs);
+            renderLeafAABBs(queriedAABBs, options.colors[size_t(type)]);
+        }
     }
 
     const char* SimulationRenderer::renderObjectPreview(const void* params, ColliderShapeType type)
     {
         if (params == nullptr) return nullptr;
 
-        // Get matrices.
-        const Mat4 viewMatrix = camera.getViewMatrix();
-        const Mat4 projectionMatrix = camera.getProjectionMatrix();
-        const Mat4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+        updateViewProjectionMatrix();
 
-        // Draw body depending on the type.
         if (type == ColliderShapeType::Circle)
         {
             const auto* circleParams = static_cast<const CircleCreateParams*>(params);
 
-            circleInstanceData.resize(1);
-            ShapeRenderer::CircleInstanceData& data = circleInstanceData[0];
-
-            data.positionX = static_cast<float>(circleParams->base.position.x);
-            data.positionY = static_cast<float>(circleParams->base.position.y);
-            data.localCOMX = 0.0f;
-            data.localCOMY = 0.0f;
-            data.rotation = static_cast<float>(circleParams->base.rotation);
-            data.radius = static_cast<float>(circleParams->radius);
-
-            data.color = 0x00FF00;
+            circleInstanceData.assign(1, ShapeRenderer::CircleInstanceData{
+                static_cast<float>(circleParams->base.position.x),
+                static_cast<float>(circleParams->base.position.y),
+                0.0f, 0.0f,
+                static_cast<float>(circleParams->base.rotation),
+                static_cast<float>(circleParams->radius),
+                previewColor, 0
+                });
 
             shapeRenderer.renderCircleShapes(circleInstanceData, viewProjectionMatrix);
         }
@@ -162,18 +153,15 @@ namespace PS_AGONY_RENDER
         {
             const auto* boxParams = static_cast<const BoxCreateParams*>(params);
 
-            boxInstanceData.resize(1);
-            ShapeRenderer::BoxInstanceData& data = boxInstanceData[0];
-
-            data.positionX = static_cast<float>(boxParams->base.position.x);
-            data.positionY = static_cast<float>(boxParams->base.position.y);
-            data.localCOMX = 0.0f;
-            data.localCOMY = 0.0f;
-            data.rotation = static_cast<float>(boxParams->base.rotation);
-            data.halfWidth = static_cast<float>(boxParams->size.x * 0.5);
-            data.halfHeight = static_cast<float>(boxParams->size.y * 0.5);
-
-            data.color = 0x00FF00;
+            boxInstanceData.assign(1, ShapeRenderer::BoxInstanceData{
+                static_cast<float>(boxParams->base.position.x),
+                static_cast<float>(boxParams->base.position.y),
+                0.0f, 0.0f,
+                static_cast<float>(boxParams->base.rotation),
+                static_cast<float>(boxParams->size.x * 0.5),
+                static_cast<float>(boxParams->size.y * 0.5),
+                previewColor, 0
+                });
 
             shapeRenderer.renderBoxShapes(boxInstanceData, viewProjectionMatrix);
         }
@@ -215,12 +203,12 @@ namespace PS_AGONY_RENDER
                     // frame and rotates about its origin, exactly like the created body.
                     for (const std::vector<Vec2>& piece : build.pieces)
                     {
-                        DrawArraysIndirectCommand cmd{};
-                        cmd.count = static_cast<uint32_t>(piece.size());
-                        cmd.instanceCount = 1;
-                        cmd.first = static_cast<uint32_t>(cache.vertices.size());
-                        cmd.baseInstance = static_cast<uint32_t>(cache.commands.size());
-                        cache.commands.push_back(cmd);
+                        cache.commands.push_back({
+                            static_cast<uint32_t>(piece.size()),
+                            1,
+                            static_cast<uint32_t>(cache.vertices.size()),
+                            static_cast<uint32_t>(cache.commands.size())
+                            });
 
                         for (const Vec2& v : piece)
                         {
@@ -236,19 +224,13 @@ namespace PS_AGONY_RENDER
                 return PhysicsGeometry::polygonBuildErrorMessage(cache.error);
             }
 
-            const size_t pieceCount = cache.commands.size();
-            shapeRenderer.ensurePolygonBufferCapacity(cache.vertices.size(), pieceCount);
-
-            polygonInstanceData.resize(pieceCount);
-            for (ShapeRenderer::PolygonInstanceData& inst : polygonInstanceData)
-            {
-                inst.positionX = static_cast<float>(polyParams->base.position.x);
-                inst.positionY = static_cast<float>(polyParams->base.position.y);
-                inst.localCOMX = 0.0f;
-                inst.localCOMY = 0.0f;
-                inst.rotation = static_cast<float>(polyParams->base.rotation);
-                inst.color = 0x00FF00;
-            }
+            polygonInstanceData.assign(cache.commands.size(), ShapeRenderer::PolygonInstanceData{
+                static_cast<float>(polyParams->base.position.x),
+                static_cast<float>(polyParams->base.position.y),
+                0.0f, 0.0f,
+                static_cast<float>(polyParams->base.rotation),
+                previewColor, 0
+                });
 
             shapeRenderer.renderPolygonShapes(cache.vertices, polygonInstanceData, cache.commands, viewProjectionMatrix);
         }
@@ -263,7 +245,7 @@ namespace PS_AGONY_RENDER
         sorted.resize(n);
         offsets.fill(0);
 
-        // Pass 1: count per bin, cache shape.
+        // Count per bin and cache shape.
         for (size_t g = 0; g < groupCount; g++)
         {
             for (size_t i = groupBegin[g]; i < groupBegin[g + 1]; i++)
@@ -279,7 +261,7 @@ namespace PS_AGONY_RENDER
             offsets[b + 1] += offsets[b];
         }
 
-        // Pass 2: scatter.
+        // Scatter.
         std::array<uint32_t, binCount> cursor;
         std::copy_n(offsets.begin(), binCount, cursor.begin());
 
@@ -313,11 +295,8 @@ namespace PS_AGONY_RENDER
             }
             foundColliders.groupBegin[FoundColliders::groupCount] = static_cast<uint32_t>(foundColliders.raw.size());
         }
-        {
-            TRACY_SCOPE_N("Partition found colliders");
 
-            foundColliders.build(colliders);
-        }
+        foundColliders.build(colliders);
     }
 
     size_t SimulationRenderer::getMemoryUsage() const noexcept
@@ -328,6 +307,8 @@ namespace PS_AGONY_RENDER
         total += getVectorMemoryUsage(foundColliders.sorted);
         total += getVectorMemoryUsage(foundColliders.shapes);
 
+        total += getVectorMemoryUsage(queriedAABBs);
+
         total += getVectorMemoryUsage(circleInstanceData);
         total += getVectorMemoryUsage(simplePointInstanceData);
         total += getVectorMemoryUsage(boxInstanceData);
@@ -336,9 +317,14 @@ namespace PS_AGONY_RENDER
         total += getVectorMemoryUsage(polygonInstanceData);
         total += getVectorMemoryUsage(polygonDrawCommands);
 
-        total += getVectorMemoryUsage(lineVertexData);
-
         total += getVectorMemoryUsage(aabbInstanceData);
+        total += getVectorMemoryUsage(lineVertexData);
+        total += getVectorMemoryUsage(constraintIconData);
+        total += getVectorMemoryUsage(hollowCircleData);
+
+        total += getVectorMemoryUsage(polygonPreviewCache.sourceVertices);
+        total += getVectorMemoryUsage(polygonPreviewCache.vertices);
+        total += getVectorMemoryUsage(polygonPreviewCache.commands);
 
         return total;
     }
@@ -347,17 +333,13 @@ namespace PS_AGONY_RENDER
     {
         size_t total = 0;
 
-        total += shapeRenderer.circleResources.vbo.getCapacity();
-        total += shapeRenderer.circleResources.instanceVbo.getCapacity();
-
-        total += shapeRenderer.simplePointCircleResources.vbo.getCapacity();
-        total += shapeRenderer.simplePointCircleResources.instanceVbo.getCapacity();
-
-        total += shapeRenderer.boxResources.vbo.getCapacity();
-        total += shapeRenderer.boxResources.instanceVbo.getCapacity();
-
-        total += shapeRenderer.capsuleResources.vbo.getCapacity();
-        total += shapeRenderer.capsuleResources.instanceVbo.getCapacity();
+        total += videoMemoryUsage(shapeRenderer.circleResources);
+        total += videoMemoryUsage(shapeRenderer.simplePointCircleResources);
+        total += videoMemoryUsage(shapeRenderer.hollowCircleResources);
+        total += videoMemoryUsage(shapeRenderer.boxResources);
+        total += videoMemoryUsage(shapeRenderer.capsuleResources);
+        total += videoMemoryUsage(shapeRenderer.aabbResources);
+        total += videoMemoryUsage(shapeRenderer.constraintIconResources);
 
         total += shapeRenderer.polygonResources.vertexVbo.getCapacity();
         total += shapeRenderer.polygonResources.instanceVbo.getCapacity();
@@ -365,14 +347,6 @@ namespace PS_AGONY_RENDER
 
         total += shapeRenderer.lineResources.vbo.getCapacity();
 
-        total += shapeRenderer.aabbResources.vbo.getCapacity();
-        total += shapeRenderer.aabbResources.instanceVbo.getCapacity();
-
         return total;
-    }
-
-    void SimulationRenderer::renderOutlines(GLuint idTextureID, const glm::vec3& outlineColor)
-    {
-        shapeRenderer.renderOutlines(idTextureID, outlineColor);
     }
 }

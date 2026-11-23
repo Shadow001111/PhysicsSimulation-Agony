@@ -1,14 +1,11 @@
 #pragma once
 
-// Private implementation details shared by SimulationRenderer.cpp,
-// SimulationRenderer_Colliders.cpp and SimulationRenderer_Constraints.cpp.
-// Not included by the public SimulationRenderer.h - keeps the class's
-// public surface unchanged while letting the three translation units
-// share code.
+// Private helpers shared by the SimulationRenderer translation units.
 
 #include "PS_AGONY2D/ObjectSoA.h"
 #include "PS_AGONY2D/Constants.h"
 #include "PS_AGONY2D/FastCosSin.h"
+#include "Ecstasy/Core/Portablity.h"
 
 #include <cstdint>
 
@@ -16,7 +13,7 @@ namespace PS_AGONY_RENDER
 {
 	using namespace PS_AGONY2D;
 
-	[[nodiscard]] static inline uint32_t idToHexColor(uint32_t x) noexcept
+	[[nodiscard]] inline uint32_t idToHexColor(uint32_t x) noexcept
 	{
 		x ^= x >> 16;
 		x *= 0x7feb352dU;
@@ -26,15 +23,31 @@ namespace PS_AGONY_RENDER
 		return x & 0xFFFFFF;
 	}
 
-	// Interpolates between the old and new rotation of a body and wraps the
-	// result into [0, 2*pi) so it can be safely fed into FastCosSin.
-	[[nodiscard]] __forceinline static Real interpolateAndWrapRotation(
-		const Real& rot,
-		const Real& oldRot,
-		const Real& wrapCount,
-		const Real& alpha)
+	struct CullRect
 	{
-		const Real fullRotation = rot + wrapCount * PS_AGONY2D::Constants::TWO_PI;
+		float minX, minY, maxX, maxY;
+
+		explicit CullRect(const AABB& aabb) noexcept
+			: minX(static_cast<float>(aabb.minX)), minY(static_cast<float>(aabb.minY))
+			, maxX(static_cast<float>(aabb.maxX)), maxY(static_cast<float>(aabb.maxY))
+		{
+		}
+
+		[[nodiscard]] bool contains(float x, float y) const noexcept
+		{
+			return x >= minX && x <= maxX && y >= minY && y <= maxY;
+		}
+
+		[[nodiscard]] bool overlaps(float otherMinX, float otherMinY, float otherMaxX, float otherMaxY) const noexcept
+		{
+			return otherMaxX >= minX && otherMinX <= maxX && otherMaxY >= minY && otherMinY <= maxY;
+		}
+	};
+
+	// Result is wrapped into [0, 2*pi) so it can be fed into FastCosSin.
+	[[nodiscard]] __forceinline Real interpolateAndWrapRotation(Real rot, Real oldRot, Real wrapCount, Real alpha) noexcept
+	{
+		const Real fullRotation = rot + wrapCount * Constants::TWO_PI;
 
 		Real interpolatedRotation = oldRot + (fullRotation - oldRot) * alpha;
 
@@ -47,7 +60,6 @@ namespace PS_AGONY_RENDER
 		return interpolatedRotation;
 	}
 
-	// Resolved world-space transform of a single body for this frame.
 	struct BodyTransformSample
 	{
 		Real x, y;
@@ -55,14 +67,8 @@ namespace PS_AGONY_RENDER
 		Real rotation;
 	};
 
-	// Bundles the body SoA pointers needed to resolve a body's render
-	// transform, plus the render alpha and whether interpolation is active.
-	// Built once per renderSimulation() call and passed by const-ref to
-	// every sub-function, instead of each one re-fetching the same 7
-	// pointers and re-deriving the same math.
-	//
-	// interpolate == false skips the old-position lerp and the rotation
-	// wrap/trunc math entirely (RenderOptions::interpolation).
+	// Resolves a body's render transform. Built once per frame.
+	// With interpolate == false the lerp and rotation wrap are skipped.
 	struct BodyTransformContext
 	{
 		const Real* ECSTASY_RESTRICT oldX;
@@ -95,19 +101,14 @@ namespace PS_AGONY_RENDER
 				const Real oldPosX = oldX[bodyIndex];
 				const Real oldPosY = oldY[bodyIndex];
 
-				const Real interpolatedX = oldPosX + (posX - oldPosX) * alpha;
-				const Real interpolatedY = oldPosY + (posY - oldPosY) * alpha;
-
-				const Real interpolatedRotation = interpolateAndWrapRotation(
-					rot[bodyIndex],
-					oldRot[bodyIndex],
-					wrapCount[bodyIndex],
-					alpha
-				);
-
+				const Real interpolatedRotation = interpolateAndWrapRotation(rot[bodyIndex], oldRot[bodyIndex], wrapCount[bodyIndex], alpha);
 				const auto [c, s] = FastCosSin::order5Scalar(interpolatedRotation);
 
-				return { interpolatedX, interpolatedY, c, s, interpolatedRotation };
+				return {
+					oldPosX + (posX - oldPosX) * alpha,
+					oldPosY + (posY - oldPosY) * alpha,
+					c, s, interpolatedRotation
+				};
 			}
 			else
 			{
@@ -116,6 +117,56 @@ namespace PS_AGONY_RENDER
 
 				return { x[bodyIndex], y[bodyIndex], c, s, rotation };
 			}
+		}
+	};
+
+	struct ColliderPlacement
+	{
+		float x, y;
+		float comX, comY;
+		float rotation;
+		ObjectDenseIndex shapeIndex;
+	};
+
+	// Resolves a collider's world transform from its body's render transform.
+	struct ColliderPlacer
+	{
+		const BodyTransformContext& transform;
+
+		const Real* ECSTASY_RESTRICT comX;
+		const Real* ECSTASY_RESTRICT comY;
+		const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndex;
+		const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndex;
+		const Real* ECSTASY_RESTRICT offsetX;
+		const Real* ECSTASY_RESTRICT offsetY;
+		const Real* ECSTASY_RESTRICT rotation;
+
+		[[nodiscard]] static ColliderPlacer make(const BodySoAViewer& bodies, const ColliderSoAViewer& colliders, const BodyTransformContext& transform) noexcept
+		{
+			return ColliderPlacer{
+				transform,
+				bodies.localCenterOfMassX, bodies.localCenterOfMassY,
+				colliders.bodyIndex, colliders.shapeIndex,
+				colliders.localOffsetX, colliders.localOffsetY, colliders.localRotation
+			};
+		}
+
+		[[nodiscard]] __forceinline ColliderPlacement place(ObjectDenseIndex colliderIndex) const noexcept
+		{
+			const ObjectDenseIndex body = bodyIndex[colliderIndex];
+			const BodyTransformSample sample = transform.sample(body);
+
+			const Real offX = offsetX[colliderIndex];
+			const Real offY = offsetY[colliderIndex];
+
+			return {
+				static_cast<float>(sample.x + (offX * sample.cosR - offY * sample.sinR)),
+				static_cast<float>(sample.y + (offX * sample.sinR + offY * sample.cosR)),
+				static_cast<float>(comX[body]),
+				static_cast<float>(comY[body]),
+				static_cast<float>(sample.rotation + rotation[colliderIndex]),
+				shapeIndex[colliderIndex]
+			};
 		}
 	};
 }

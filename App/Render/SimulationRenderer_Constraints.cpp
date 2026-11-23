@@ -11,19 +11,8 @@ namespace PS_AGONY_RENDER
 {
     namespace
     {
-        struct CullRect
-        {
-            float minX, minY, maxX, maxY;
-        };
-
         using LineVertices = std::vector<ShapeRenderer::LineVertex>;
         using IconInstances = std::vector<ShapeRenderer::ConstraintIconInstanceData>;
-
-        template<ConstraintType Type>
-        constexpr uint32_t iconOf() noexcept
-        {
-            return uint32_t(Type);
-        }
 
         template<ConstraintType Type, class Viewer>
         void collect(
@@ -35,7 +24,7 @@ namespace PS_AGONY_RENDER
             LineVertices& lines,
             IconInstances* icons)
         {
-            constexpr uint32_t icon = static_cast<uint32_t>(iconOf<Type>());
+            constexpr uint32_t icon = static_cast<uint32_t>(Type);
 
             for (ObjectDenseIndex i = range.begin; i < range.end; i++)
             {
@@ -65,10 +54,7 @@ namespace PS_AGONY_RENDER
                     maxY = std::fmax(maxY, std::fmax(bodyA.y, bodyB.y));
                 }
 
-                if (maxX < cull.minX || minX > cull.maxX || maxY < cull.minY || minY > cull.maxY)
-                {
-                    continue;
-                }
+                if (!cull.overlaps(minX, minY, maxX, maxY)) continue;
 
                 if constexpr (Type == ConstraintType::RevoluteJoint)
                 {
@@ -93,7 +79,6 @@ namespace PS_AGONY_RENDER
 
     void SimulationRenderer::renderConstraints(
         const Simulation& simulation,
-        const Mat4& viewProjectionMatrix,
         const BodyTransformContext& transformContext,
         const AABB& cameraAABB,
         const ConstraintGroupColors& groupColors,
@@ -116,14 +101,11 @@ namespace PS_AGONY_RENDER
         const IConstraintSystem& sliderSystem = simulation.getConstraintSystem(ConstraintType::SliderJoint);
 
         const bool drawIcons = iconSize > 0.0f;
-
-        const CullRect cull{
-            static_cast<float>(cameraAABB.minX), static_cast<float>(cameraAABB.minY),
-            static_cast<float>(cameraAABB.maxX), static_cast<float>(cameraAABB.maxY)
-        };
+        const CullRect cull(cameraAABB);
 
         lineVertexData.clear();
         constraintIconData.clear();
+
         IconInstances* icons = nullptr;
         if (drawIcons)
         {
