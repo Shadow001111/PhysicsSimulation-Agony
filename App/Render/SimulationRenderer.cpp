@@ -90,10 +90,10 @@ namespace PS_AGONY_RENDER
         {
             renderColliderExtents(foundColliders.raw, renderOptions.colliders.minExtentColor, colliders.minExtent, viewProjectionMatrix, transformContext);
         }
-        //if (renderOptions.colliders.maxExtent)
-        //{
-        //    renderColliderExtents(foundColliders.raw, renderOptions.colliders.maxExtentColor, colliders.maxExtent, viewProjectionMatrix, transformContext);
-        //}
+        if (renderOptions.colliders.maxExtent)
+        {
+            renderColliderExtents(foundColliders.raw, renderOptions.colliders.maxExtentColor, colliders.maxExtent, viewProjectionMatrix, transformContext);
+        }
 
         {
             TRACY_SCOPE_N("Broad phase leaf AABBs");

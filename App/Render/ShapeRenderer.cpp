@@ -159,7 +159,7 @@ namespace PS_AGONY_RENDER
             hollowCircleResources.vao.enableAttribute(0);
             hollowCircleResources.vao.setFloatAttribute(0, 2, 0, 0);
 
-            ensureSimplePointInstanceVboCapacity(64);
+            ensureHollowCircleInstanceVboCapacity(64);
         }
 
         // Box.

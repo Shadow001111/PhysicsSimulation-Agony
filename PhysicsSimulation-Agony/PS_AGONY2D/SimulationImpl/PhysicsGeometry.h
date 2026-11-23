@@ -43,7 +43,10 @@ namespace PS_AGONY2D::PhysicsGeometry
 	Real calculatePolygonArea(std::span<const Vec2> vertices);
 
 	// Largest circle around the polygon's local origin that fits inside it. 0 when the origin is outside.
-	Real calculatePolygonInRadius(const PolygonGeometry& geometry);
+	Real calculatePolygonInnerRadius(const PolygonGeometry& geometry);
+
+	// Smallest circle around the polygon's local origin that fits polygon inside it.
+	Real calculatePolygonOuterRadius(const PolygonGeometry& geometry);
 
 	// Creation-time sanitizer: dedupes neighbors, strips collinear vertices, auto-reverses CW to CCW.
 	// Returns nullopt if the result is degenerate (<3 vertices, ~zero area) or not simple (self-intersecting).

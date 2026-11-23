@@ -80,6 +80,7 @@ namespace PS_AGONY2D
         );
         circles.append(newCollider, radius);
         colliders.minExtent[newCollider] = radius;
+        colliders.maxExtent[newCollider] = radius;
 
         return placeNewCollider(newCollider);
     }
@@ -106,6 +107,7 @@ namespace PS_AGONY2D
         const Real halfHeight = height * Real(0.5);
         boxes.append(newCollider, halfWidth, halfHeight);
         colliders.minExtent[newCollider] = std::fmin(halfWidth, halfHeight);
+        colliders.maxExtent[newCollider] = std::fmax(halfWidth, halfHeight);
 
         return placeNewCollider(newCollider);
     }
@@ -198,6 +200,7 @@ namespace PS_AGONY2D
         );
         capsules.append(newCollider, length * Real(0.5), radius);
         colliders.minExtent[newCollider] = radius;
+        colliders.maxExtent[newCollider] = length * Real(0.5) + radius;
 
         return placeNewCollider(newCollider);
     }
@@ -531,13 +534,15 @@ namespace PS_AGONY2D
         localOffset += Vec2(cosL * centroid.x - sinL * centroid.y, sinL * centroid.x + cosL * centroid.y);
 
         PolygonGeometry geometry{ convexVertices };
-        const Real minExtent = PhysicsGeometry::calculatePolygonInRadius(geometry);
+        const Real minExtent = PhysicsGeometry::calculatePolygonInnerRadius(geometry);
+        const Real maxExtent = PhysicsGeometry::calculatePolygonOuterRadius(geometry);
 
         const ObjectDenseIndex newCollider = createColliderInternal(
             bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Polygon, newShapeIndex
         );
         polygons.append(newCollider, std::move(geometry));
         colliders.minExtent[newCollider] = minExtent;
+        colliders.maxExtent[newCollider] = maxExtent;
 
         return placeNewCollider(newCollider);
     }
@@ -765,6 +770,7 @@ namespace PS_AGONY2D
             if (shapeType != ColliderShapeType::Circle) break;
             circles.radius[shapeIndex] = std::fmax(Real(0), c.a);
             colliders.minExtent[colliderIndex] = circles.radius[shapeIndex];
+            colliders.maxExtent[colliderIndex] = circles.radius[shapeIndex];
             spatialDirty = true;
             break;
 
@@ -773,6 +779,7 @@ namespace PS_AGONY2D
             boxes.halfWidth[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             boxes.halfHeight[shapeIndex] = std::fmax(Real(0), c.b) * Real(0.5);
             colliders.minExtent[colliderIndex] = std::fmin(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]);
+            colliders.maxExtent[colliderIndex] = std::fmax(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]);
             spatialDirty = true;
             break;
 
@@ -781,6 +788,7 @@ namespace PS_AGONY2D
             capsules.halfLength[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             capsules.radius[shapeIndex] = std::fmax(Real(0), c.b);
             colliders.minExtent[colliderIndex] = capsules.radius[shapeIndex];
+            colliders.maxExtent[colliderIndex] = capsules.halfLength[shapeIndex] + capsules.radius[shapeIndex];
             spatialDirty = true;
             break;
 
@@ -797,7 +805,8 @@ namespace PS_AGONY2D
             colliders.localOffsetX[colliderIndex] += cosL * centroid.x - sinL * centroid.y;
             colliders.localOffsetY[colliderIndex] += sinL * centroid.x + cosL * centroid.y;
             polygons.geometry[shapeIndex] = std::move(pending);
-            colliders.minExtent[colliderIndex] = PhysicsGeometry::calculatePolygonInRadius(polygons.geometry[shapeIndex]);
+            colliders.minExtent[colliderIndex] = PhysicsGeometry::calculatePolygonInnerRadius(polygons.geometry[shapeIndex]);
+            colliders.maxExtent[colliderIndex] = PhysicsGeometry::calculatePolygonOuterRadius(polygons.geometry[shapeIndex]);
             spatialDirty = true;
             break;
         }
