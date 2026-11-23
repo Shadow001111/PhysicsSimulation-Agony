@@ -517,7 +517,6 @@ namespace PS_AGONY2D
 
     void Simulation::rebuildSpatialData()
     {
-        computeBodyWorldCenters(objectManager.bodies.liveRange());
         computeColliderWorldPositions(objectManager.colliders.liveRange());
         computeColliderWorldRotations(objectManager.colliders.liveRange());
         buildColliderAABBs(true);
@@ -541,7 +540,6 @@ namespace PS_AGONY2D
 
     void Simulation::updateDynamicSpatialData()
     {
-        computeBodyWorldCenters(objectManager.bodies.range(BodyGroup::Dynamic));
         computeColliderWorldPositions(objectManager.colliders.range(BodyGroup::Dynamic));
         computeColliderWorldRotations(objectManager.colliders.range(BodyGroup::Dynamic));
         buildColliderAABBs(false);
@@ -632,8 +630,8 @@ namespace PS_AGONY2D
             const size_t b = dynamic.begin;
             const size_t n = dynamic.size();
 
-            std::copy_n(bodies.offsetX.data() + b, n, bodies.renderOldOffsetX.data() + b);
-            std::copy_n(bodies.offsetY.data() + b, n, bodies.renderOldOffsetY.data() + b);
+            std::copy_n(bodies.comX.data() + b, n, bodies.renderOldComX.data() + b);
+            std::copy_n(bodies.comY.data() + b, n, bodies.renderOldComY.data() + b);
             std::copy_n(bodies.rotation.data() + b, n, bodies.renderOldRotation.data() + b);
 
             std::fill_n(bodies.renderRotationWrapCount.data() + b, n, Real(0));
@@ -650,7 +648,6 @@ namespace PS_AGONY2D
         }
 
         // That's for renderer to have actual information.
-        computeBodyWorldCenters(objectManager.bodies.range(BodyGroup::Dynamic));
         computeColliderWorldPositions(objectManager.colliders.range(BodyGroup::Dynamic));
         computeColliderWorldRotations(objectManager.colliders.range(BodyGroup::Dynamic));
         buildColliderAABBs(false);
@@ -674,83 +671,35 @@ namespace PS_AGONY2D
         buildCapsuleAABBs(om.colliders, om.capsules, shapeRange(om.capsules));
     }
 
-    void Simulation::computeBodyWorldCenters(IndexRange range)
-    {
-        TRACY_SCOPE_NC("Compute true positions", PS_AGONY2D::Profiling::Color::Magenta);
-
-        const Real* ECSTASY_RESTRICT positionXPtr = objectManager.bodies.offsetX.data();
-        const Real* ECSTASY_RESTRICT positionYPtr = objectManager.bodies.offsetY.data();
-        const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = objectManager.bodies.localCenterOfMassX.data();
-        const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = objectManager.bodies.localCenterOfMassY.data();
-        const Real* ECSTASY_RESTRICT rotationCosPtr = objectManager.bodies.rotationCos.data();
-        const Real* ECSTASY_RESTRICT rotationSinPtr = objectManager.bodies.rotationSin.data();
-
-        Real* ECSTASY_RESTRICT worldCenterXPtr = objectManager.bodies.worldCenterX.data();
-        Real* ECSTASY_RESTRICT worldCenterYPtr = objectManager.bodies.worldCenterY.data();
-
-        size_t i = range.begin;
-        for (; i + RealSimd::lanes <= range.end; i += RealSimd::lanes)
-        {
-            const RealSimd positionX = RealSimd::loadu(positionXPtr + i);
-            const RealSimd positionY = RealSimd::loadu(positionYPtr + i);
-
-            const RealSimd localCenterOfMassX = RealSimd::loadu(localCenterOfMassXPtr + i);
-            const RealSimd localCenterOfMassY = RealSimd::loadu(localCenterOfMassYPtr + i);
-
-            const RealSimd cosRot = RealSimd::loadu(rotationCosPtr + i);
-            const RealSimd sinRot = RealSimd::loadu(rotationSinPtr + i);
-
-            const RealSimd truePositionX = RealSimd::negMulAdd(localCenterOfMassX, cosRot, RealSimd::mulAdd(localCenterOfMassY, sinRot, positionX + localCenterOfMassX));
-            const RealSimd truePositionY = RealSimd::negMulAdd(localCenterOfMassX, sinRot, RealSimd::negMulAdd(localCenterOfMassY, cosRot, positionY + localCenterOfMassY));
-
-            truePositionX.storeu(worldCenterXPtr + i);
-            truePositionY.storeu(worldCenterYPtr + i);
-        }
-        for (; i < range.end; i++)
-        {
-            const Real positionX = positionXPtr[i];
-            const Real positionY = positionYPtr[i];
-            const Real localCenterOfMassX = localCenterOfMassXPtr[i];
-            const Real localCenterOfMassY = localCenterOfMassYPtr[i];
-            const Real cosRot = rotationCosPtr[i];
-            const Real sinRot = rotationSinPtr[i];
-            worldCenterXPtr[i] = (positionX + localCenterOfMassX) - (localCenterOfMassX * cosRot - localCenterOfMassY * sinRot);
-            worldCenterYPtr[i] = (positionY + localCenterOfMassY) - (localCenterOfMassX * sinRot + localCenterOfMassY * cosRot);
-        }
-    }
-
     void Simulation::computeColliderWorldPositions(IndexRange colliderRange)
     {
         TRACY_SCOPE_N("Compute collider world positions");
 
-        const Real* ECSTASY_RESTRICT bodyWorldXPtr = objectManager.bodies.worldCenterX.data();
-        const Real* ECSTASY_RESTRICT bodyWorldYPtr = objectManager.bodies.worldCenterY.data();
+        const Real* ECSTASY_RESTRICT comXPtr = objectManager.bodies.comX.data();
+        const Real* ECSTASY_RESTRICT comYPtr = objectManager.bodies.comY.data();
         const Real* ECSTASY_RESTRICT bodyCosPtr = objectManager.bodies.rotationCos.data();
         const Real* ECSTASY_RESTRICT bodySinPtr = objectManager.bodies.rotationSin.data();
 
         const ObjectDenseIndex* ECSTASY_RESTRICT ownerPtr = objectManager.colliders.bodyIndex.data();
-        const Real* ECSTASY_RESTRICT localOffXPtr = objectManager.colliders.localOffsetX.data();
-        const Real* ECSTASY_RESTRICT localOffYPtr = objectManager.colliders.localOffsetY.data();
+        const Real* ECSTASY_RESTRICT comOffXPtr = objectManager.colliders.comOffsetX.data();
+        const Real* ECSTASY_RESTRICT comOffYPtr = objectManager.colliders.comOffsetY.data();
 
         Real* ECSTASY_RESTRICT worldPosXPtr = objectManager.colliders.worldPosX.data();
         Real* ECSTASY_RESTRICT worldPosYPtr = objectManager.colliders.worldPosY.data();
 
-        // Position uses the BODY's rotation only (an offset defined in body-local
-        // space); the collider's own local rotation affects its orientation, not
-        // where its origin sits relative to the body.
+        // The offset is body-local and relative to the center of mass, so only the body rotation applies.
+        // The collider's own local rotation affects its orientation only.
         for (size_t i = colliderRange.begin; i < colliderRange.end; i++)
         {
             const ObjectDenseIndex body = ownerPtr[i];
-            const Real offX = localOffXPtr[i];
-            const Real offY = localOffYPtr[i];
+            const Real offX = comOffXPtr[i];
+            const Real offY = comOffYPtr[i];
 
             const Real bCos = bodyCosPtr[body];
             const Real bSin = bodySinPtr[body];
-            const Real bodyWorldX = bodyWorldXPtr[body];
-            const Real bodyWorldY = bodyWorldYPtr[body];
 
-            worldPosXPtr[i] = bodyWorldX + (offX * bCos - offY * bSin);
-            worldPosYPtr[i] = bodyWorldY + (offX * bSin + offY * bCos);
+            worldPosXPtr[i] = comXPtr[body] + (offX * bCos - offY * bSin);
+            worldPosYPtr[i] = comYPtr[body] + (offX * bSin + offY * bCos);
         }
     }
 
@@ -818,24 +767,16 @@ namespace PS_AGONY2D
             const Real cosRot = objectManager.bodies.rotationCos[bodyIndex];
             const Real sinRot = objectManager.bodies.rotationSin[bodyIndex];
 
-            // Calculate current world position of the grab point.
-            const Vec2 worldCenter = { objectManager.bodies.worldCenterX[bodyIndex], objectManager.bodies.worldCenterY[bodyIndex] };
-            const Vec2 localOffset = held.localOffset;
-
-            const Vec2 rotatedOffset = Vec2(
-                localOffset.x * cosRot - localOffset.y * sinRot,
-                localOffset.x * sinRot + localOffset.y * cosRot
-            );
-            const Vec2 worldGrabPoint = worldCenter + rotatedOffset;
-
-            // Calculate vector (worldR) from the World COM to the world Grab Point.
+            // Grab point relative to the COM (body-local offset is relative to the body origin).
             const Vec2 localCenterOfMass = { objectManager.bodies.localCenterOfMassX[bodyIndex], objectManager.bodies.localCenterOfMassY[bodyIndex] };
-            const Vec2 localR = localOffset - localCenterOfMass;
+            const Vec2 localR = held.localOffset - localCenterOfMass;
 
             const Vec2 worldR = Vec2(
                 localR.x * cosRot - localR.y * sinRot,
                 localR.x * sinRot + localR.y * cosRot
             );
+            const Vec2 worldCenterOfMass = { objectManager.bodies.comX[bodyIndex], objectManager.bodies.comY[bodyIndex] };
+            const Vec2 worldGrabPoint = worldCenterOfMass + worldR;
 
             // Target position of this body's anchor.
             const Vec2 targetPosition = holderPosition + held.targetOffset;

@@ -276,15 +276,15 @@ namespace PS_AGONY2D
 	void ContinuousCollisionDetector::snapshotPoses(const BodySoA& bodies, const ColliderSoA& colliders)
 	{
 		const size_t bodyCount = bodies.getCount();
-		if (prevOffsetX.size() < bodyCount)
+		if (prevComX.size() < bodyCount)
 		{
-			prevOffsetX.resize(bodyCount);
-			prevOffsetY.resize(bodyCount);
+			prevComX.resize(bodyCount);
+			prevComY.resize(bodyCount);
 		}
 
 		const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
-		std::copy_n(bodies.offsetX.data() + dynamic.begin, dynamic.size(), prevOffsetX.data() + dynamic.begin);
-		std::copy_n(bodies.offsetY.data() + dynamic.begin, dynamic.size(), prevOffsetY.data() + dynamic.begin);
+		std::copy_n(bodies.comX.data() + dynamic.begin, dynamic.size(), prevComX.data() + dynamic.begin);
+		std::copy_n(bodies.comY.data() + dynamic.begin, dynamic.size(), prevComY.data() + dynamic.begin);
 
 		const size_t colliderCount = colliders.worldPosX.size();
 		if (prevColliderX.size() < colliderCount)
@@ -320,11 +320,11 @@ namespace PS_AGONY2D
 		const Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
 		const Real* ECSTASY_RESTRICT minExtentPtr = colliders.minExtent.data();
 
-		const Real* ECSTASY_RESTRICT offsetXPtr = bodies.offsetX.data();
-		const Real* ECSTASY_RESTRICT offsetYPtr = bodies.offsetY.data();
+		const Real* ECSTASY_RESTRICT comXPtr = bodies.comX.data();
+		const Real* ECSTASY_RESTRICT comYPtr = bodies.comY.data();
 
-		const Real* ECSTASY_RESTRICT prevOffsetXPtr = prevOffsetX.data();
-		const Real* ECSTASY_RESTRICT prevOffsetYPtr = prevOffsetY.data();
+		const Real* ECSTASY_RESTRICT prevComXPtr = prevComX.data();
+		const Real* ECSTASY_RESTRICT prevComYPtr = prevComY.data();
 		const Real* ECSTASY_RESTRICT prevColliderXPtr = prevColliderX.data();
 		const Real* ECSTASY_RESTRICT prevColliderYPtr = prevColliderY.data();
 
@@ -345,8 +345,8 @@ namespace PS_AGONY2D
 			const ObjectDenseIndex body = ownerPtr[colliderIndex];
 
 			// Cheap reject on the body origin displacement.
-			const Real bodyDx = offsetXPtr[body] - prevOffsetXPtr[body];
-			const Real bodyDy = offsetYPtr[body] - prevOffsetYPtr[body];
+			const Real bodyDx = comXPtr[body] - prevComXPtr[body];
+			const Real bodyDy = comYPtr[body] - prevComYPtr[body];
 			const Real bodyDeltaSquaredLength = bodyDx * bodyDx + bodyDy * bodyDy;
 			if (bodyDeltaSquaredLength <= MIN_DISPLACEMENT_SQ) continue;
 
@@ -359,7 +359,7 @@ namespace PS_AGONY2D
 			const Real thresholdSq = threshold * threshold;
 			if (bodyDeltaSquaredLength <= thresholdSq) continue;
 
-			// Previous collider origin: offset + com + R(localOffset - com), with the previous rotation.
+			// Previous collider origin: previous COM + R(previous rotation) * comOffset.
 			const Vec2 start = { prevColliderXPtr[colliderIndex], prevColliderYPtr[colliderIndex] };
 			const Vec2 end = { worldPosXPtr[colliderIndex], worldPosYPtr[colliderIndex] };
 			const Vec2 d = end - start;
@@ -501,14 +501,12 @@ namespace PS_AGONY2D
 
 		// Move bodies back along their own displacement. Translation only: rotation (cos/sin) stays valid.
 		Real* ECSTASY_RESTRICT shiftedHitTimePtr = bodyHitTime.data() - bodyRange.begin;
-		Real* ECSTASY_RESTRICT offsetXPtr = bodies.offsetX.data();
-		Real* ECSTASY_RESTRICT offsetYPtr = bodies.offsetY.data();
+		Real* ECSTASY_RESTRICT comXPtr = bodies.comX.data();
+		Real* ECSTASY_RESTRICT comYPtr = bodies.comY.data();
 		Real* ECSTASY_RESTRICT worldPosXPtr = colliders.worldPosX.data();
 		Real* ECSTASY_RESTRICT worldPosYPtr = colliders.worldPosY.data();
-		Real* ECSTASY_RESTRICT worldCenterXPtr = bodies.worldCenterX.data();
-		Real* ECSTASY_RESTRICT worldCenterYPtr = bodies.worldCenterY.data();
-		const Real* ECSTASY_RESTRICT prevOffsetXPtr = prevOffsetX.data();
-		const Real* ECSTASY_RESTRICT prevOffsetYPtr = prevOffsetY.data();
+		const Real* ECSTASY_RESTRICT prevComXPtr = prevComX.data();
+		const Real* ECSTASY_RESTRICT prevComYPtr = prevComY.data();
 		{
 			TRACY_SCOPE_N("CCD: Shift hit bodies");
 			for (const ObjectDenseIndex body : hitBodies)
@@ -516,13 +514,11 @@ namespace PS_AGONY2D
 				const Real back = shiftedHitTimePtr[body] - Real(1);
 				shiftedHitTimePtr[body] = Real(1); // Restore invariant.
 
-				const Real shiftX = (offsetXPtr[body] - prevOffsetXPtr[body]) * back;
-				const Real shiftY = (offsetYPtr[body] - prevOffsetYPtr[body]) * back;
+				const Real shiftX = (comXPtr[body] - prevComXPtr[body]) * back;
+				const Real shiftY = (comYPtr[body] - prevComYPtr[body]) * back;
 
-				offsetXPtr[body] += shiftX;
-				offsetYPtr[body] += shiftY;
-				worldCenterXPtr[body] += shiftX;
-				worldCenterYPtr[body] += shiftY;
+				comXPtr[body] += shiftX;
+				comYPtr[body] += shiftY;
 
 				for (const ObjectDenseIndex collider : bodies.colliderIndices[body])
 				{
@@ -537,8 +533,8 @@ namespace PS_AGONY2D
 	size_t ContinuousCollisionDetector::getMemoryUsage() const
 	{
 		return
-			getVectorMemoryUsage(prevOffsetX) +
-			getVectorMemoryUsage(prevOffsetY) +
+			getVectorMemoryUsage(prevComX) +
+			getVectorMemoryUsage(prevComY) +
 			getVectorMemoryUsage(prevColliderX) +
 			getVectorMemoryUsage(prevColliderY) +
 			getVectorMemoryUsage(hitBodies) +

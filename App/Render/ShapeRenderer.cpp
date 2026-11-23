@@ -85,8 +85,8 @@ namespace PS_AGONY_RENDER
         // Lines.
         {
             std::vector<Shader::ShaderSource> sources = {
-                { GL_VERTEX_SHADER, "res/Shaders/spring.vert" },
-                { GL_FRAGMENT_SHADER, "res/Shaders/spring.frag" }
+                { GL_VERTEX_SHADER, "res/Shaders/line.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/line.frag" }
             };
             lineResources.shader.create(sources);
         }
@@ -395,6 +395,8 @@ namespace PS_AGONY_RENDER
         const size_t vertexBytes = vertices.size() * sizeof(glm::vec2);
         const size_t instanceBytes = instances.size() * sizeof(PolygonInstanceData);
         const size_t cmdBytes = drawCommands.size() * sizeof(Ecstasy::OpenGL::DrawArraysIndirectCommand);
+
+        ensurePolygonBufferCapacity(vertices.size(), instances.size());
 
         // Upload vertex positions.
         polygonResources.vertexVbo.write(vertices.data(), vertexBytes);

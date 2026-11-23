@@ -20,7 +20,7 @@ namespace PS_AGONY_EDITOR
 
 		if (ImGui::CollapsingHeader("Body", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			float pos[2] = { static_cast<float>(bd->offset.x), static_cast<float>(bd->offset.y) };
+			float pos[2] = { static_cast<float>(bd->position.x), static_cast<float>(bd->position.y) };
 			if (ImGui::DragFloat2("Position", pos, 0.02f)) api.setBodyPosition(h, Vec2(pos[0], pos[1]));
 
 			float rot = static_cast<float>(bd->rotation);

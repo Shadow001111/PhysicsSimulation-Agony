@@ -35,7 +35,7 @@ namespace PS_AGONY_EDITOR
 		{
 			const Real c = bv.rotationCos[bi];
 			const Real s = bv.rotationSin[bi];
-			return Vec2(bv.worldCenterX[bi] + l.x * c - l.y * s, bv.worldCenterY[bi] + l.x * s + l.y * c);
+			return Vec2(bv.comX[bi] + l.x * c - l.y * s, bv.comY[bi] + l.x * s + l.y * c);
 		}
 
 		template<class BV>
@@ -44,6 +44,12 @@ namespace PS_AGONY_EDITOR
 			const Real c = bv.rotationCos[bi];
 			const Real s = bv.rotationSin[bi];
 			return Vec2(d.x * c + d.y * s, -d.x * s + d.y * c);
+		}
+
+		template<class BV>
+		inline Vec2 worldToLocal(const BV& bv, ObjectDenseIndex bi, Vec2 w)
+		{
+			return worldDirToLocal(bv, bi, Vec2(w.x - bv.comX[bi], w.y - bv.comY[bi]));
 		}
 
 		inline bool dragVec2(const char* label, Vec2 v, Vec2& out, float speed = 0.01f)

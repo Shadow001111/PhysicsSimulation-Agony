@@ -24,7 +24,7 @@ namespace PS_AGONY_EDITOR
 					toScreen(Vec2(cv.aabbMaxX[ci], cv.aabbMinY[ci])),
 					kSelectColor, 0.0f, 0, 1.5f);
 			}
-			const ImVec2 c = toScreen(Vec2(bv.worldCenterX[bi], bv.worldCenterY[bi]));
+			const ImVec2 c = toScreen(Vec2(bv.comX[bi], bv.comY[bi]));
 			dl->AddLine(ImVec2(c.x - 5, c.y), ImVec2(c.x + 5, c.y), kSelectColor, 1.5f);
 			dl->AddLine(ImVec2(c.x, c.y - 5), ImVec2(c.x, c.y + 5), kSelectColor, 1.5f);
 		}
@@ -68,7 +68,7 @@ namespace PS_AGONY_EDITOR
 						if (const auto d = cs.getSliderJointData(i)) link(d->bodyHandleA, d->localAnchorA, d->bodyHandleB, d->localAnchorB);
 						break;
 					case ConstraintType::Motor:
-						dl->AddCircle(toScreen(Vec2(bv.worldCenterX[bi], bv.worldCenterY[bi])), 9.0f, kConstraintColor, 16, 1.5f);
+						dl->AddCircle(toScreen(Vec2(bv.comX[bi], bv.comY[bi])), 9.0f, kConstraintColor, 16, 1.5f);
 						break;
 					default: break;
 					}
@@ -125,11 +125,7 @@ namespace PS_AGONY_EDITOR
 			const ObjectDenseIndex bi = api.getBodyIndex(firstBody);
 			if (bi != Handle::NULL_DENSE_INDEX)
 			{
-				const Real c = bv.rotationCos[bi];
-				const Real s = bv.rotationSin[bi];
-				const Vec2 w(
-					bv.worldCenterX[bi] + firstLocalAnchor.x * c - firstLocalAnchor.y * s,
-					bv.worldCenterY[bi] + firstLocalAnchor.x * s + firstLocalAnchor.y * c);
+				const Vec2 w = localToWorld(bv, bi, firstLocalAnchor);
 				dl->AddCircleFilled(toScreen(w), 4.0f, kSelectColor);
 				dl->AddLine(toScreen(w), toScreen(mouseWorld), kHintColor, 1.5f);
 			}

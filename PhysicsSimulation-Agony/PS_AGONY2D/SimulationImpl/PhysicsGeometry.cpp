@@ -43,22 +43,18 @@ namespace PS_AGONY2D::PhysicsGeometry
         Real xx = Real(0);
         Real yy = Real(0);
 
-        const bool computeCOM = !centerOfMass.has_value();
         const Vec2* verticesPtr = vertices.data();
 
         for (size_t i = 0; i < verticesCount; i++)
         {
             const Vec2& p0 = verticesPtr[i];
-            const Vec2& p1 = verticesPtr[(i + 1) % verticesCount];
+            const Vec2& p1 = verticesPtr[(i + 1 == verticesCount) ? 0 : i + 1];
 
-            Real cross = p0.x * p1.y - p1.x * p0.y;
+            const Real cross = p0.x * p1.y - p1.x * p0.y;
             signedArea += cross;
 
-            if (computeCOM)
-            {
-                cx += (p0.x + p1.x) * cross;
-                cy += (p0.y + p1.y) * cross;
-            }
+            cx += (p0.x + p1.x) * cross;
+            cy += (p0.y + p1.y) * cross;
 
             // Area moments about origin.
             xx += (p0.y * p0.y + p0.y * p1.y + p1.y * p1.y) * cross;
@@ -66,45 +62,26 @@ namespace PS_AGONY2D::PhysicsGeometry
         }
 
         // Precondition: CCW winding (guaranteed by preparePolygonOutline); a CW input yields zero inertia.
-
         signedArea *= Real(0.5);
-        const Real absoluteArea = signedArea;
-        if (absoluteArea < std::numeric_limits<Real>::epsilon())
+        if (signedArea < std::numeric_limits<Real>::epsilon())
         {
             return { Real(0), centerOfMass.value_or(Vec2(Real(0))) };
         }
 
-        // Determine final Center of Mass.
-        Vec2 finalCOM;
-        if (computeCOM)
+        const Real invSixArea = Real(1) / (Real(6) * signedArea);
+        const Vec2 centroid(cx * invSixArea, cy * invSixArea);
+
+        // Inertia about the origin, shifted to the centroid.
+        const Real inertiaAboutCentroid = (mass / signedArea) * ((xx + yy) / Real(12)) - mass * glm::dot(centroid, centroid);
+
+        if (!centerOfMass.has_value())
         {
-            finalCOM = Vec2(
-                cx / (Real(6) * signedArea),
-                cy / (Real(6) * signedArea)
-            );
-        }
-        else
-        {
-            finalCOM = centerOfMass.value();
+            return { inertiaAboutCentroid, centroid };
         }
 
-        xx /= Real(12);
-        yy /= Real(12);
-
-        // Local/World polar moment of area scaled to mass moment
-        Real inertia = (mass / absoluteArea) * (xx + yy);
-
-        if (!computeCOM)
-        {
-            Real deltaSquared = glm::dot(finalCOM, finalCOM);
-            inertia += mass * deltaSquared;
-        }
-        else
-        {
-            inertia -= mass * glm::dot(finalCOM, finalCOM);
-        }
-
-        return { inertia, finalCOM };
+        // Parallel-axis shift to the requested pivot (same frame as the vertices).
+        const Vec2 delta = centroid - *centerOfMass;
+        return { inertiaAboutCentroid + mass * glm::dot(delta, delta), *centerOfMass };
     }
 
     Real calculateCapsuleInertia(Real mass, Real length, Real radius, Vec2 centerOfMass)

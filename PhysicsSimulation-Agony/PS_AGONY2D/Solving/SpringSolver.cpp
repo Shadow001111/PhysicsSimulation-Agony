@@ -14,10 +14,8 @@ namespace PS_AGONY2D
 				return { v.x * cos - v.y * sin, v.x * sin + v.y * cos };
 			};
 
-		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
-		const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
+		const Real* ECSTASY_RESTRICT comXPtr = bodies->comX.data();
+		const Real* ECSTASY_RESTRICT comYPtr = bodies->comY.data();
 		const Real* ECSTASY_RESTRICT rotationCosPtr = bodies->rotationCos.data();
 		const Real* ECSTASY_RESTRICT rotationSinPtr = bodies->rotationSin.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
@@ -54,14 +52,8 @@ namespace PS_AGONY2D
 				continue;
 			}
 
-			const Vec2 worldCenterA{
-				positionXPtr[bodyIndexA] + localCenterOfMassXPtr[bodyIndexA],
-				positionYPtr[bodyIndexA] + localCenterOfMassYPtr[bodyIndexA]
-			};
-			const Vec2 worldCenterB{
-				positionXPtr[bodyIndexB] + localCenterOfMassXPtr[bodyIndexB],
-				positionYPtr[bodyIndexB] + localCenterOfMassYPtr[bodyIndexB]
-			};
+			const Vec2 worldCenterA{ comXPtr[bodyIndexA], comYPtr[bodyIndexA] };
+			const Vec2 worldCenterB{ comXPtr[bodyIndexB], comYPtr[bodyIndexB] };
 
 			const Vec2 rotatedAnchorA = rotate(viewer.localAnchorA[i], rotationCosPtr[bodyIndexA], rotationSinPtr[bodyIndexA]);
 			const Vec2 rotatedAnchorB = rotate(viewer.localAnchorB[i], rotationCosPtr[bodyIndexB], rotationSinPtr[bodyIndexB]);

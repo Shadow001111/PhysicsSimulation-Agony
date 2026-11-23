@@ -62,7 +62,7 @@ namespace PS_AGONY_RENDER
 
 	struct BodyTransformSample
 	{
-		Real x, y;
+		Real x, y; // World center of mass.
 		Real cosR, sinR;
 		Real rotation;
 	};
@@ -86,8 +86,8 @@ namespace PS_AGONY_RENDER
 		[[nodiscard]] static BodyTransformContext make(const BodySoAViewer& bodies, Real alpha, bool interpolate) noexcept
 		{
 			return BodyTransformContext{
-				bodies.renderOldOffsetX, bodies.renderOldOffsetY, bodies.renderOldRotation, bodies.renderRotationWrapCount,
-				bodies.offsetX, bodies.offsetY, bodies.rotation,
+				bodies.renderOldComX, bodies.renderOldComY, bodies.renderOldRotation, bodies.renderRotationWrapCount,
+				bodies.comX, bodies.comY, bodies.rotation,
 				alpha, interpolate
 			};
 		}
@@ -133,21 +133,18 @@ namespace PS_AGONY_RENDER
 	{
 		const BodyTransformContext& transform;
 
-		const Real* ECSTASY_RESTRICT comX;
-		const Real* ECSTASY_RESTRICT comY;
 		const ObjectDenseIndex* ECSTASY_RESTRICT bodyIndex;
 		const ObjectDenseIndex* ECSTASY_RESTRICT shapeIndex;
-		const Real* ECSTASY_RESTRICT offsetX;
-		const Real* ECSTASY_RESTRICT offsetY;
+		const Real* ECSTASY_RESTRICT comOffsetX;
+		const Real* ECSTASY_RESTRICT comOffsetY;
 		const Real* ECSTASY_RESTRICT rotation;
 
-		[[nodiscard]] static ColliderPlacer make(const BodySoAViewer& bodies, const ColliderSoAViewer& colliders, const BodyTransformContext& transform) noexcept
+		[[nodiscard]] static ColliderPlacer make(const BodySoAViewer&, const ColliderSoAViewer& colliders, const BodyTransformContext& transform) noexcept
 		{
 			return ColliderPlacer{
 				transform,
-				bodies.localCenterOfMassX, bodies.localCenterOfMassY,
 				colliders.bodyIndex, colliders.shapeIndex,
-				colliders.localOffsetX, colliders.localOffsetY, colliders.localRotation
+				colliders.comOffsetX, colliders.comOffsetY, colliders.localRotation
 			};
 		}
 
@@ -156,14 +153,14 @@ namespace PS_AGONY_RENDER
 			const ObjectDenseIndex body = bodyIndex[colliderIndex];
 			const BodyTransformSample sample = transform.sample(body);
 
-			const Real offX = offsetX[colliderIndex];
-			const Real offY = offsetY[colliderIndex];
+			const Real offX = comOffsetX[colliderIndex];
+			const Real offY = comOffsetY[colliderIndex];
 
 			return {
 				static_cast<float>(sample.x + (offX * sample.cosR - offY * sample.sinR)),
 				static_cast<float>(sample.y + (offX * sample.sinR + offY * sample.cosR)),
-				static_cast<float>(comX[body]),
-				static_cast<float>(comY[body]),
+				0.0f, // Shaders rotate about the collider origin, which is already placed in world space.
+				0.0f,
 				static_cast<float>(sample.rotation + rotation[colliderIndex]),
 				shapeIndex[colliderIndex]
 			};

@@ -6,10 +6,13 @@
 #include "PS_AGONY2D/Types/CollisionEvent.h"
 
 // Define all scalar SoA fields.
+// comOffset = localOffset - owner's localCenterOfMass. Kept in sync by ObjectManager.
 #define PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(F) \
 	F(bodyIndex, ObjectDenseIndex) \
 	F(localOffsetX, Real) \
 	F(localOffsetY, Real) \
+	F(comOffsetX, Real) \
+	F(comOffsetY, Real) \
 	F(localRotation, Real) \
 	F(worldPosX, Real) \
 	F(worldPosY, Real) \
@@ -34,9 +37,9 @@ namespace PS_AGONY2D
 	{
 		#define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-		#undef DECLARE_FIELD
+			#undef DECLARE_FIELD
 
-		HandleTable handles;
+			HandleTable handles;
 
 		// Dense order follows BodyGroup of the owner body. Changed by ObjectManager group moves only.
 		GroupRanges groups;
@@ -73,9 +76,9 @@ namespace PS_AGONY2D
 	public:
 		#define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-		#undef DECLARE_VIEWER_FIELD
+			#undef DECLARE_VIEWER_FIELD
 
-		const HandleTable* handles = nullptr;
+			const HandleTable* handles = nullptr;
 
 		ColliderSoAViewer() = default;
 		explicit ColliderSoAViewer(const ColliderSoA& data) noexcept;

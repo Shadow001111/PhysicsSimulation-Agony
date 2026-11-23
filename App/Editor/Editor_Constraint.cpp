@@ -15,11 +15,7 @@ namespace PS_AGONY_EDITOR
 
 		const ObjectDenseIndex bi = api.getColliders().bodyIndex[ci];
 		const BodySoAViewer bv = api.getBodies();
-		const Real wx = mouseWorld.x - bv.worldCenterX[bi];
-		const Real wy = mouseWorld.y - bv.worldCenterY[bi];
-		const Real c = bv.rotationCos[bi];
-		const Real s = bv.rotationSin[bi];
-		const Vec2 local(wx * c + wy * s, -wx * s + wy * c); // Local to the center of mass.
+		const Vec2 local = worldToLocal(bv, bi, mouseWorld); // Local to the center of mass.
 		const Handle body = api.getBodyHandle(bi);
 
 		if (constraintKind == static_cast<int>(ConstraintType::Motor))

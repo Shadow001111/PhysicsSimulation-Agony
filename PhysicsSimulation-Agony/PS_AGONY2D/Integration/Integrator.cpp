@@ -57,8 +57,8 @@ namespace PS_AGONY2D::Integrator
         TRACY_SCOPE_NC("Integrate kinematics (semi-implicit)", PS_AGONY2D::Profiling::Color::Blue);
 
         // Get pointers.
-        Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
-        Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
+        Real* ECSTASY_RESTRICT positionXPtr = bodies.comX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies.comY.data();
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
         const Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();
@@ -143,8 +143,8 @@ namespace PS_AGONY2D::Integrator
         TRACY_SCOPE_NC("Integrate phase2 (velocity-verlet)", PS_AGONY2D::Profiling::Color::Red);
 
         // Get pointers.
-        Real* ECSTASY_RESTRICT positionXPtr = bodies.offsetX.data();
-        Real* ECSTASY_RESTRICT positionYPtr = bodies.offsetY.data();
+        Real* ECSTASY_RESTRICT positionXPtr = bodies.comX.data();
+        Real* ECSTASY_RESTRICT positionYPtr = bodies.comY.data();
         Real* ECSTASY_RESTRICT rotationPtr = bodies.rotation.data();
 
         Real* ECSTASY_RESTRICT velocityXPtr = bodies.velocityX.data();

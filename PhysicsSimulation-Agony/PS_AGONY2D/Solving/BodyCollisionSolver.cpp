@@ -136,8 +136,8 @@ namespace PS_AGONY2D
 		const size_t collisionCount = activeCollisionCount;
 		if (collisionCount == 0) return { Real(0), Real(0) };
 
-		const Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
-		const Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+		const Real* ECSTASY_RESTRICT positionXPtr = bodies->comX.data();
+		const Real* ECSTASY_RESTRICT positionYPtr = bodies->comY.data();
 		const Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		const Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
 		const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
@@ -230,13 +230,11 @@ namespace PS_AGONY2D
 	{
 		TRACY_SCOPE_NC("Compute constraint data", PS_AGONY2D::Profiling::Color::Chocolate);
 
-		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
-		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+		Real* ECSTASY_RESTRICT positionXPtr = bodies->comX.data();
+		Real* ECSTASY_RESTRICT positionYPtr = bodies->comY.data();
 		const Real* ECSTASY_RESTRICT velocityXPtr = bodies->velocityX.data();
 		const Real* ECSTASY_RESTRICT velocityYPtr = bodies->velocityY.data();
 		const Real* ECSTASY_RESTRICT angularVelocityPtr = bodies->angularVelocity.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassXPtr = bodies->localCenterOfMassX.data();
-		const Real* ECSTASY_RESTRICT localCenterOfMassYPtr = bodies->localCenterOfMassY.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 		const Real* ECSTASY_RESTRICT invInertiaPtr = bodies->invInertia.data();
 		const MaterialIndex* ECSTASY_RESTRICT colliderMaterialIndexPtr = colliders.materialIndex;
@@ -267,14 +265,8 @@ namespace PS_AGONY2D
 			const ObjectDenseIndex bodyA = bodyIndexPtr[colliderA];
 			const ObjectDenseIndex bodyB = bodyIndexPtr[colliderB];
 
-			const Vec2 positionA = { positionXPtr[bodyA], positionYPtr[bodyA] };
-			const Vec2 positionB = { positionXPtr[bodyB], positionYPtr[bodyB] };
-
-			const Vec2 localCOMA = { localCenterOfMassXPtr[bodyA], localCenterOfMassYPtr[bodyA] };
-			const Vec2 localCOMB = { localCenterOfMassXPtr[bodyB], localCenterOfMassYPtr[bodyB] };
-
-			const Vec2 centerOfMassA = positionA + localCOMA;
-			const Vec2 centerOfMassB = positionB + localCOMB;
+			const Vec2 centerOfMassA = { positionXPtr[bodyA], positionYPtr[bodyA] };
+			const Vec2 centerOfMassB = { positionXPtr[bodyB], positionYPtr[bodyB] };
 
 			const Real invMassA = invMassPtr[bodyA];
 			const Real invMassB = invMassPtr[bodyB];
@@ -299,7 +291,7 @@ namespace PS_AGONY2D
 				positionHot.bodyA = bodyA;
 				positionHot.bodyB = bodyB;
 				positionHot.normal = data.normal;
-				positionHot.penetrationBase = data.penetration + glm::dot(positionB - positionA, data.normal) - simulationSettings.positionCorrectionSlop;
+				positionHot.penetrationBase = data.penetration + glm::dot(centerOfMassB - centerOfMassA, data.normal) - simulationSettings.positionCorrectionSlop;
 			}
 			{
 				auto& velocityConstraint = velocityConstraintContainer[c];
@@ -543,7 +535,7 @@ namespace PS_AGONY2D
 				// Normal.
 				Real jnSingle = 0;
 				{
-					const Real velocityAlongNormal = glm::dot(linearVelocityB - linearVelocityA, normal) + 
+					const Real velocityAlongNormal = glm::dot(linearVelocityB - linearVelocityA, normal) +
 						c.rBn * angularVelocityB - c.rAn * angularVelocityA;
 
 					Real& accumulatedJn = collisionData.impulses[0].normalImpulseAccumulator;
@@ -892,7 +884,7 @@ namespace PS_AGONY2D
 							accumulatedImpulse1 = x1;
 
 							const Real jtSum = deltaJt0 + deltaJt1;
-							
+
 							linearVelocityA -= tangent * (jtSum * invMassA);
 							linearVelocityB += tangent * (jtSum * invMassB);
 							angularVelocityA -= (deltaJt0 * c0.rAt + deltaJt1 * c1.rAt) * invInertiaA;
@@ -941,8 +933,8 @@ namespace PS_AGONY2D
 
 		std::span<const PositionHotData> collisionDataSpan(positionHotContainer.data() + pass.start, pass.size);
 
-		Real* ECSTASY_RESTRICT positionXPtr = bodies->offsetX.data();
-		Real* ECSTASY_RESTRICT positionYPtr = bodies->offsetY.data();
+		Real* ECSTASY_RESTRICT positionXPtr = bodies->comX.data();
+		Real* ECSTASY_RESTRICT positionYPtr = bodies->comY.data();
 		const Real* ECSTASY_RESTRICT invMassPtr = bodies->invMass.data();
 
 		const size_t collisionCount = collisionDataSpan.size();

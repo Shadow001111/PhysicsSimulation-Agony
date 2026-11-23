@@ -79,21 +79,19 @@ namespace PS_AGONY_EDITOR
 		const BodySoAViewer bv = api.getBodies();
 		if (bv.invMass[bi] == 0) return false;
 
-		const Real wx = anchorWorld.x - bv.worldCenterX[bi];
-		const Real wy = anchorWorld.y - bv.worldCenterY[bi];
-		const Real c = bv.rotationCos[bi];
-		const Real s = bv.rotationSin[bi];
+		// The holder stores the anchor relative to the body origin, not the center of mass.
+		const Vec2 localAnchor = worldToLocal(bv, bi, anchorWorld) + Vec2(bv.localCenterOfMassX[bi], bv.localCenterOfMassY[bi]);
 
 		sim.getMainBodyHolder().heldBodies.push_back({
 			body,
-			Vec2(wx * c + wy * s, -wx * s + wy * c),
+			localAnchor,
 			Vec2(anchorWorld.x - grabWorld.x, anchorWorld.y - grabWorld.y)
 			});
 		return true;
 	}
 
 	// Starts dragging. The clicked body is held at the click point, every other selected body is held at its
-	// world center. The holder is reset to the click point with zero velocity (stale target would fling bodies).
+	// center of mass. The holder is reset to the click point with zero velocity (stale target would fling bodies).
 	// Does nothing for a static body or a busy holder.
 	void Editor::beginDrag(Simulation& sim, Handle body, Vec2 grabWorld)
 	{
@@ -111,7 +109,7 @@ namespace PS_AGONY_EDITOR
 
 		const bool multiple = selected.size() > 1;
 		const Vec2 primaryAnchor = (multiple || !kAllowSingleBodyRotation)
-			? Vec2(bv.worldCenterX[primary], bv.worldCenterY[primary])
+			? Vec2(bv.comX[primary], bv.comY[primary])
 			: grabWorld;
 
 		if (!holdBody(sim, body, primaryAnchor, grabWorld)) return;
@@ -123,7 +121,7 @@ namespace PS_AGONY_EDITOR
 		{
 			const ObjectDenseIndex bi = api.getBodyIndex(h);
 			if (bi == Handle::NULL_DENSE_INDEX || bi == primary) continue;
-			holdBody(sim, h, Vec2(bv.worldCenterX[bi], bv.worldCenterY[bi]), grabWorld);
+			holdBody(sim, h, Vec2(bv.comX[bi], bv.comY[bi]), grabWorld);
 		}
 	}
 

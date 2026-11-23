@@ -14,6 +14,13 @@ namespace PS_AGONY2D
 {
     namespace
     {
+        void refreshComOffset(const BodySoA& bodies, ColliderSoA& colliders, ObjectDenseIndex collider)
+        {
+            const ObjectDenseIndex body = colliders.bodyIndex[collider];
+            colliders.comOffsetX[collider] = colliders.localOffsetX[collider] - bodies.localCenterOfMassX[body];
+            colliders.comOffsetY[collider] = colliders.localOffsetY[collider] - bodies.localCenterOfMassY[body];
+        }
+
         // 'ascendingIndices' must be sorted ascending. Visits the body nearest the Dynamic/Sleeping boundary first,
         // because each adjacent move swaps with the boundary-side body of the source group.
         template<bool TO_SLEEP, class Func>
@@ -290,10 +297,10 @@ namespace PS_AGONY2D
         const Vec2 neededCenterOfMass = build.neededCenterOfMass;
         std::vector<std::vector<Vec2>>& convexPieces = build.pieces;
 
-        // Body origin == world COM == position + R(rotation) * trueCOM.
+        // The outline is centered on the true COM, so the body origin sits there.
         const Real cosR = std::cos(params.base.rotation);
         const Real sinR = std::sin(params.base.rotation);
-        const Vec2 worldCOM = params.base.position + Vec2(
+        const Vec2 origin = params.base.position + Vec2(
             cosR * trueCenterOfMass.x - sinR * trueCenterOfMass.y,
             sinR * trueCenterOfMass.x + cosR * trueCenterOfMass.y
         );
@@ -302,7 +309,7 @@ namespace PS_AGONY2D
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
         const ObjectDenseIndex newBodyIndex = appendBody(
-            worldCOM,
+            origin,
             params.base.velocity,
             params.base.rotation,
             params.base.angularVelocity,
@@ -510,6 +517,7 @@ namespace PS_AGONY2D
         const ObjectDenseIndex newCollider = colliders.append(
             bodyIndex, localOffset, localRotation, materialIndex, shapeType, shapeIndex
         );
+        refreshComOffset(bodies, colliders, newCollider);
         bodies.addCollider(bodyIndex, newCollider);
         spatialDirty = true;
 
@@ -678,12 +686,21 @@ namespace PS_AGONY2D
                 destroyBodyImmediate(bodyIndex);
                 break;
             case T::SetBodyPosition:
-                bodies.offsetX[bodyIndex] = c.a;
-                bodies.offsetY[bodyIndex] = c.b;
-                bodies.renderOldOffsetX[bodyIndex] = c.a; // Teleport: no render interpolation.
-                bodies.renderOldOffsetY[bodyIndex] = c.b;
+            {
+                const Real r = bodies.rotation[bodyIndex];
+                const Real cosR = std::cos(r);
+                const Real sinR = std::sin(r);
+                const Real lx = bodies.localCenterOfMassX[bodyIndex];
+                const Real ly = bodies.localCenterOfMassY[bodyIndex];
+                const Real x = c.a + cosR * lx - sinR * ly;
+                const Real y = c.b + sinR * lx + cosR * ly;
+                bodies.comX[bodyIndex] = x;
+                bodies.comY[bodyIndex] = y;
+                bodies.renderOldComX[bodyIndex] = x; // Teleport: no render interpolation.
+                bodies.renderOldComY[bodyIndex] = y;
                 spatialDirty = true;
                 break;
+            }
 
             case T::SetBodyRotation:
             {
@@ -720,10 +737,24 @@ namespace PS_AGONY2D
             }
 
             case T::SetBodyLocalCenterOfMass:
+            {
+                // The body origin stays in place, so the world COM moves.
+                const Real r = bodies.rotation[bodyIndex];
+                const Real cosR = std::cos(r);
+                const Real sinR = std::sin(r);
+                const Real dx = c.a - bodies.localCenterOfMassX[bodyIndex];
+                const Real dy = c.b - bodies.localCenterOfMassY[bodyIndex];
+                bodies.comX[bodyIndex] += cosR * dx - sinR * dy;
+                bodies.comY[bodyIndex] += sinR * dx + cosR * dy;
+                bodies.renderOldComX[bodyIndex] = bodies.comX[bodyIndex];
+                bodies.renderOldComY[bodyIndex] = bodies.comY[bodyIndex];
                 bodies.localCenterOfMassX[bodyIndex] = c.a;
                 bodies.localCenterOfMassY[bodyIndex] = c.b;
-                spatialDirty = true; // World center depends on it.
+                for (const ObjectDenseIndex collider : bodies.colliderIndices[bodyIndex])
+                    refreshComOffset(bodies, colliders, collider);
+                spatialDirty = true;
                 break;
+            }
 
             case T::RecomputeBodyInertia:
                 recomputeBodyInertia(bodyIndex);
@@ -754,6 +785,7 @@ namespace PS_AGONY2D
         case T::SetColliderLocalOffset:
             colliders.localOffsetX[colliderIndex] = c.a;
             colliders.localOffsetY[colliderIndex] = c.b;
+            refreshComOffset(bodies, colliders, colliderIndex);
             spatialDirty = true;
             break;
 
@@ -804,6 +836,7 @@ namespace PS_AGONY2D
             const Real sinL = std::sin(colliders.localRotation[colliderIndex]);
             colliders.localOffsetX[colliderIndex] += cosL * centroid.x - sinL * centroid.y;
             colliders.localOffsetY[colliderIndex] += sinL * centroid.x + cosL * centroid.y;
+            refreshComOffset(bodies, colliders, colliderIndex);
             polygons.geometry[shapeIndex] = std::move(pending);
             colliders.minExtent[colliderIndex] = PhysicsGeometry::calculatePolygonInnerRadius(polygons.geometry[shapeIndex]);
             colliders.maxExtent[colliderIndex] = PhysicsGeometry::calculatePolygonOuterRadius(polygons.geometry[shapeIndex]);
@@ -878,7 +911,6 @@ namespace PS_AGONY2D
             totalArea += colliderArea(*this, ci);
         if (totalArea <= Real(0)) return;
 
-        const Vec2 com(bodies.localCenterOfMassX[b], bodies.localCenterOfMassY[b]);
         const Real massPerArea = mass / totalArea;
 
         // Sum of each collider's inertia about its own centroid plus parallel-axis shift to the body COM.
@@ -890,7 +922,7 @@ namespace PS_AGONY2D
 
             const Real m = massPerArea * area;
             const ObjectDenseIndex s = colliders.shapeIndex[ci];
-            Vec2 centroid(colliders.localOffsetX[ci], colliders.localOffsetY[ci]);
+            const Vec2 d(colliders.comOffsetX[ci], colliders.comOffsetY[ci]);
             Real own = Real(0);
 
             switch (colliders.shapeType[ci])
@@ -906,21 +938,15 @@ namespace PS_AGONY2D
                 break;
             case ColliderShapeType::Polygon:
             {
+                // Polygons are centroid-centered, so the collider origin is their centroid.
                 const PolygonGeometry& g = polygons.geometry[s];
-                const auto [polyInertia, polyCentroid] = PhysicsGeometry::calculatePolygonInertia(m, { g.vertices(), g.size() }, std::nullopt);
-                own = polyInertia;
-
-                // Polygon vertices live in the collider frame, rotated by the collider's local rotation.
-                const Real cr = std::cos(colliders.localRotation[ci]);
-                const Real sr = std::sin(colliders.localRotation[ci]);
-                centroid += Vec2(cr * polyCentroid.x - sr * polyCentroid.y, sr * polyCentroid.x + cr * polyCentroid.y);
+                own = PhysicsGeometry::calculatePolygonInertia(m, { g.vertices(), g.size() }, std::nullopt).first;
                 break;
             }
             default:
                 break;
             }
 
-            const Vec2 d = centroid - com;
             inertia += own + m * (d.x * d.x + d.y * d.y);
         }
 
@@ -1230,8 +1256,15 @@ namespace PS_AGONY2D
         Vec2 localCenterOfMass
     )
     {
+        const Real cosR = std::cos(rot);
+        const Real sinR = std::sin(rot);
+        const Vec2 centerOfMass = pos + Vec2(
+            cosR * localCenterOfMass.x - sinR * localCenterOfMass.y,
+            sinR * localCenterOfMass.x + cosR * localCenterOfMass.y
+        );
+
         const ObjectDenseIndex index = bodies.append(
-            pos, vel, rot, anglVel, mass, invMass, inertia, invInertia, localCenterOfMass
+            centerOfMass, vel, rot, anglVel, mass, invMass, inertia, invInertia, localCenterOfMass
         );
         return moveBodyToGroup(index, invMass == Real(0) ? BodyGroup::Static : BodyGroup::Dynamic);
     }
@@ -1271,8 +1304,8 @@ namespace PS_AGONY2D
         bodies.sleepIslandId[b] = sleepIslandId;
 
         // preUpdate no longer refreshes render-old values for this body.
-        bodies.renderOldOffsetX[b] = bodies.offsetX[b];
-        bodies.renderOldOffsetY[b] = bodies.offsetY[b];
+        bodies.renderOldComX[b] = bodies.comX[b];
+        bodies.renderOldComY[b] = bodies.comY[b];
         bodies.renderOldRotation[b] = bodies.rotation[b];
         bodies.renderRotationWrapCount[b] = Real(0);
         bodies.sleepingTimer[b] = 0.0f;

@@ -9,17 +9,16 @@
 #include <optional>
 
 // Define all scalar SoA fields.
+// comX/comY is the world center of mass; bodies rotate about it. Body origin = com - R * localCenterOfMass.
 #define PS_AGONY_BODY_SOA_SCALAR_FIELDS(F) \
-    F(renderOldOffsetX, Real) \
-    F(renderOldOffsetY, Real) \
+    F(renderOldComX, Real) \
+    F(renderOldComY, Real) \
     F(renderOldRotation, Real) \
     F(renderRotationWrapCount, Real) \
-    F(offsetX, Real) \
-    F(offsetY, Real) \
+    F(comX, Real) \
+    F(comY, Real) \
     F(localCenterOfMassX, Real) \
     F(localCenterOfMassY, Real) \
-    F(worldCenterX, Real) \
-    F(worldCenterY, Real) \
     F(velocityX, Real) \
     F(velocityY, Real) \
     F(rotation, Real) \
@@ -45,9 +44,9 @@ namespace PS_AGONY2D
 
     struct BodyData
     {
-        Vec2 offset;
+        Vec2 position; // Body origin in world space.
         Vec2 localCenterOfMass;
-        Vec2 worldCenter;
+        Vec2 worldCenter; // Center of mass in world space.
         Vec2 velocity;
         Real rotation;
         Real angularVelocity;
@@ -63,13 +62,13 @@ namespace PS_AGONY2D
     {
         #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-        #undef DECLARE_FIELD
+            #undef DECLARE_FIELD
 
-        #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
-        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
-        #undef DECLARE_VECTOR_FIELD
+            #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
+            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
+            #undef DECLARE_VECTOR_FIELD
 
-        HandleTable handles;
+            HandleTable handles;
 
         // Changed by ObjectManager::moveBodyToGroup only.
         uint32_t groupCounts[size_t(BodyGroup::Unused)]{};
@@ -112,7 +111,7 @@ namespace PS_AGONY2D
         void swap(ObjectDenseIndex a, ObjectDenseIndex b);
 
         ObjectDenseIndex append(
-            Vec2 pos, Vec2 vel, Real rot, Real anglVel,
+            Vec2 centerOfMass, Vec2 vel, Real rot, Real anglVel,
             Real mass, Real invMass, Real inertia, Real invInertia,
             Vec2 localCenterOfMass
         );
@@ -135,7 +134,7 @@ namespace PS_AGONY2D
 
         std::optional<BodyData> getBodyData(ObjectDenseIndex index) const noexcept;
 
-        size_t getCount() const noexcept { return offsetX.size(); }
+        size_t getCount() const noexcept { return comX.size(); }
         size_t getMemoryUsage() const noexcept;
     };
 
@@ -145,13 +144,13 @@ namespace PS_AGONY2D
     public:
         #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-        #undef DECLARE_VIEWER_FIELD
+            #undef DECLARE_VIEWER_FIELD
 
-        #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
-        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
-        #undef DECLARE_VIEWER_VECTOR_FIELD
+            #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
+            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
+            #undef DECLARE_VIEWER_VECTOR_FIELD
 
-        BodySoAViewer() = default;
+            BodySoAViewer() = default;
         explicit BodySoAViewer(const BodySoA& data) noexcept;
 
         size_t getCount() const noexcept { return count; }

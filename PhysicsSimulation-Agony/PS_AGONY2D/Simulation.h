@@ -248,9 +248,6 @@ namespace PS_AGONY2D
 
 		void buildColliderAABBs(bool includeStaticAndSleeping);
 
-		// range.begin must be 0 (aligned SIMD loads).
-		void computeBodyWorldCenters(IndexRange range);
-
 		void computeColliderWorldPositions(IndexRange colliderRange);
 		void computeColliderWorldRotations(IndexRange colliderRange);
 

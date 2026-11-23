@@ -19,6 +19,8 @@ namespace PS_AGONY2D
 
 		this->localOffsetX.push_back(localOffset.x);
 		this->localOffsetY.push_back(localOffset.y);
+		this->comOffsetX.push_back(0);
+		this->comOffsetY.push_back(0);
 
 		Real wrappedLocal = std::fmod(localRotationIn, Constants::TWO_PI);
 		if (wrappedLocal < Real(0)) wrappedLocal += Constants::TWO_PI;
@@ -57,7 +59,7 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD_AB(name, type) std::swap(name[a], name[b]);
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(SWAP_FIELD_AB)
-		#undef SWAP_FIELD_AB
+			#undef SWAP_FIELD_AB
 	}
 
 	void ColliderSoA::swapWithBack(ObjectDenseIndex index)
@@ -70,7 +72,7 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) std::swap(name[index], name.back());
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(SWAP_FIELD)
-		#undef SWAP_FIELD
+			#undef SWAP_FIELD
 	}
 
 	void ColliderSoA::popBack()
@@ -83,7 +85,7 @@ namespace PS_AGONY2D
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_COLLIDER_SOA_SCALAR_FIELDS(POP_FIELD)
-		#undef POP_FIELD
+			#undef POP_FIELD
 	}
 
 	ObjectDenseIndex ColliderSoA::swapRemove(ObjectDenseIndex index)

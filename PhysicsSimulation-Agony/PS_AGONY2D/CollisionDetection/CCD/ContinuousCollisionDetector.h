@@ -62,8 +62,8 @@ namespace PS_AGONY2D
 		);
 
 		// Orientation before integration.
-		CacheLineAlignedVector<Real> prevOffsetX;
-		CacheLineAlignedVector<Real> prevOffsetY;
+		CacheLineAlignedVector<Real> prevComX;
+		CacheLineAlignedVector<Real> prevComY;
 		CacheLineAlignedVector<Real> prevColliderX;
 		CacheLineAlignedVector<Real> prevColliderY;
 

@@ -4,24 +4,22 @@
 namespace PS_AGONY2D
 {
 	ObjectDenseIndex BodySoA::append(
-		Vec2 pos, Vec2 vel, Real rot, Real anglVel,
+		Vec2 centerOfMass, Vec2 vel, Real rot, Real anglVel,
 		Real mass, Real invMass, Real inertia, Real invInertia,
 		Vec2 localCenterOfMass
 	)
 	{
 		const ObjectDenseIndex newIndex = getCount();
 
-		this->renderOldOffsetX.push_back(pos.x);
-		this->renderOldOffsetY.push_back(pos.y);
+		this->renderOldComX.push_back(centerOfMass.x);
+		this->renderOldComY.push_back(centerOfMass.y);
 		this->renderOldRotation.push_back(rot);
 		this->renderRotationWrapCount.push_back(0);
 
-		this->offsetX.push_back(pos.x);
-		this->offsetY.push_back(pos.y);
+		this->comX.push_back(centerOfMass.x);
+		this->comY.push_back(centerOfMass.y);
 		this->localCenterOfMassX.push_back(localCenterOfMass.x);
 		this->localCenterOfMassY.push_back(localCenterOfMass.y);
-		this->worldCenterX.push_back(0);
-		this->worldCenterY.push_back(0);
 		this->velocityX.push_back(vel.x);
 		this->velocityY.push_back(vel.y);
 		this->rotation.push_back(rot);
@@ -46,7 +44,7 @@ namespace PS_AGONY2D
 
 	void BodySoA::swapWithBack(ObjectDenseIndex index)
 	{
-		if (index >= offsetX.size()) [[unlikely]]
+		if (index >= comX.size()) [[unlikely]]
 		{
 			return;
 		}
@@ -63,7 +61,7 @@ namespace PS_AGONY2D
 
 	void BodySoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
 	{
-		if (a == b || a >= offsetX.size() || b >= offsetX.size()) [[unlikely]]
+		if (a == b || a >= comX.size() || b >= comX.size()) [[unlikely]]
 		{
 			return;
 		}
@@ -81,7 +79,7 @@ namespace PS_AGONY2D
 
 	void BodySoA::popBack()
 	{
-		if (offsetX.empty()) [[unlikely]]
+		if (comX.empty()) [[unlikely]]
 		{
 			return;
 		}
@@ -162,12 +160,16 @@ namespace PS_AGONY2D
 
 	std::optional<BodyData> BodySoA::getBodyData(ObjectDenseIndex index) const noexcept
 	{
-		if (index >= offsetX.size()) [[unlikely]] return std::nullopt;
+		if (index >= comX.size()) [[unlikely]] return std::nullopt;
+		const Real cosR = rotationCos[index];
+		const Real sinR = rotationSin[index];
+		const Real lx = localCenterOfMassX[index];
+		const Real ly = localCenterOfMassY[index];
 		return BodyData
 		{
-			{ offsetX[index], offsetY[index] },
-			{ localCenterOfMassX[index], localCenterOfMassY[index] },
-			{ worldCenterX[index], worldCenterY[index] },
+			{ comX[index] - (cosR * lx - sinR * ly), comY[index] - (sinR * lx + cosR * ly) },
+			{ lx, ly },
+			{ comX[index], comY[index] },
 			{ velocityX[index], velocityY[index] },
 			rotation[index], angularVelocity[index],
 			mass[index], invMass[index],

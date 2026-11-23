@@ -1239,7 +1239,7 @@ static void onCircleSplit(const PS_AGONY2D::CollisionEvent& event, PS_AGONY2D::S
     if (!data) return;
 
     const float radius = float(data->mass); // Mass equals radius by construction.
-    const PS_AGONY2D::Vec2 position = data->offset;
+    const PS_AGONY2D::Vec2 position = data->position;
     const PS_AGONY2D::Vec2 velocity = data->velocity;
 
     objects.destroyBody(event.selfBody);
