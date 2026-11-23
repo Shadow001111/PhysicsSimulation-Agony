@@ -2,7 +2,6 @@
 
 in vec2 uv;
 in flat vec3 color;
-in flat float radius;
 in flat uint fragIdOut;
 
 layout(location = 0) out vec4 fragColor;

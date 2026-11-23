@@ -27,14 +27,18 @@ namespace PS_AGONY_RENDER
 			uint32_t id;
 		};
 
-		// Position-only circle marker: no rotation, no local COM offset.
-		// Used for debug/marker points (body positions, COM dots, contact
-		// points) where the extra 12 bytes and per-vertex rotate2D of
-		// CircleInstanceData buy nothing since the shape is a circle.
 		struct SimplePointInstanceData
 		{
 			float positionX, positionY;
 			float radius;
+			uint32_t color;
+			uint32_t id;
+		};
+
+		struct HollowCircleInstanceData
+		{
+			float positionX, positionY;
+			float outerRadius, innerRadius;
 			uint32_t color;
 			uint32_t id;
 		};
@@ -77,33 +81,8 @@ namespace PS_AGONY_RENDER
 			float maxX, maxY;
 		};
 
-		struct CircleRenderResources
-		{
-			VertexArray vao;
-			ImmutableBuffer vbo;
-			ImmutableBuffer instanceVbo;
-			Shader shader;
-		};
 
-		struct SimplePointCircleRenderResources
-		{
-			VertexArray vao;
-			ImmutableBuffer vbo;
-			ImmutableBuffer instanceVbo;
-			Shader shader;
-		};
-
-		struct BoxRenderResources
-		{
-			VertexArray vao;
-			ImmutableBuffer vbo;
-			ImmutableBuffer instanceVbo;
-			Shader shader;
-		};
-
-		// Capsule reuses BoxInstanceData (halfWidth = halfLength + radius, halfHeight = radius)
-		// and box.vert; capsule.frag carves the rounded ends via discard.
-		struct CapsuleRenderResources
+		struct ShapeRenderResources
 		{
 			VertexArray vao;
 			ImmutableBuffer vbo;
@@ -120,27 +99,10 @@ namespace PS_AGONY_RENDER
 			Shader shader;
 		};
 
-		// Shared by any 2-point-per-segment line draw: springs, joints, rods, etc.
 		struct LineRenderResources
 		{
 			VertexArray vao;
 			ImmutableBuffer vbo;
-			Shader shader;
-		};
-
-		struct ConstraintIconRenderResources
-		{
-			VertexArray vao;
-			ImmutableBuffer vbo;
-			ImmutableBuffer instanceVbo;
-			Shader shader;
-		};
-
-		struct AABBResources
-		{
-			VertexArray vao;
-			ImmutableBuffer vbo;
-			ImmutableBuffer instanceVbo;
 			Shader shader;
 		};
 
@@ -151,14 +113,15 @@ namespace PS_AGONY_RENDER
 		};
 	public:
 		// Render resources (GPU-side only; CPU-side instance data is owned by the caller).
-		CircleRenderResources circleResources;
-		SimplePointCircleRenderResources simplePointCircleResources;
-		BoxRenderResources boxResources;
-		CapsuleRenderResources capsuleResources;
+		ShapeRenderResources circleResources;
+		ShapeRenderResources simplePointCircleResources;
+		ShapeRenderResources hollowCircleResources;
+		ShapeRenderResources boxResources;
+		ShapeRenderResources capsuleResources;
 		PolygonRenderResources polygonResources;
 		LineRenderResources lineResources;
-		ConstraintIconRenderResources constraintIconResources;
-		AABBResources aabbResources;
+		ShapeRenderResources constraintIconResources;
+		ShapeRenderResources aabbResources;
 		OutlineRenderResources outlineResources;
 	public:
 		void init();
@@ -167,6 +130,7 @@ namespace PS_AGONY_RENDER
 
 		void renderCircleShapes(std::span<const CircleInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderSimplePointCircles(std::span<const SimplePointInstanceData> instances, const glm::mat4& viewProjectionMatrix);
+		void renderHollowCircleShapes(std::span<const HollowCircleInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderBoxShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderCapsuleShapes(std::span<const BoxInstanceData> instances, const glm::mat4& viewProjectionMatrix);
 		void renderPolygonShapes(
@@ -184,6 +148,7 @@ namespace PS_AGONY_RENDER
 
 		void ensureCircleInstanceVboCapacity(size_t count);
 		void ensureSimplePointInstanceVboCapacity(size_t count);
+		void ensureHollowCircleInstanceVboCapacity(size_t count);
 		void ensureBoxInstanceVboCapacity(size_t count);
 		void ensureCapsuleInstanceVboCapacity(size_t count);
 		void ensurePolygonBufferCapacity(size_t vertexCount, size_t polygonCount);

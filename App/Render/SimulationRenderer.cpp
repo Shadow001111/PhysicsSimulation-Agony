@@ -10,18 +10,6 @@
 
 namespace PS_AGONY_RENDER
 {
-    namespace
-    {
-        uint32_t packColor(const glm::vec3& c) noexcept
-        {
-            const auto to8 = [](float v) -> uint32_t
-                {
-                    return static_cast<uint32_t>(std::fmax(0.0f, std::fmin(1.0f, v)) * 255.0f + 0.5f);
-                };
-            return (to8(c.x) << 16) | (to8(c.y) << 8) | to8(c.z);
-        }
-    }
-
     void SimulationRenderer::init()
     {
         TRACY_SCOPE_N("SimulationRenderer init");
@@ -56,7 +44,7 @@ namespace PS_AGONY_RENDER
         // instead of each one re-fetching the same body pointers and redoing the
         // same lerp/wrap math. When renderOptions.interpolation is false, sampling
         // a body transform skips that math entirely (see BodyTransformContext::sample).
-        const BodyTransformContext transformContext = BodyTransformContext::make(bodies, simRenderAlpha, renderOptions.interpolation);
+        const BodyTransformContext transformContext = BodyTransformContext::make(bodies, simRenderAlpha, renderOptions.bodies.interpolation);
 
         // Fetch colliders which overlap camera AABB.
         queryCollidersForRender(simulation, cameraAABB);
@@ -65,23 +53,23 @@ namespace PS_AGONY_RENDER
         GroupColors groupColors;
         for (size_t g = 0; g < FoundColliders::groupCount; g++)
         {
-            groupColors[g] = packColor(renderOptions.bodyGroupColors[g]);
+            groupColors[g] = packColor(renderOptions.bodies.groupColors[g]);
         }
         renderColliders(viewProjectionMatrix, transformContext, groupColors);
 
         // Color-only from here: avoids a feedback loop when sampling the id texture.
         glDrawBuffers(1, &RenderAttachments::colorDrawBuffer);
 
-        if (renderOptions.outlineColliders)
+        if (renderOptions.colliders.outline)
         {
-            renderOutlines(idTextureID, renderOptions.outlineColor);
+            renderOutlines(idTextureID, renderOptions.colliders.outlineColor);
         }
 
         {
             ConstraintGroupColors constraintColors;
             for (size_t g = 0; g < constraintColors.size(); g++)
             {
-                constraintColors[g] = packColor(renderOptions.constraintGroupColors[g]);
+                constraintColors[g] = packColor(renderOptions.constraints.groupColors[g]);
             }
 
             renderConstraints(
@@ -90,43 +78,46 @@ namespace PS_AGONY_RENDER
                 transformContext,
                 cameraAABB,
                 constraintColors,
-                renderOptions.constraintIcons ? renderOptions.constraintIconSize : 0.0f
+                renderOptions.constraints.icons ? renderOptions.constraints.iconSize : 0.0f
             );
         }
 
-        if (renderOptions.colliderAABBs)
+        if (renderOptions.colliders.aabbs)
         {
             renderColliderAABBs(foundColliders.raw, viewProjectionMatrix);
         }
+        if (renderOptions.colliders.minExtent)
+        {
+            renderColliderExtents(foundColliders.raw, renderOptions.colliders.minExtentColor, colliders.minExtent, viewProjectionMatrix, transformContext);
+        }
+        //if (renderOptions.colliders.maxExtent)
+        //{
+        //    renderColliderExtents(foundColliders.raw, renderOptions.colliders.maxExtentColor, colliders.maxExtent, viewProjectionMatrix, transformContext);
+        //}
 
-        if (
-            renderOptions.broadPhaseDynamicAABBs ||
-            renderOptions.broadPhaseStaticAABBs ||
-            renderOptions.broadPhaseSleepingAABBs
-            )
         {
             TRACY_SCOPE_N("Broad phase leaf AABBs");
 
             const auto& bfcd = simulation.getBroadPhaseCollisionDetector();
             const BroadPhaseInternal::AABBQuery query(cameraAABB);
 
-            if (renderOptions.broadPhaseDynamicAABBs)
+            if (renderOptions.broadphaseAABBs.enabled[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)])
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Dynamic, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseDynamicAABBColor, viewProjectionMatrix);
+                renderLeafAABBs(queriedAABBs, renderOptions.broadphaseAABBs.colors[size_t(BroadPhaseInternal::BvhTreeType::Dynamic)], viewProjectionMatrix);
             }
-            if (renderOptions.broadPhaseStaticAABBs)
+            if (renderOptions.broadphaseAABBs.enabled[size_t(BroadPhaseInternal::BvhTreeType::Static)])
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Static, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseStaticAABBColor, viewProjectionMatrix);
+                renderLeafAABBs(queriedAABBs, renderOptions.broadphaseAABBs.colors[size_t(BroadPhaseInternal::BvhTreeType::Static)], viewProjectionMatrix);
             }
-            if (renderOptions.broadPhaseSleepingAABBs)
+            if (renderOptions.broadphaseAABBs.enabled[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)])
             {
                 queriedAABBs.clear();
                 bfcd.queryLeafNodeAABBsInShape(query, BroadPhaseInternal::BvhTreeTypeFlag::Sleeping, queriedAABBs);
-                renderLeafAABBs(queriedAABBs, renderOptions.broadPhaseSleepingAABBColor, viewProjectionMatrix);
+                renderLeafAABBs(queriedAABBs, renderOptions.broadphaseAABBs.colors[size_t(BroadPhaseInternal::BvhTreeType::Sleeping)], viewProjectionMatrix);
             }
         }
         if (renderOptions.contactPoints)

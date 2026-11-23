@@ -10,7 +10,6 @@ layout (location = 6) in uint instanceId;
 
 out vec2 uv;
 out flat vec3 color;
-out flat float radius;
 out flat uint fragIdOut;
 
 uniform mat4 viewProjectionMatrix;
@@ -39,6 +38,5 @@ void main()
     const float b = (instanceColor & 255) / 255.0;
     color = vec3(r, g, b);
 
-    radius = instanceRadius;
     fragIdOut = instanceId;
 }

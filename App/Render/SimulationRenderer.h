@@ -32,52 +32,86 @@ namespace PS_AGONY_RENDER
 
 	struct RenderOptions
 	{
-		bool colliderAABBs = false;
+		struct Bodies
+		{
+			// When false, all body transforms used for rendering this frame snap
+			// straight to the current simulation state instead of blending from
+			// the previous state via simRenderAlpha. Skips the lerp and the
+			// rotation wrap/trunc math - use when the render rate matches the
+			// sim rate and interpolation isn't needed.
+			bool interpolation = true;
 
-		bool broadPhaseDynamicAABBs = false;
-		bool broadPhaseStaticAABBs = false;
-		bool broadPhaseSleepingAABBs = false;
+			// Tint per body group, indexed by BodyGroup.
+			std::array<glm::vec3, size_t(BodyGroup::Unused)> groupColors = {
+				glm::vec3{ 1.0f, 1.0f, 1.0f },
+				glm::vec3{ 0.2f, 0.4f, 1.0f },
+				glm::vec3{ 0.2f, 0.2f, 0.2f }
+			};
+		};
+
+		struct Colliders
+		{
+			bool aabbs = false;
+
+			bool outline = true;
+			glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
+		
+			bool minExtent = false;
+			bool maxExtent = false;
+			glm::vec3 minExtentColor = { 1.0f, 0.8f, 0.0f };
+			glm::vec3 maxExtentColor = { 0.8f, 1.0f, 0.0f };
+		};
+
+		struct BroadPhaseAABBs
+		{
+			std::array<bool, size_t(BroadPhaseInternal::BvhTreeType::COUNT)> enabled{ false };
+			std::array<glm::vec3, size_t(BroadPhaseInternal::BvhTreeType::COUNT)> colors = {
+				glm::vec3{ 0.0f, 1.0f, 0.0f },
+				glm::vec3{ 0.2f, 0.4f, 1.0f },
+				glm::vec3{ 0.2f, 0.2f, 0.2f }
+			};
+		};
+
+		struct Constraints
+		{
+			// Constraint line and icon tint per constraint group.
+			ConstraintGroupArray<glm::vec3> groupColors = []
+				{
+					ConstraintGroupArray<glm::vec3> colors;
+					colors[size_t(ConstraintGroup::Inactive)] = { 0.2f, 0.4f, 1.0f };
+					colors[size_t(ConstraintGroup::Sleeping)] = { 0.4f, 0.4f, 0.4f };
+					colors[size_t(ConstraintGroup::Active)] = { 0.0f, 1.0f, 1.0f };
+					return colors;
+				}();
+
+			// Draws an icon at the midpoint of every constraint.
+			bool icons = false;
+
+			// Constraint icon side length in world units.
+			float iconSize = 0.5f;
+		};
+
+		//
+		Bodies bodies;
+		Colliders colliders;
+		BroadPhaseAABBs broadphaseAABBs;
+		Constraints constraints;
 
 		bool contactPoints = false;
-
-		bool outlineColliders = true;
-
-		glm::vec3 broadPhaseDynamicAABBColor = { 0.0f, 1.0f, 0.0f };
-		glm::vec3 broadPhaseStaticAABBColor = { 0.2f, 0.4f, 1.0f };
-		glm::vec3 broadPhaseSleepingAABBColor = { 0.2f, 0.2f, 0.2f };
-		glm::vec3 outlineColor = { 0.0f, 0.0f, 0.0f };
-
-		// When false, all body transforms used for rendering this frame snap
-		// straight to the current simulation state instead of blending from
-		// the previous state via simRenderAlpha. Skips the lerp and the
-		// rotation wrap/trunc math - use when the render rate matches the
-		// sim rate and interpolation isn't needed.
-		bool interpolation = true;
-
-		// Constraint line and icon tint per constraint group.
-		ConstraintGroupArray<glm::vec3> constraintGroupColors = []
-			{
-				ConstraintGroupArray<glm::vec3> colors;
-				colors[size_t(ConstraintGroup::Inactive)] = { 0.2f, 0.4f, 1.0f };
-				colors[size_t(ConstraintGroup::Sleeping)] = { 0.4f, 0.4f, 0.4f };
-				colors[size_t(ConstraintGroup::Active)] = { 0.0f, 1.0f, 1.0f };
-				return colors;
-			}();
-
-		// Draws an icon at the midpoint of every constraint.
-		bool constraintIcons = false;
-
-		// Constraint icon side length in world units.
-		float constraintIconSize = 0.5f;
-
-		// Tint per body group, indexed by BodyGroup.
-		std::array<glm::vec3, size_t(BodyGroup::Unused)> bodyGroupColors = {
-			glm::vec3{ 1.0f, 1.0f, 1.0f },
-			glm::vec3{ 0.2f, 0.4f, 1.0f },
-			glm::vec3{ 0.2f, 0.2f, 0.2f }
-		};
 	};
 
+	inline uint32_t packColor(const glm::vec3& c) noexcept
+	{
+		const auto to8 = [](float v) -> uint32_t
+			{
+				return static_cast<uint32_t>(std::fmax(0.0f, std::fmin(1.0f, v)) * 255.0f + 0.5f);
+			};
+		return (to8(c.x) << 16) | (to8(c.y) << 8) | to8(c.z);
+	}
+
+	// TODO: Remove "const Mat4& viewProjectionMatrix". Just add member field.
+	// TODO: Remove a lot of tracy scopes.
+	// TODO: Have single buffer for draw data.
 	class SimulationRenderer
 	{
 		// Colliders in camera view, bucketed by (shape, body group).
@@ -143,6 +177,7 @@ namespace PS_AGONY_RENDER
 		std::vector<ShapeRenderer::FloatAABB> aabbInstanceData;
 		std::vector<ShapeRenderer::LineVertex> lineVertexData; // Reused scratch buffer for all constraint lines.
 		std::vector<ShapeRenderer::ConstraintIconInstanceData> constraintIconData;
+		std::vector<ShapeRenderer::HollowCircleInstanceData> hollowCircleData;
 
 		// Polygon creator preview: rebuilt only when the inputs change.
 		struct PolygonPreviewCache
@@ -214,6 +249,8 @@ namespace PS_AGONY_RENDER
 		void renderColliderAABBs(std::span<const ObjectDenseIndex> givenColliders, const Mat4& viewProjectionMatrix);
 		void renderLeafAABBs(std::span<const AABB> aabbs, const glm::vec3& color, const Mat4& viewProjectionMatrix);
 		void renderContactPoints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const AABB& cameraAABB);
+
+		void renderColliderExtents(std::span<const ObjectDenseIndex> givenColliders, const glm::vec3& color, const Real* extentPtr, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext);
 
 		void renderConstraints(const Simulation& simulation, const Mat4& viewProjectionMatrix, const BodyTransformContext& transformContext, const AABB& cameraAABB, const ConstraintGroupColors& groupColors, float iconSize);
 	};

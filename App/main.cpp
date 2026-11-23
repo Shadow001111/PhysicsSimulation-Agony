@@ -260,22 +260,46 @@ static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const D
 
 static void renderRenderOptions(PS_AGONY_RENDER::RenderOptions& renderOptions)
 {
+    //ImGui::SeparatorText("Bodies");
+    //{
+    //}
+
     ImGui::SeparatorText("Colliders");
-    ImGui::Checkbox("Collider AABBs", &renderOptions.colliderAABBs);
-    ImGui::Checkbox("Contact points", &renderOptions.contactPoints);
-    colorToggle("Outline colliders", renderOptions.outlineColliders, "##OutlineColor", renderOptions.outlineColor);
+    {
+        auto& colliders = renderOptions.colliders;
+
+        ImGui::Checkbox("AABBs", &colliders.aabbs);
+        colorToggle("Outline", colliders.outline, "##OutlineColor", colliders.outlineColor);
+        colorToggle("Min extents", colliders.minExtent, "##MinExtentColor", colliders.minExtentColor);
+        colorToggle("Max extents", colliders.maxExtent, "##MaxExtentColor", colliders.maxExtentColor);
+    }
 
     ImGui::SeparatorText("Broad-phase AABBs");
-    colorToggle("Dynamic", renderOptions.broadPhaseDynamicAABBs, "##DynamicAABBColor", renderOptions.broadPhaseDynamicAABBColor);
-    colorToggle("Static", renderOptions.broadPhaseStaticAABBs, "##StaticAABBColor", renderOptions.broadPhaseStaticAABBColor);
-    colorToggle("Sleeping", renderOptions.broadPhaseSleepingAABBs, "##SleepingAABBColor", renderOptions.broadPhaseSleepingAABBColor);
+    {
+        auto& aabbs = renderOptions.broadphaseAABBs;
+
+        using T = PS_AGONY2D::BroadPhaseInternal::BvhTreeType;
+
+        colorToggle("Dynamic" , aabbs.enabled[size_t(T::Dynamic)] , "##DynamicAABBColor" , aabbs.colors[size_t(T::Dynamic)]);
+        colorToggle("Static"  , aabbs.enabled[size_t(T::Static)]  , "##StaticAABBColor"  , aabbs.colors[size_t(T::Static)]);
+        colorToggle("Sleeping", aabbs.enabled[size_t(T::Sleeping)], "##SleepingAABBColor", aabbs.colors[size_t(T::Sleeping)]);
+    }
 
     ImGui::SeparatorText("Constraints");
-    ImGui::Checkbox("Constraint icons", &renderOptions.constraintIcons);
-    if (renderOptions.constraintIcons)
     {
-        ImGui::SameLine(160.0f);
-        ImGui::SliderFloat("Icon size", &renderOptions.constraintIconSize, 0.1f, 10.0f);
+        auto& constraints = renderOptions.constraints;
+
+        ImGui::Checkbox("Constraint icons", &constraints.icons);
+        if (constraints.icons)
+        {
+            ImGui::SameLine(160.0f);
+            ImGui::SliderFloat("Icon size", &constraints.iconSize, 0.1f, 10.0f);
+        }
+    }
+
+    ImGui::SeparatorText("Other");
+    {
+        ImGui::Checkbox("Contact points", &renderOptions.contactPoints);
     }
 }
 
@@ -685,7 +709,7 @@ static int gameFunc()
             editor.drawUI(simulation, simulationRenderer);
 
             // Render simulation to FBO.
-            renderOptions.interpolation = deltaTime < simulation.getSimulationSettings().clockSettings.updateInterval;
+            renderOptions.bodies.interpolation = deltaTime < simulation.getSimulationSettings().clockSettings.updateInterval;
             const GLuint idTex = framebuffer.getTexture("id").value()->getID();
             simulationRenderer.renderSimulation(simulation, simulation.getRenderAlpha(), cameraAABB, renderOptions, idTex);
 

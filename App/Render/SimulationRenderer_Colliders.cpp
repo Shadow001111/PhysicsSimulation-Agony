@@ -510,4 +510,59 @@ namespace PS_AGONY_RENDER
         // Render.
         shapeRenderer.renderSimplePointCircles(simplePointInstanceData, viewProjectionMatrix);
     }
+
+    void SimulationRenderer::renderColliderExtents(
+        std::span<const ObjectDenseIndex> givenColliders,
+        const glm::vec3& color,
+        const Real* ECSTASY_RESTRICT extentPtr,
+        const Mat4& viewProjectionMatrix,
+        const BodyTransformContext& transformContext
+    )
+    {
+        const size_t colliderCount = givenColliders.size();
+        if (colliderCount == 0) return;
+
+        // Reserve space.
+        hollowCircleData.resize(colliderCount);
+
+        // Prepare instance data.
+        const Real* ECSTASY_RESTRICT localCOMXPtr = bodies.localCenterOfMassX;
+        const Real* ECSTASY_RESTRICT localCOMYPtr = bodies.localCenterOfMassY;
+
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderBodyIndexPtr = colliders.bodyIndex;
+        const ObjectDenseIndex* ECSTASY_RESTRICT colliderShapeIndexPtr = colliders.shapeIndex;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetXPtr = colliders.localOffsetX;
+        const Real* ECSTASY_RESTRICT colliderLocalOffsetYPtr = colliders.localOffsetY;
+        const Real* ECSTASY_RESTRICT colliderLocalRotationPtr = colliders.localRotation;
+
+        const uint32_t packedColor = packColor(color);
+
+        ShapeRenderer::HollowCircleInstanceData* ECSTASY_RESTRICT renderDataPtr = hollowCircleData.data();
+
+        for (size_t i = 0; i < colliderCount; i++)
+        {
+            const ObjectDenseIndex colliderIndex = givenColliders[i];
+            const ObjectDenseIndex bodyIndex = colliderBodyIndexPtr[colliderIndex];
+
+            const BodyTransformSample body = transformContext.sample(bodyIndex);
+
+            const Real localOffX = colliderLocalOffsetXPtr[colliderIndex];
+            const Real localOffY = colliderLocalOffsetYPtr[colliderIndex];
+            const Real localRot = colliderLocalRotationPtr[colliderIndex];
+
+            const Real worldOffX = localOffX * body.cosR - localOffY * body.sinR;
+            const Real worldOffY = localOffX * body.sinR + localOffY * body.cosR;
+
+            const Real extent = extentPtr[colliderIndex];
+
+            renderDataPtr[i].positionX = body.x + worldOffX;
+            renderDataPtr[i].positionY = body.y + worldOffY;
+            renderDataPtr[i].outerRadius = extent;
+            renderDataPtr[i].innerRadius = std::fmax(Real(0), extent - Real(0.05));
+            renderDataPtr[i].color = packedColor;
+            renderDataPtr[i].id = 0;
+        }
+
+        shapeRenderer.renderHollowCircleShapes(hollowCircleData, viewProjectionMatrix);
+    }
 }

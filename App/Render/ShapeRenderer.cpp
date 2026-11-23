@@ -34,6 +34,16 @@ namespace PS_AGONY_RENDER
             simplePointCircleResources.shader.create(sources);
         }
 
+        // Hollow circle.
+        {
+            std::vector<Shader::ShaderSource> sources = {
+                { GL_VERTEX_SHADER, "res/Shaders/Bodies/hollow_circle.vert" },
+                { GL_FRAGMENT_SHADER, "res/Shaders/Bodies/hollow_circle.frag" }
+            };
+
+            hollowCircleResources.shader.create(sources);
+        }
+
         // Box.
         {
             std::vector<Shader::ShaderSource> sources = {
@@ -103,15 +113,15 @@ namespace PS_AGONY_RENDER
 
     void ShapeRenderer::initBuffers()
     {
+        const float circleVertices[] =
+        {
+            0.0f, 2.0f,
+            1.7321f, -1.0f,
+            -1.7321f, -1.0f
+        };
+
         // Circle.
         {
-            const float circleVertices[] =
-            {
-                0.0f, 2.0f,
-                1.7321f, -1.0f,
-                -1.7321f, -1.0f
-            };
-
             circleResources.vbo.create();
             circleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
 
@@ -126,13 +136,6 @@ namespace PS_AGONY_RENDER
 
         // Simple point circle.
         {
-            const float circleVertices[] =
-            {
-                0.0f, 2.0f,
-                1.7321f, -1.0f,
-                -1.7321f, -1.0f
-            };
-
             simplePointCircleResources.vbo.create();
             simplePointCircleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
 
@@ -141,6 +144,20 @@ namespace PS_AGONY_RENDER
 
             simplePointCircleResources.vao.enableAttribute(0);
             simplePointCircleResources.vao.setFloatAttribute(0, 2, 0, 0);
+
+            ensureSimplePointInstanceVboCapacity(64);
+        }
+
+        // Hollow circle.
+        {
+            hollowCircleResources.vbo.create();
+            hollowCircleResources.vbo.allocateStorage(sizeof(circleVertices), 0, circleVertices);
+
+            hollowCircleResources.vao.create();
+            hollowCircleResources.vao.bindVertexBuffer(0, hollowCircleResources.vbo.getID(), 0, sizeof(float) * 2);
+
+            hollowCircleResources.vao.enableAttribute(0);
+            hollowCircleResources.vao.setFloatAttribute(0, 2, 0, 0);
 
             ensureSimplePointInstanceVboCapacity(64);
         }
@@ -293,6 +310,29 @@ namespace PS_AGONY_RENDER
         simplePointCircleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
 
         simplePointCircleResources.vao.bind();
+
+        // Draw.
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
+    }
+
+    void ShapeRenderer::renderHollowCircleShapes(std::span<const HollowCircleInstanceData> instances, const glm::mat4& viewProjectionMatrix)
+    {
+        TRACY_SCOPE_N("Render hollow circles");
+
+        const size_t count = instances.size();
+        if (count == 0) return;
+
+        // Reserve space.
+        ensureHollowCircleInstanceVboCapacity(count);
+
+        // Move data to gpu.
+        hollowCircleResources.instanceVbo.write(instances.data(), count * sizeof(HollowCircleInstanceData));
+
+        // Bind things, set uniforms.
+        hollowCircleResources.shader.use();
+        hollowCircleResources.shader.setMat4("viewProjectionMatrix", viewProjectionMatrix);
+
+        hollowCircleResources.vao.bind();
 
         // Draw.
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3, count);
@@ -478,6 +518,42 @@ namespace PS_AGONY_RENDER
 
         vao.enableAttribute(4);
         vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
+        vao.setAttributeDivisor(4, 1);
+    }
+
+    void ShapeRenderer::ensureHollowCircleInstanceVboCapacity(size_t count)
+    {
+        constexpr size_t SIZEOF_INSTANCE = sizeof(HollowCircleInstanceData);
+
+        auto& vao = hollowCircleResources.vao;
+        auto& instanceVbo = hollowCircleResources.instanceVbo;
+
+        const size_t neededCapacity = count * SIZEOF_INSTANCE;
+        const size_t currentCapacity = instanceVbo.getCapacity();
+
+        if (neededCapacity <= currentCapacity) return;
+
+        const size_t newCapacity = neededCapacity + (neededCapacity >> 1);
+
+        instanceVbo.create();
+        instanceVbo.allocateStorage(newCapacity, GL_DYNAMIC_STORAGE_BIT);
+
+        vao.bindVertexBuffer(1, instanceVbo.getID(), 0, SIZEOF_INSTANCE);
+
+        vao.enableAttribute(1);
+        vao.setFloatAttribute(1, 2, 0, 1);
+        vao.setAttributeDivisor(1, 1);
+
+        vao.enableAttribute(2);
+        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
+        vao.setAttributeDivisor(2, 1);
+
+        vao.enableAttribute(3);
+        vao.setIntAttribute(3, 1, sizeof(float) * 4, 1);
+        vao.setAttributeDivisor(3, 1);
+
+        vao.enableAttribute(4);
+        vao.setIntAttribute(4, 1, sizeof(float) * 5, 1);
         vao.setAttributeDivisor(4, 1);
     }
 
