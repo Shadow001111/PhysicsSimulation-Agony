@@ -78,7 +78,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		{
 			const RealSimd dx = RealSimd::max(minXV - posXV, RealSimd::max(zeroV, posXV - maxXV));
 			const RealSimd dy = RealSimd::max(minYV - posYV, RealSimd::max(zeroV, posYV - maxYV));
-			const RealSimd distSq = RealSimd::mulAdd(dx, dx, dy * dy);
+			const RealSimd distSq = dx * dx + dy * dy;
 			return distSq <= radiusSqV;
 		}
 	};

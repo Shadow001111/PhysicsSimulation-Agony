@@ -80,9 +80,9 @@ namespace PS_AGONY2D::Integrator
             RealSimd posY = RealSimd::loadu(positionYPtr + i);
             RealSimd rot = RealSimd::loadu(rotationPtr + i);
 
-            posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
-            posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
-            rot = RealSimd::mulAdd(angVel, deltaTimeV, rot);
+            posX = velX * deltaTimeV + posX;
+            posY = velY * deltaTimeV + posY;
+            rot = angVel * deltaTimeV + rot;
 
             posX.storeu(positionXPtr + i);
             posY.storeu(positionYPtr + i);
@@ -174,9 +174,9 @@ namespace PS_AGONY2D::Integrator
             RealSimd posY = RealSimd::loadu(positionYPtr + i);
             RealSimd rot = RealSimd::loadu(rotationPtr + i);
 
-            posX = RealSimd::mulAdd(velX, deltaTimeV, posX);
-            posY = RealSimd::mulAdd(velY, deltaTimeV, posY);
-            rot = RealSimd::mulAdd(angVel, deltaTimeV, rot);
+            posX = velX * deltaTimeV + posX;
+            posY = velY * deltaTimeV + posY;
+            rot = angVel * deltaTimeV + rot;
 
             posX.storeu(positionXPtr + i);
             posY.storeu(positionYPtr + i);

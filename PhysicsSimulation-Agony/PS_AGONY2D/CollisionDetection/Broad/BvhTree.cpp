@@ -168,7 +168,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			.maxY = -std::numeric_limits<Real>::max()
 		};
 
-		// TODO: Write manual SIMD.
+		// No need for manual SIMD.
 		for (size_t i = 0; i < count; i++)
 		{
 			const Real minX = minXPtr[i];
@@ -201,10 +201,18 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		const Real scaleX = clampMax / (maxX - bounds.minX);
 		const Real scaleY = clampMax / (maxY - bounds.minY);
 
-		const RealSimd scaledMinXV(bounds.minX * scaleX);
-		const RealSimd scaledMinYV(bounds.minY * scaleY);
+		const Real negScaledMinX = -bounds.minX * scaleX;
+		const Real negScaledMinY = -bounds.minY * scaleY;
+
+		const Real halfScaleX = scaleX * Real(0.5);
+		const Real halfScaleY = scaleY * Real(0.5);
+
+		const RealSimd negScaledMinXV(negScaledMinX);
+		const RealSimd negScaledMinYV(negScaledMinY);
+
 		const RealSimd halfScaleXV(scaleX * Real(0.5));
 		const RealSimd halfScaleYV(scaleY * Real(0.5));
+
 		const RealSimd clampMaxV(clampMax);
 
 		Real* ECSTASY_RESTRICT cxPtr = centroidX.data();
@@ -213,22 +221,31 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		size_t i = 0;
 		for (; i + RealSimd::lanes <= count; i += RealSimd::lanes)
 		{
-			const RealSimd sx = RealSimd::load(cxPtr + i);
-			const RealSimd sy = RealSimd::load(cyPtr + i);
+			const RealSimd x = RealSimd::load(cxPtr + i);
+			const RealSimd y = RealSimd::load(cyPtr + i);
 
-			const RealSimd tx = RealSimd::mulSub(sx, halfScaleXV, scaledMinXV);
-			const RealSimd ty = RealSimd::mulSub(sy, halfScaleYV, scaledMinYV);
+			RealSimd tx = x * halfScaleXV + negScaledMinXV;
+			RealSimd ty = y * halfScaleYV + negScaledMinYV;
 
-			RealSimd::clamp(tx, RealSimd(0), clampMaxV).store(cxPtr + i);
-			RealSimd::clamp(ty, RealSimd(0), clampMaxV).store(cyPtr + i);
+			tx = RealSimd::clamp(tx, RealSimd(0), clampMaxV);
+			ty = RealSimd::clamp(ty, RealSimd(0), clampMaxV);
+
+			tx.store(cxPtr + i);
+			ty.store(cyPtr + i);
 		}
 		for (; i < count; i++)
 		{
-			const Real tx = (cxPtr[i] * Real(0.5) - bounds.minX) * scaleX;
-			const Real ty = (cyPtr[i] * Real(0.5) - bounds.minY) * scaleY;
+			const Real x = cxPtr[i];
+			const Real y = cyPtr[i];
 
-			cxPtr[i] = std::clamp(tx, Real(0), clampMax);
-			cyPtr[i] = std::clamp(ty, Real(0), clampMax);
+			Real tx = x * halfScaleX + negScaledMinX;
+			Real ty = y * halfScaleY + negScaledMinY;
+
+			tx = std::clamp(tx, Real(0), clampMax);
+			ty = std::clamp(ty, Real(0), clampMax);
+
+			cxPtr[i] = tx;
+			cyPtr[i] = ty;
 		}
 	}
 

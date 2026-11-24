@@ -82,7 +82,7 @@ namespace PS_AGONY2D
                 const RealSimd radiusSum = radiusA + radiusB;
                 const RealSimd radiusSumSquared = radiusSum * radiusSum;
 
-                const RealSimd squaredDistance = RealSimd::mulAdd(deltaPositionX, deltaPositionX, deltaPositionY * deltaPositionY);
+                const RealSimd squaredDistance = deltaPositionX * deltaPositionX + deltaPositionY * deltaPositionY;
 
                 const RealSimd isCollidingMask = squaredDistance < radiusSumSquared;
 

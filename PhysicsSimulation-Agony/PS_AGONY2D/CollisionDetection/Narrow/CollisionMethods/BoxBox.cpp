@@ -74,12 +74,12 @@ namespace PS_AGONY2D
             const Real4Simd cosSinV1 = makeReal4(absRelativeCos, absRelativeSin, absRelativeCos, absRelativeSin);
             const Real4Simd cosSinV2 = makeReal4(absRelativeSin, absRelativeCos, absRelativeSin, absRelativeCos);
 
-            const Real4Simd radiusSumV = Real4Simd::mulAdd(halfWidthV, cosSinV1, Real4Simd::mulAdd(halfHeightV, cosSinV2, halfWidthHeightV));
+            const Real4Simd radiusSumV = halfWidthV * cosSinV1 + halfHeightV * cosSinV2 + halfWidthHeightV;
 
             // Axis components per lane; dot(centerDelta, axis) = dx * axisX + dy * axisY.
             const Real4Simd axisXV = makeReal4(cosA, -sinA, cosB, -sinB);
             const Real4Simd axisYV = makeReal4(sinA, cosA, sinB, cosB);
-            const Real4Simd centerDeltaOnAxisV = Real4Simd::mulAdd(Real4Simd(centerDelta.x), axisXV, Real4Simd(centerDelta.y) * axisYV);
+            const Real4Simd centerDeltaOnAxisV = Real4Simd(centerDelta.x) * axisXV + Real4Simd(centerDelta.y) * axisYV;
 
             const Real4Simd overlap = radiusSumV - (Real4Simd::getAbsMask() & centerDeltaOnAxisV);
             if ((overlap < Real4Simd(0)).movemask() != 0) continue; // Abort!

@@ -96,7 +96,7 @@ namespace PS_AGONY2D
 
                 // Circle center -> closest point of the capsule core: clamp(t, -halfLength, halfLength).
                 const RealSimd negHalfLength = zero - halfLengthB;
-                const RealSimd alongAxis = RealSimd::mulAdd(dX, cosB, dY * sinB);
+                const RealSimd alongAxis = dX * cosB + dY * sinB;
                 const RealSimd clampedLow = RealSimd::blendv(alongAxis, negHalfLength, alongAxis < negHalfLength);
                 const RealSimd t = RealSimd::blendv(clampedLow, halfLengthB, halfLengthB < clampedLow);
 
@@ -104,7 +104,7 @@ namespace PS_AGONY2D
                 const RealSimd deltaY = sinB * t - dY;
 
                 const RealSimd radiusSum = radiusA + radiusB;
-                const RealSimd squaredDistance = RealSimd::mulAdd(deltaX, deltaX, deltaY * deltaY);
+                const RealSimd squaredDistance = deltaX * deltaX + deltaY * deltaY;
 
                 unsigned int collisionMask = (squaredDistance < radiusSum * radiusSum).movemask();
                 if (collisionMask == 0) continue;
@@ -114,7 +114,7 @@ namespace PS_AGONY2D
                 const RealSimd isCloseToZeroMask = distance < RealSimd(ZERO_DIVISION_BOUNDARY);
 
                 // Circle center on the core: push out along the capsule side, away from the circle's side.
-                const RealSimd sideOffset = RealSimd::mulSub(dY, cosB, dX * sinB);
+                const RealSimd sideOffset = dY * cosB - dX * sinB;
                 const RealSimd flipMask = sideOffset < zero;
                 const RealSimd fallbackX = RealSimd::blendv(sinB, -sinB, flipMask);
                 const RealSimd fallbackY = RealSimd::blendv(-cosB, cosB, flipMask);
