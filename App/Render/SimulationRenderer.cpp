@@ -141,7 +141,6 @@ namespace PS_AGONY_RENDER
             circleInstanceData.assign(1, ShapeRenderer::CircleInstanceData{
                 static_cast<float>(circleParams->base.position.x),
                 static_cast<float>(circleParams->base.position.y),
-                0.0f, 0.0f,
                 static_cast<float>(circleParams->base.rotation),
                 static_cast<float>(circleParams->radius),
                 previewColor, 0
@@ -156,7 +155,6 @@ namespace PS_AGONY_RENDER
             boxInstanceData.assign(1, ShapeRenderer::BoxInstanceData{
                 static_cast<float>(boxParams->base.position.x),
                 static_cast<float>(boxParams->base.position.y),
-                0.0f, 0.0f,
                 static_cast<float>(boxParams->base.rotation),
                 static_cast<float>(boxParams->size.x * 0.5),
                 static_cast<float>(boxParams->size.y * 0.5),
@@ -227,7 +225,6 @@ namespace PS_AGONY_RENDER
             polygonInstanceData.assign(cache.commands.size(), ShapeRenderer::PolygonInstanceData{
                 static_cast<float>(polyParams->base.position.x),
                 static_cast<float>(polyParams->base.position.y),
-                0.0f, 0.0f,
                 static_cast<float>(polyParams->base.rotation),
                 previewColor, 0
                 });

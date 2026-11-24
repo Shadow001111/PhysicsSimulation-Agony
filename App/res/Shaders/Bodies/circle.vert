@@ -2,11 +2,10 @@
 
 layout (location = 0) in vec2 vertLocalPosition;
 layout (location = 1) in vec2 instancePosition;
-layout (location = 2) in vec2 instanceCOM;
-layout (location = 3) in float instanceRotation;
-layout (location = 4) in float instanceRadius;
-layout (location = 5) in uint instanceColor;
-layout (location = 6) in uint instanceId;
+layout (location = 2) in float instanceRotation;
+layout (location = 3) in float instanceRadius;
+layout (location = 4) in uint instanceColor;
+layout (location = 5) in uint instanceId;
 
 out vec2 uv;
 out flat vec3 color;
@@ -29,7 +28,7 @@ void main()
     uv = vertLocalPosition;
 
     vec2 localPosition = vertLocalPosition * instanceRadius;
-    vec2 worldPos = instancePosition + rotate2D(localPosition - instanceCOM, instanceRotation) + instanceCOM;
+    vec2 worldPos = instancePosition + rotate2D(localPosition, instanceRotation);
     vec4 clipPos = viewProjectionMatrix * vec4(worldPos, 0.0, 1.0);
     gl_Position = clipPos;
 

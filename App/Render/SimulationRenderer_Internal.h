@@ -123,7 +123,6 @@ namespace PS_AGONY_RENDER
 	struct ColliderPlacement
 	{
 		float x, y;
-		float comX, comY;
 		float rotation;
 		ObjectDenseIndex shapeIndex;
 	};
@@ -159,8 +158,6 @@ namespace PS_AGONY_RENDER
 			return {
 				static_cast<float>(sample.x + (offX * sample.cosR - offY * sample.sinR)),
 				static_cast<float>(sample.y + (offX * sample.sinR + offY * sample.cosR)),
-				0.0f, // Shaders rotate about the collider origin, which is already placed in world space.
-				0.0f,
 				static_cast<float>(sample.rotation + rotation[colliderIndex]),
 				shapeIndex[colliderIndex]
 			};

@@ -2,11 +2,10 @@
 
 layout (location = 0) in vec2 vertLocalPosition;
 layout (location = 1) in vec2 instancePosition;
-layout (location = 2) in vec2 instanceCOM;
-layout (location = 3) in float instanceRotation;
-layout (location = 4) in vec2 instanceHalfSize;
-layout (location = 5) in uint instanceColor;
-layout (location = 6) in uint instanceId;
+layout (location = 2) in float instanceRotation;
+layout (location = 3) in vec2 instanceHalfSize;
+layout (location = 4) in uint instanceColor;
+layout (location = 5) in uint instanceId;
 
 out vec2 uv;
 out flat vec3 color;
@@ -28,7 +27,7 @@ vec2 rotate2D(vec2 v, float angle)
 void main()
 {
     vec2 localPosition = instanceHalfSize * (vertLocalPosition * 2.0 - 1.0);
-    vec2 worldPosition = instancePosition + rotate2D(localPosition - instanceCOM, instanceRotation) + instanceCOM;
+    vec2 worldPosition = instancePosition + rotate2D(localPosition, instanceRotation);
     gl_Position = viewProjectionMatrix * vec4(worldPosition, 0.0, 1.0);
 
     const float r = (instanceColor >> 16) / 255.0;

@@ -467,24 +467,20 @@ namespace PS_AGONY_RENDER
         vao.setAttributeDivisor(1, 1);
 
         vao.enableAttribute(2);
-        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
+        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
         vao.setAttributeDivisor(2, 1);
 
         vao.enableAttribute(3);
-        vao.setFloatAttribute(3, 1, sizeof(float) * 4, 1);
+        vao.setFloatAttribute(3, 1, sizeof(float) * 3, 1);
         vao.setAttributeDivisor(3, 1);
 
         vao.enableAttribute(4);
-        vao.setFloatAttribute(4, 1, sizeof(float) * 5, 1);
+        vao.setIntAttribute(4, 1, sizeof(float) * 4, 1);
         vao.setAttributeDivisor(4, 1);
 
         vao.enableAttribute(5);
-        vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
+        vao.setIntAttribute(5, 1, sizeof(float) * 5, 1);
         vao.setAttributeDivisor(5, 1);
-
-        vao.enableAttribute(6);
-        vao.setIntAttribute(6, 1, sizeof(float) * 7, 1);
-        vao.setAttributeDivisor(6, 1);
     }
 
     void ShapeRenderer::ensureSimplePointInstanceVboCapacity(size_t count)
@@ -584,24 +580,20 @@ namespace PS_AGONY_RENDER
         vao.setAttributeDivisor(1, 1);
 
         vao.enableAttribute(2);
-        vao.setFloatAttribute(2, 2, sizeof(float) * 2, 1);
+        vao.setFloatAttribute(2, 1, sizeof(float) * 2, 1);
         vao.setAttributeDivisor(2, 1);
 
         vao.enableAttribute(3);
-        vao.setFloatAttribute(3, 1, sizeof(float) * 4, 1);
+        vao.setFloatAttribute(3, 2, sizeof(float) * 3, 1);
         vao.setAttributeDivisor(3, 1);
 
         vao.enableAttribute(4);
-        vao.setFloatAttribute(4, 2, sizeof(float) * 5, 1);
+        vao.setIntAttribute(4, 1, sizeof(float) * 5, 1);
         vao.setAttributeDivisor(4, 1);
 
         vao.enableAttribute(5);
-        vao.setIntAttribute(5, 1, sizeof(float) * 7, 1);
+        vao.setIntAttribute(5, 1, sizeof(float) * 6, 1);
         vao.setAttributeDivisor(5, 1);
-
-        vao.enableAttribute(6);
-        vao.setIntAttribute(6, 1, sizeof(float) * 8, 1);
-        vao.setAttributeDivisor(6, 1);
     }
 
     void ShapeRenderer::ensureBoxInstanceVboCapacity(size_t count)

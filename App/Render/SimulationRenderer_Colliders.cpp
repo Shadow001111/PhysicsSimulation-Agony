@@ -47,7 +47,7 @@ namespace PS_AGONY_RENDER
             {
                 const ColliderPlacement p = placer.place(collider);
                 out[i] = {
-                    p.x, p.y, p.comX, p.comY, p.rotation,
+                    p.x, p.y, p.rotation,
                     static_cast<float>(radiusPtr[p.shapeIndex]),
                     color, static_cast<uint32_t>(collider + 1)
                 };
@@ -72,7 +72,7 @@ namespace PS_AGONY_RENDER
             {
                 const ColliderPlacement p = placer.place(collider);
                 out[i] = {
-                    p.x, p.y, p.comX, p.comY, p.rotation,
+                    p.x, p.y, p.rotation,
                     static_cast<float>(halfWidthPtr[p.shapeIndex]),
                     static_cast<float>(halfHeightPtr[p.shapeIndex]),
                     color, static_cast<uint32_t>(collider + 1)
@@ -99,7 +99,7 @@ namespace PS_AGONY_RENDER
                 const ColliderPlacement p = placer.place(collider);
                 const float radius = static_cast<float>(radiusPtr[p.shapeIndex]);
                 out[i] = {
-                    p.x, p.y, p.comX, p.comY, p.rotation,
+                    p.x, p.y, p.rotation,
                     static_cast<float>(halfLengthPtr[p.shapeIndex]) + radius,
                     radius,
                     color, static_cast<uint32_t>(collider + 1)
@@ -147,7 +147,7 @@ namespace PS_AGONY_RENDER
                     verts[vertexOffset + v].y = localVerts[v].y;
                 }
 
-                instances[i] = { p.x, p.y, p.comX, p.comY, p.rotation, color, static_cast<uint32_t>(collider + 1) };
+                instances[i] = { p.x, p.y, p.rotation, color, static_cast<uint32_t>(collider + 1) };
                 commands[i] = { vertCount, 1, vertexOffset, 0 };
 
                 vertexOffset += vertCount;

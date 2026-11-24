@@ -20,7 +20,6 @@ namespace PS_AGONY_RENDER
 		struct CircleInstanceData
 		{
 			float positionX, positionY;
-			float localCOMX, localCOMY;
 			float rotation;
 			float radius;
 			uint32_t color;
@@ -46,7 +45,6 @@ namespace PS_AGONY_RENDER
 		struct BoxInstanceData
 		{
 			float positionX, positionY;
-			float localCOMX, localCOMY;
 			float rotation;
 			float halfWidth, halfHeight;
 			uint32_t color;
@@ -56,7 +54,6 @@ namespace PS_AGONY_RENDER
 		struct PolygonInstanceData
 		{
 			float positionX, positionY;
-			float localCOMX, localCOMY;
 			float rotation;
 			uint32_t color;
 			uint32_t id;
