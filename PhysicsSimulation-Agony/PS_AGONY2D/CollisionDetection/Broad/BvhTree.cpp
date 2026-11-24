@@ -89,7 +89,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		nodes.reserve(count / 4 + 1);
 		colliderIndices.resize(count);
 
-		const Bounds bounds = gatherCentroids(aabbs, colliderRange);
+		const AABB bounds = gatherCentroids(aabbs, colliderRange);
 		transformCentroids(count, bounds);
 		computeMortonCodes(count);
 		sortByMortonCodes(colliderRange);
@@ -145,7 +145,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 	// Gathers 2*centroid (min + max) and returns the
 	// bounds of the gathered AABBs.
-	BvhTree::Bounds BvhTree::gatherCentroids(const AABBSoAViewer& aabbs, IndexRange colliderRange)
+	AABB BvhTree::gatherCentroids(const AABBSoAViewer& aabbs, IndexRange colliderRange)
 	{
 		TRACY_SCOPE_N("Gather centroids");
 
@@ -154,38 +154,41 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		centroidY.resize(count);
 
 		const Real* ECSTASY_RESTRICT minXPtr = aabbs.minX + colliderRange.begin;
-		const Real* ECSTASY_RESTRICT maxXPtr = aabbs.maxX + colliderRange.begin;
 		const Real* ECSTASY_RESTRICT minYPtr = aabbs.minY + colliderRange.begin;
+		const Real* ECSTASY_RESTRICT maxXPtr = aabbs.maxX + colliderRange.begin;
 		const Real* ECSTASY_RESTRICT maxYPtr = aabbs.maxY + colliderRange.begin;
 
 		Real* ECSTASY_RESTRICT sumXPtr = centroidX.data();
 		Real* ECSTASY_RESTRICT sumYPtr = centroidY.data();
 
-		Bounds b{
-			std::numeric_limits<Real>::max(), -std::numeric_limits<Real>::max(),
-			std::numeric_limits<Real>::max(), -std::numeric_limits<Real>::max() };
+		AABB b{
+			.minX =  std::numeric_limits<Real>::max(),
+			.minY =  std::numeric_limits<Real>::max(),
+			.maxX = -std::numeric_limits<Real>::max(),
+			.maxY = -std::numeric_limits<Real>::max()
+		};
 
 		// TODO: Write manual SIMD.
 		for (size_t i = 0; i < count; i++)
 		{
 			const Real minX = minXPtr[i];
-			const Real maxX = maxXPtr[i];
 			const Real minY = minYPtr[i];
+			const Real maxX = maxXPtr[i];
 			const Real maxY = maxYPtr[i];
 
 			sumXPtr[i] = minX + maxX;
 			sumYPtr[i] = minY + maxY;
 
 			b.minX = std::fmin(b.minX, minX);
-			b.maxX = std::fmax(b.maxX, maxX);
 			b.minY = std::fmin(b.minY, minY);
+			b.maxX = std::fmax(b.maxX, maxX);
 			b.maxY = std::fmax(b.maxY, maxY);
 		}
 		return b;
 	}
 
 	// In place: 2*centroid -> centroid scaled to [0, 0xFFFF].
-	void BvhTree::transformCentroids(uint32_t count, const Bounds& bounds)
+	void BvhTree::transformCentroids(uint32_t count, const AABB& bounds)
 	{
 		TRACY_SCOPE_N("Transform centroids");
 
@@ -420,7 +423,6 @@ namespace PS_AGONY2D::BroadPhaseInternal
 			Ecstasy::Core::Simd<uint64_t, 256>
 		>;
 
-		// 'Set' stores in reverse order.
 		const InternalRealSimd minMaxBlendMask = InternalUintSimd::set(-1, 0, -1, 0).as<InternalRealSimd>();
 
 		const ObjectDenseIndex* ECSTASY_RESTRICT indicesPtr = colliderIndices.data();

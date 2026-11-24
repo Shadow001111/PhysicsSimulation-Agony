@@ -67,13 +67,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		void queryLeafNodeAABBsInShape(const ShapeQuery& shape, std::vector<AABB>& outAABBs) const;
 
 		size_t getMemoryUsage() const;
-
 	private:
-		struct Bounds
-		{
-			Real minX, maxX, minY, maxY;
-		};
-
 		struct PackedIndex
 		{
 			uint32_t key;
@@ -95,8 +89,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 		static constexpr uint64_t MAX_STACK_CAPACITY = BroadPhaseInternal::MAX_STACK_CAPACITY;
 
-		Bounds gatherCentroids(const AABBSoAViewer& aabbs, IndexRange colliderRange);
-		void transformCentroids(uint32_t count, const Bounds& bounds);
+		AABB gatherCentroids(const AABBSoAViewer& aabbs, IndexRange colliderRange);
+		void transformCentroids(uint32_t count, const AABB& bounds);
 		void computeMortonCodes(uint32_t count);
 		void sortByMortonCodes(IndexRange colliderRange);
 		uint32_t buildNodes(uint32_t count); // Returns leaf count.
