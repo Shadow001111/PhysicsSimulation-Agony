@@ -10,6 +10,7 @@
 
 // Define all scalar SoA fields.
 // comX/comY is the world center of mass; bodies rotate about it. Body origin = com - R * localCenterOfMass.
+// boundRadius is the max distance from the center of mass to any collider point. Kept in sync by ObjectManager.
 #define PS_AGONY_BODY_SOA_SCALAR_FIELDS(F) \
     F(renderOldComX, Real) \
     F(renderOldComY, Real) \
@@ -29,6 +30,7 @@
     F(invInertia, Real) \
     F(rotationCos, Real) \
     F(rotationSin, Real) \
+    F(boundRadius, Real) \
     F(sleepingTimer, float) \
     F(islandId, ObjectDenseIndex) \
     F(sleepIslandId, ObjectDenseIndex)
@@ -62,13 +64,13 @@ namespace PS_AGONY2D
     {
         #define DECLARE_FIELD(name, type) CacheLineAlignedVector<type> name;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_FIELD)
-            #undef DECLARE_FIELD
+        #undef DECLARE_FIELD
 
-            #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
-            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
-            #undef DECLARE_VECTOR_FIELD
+        #define DECLARE_VECTOR_FIELD(name, innerType) CacheLineAlignedVector<std::vector<innerType>> name;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VECTOR_FIELD)
+        #undef DECLARE_VECTOR_FIELD
 
-            HandleTable handles;
+        HandleTable handles;
 
         // Changed by ObjectManager::moveBodyToGroup only.
         uint32_t groupCounts[size_t(BodyGroup::Unused)]{};
@@ -144,13 +146,13 @@ namespace PS_AGONY2D
     public:
         #define DECLARE_VIEWER_FIELD(name, type) const type* name = nullptr;
         PS_AGONY_BODY_SOA_SCALAR_FIELDS(DECLARE_VIEWER_FIELD)
-            #undef DECLARE_VIEWER_FIELD
+        #undef DECLARE_VIEWER_FIELD
 
-            #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
-            PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
-            #undef DECLARE_VIEWER_VECTOR_FIELD
+        #define DECLARE_VIEWER_VECTOR_FIELD(name, innerType) const std::vector<innerType>* name = nullptr;
+        PS_AGONY_BODY_SOA_VECTOR_FIELDS(DECLARE_VIEWER_VECTOR_FIELD)
+        #undef DECLARE_VIEWER_VECTOR_FIELD
 
-            BodySoAViewer() = default;
+        BodySoAViewer() = default;
         explicit BodySoAViewer(const BodySoA& data) noexcept;
 
         size_t getCount() const noexcept { return count; }

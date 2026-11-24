@@ -590,8 +590,7 @@ namespace PS_AGONY2D
 
         objectManager.updateSleeping(
             deltaTimeF,
-            simulationSettings.linearSpeedSleepThreshold,
-            simulationSettings.angularSpeedSleepThreshold,
+            simulationSettings.sleepSpeedThreshold,
             simulationSettings.sleepTimeThreshold,
             islandManager,
             mainBodyHolder

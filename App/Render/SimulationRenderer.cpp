@@ -94,6 +94,28 @@ namespace PS_AGONY_RENDER
             renderColliderExtents(foundColliders.raw, renderOptions.colliders.maxExtentColor, colliders.maxExtent, transformContext);
         }
 
+        if (renderOptions.bodies.boundRadius)
+        {
+            // Get body indices.
+            const ObjectDenseIndex* ECSTASY_RESTRICT ownerPtr = colliders.bodyIndex;
+
+            const size_t colliderCount = foundColliders.raw.size();
+
+            foundBodies.clear();
+            foundBodies.resize(colliderCount);
+            for (size_t i = 0; i < colliderCount; i++)
+            {
+                ObjectDenseIndex colliderIndex = foundColliders.raw[i];
+                foundBodies[i] = ownerPtr[colliderIndex];
+            }
+
+            // Dedupe.
+            std::sort(foundBodies.begin(), foundBodies.end());
+            foundBodies.erase(std::unique(foundBodies.begin(), foundBodies.end()), foundBodies.end());
+            
+            renderBodyBoundRadiuses(foundBodies, renderOptions.bodies.boundRadiusColor);
+        }
+
         renderBroadPhaseAABBs(simulation, cameraAABB, renderOptions.broadphaseAABBs);
 
         if (renderOptions.contactPoints)

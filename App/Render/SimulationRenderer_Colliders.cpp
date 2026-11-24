@@ -239,6 +239,7 @@ namespace PS_AGONY_RENDER
 
         const ColliderPlacer placer = ColliderPlacer::make(bodies, colliders, transformContext);
         const uint32_t packedColor = packColor(color);
+
         ShapeRenderer::HollowCircleInstanceData* ECSTASY_RESTRICT out = hollowCircleData.data();
 
         for (size_t i = 0; i < count; i++)
@@ -248,6 +249,36 @@ namespace PS_AGONY_RENDER
             const float extent = static_cast<float>(extentPtr[collider]);
 
             out[i] = { p.x, p.y, extent, std::fmax(0.0f, extent - 0.05f), packedColor, 0 };
+        }
+
+        shapeRenderer.renderHollowCircleShapes(hollowCircleData, viewProjectionMatrix);
+    }
+
+    // TODO: Move to separate file for bodies only.
+    void SimulationRenderer::renderBodyBoundRadiuses(std::span<const ObjectDenseIndex> givenBodies, const glm::vec3& color)
+    {
+        const size_t count = givenBodies.size();
+        if (count == 0) return;
+
+        hollowCircleData.resize(count);
+
+        const uint32_t packedColor = packColor(color);
+
+        const Real* ECSTASY_RESTRICT positionXPtr = bodies.comX;
+        const Real* ECSTASY_RESTRICT positionYPtr = bodies.comY;
+        const Real* ECSTASY_RESTRICT boundRadiusPtr = bodies.boundRadius;
+
+        ShapeRenderer::HollowCircleInstanceData* ECSTASY_RESTRICT out = hollowCircleData.data();
+
+        for (size_t i = 0; i < count; i++)
+        {
+            const ObjectDenseIndex body = givenBodies[i];
+
+            const float x = static_cast<float>(positionXPtr[body]);
+            const float y = static_cast<float>(positionYPtr[body]);
+            const float radius = static_cast<float>(boundRadiusPtr[body]);
+
+            out[i] = { x, y, radius, std::fmax(0.0f, radius - 0.05f), packedColor, 0 };
         }
 
         shapeRenderer.renderHollowCircleShapes(hollowCircleData, viewProjectionMatrix);

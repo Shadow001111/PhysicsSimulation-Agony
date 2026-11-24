@@ -45,6 +45,9 @@ namespace PS_AGONY_RENDER
 				glm::vec3{ 0.2f, 0.4f, 1.0f },
 				glm::vec3{ 0.2f, 0.2f, 0.2f }
 			};
+
+			bool boundRadius = false;
+			glm::vec3 boundRadiusColor = { 1.0f, 0.8f, 0.0f };
 		};
 
 		struct Colliders
@@ -57,7 +60,7 @@ namespace PS_AGONY_RENDER
 			bool minExtent = false;
 			bool maxExtent = false;
 			glm::vec3 minExtentColor = { 1.0f, 0.8f, 0.0f };
-			glm::vec3 maxExtentColor = { 0.8f, 1.0f, 0.0f };
+			glm::vec3 maxExtentColor = { 1.0f, 0.8f, 0.0f };
 		};
 
 		struct BroadPhaseAABBs
@@ -146,6 +149,7 @@ namespace PS_AGONY_RENDER
 
 		// Resources.
 		FoundColliders foundColliders;
+		std::vector<ObjectDenseIndex> foundBodies;
 
 		std::vector<AABB> queriedAABBs;
 
@@ -236,6 +240,8 @@ namespace PS_AGONY_RENDER
 		void renderContactPoints(const Simulation& simulation, const AABB& cameraAABB);
 
 		void renderColliderExtents(std::span<const ObjectDenseIndex> givenColliders, const glm::vec3& color, const Real* extentPtr, const BodyTransformContext& transformContext);
+
+		void renderBodyBoundRadiuses(std::span<const ObjectDenseIndex> givenBodies, const glm::vec3& color);
 
 		void renderConstraints(const Simulation& simulation, const BodyTransformContext& transformContext, const AABB& cameraAABB, const ConstraintGroupColors& groupColors, float iconSize);
 	};

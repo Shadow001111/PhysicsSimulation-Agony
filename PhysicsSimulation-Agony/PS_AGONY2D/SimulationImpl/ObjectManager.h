@@ -164,7 +164,7 @@ namespace PS_AGONY2D
 		// Advances sleep timers of Dynamic bodies and sleeps every island whose bodies are all quiet long enough.
 		// Islands containing held bodies stay awake.
 		void updateSleeping(
-			float deltaTime, Real linearSpeedThreshold, Real angularSpeedThreshold, float sleepTimeThreshold,
+			float deltaTime, Real speedThreshold, float sleepTimeThreshold,
 			const IslandManager& islandManager, const Interactivity::BodyHolder& holder
 		);
 

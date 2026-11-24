@@ -30,6 +30,7 @@ namespace PS_AGONY2D
 		this->invInertia.push_back(invInertia);
 		this->rotationCos.push_back(std::cos(rot)); // TODO: Use fast cos/sin.
 		this->rotationSin.push_back(std::sin(rot));
+		this->boundRadius.push_back(0);
 		this->sleepingTimer.push_back(0.0f);
 		this->islandId.push_back(-1);
 		this->sleepIslandId.push_back(-1);
@@ -52,11 +53,11 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) PS_AGONY_SWAP_WITH_BACK(name, index);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
-			#undef SWAP_FIELD
+		#undef SWAP_FIELD
 
-			#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
-			PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
-			#undef SWAP_VECTOR_FIELD
+		#define SWAP_VECTOR_FIELD(name, innerType) PS_AGONY_SWAP_WITH_BACK(name, index);
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+		#undef SWAP_VECTOR_FIELD
 	}
 
 	void BodySoA::swap(ObjectDenseIndex a, ObjectDenseIndex b)
@@ -70,11 +71,11 @@ namespace PS_AGONY2D
 
 		#define SWAP_FIELD(name, type) std::swap(name[a], name[b]);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(SWAP_FIELD)
-			#undef SWAP_FIELD
+		#undef SWAP_FIELD
 
-			#define SWAP_VECTOR_FIELD(name, innerType) std::swap(name[a], name[b]);
-			PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
-			#undef SWAP_VECTOR_FIELD
+		#define SWAP_VECTOR_FIELD(name, innerType) std::swap(name[a], name[b]);
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(SWAP_VECTOR_FIELD)
+		#undef SWAP_VECTOR_FIELD
 	}
 
 	void BodySoA::popBack()
@@ -87,11 +88,11 @@ namespace PS_AGONY2D
 
 		#define POP_FIELD(name, type) name.pop_back();
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(POP_FIELD)
-			#undef POP_FIELD
+		#undef POP_FIELD
 
-			#define POP_VECTOR_FIELD(name, innerType) name.pop_back();
-			PS_AGONY_BODY_SOA_VECTOR_FIELDS(POP_VECTOR_FIELD)
-			#undef POP_VECTOR_FIELD
+		#define POP_VECTOR_FIELD(name, innerType) name.pop_back();
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(POP_VECTOR_FIELD)
+		#undef POP_VECTOR_FIELD
 	}
 
 	void BodySoA::addAttachment(ObjectDenseIndex bodyIndex, ConstraintType type, ObjectDenseIndex objectIndex)
@@ -185,16 +186,16 @@ namespace PS_AGONY2D
 
 		#define MEM_FIELD(name, type) total += getVectorMemoryUsage(name);
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(MEM_FIELD)
-			#undef MEM_FIELD
+		#undef MEM_FIELD
 
-			#define MEM_VECTOR_FIELD(name, innerType) \
+		#define MEM_VECTOR_FIELD(name, innerType) \
 		total += getVectorMemoryUsage(name); \
 		for (const auto& innerVec : name) { total += getVectorMemoryUsage(innerVec); }
+		
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(MEM_VECTOR_FIELD)
+		#undef MEM_VECTOR_FIELD
 
-			PS_AGONY_BODY_SOA_VECTOR_FIELDS(MEM_VECTOR_FIELD)
-			#undef MEM_VECTOR_FIELD
-
-			return total;
+		return total;
 	}
 
 	BodySoAViewer::BodySoAViewer(const BodySoA& data) noexcept :
@@ -202,7 +203,7 @@ namespace PS_AGONY2D
 	{
 		#define INIT_VIEWER_FIELD(name, type) name = data.name.data();
 		PS_AGONY_BODY_SOA_SCALAR_FIELDS(INIT_VIEWER_FIELD)
-			PS_AGONY_BODY_SOA_VECTOR_FIELDS(INIT_VIEWER_FIELD)
-			#undef INIT_VIEWER_FIELD
+		PS_AGONY_BODY_SOA_VECTOR_FIELDS(INIT_VIEWER_FIELD)
+		#undef INIT_VIEWER_FIELD
 	}
 }

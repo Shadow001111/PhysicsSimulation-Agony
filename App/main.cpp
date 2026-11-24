@@ -229,18 +229,6 @@ static void renderSimulationSettings(PS_AGONY2D::Simulation& simulation)
     renderIntegratorSettings(settings);
 }
 
-static const char* shapeTypeName(PS_AGONY2D::ColliderShapeType type)
-{
-    switch (type)
-    {
-    case PS_AGONY2D::ColliderShapeType::Circle: return "Circle";
-    case PS_AGONY2D::ColliderShapeType::Box: return "Box";
-    case PS_AGONY2D::ColliderShapeType::Polygon: return "Polygon";
-    case PS_AGONY2D::ColliderShapeType::Capsule: return "Capsule";
-    }
-    return "?";
-}
-
 static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const DebugData& debugData)
 {
     auto& settings = simulation.getSimulationSettings();
@@ -260,9 +248,12 @@ static void renderPhysicsDiagnostics(PS_AGONY2D::Simulation& simulation, const D
 
 static void renderRenderOptions(PS_AGONY_RENDER::RenderOptions& renderOptions)
 {
-    //ImGui::SeparatorText("Bodies");
-    //{
-    //}
+    ImGui::SeparatorText("Bodies");
+    {
+        auto& bodies = renderOptions.bodies;
+
+        colorToggle("Bound radius", bodies.boundRadius, "##BoundRadiusColor", bodies.boundRadiusColor);
+    }
 
     ImGui::SeparatorText("Colliders");
     {

@@ -67,8 +67,8 @@ namespace PS_AGONY2D
 			ContinuousCollisionDetector::Settings ccdSettings;
 
 			// Sleep.
-			Real linearSpeedSleepThreshold = 0.1f;
-			Real angularSpeedSleepThreshold = 0.1f;
+			// Compared against linear speed + angular speed * body bound radius.
+			Real sleepSpeedThreshold = 0.1f;
 			Real sleepTimeThreshold = 0.5f;
 
 			// Debug.
@@ -235,7 +235,7 @@ namespace PS_AGONY2D
 		// Per-step pass: dynamic bodies and the dynamic tree only.
 		void updateDynamicSpatialData();
 
-		// Puts dynamic bodies below the sleep thresholds to sleep. Held bodies are skipped.
+		// Puts dynamic bodies below the sleep threshold to sleep. Held bodies are skipped.
 		void updateSleeping(float deltaTimeF);
 
 		// Held bodies are modified by the holder every step, so they must be awake before integration.

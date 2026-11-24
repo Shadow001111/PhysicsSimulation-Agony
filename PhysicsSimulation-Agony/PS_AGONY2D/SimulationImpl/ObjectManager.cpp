@@ -21,6 +21,27 @@ namespace PS_AGONY2D
             colliders.comOffsetY[collider] = colliders.localOffsetY[collider] - bodies.localCenterOfMassY[body];
         }
 
+        void setColliderExtents(ColliderSoA& colliders, ObjectDenseIndex collider, Real minExtent, Real maxExtent)
+        {
+            colliders.minExtent[collider] = minExtent;
+            colliders.maxExtent[collider] = maxExtent;
+        }
+
+        Real colliderReach(const ColliderSoA& colliders, ObjectDenseIndex collider)
+        {
+            const Real x = colliders.comOffsetX[collider];
+            const Real y = colliders.comOffsetY[collider];
+            return std::sqrt(x * x + y * y) + colliders.maxExtent[collider];
+        }
+
+        void refreshBoundRadius(BodySoA& bodies, const ColliderSoA& colliders, ObjectDenseIndex body)
+        {
+            Real radius = 0;
+            for (const ObjectDenseIndex collider : bodies.colliderIndices[body])
+                radius = std::fmax(radius, colliderReach(colliders, collider));
+            bodies.boundRadius[body] = radius;
+        }
+
         // 'ascendingIndices' must be sorted ascending. Visits the body nearest the Dynamic/Sleeping boundary first,
         // because each adjacent move swaps with the boundary-side body of the source group.
         template<bool TO_SLEEP, class Func>
@@ -86,8 +107,7 @@ namespace PS_AGONY2D
             bodyIndex, params.localOffset, params.localRotation, materialIndex, ColliderShapeType::Circle, newShapeIndex
         );
         circles.append(newCollider, radius);
-        colliders.minExtent[newCollider] = radius;
-        colliders.maxExtent[newCollider] = radius;
+        setColliderExtents(colliders, newCollider, radius, radius);
 
         return placeNewCollider(newCollider);
     }
@@ -113,8 +133,7 @@ namespace PS_AGONY2D
         const Real halfWidth = width * Real(0.5);
         const Real halfHeight = height * Real(0.5);
         boxes.append(newCollider, halfWidth, halfHeight);
-        colliders.minExtent[newCollider] = std::fmin(halfWidth, halfHeight);
-        colliders.maxExtent[newCollider] = std::fmax(halfWidth, halfHeight);
+        setColliderExtents(colliders, newCollider, std::fmin(halfWidth, halfHeight), std::fmax(halfWidth, halfHeight));
 
         return placeNewCollider(newCollider);
     }
@@ -206,8 +225,7 @@ namespace PS_AGONY2D
             bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Capsule, newShapeIndex
         );
         capsules.append(newCollider, length * Real(0.5), radius);
-        colliders.minExtent[newCollider] = radius;
-        colliders.maxExtent[newCollider] = length * Real(0.5) + radius;
+        setColliderExtents(colliders, newCollider, radius, length * Real(0.5) + radius);
 
         return placeNewCollider(newCollider);
     }
@@ -409,6 +427,7 @@ namespace PS_AGONY2D
 
         const ObjectDenseIndex bodyIndex = wakeBody(colliders.bodyIndex[colliderIndex]);
         destroyColliderInternal(bodyIndex, colliderIndex);
+        refreshBoundRadius(bodies, colliders, bodyIndex);
     }
 
     bool ObjectManager::wakeAndResolvePair(Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b)
@@ -549,8 +568,7 @@ namespace PS_AGONY2D
             bodyIndex, localOffset, localRotation, materialIndex, ColliderShapeType::Polygon, newShapeIndex
         );
         polygons.append(newCollider, std::move(geometry));
-        colliders.minExtent[newCollider] = minExtent;
-        colliders.maxExtent[newCollider] = maxExtent;
+        setColliderExtents(colliders, newCollider, minExtent, maxExtent);
 
         return placeNewCollider(newCollider);
     }
@@ -752,6 +770,7 @@ namespace PS_AGONY2D
                 bodies.localCenterOfMassY[bodyIndex] = c.b;
                 for (const ObjectDenseIndex collider : bodies.colliderIndices[bodyIndex])
                     refreshComOffset(bodies, colliders, collider);
+                refreshBoundRadius(bodies, colliders, bodyIndex);
                 spatialDirty = true;
                 break;
             }
@@ -781,7 +800,7 @@ namespace PS_AGONY2D
         {
         case T::DestroyCollider:
             destroyColliderImmediate(colliderIndex);
-            break;
+            return;
         case T::SetColliderLocalOffset:
             colliders.localOffsetX[colliderIndex] = c.a;
             colliders.localOffsetY[colliderIndex] = c.b;
@@ -801,8 +820,7 @@ namespace PS_AGONY2D
         case T::SetCircleRadius:
             if (shapeType != ColliderShapeType::Circle) break;
             circles.radius[shapeIndex] = std::fmax(Real(0), c.a);
-            colliders.minExtent[colliderIndex] = circles.radius[shapeIndex];
-            colliders.maxExtent[colliderIndex] = circles.radius[shapeIndex];
+            setColliderExtents(colliders, colliderIndex, circles.radius[shapeIndex], circles.radius[shapeIndex]);
             spatialDirty = true;
             break;
 
@@ -810,8 +828,9 @@ namespace PS_AGONY2D
             if (shapeType != ColliderShapeType::Box) break;
             boxes.halfWidth[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             boxes.halfHeight[shapeIndex] = std::fmax(Real(0), c.b) * Real(0.5);
-            colliders.minExtent[colliderIndex] = std::fmin(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]);
-            colliders.maxExtent[colliderIndex] = std::fmax(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]);
+            setColliderExtents(colliders, colliderIndex,
+                std::fmin(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]),
+                std::fmax(boxes.halfWidth[shapeIndex], boxes.halfHeight[shapeIndex]));
             spatialDirty = true;
             break;
 
@@ -819,8 +838,7 @@ namespace PS_AGONY2D
             if (shapeType != ColliderShapeType::Capsule) break;
             capsules.halfLength[shapeIndex] = std::fmax(Real(0), c.a) * Real(0.5);
             capsules.radius[shapeIndex] = std::fmax(Real(0), c.b);
-            colliders.minExtent[colliderIndex] = capsules.radius[shapeIndex];
-            colliders.maxExtent[colliderIndex] = capsules.halfLength[shapeIndex] + capsules.radius[shapeIndex];
+            setColliderExtents(colliders, colliderIndex, capsules.radius[shapeIndex], capsules.halfLength[shapeIndex] + capsules.radius[shapeIndex]);
             spatialDirty = true;
             break;
 
@@ -838,8 +856,9 @@ namespace PS_AGONY2D
             colliders.localOffsetY[colliderIndex] += sinL * centroid.x + cosL * centroid.y;
             refreshComOffset(bodies, colliders, colliderIndex);
             polygons.geometry[shapeIndex] = std::move(pending);
-            colliders.minExtent[colliderIndex] = PhysicsGeometry::calculatePolygonInnerRadius(polygons.geometry[shapeIndex]);
-            colliders.maxExtent[colliderIndex] = PhysicsGeometry::calculatePolygonOuterRadius(polygons.geometry[shapeIndex]);
+            setColliderExtents(colliders, colliderIndex,
+                PhysicsGeometry::calculatePolygonInnerRadius(polygons.geometry[shapeIndex]),
+                PhysicsGeometry::calculatePolygonOuterRadius(polygons.geometry[shapeIndex]));
             spatialDirty = true;
             break;
         }
@@ -847,6 +866,8 @@ namespace PS_AGONY2D
         default:
             break;
         }
+
+        refreshBoundRadius(bodies, colliders, colliders.bodyIndex[colliderIndex]);
     }
 
     void ObjectManager::applyBodyMass(ObjectDenseIndex b, Real newMass)
@@ -1088,7 +1109,9 @@ namespace PS_AGONY2D
 
     ObjectDenseIndex ObjectManager::placeNewCollider(ObjectDenseIndex c)
     {
-        return moveColliderToGroup(c, bodies.groupOf(colliders.bodyIndex[c]));
+        const ObjectDenseIndex body = colliders.bodyIndex[c];
+        bodies.boundRadius[body] = std::fmax(bodies.boundRadius[body], colliderReach(colliders, c));
+        return moveColliderToGroup(c, bodies.groupOf(body));
     }
 
     void ObjectManager::moveBodyColliders(ObjectDenseIndex b, BodyGroup to)
@@ -1420,19 +1443,18 @@ namespace PS_AGONY2D
     }
 
     void ObjectManager::updateSleeping(
-        float deltaTime, Real linearSpeedThreshold, Real angularSpeedThreshold, float sleepTimeThreshold,
+        float deltaTime, Real speedThreshold, float sleepTimeThreshold,
         const IslandManager& islandManager, const Interactivity::BodyHolder& holder
     )
     {
         const IndexRange dynamic = bodies.range(BodyGroup::Dynamic);
         if (dynamic.empty()) return;
 
-        const Real linearSq = linearSpeedThreshold * linearSpeedThreshold;
-
         float* const sleepingTimerPtr = bodies.sleepingTimer.data();
         const Real* const velXPtr = bodies.velocityX.data();
         const Real* const velYPtr = bodies.velocityY.data();
         const Real* const angVelPtr = bodies.angularVelocity.data();
+        const Real* const boundRadiusPtr = bodies.boundRadius.data();
         const ObjectDenseIndex* const islandIdPtr = bodies.islandId.data();
 
         // Bodies woken after the islands were built (commands) have NO_ISLAND: they map to a trailing slot that stays 0.
@@ -1442,11 +1464,11 @@ namespace PS_AGONY2D
         flags[islandCount] = 0;
 
         // Timers, and AND-reduce readiness per island.
+        // TODO: Use SIMD.
         for (ObjectDenseIndex i = dynamic.begin; i < dynamic.end; i++)
         {
-            const Real linearExcess = velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i] - linearSq;
-            const Real angularExcess = std::fabs(angVelPtr[i]) - angularSpeedThreshold;
-            const bool quiet = std::fmax(linearExcess, angularExcess) <= Real(0);
+            const Real speed = std::sqrt(velXPtr[i] * velXPtr[i] + velYPtr[i] * velYPtr[i]) + std::fabs(angVelPtr[i]) * boundRadiusPtr[i];
+            const bool quiet = speed <= speedThreshold;
 
             const float timer = (sleepingTimerPtr[i] + deltaTime) * float(quiet);
             sleepingTimerPtr[i] = timer;
