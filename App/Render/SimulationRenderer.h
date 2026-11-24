@@ -216,7 +216,6 @@ namespace PS_AGONY_RENDER
 		Camera2D& getCamera() noexcept { return camera; }
 
 		size_t getMemoryUsage() const noexcept;
-		size_t getVideoMemoryUsage() const noexcept;
 	private:
 		void updateViewProjectionMatrix();
 		void queryCollidersForRender(const Simulation& simulation, const AABB& cameraAABB);

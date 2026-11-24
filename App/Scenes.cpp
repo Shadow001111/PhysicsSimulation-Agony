@@ -206,7 +206,7 @@ void load_LargeWorld(
     constexpr float terrainBaseY = -20.0f;
 
     PS_AGONY2D::Material worldMaterial = {
-        .elasticity = 0.9f,
+        .elasticity = 0.5f,
         .staticFriction = 0.8f,
         .dynamicFriction = 0.6f
     };

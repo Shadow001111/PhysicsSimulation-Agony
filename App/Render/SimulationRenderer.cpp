@@ -13,11 +13,6 @@ namespace PS_AGONY_RENDER
     namespace
     {
         constexpr uint32_t previewColor = 0x00FF00;
-
-        size_t videoMemoryUsage(const ShapeRenderer::ShapeRenderResources& resources) noexcept
-        {
-            return resources.vbo.getCapacity() + resources.instanceVbo.getCapacity();
-        }
     }
 
     void SimulationRenderer::init()
@@ -344,27 +339,6 @@ namespace PS_AGONY_RENDER
         total += getVectorMemoryUsage(polygonPreviewCache.sourceVertices);
         total += getVectorMemoryUsage(polygonPreviewCache.vertices);
         total += getVectorMemoryUsage(polygonPreviewCache.commands);
-
-        return total;
-    }
-
-    size_t SimulationRenderer::getVideoMemoryUsage() const noexcept
-    {
-        size_t total = 0;
-
-        total += videoMemoryUsage(shapeRenderer.circleResources);
-        total += videoMemoryUsage(shapeRenderer.simplePointCircleResources);
-        total += videoMemoryUsage(shapeRenderer.hollowCircleResources);
-        total += videoMemoryUsage(shapeRenderer.boxResources);
-        total += videoMemoryUsage(shapeRenderer.capsuleResources);
-        total += videoMemoryUsage(shapeRenderer.aabbResources);
-        total += videoMemoryUsage(shapeRenderer.constraintIconResources);
-
-        total += shapeRenderer.polygonResources.vertexVbo.getCapacity();
-        total += shapeRenderer.polygonResources.instanceVbo.getCapacity();
-        total += shapeRenderer.polygonResources.indirectBuf.getCapacity();
-
-        total += shapeRenderer.lineResources.vbo.getCapacity();
 
         return total;
     }
