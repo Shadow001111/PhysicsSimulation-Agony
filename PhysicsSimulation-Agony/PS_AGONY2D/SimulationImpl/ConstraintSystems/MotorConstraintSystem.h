@@ -7,7 +7,7 @@
 namespace PS_AGONY2D
 {
 	class MotorConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::Motor, MotorSoA, MotorSoAViewer, MotorSolver>
+		public ConstraintSystemBase<ConstraintType::Motor, MotorSoA, MotorSoAViewer, MotorSolver, MotorConstraintSystem>
 	{
 		enum class Cmd : uint8_t { TargetSpeed, MaxTorque };
 	public:
@@ -29,10 +29,10 @@ namespace PS_AGONY2D
 		// Call through ObjectManager::createMotor (wakes the body, registers the attachment).
 		ObjectDenseIndex createAt(ObjectDenseIndex bodyIndex, const CreateParams& p)
 		{
-			return createSingleImpl(bodyIndex, p.targetSpeed, p.maxTorque);
+			return createImpl(bodyIndex, p.targetSpeed, p.maxTorque);
 		}
 
-		// 'accumulatedImpulse is intentionally' left untouched on change.
+		// accumulatedImpulse is left untouched on change.
 		void queueTargetSpeed(Handle h, Real v) { pushCommand(Cmd::TargetSpeed, h, v); }
 		void queueMaxTorque(Handle h, Real v) { pushCommand(Cmd::MaxTorque, h, v); }
 
@@ -46,13 +46,6 @@ namespace PS_AGONY2D
 					case Cmd::MaxTorque: soa.maxTorque[i] = std::fmax(Real(0), c.a); break;
 					}
 				});
-		}
-
-		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
-		{
-			const ObjectDenseIndex i = soa.indexOf(h);
-			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			return getDataAt(i, bodies);
 		}
 
 		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept

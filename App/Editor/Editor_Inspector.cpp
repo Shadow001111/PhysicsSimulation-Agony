@@ -150,22 +150,25 @@ namespace PS_AGONY_EDITOR
 			if (ImGui::Button("+ Circle"))
 			{
 				CircleColliderCreateParams p{};
+				p.bodyHandle = h;
 				p.radius = 0.5;
-				api.createCircleColliderH(h, p);
+				api.createCircleColliderH(p);
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("+ Box"))
 			{
 				BoxColliderCreateParams p{};
+				p.bodyHandle = h;
 				p.size = Vec2(1, 1);
-				api.createBoxColliderH(h, p);
+				api.createBoxColliderH(p);
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("+ Capsule"))
 			{
 				CapsuleColliderCreateParams p{};
+				p.bodyHandle = h;
 				p.length = 1; p.radius = 0.25;
-				api.createCapsuleColliderH(h, p);
+				api.createCapsuleColliderH(p);
 			}
 			ImGui::TextDisabled("Mass/inertia are not updated by collider edits.");
 

@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <vector>
 
 namespace PS_AGONY2D
@@ -68,6 +70,8 @@ namespace PS_AGONY2D
 		virtual void popBack() = 0;
 		// Body indices of a constraint (b == NULL_DENSE_INDEX for single-body). index must be in range.
 		virtual void getBodyIndices(ObjectDenseIndex index, ObjectDenseIndex& a, ObjectDenseIndex& b) const noexcept = 0;
+		// Handle -> dense index (Handle::NULL_DENSE_INDEX if stale).
+		virtual ObjectDenseIndex indexOf(Handle h) const noexcept = 0;
 		virtual void remapBodyIndex(ObjectDenseIndex index, ObjectDenseIndex oldBodyIndex, ObjectDenseIndex newBodyIndex) = 0;
 
 		// Applies and clears the queued modification commands.
@@ -93,16 +97,17 @@ namespace PS_AGONY2D
 
 	using ConstraintSystemArray = std::array<IConstraintSystem*, static_cast<size_t>(ConstraintType::COUNT)>;
 
-	template<ConstraintType Type, class SoA, class Viewer, class Solver>
+	template<ConstraintType Type, class SoA, class Viewer, class Solver, class Derived>
 	class ConstraintSystemBase : public IConstraintSystem
 	{
+	public:
+		static constexpr ConstraintType TYPE = Type;
+		// Single-body constraints expose `bodyIndex` instead of `bodyIndexA/B`.
+		static constexpr bool IsSingleBody = requires(SoA & s) { s.bodyIndex; };
 	protected:
 		SoA soa;
 		Solver solver;
 		std::vector<ConstraintCommand> commands;
-
-		// Single-body constraints expose `bodyIndex` instead of `bodyIndexA/B`.
-		static constexpr bool IsSingleBody = requires(SoA & s) { s.bodyIndex; };
 
 		template<class E>
 		void pushCommand(E type, Handle handle, Real a = 0, Real b = 0, uint32_t index = 0)
@@ -146,28 +151,17 @@ namespace PS_AGONY2D
 			return true;
 		}
 
-		// Resolves body handles to dense indices. False if any is stale.
-		static bool resolve(const BodySoA& bodies, Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b) noexcept
+		// Normalized axis, or (1, 0) if zero-length.
+		static Vec2 sanitizeAxis(Vec2 axis) noexcept
 		{
-			a = bodies.indexOf(hA);
-			b = bodies.indexOf(hB);
-			return a != Handle::NULL_DENSE_INDEX && b != Handle::NULL_DENSE_INDEX;
+			return normalizeAxis(axis) ? axis : Vec2(Real(1), Real(0));
 		}
 
-		// Appends a single-body constraint. Returns its dense index. Attachments are ObjectManager's job.
+		// Appends a constraint (body indices first in args). Returns its dense index. Attachments are ObjectManager's job.
 		template<class... Args>
-		ObjectDenseIndex createSingleImpl(ObjectDenseIndex index, Args&&... args)
+		ObjectDenseIndex createImpl(Args&&... args)
 		{
-			const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(soa.append(index, std::forward<Args>(args)...));
-			return newIndex;
-		}
-
-		// Appends a constraint. Returns its dense index. Attachments are ObjectManager's job.
-		template<class... Args>
-		ObjectDenseIndex createImpl(ObjectDenseIndex indexA, ObjectDenseIndex indexB, Args&&... args)
-		{
-			const ObjectDenseIndex newIndex = static_cast<ObjectDenseIndex>(soa.append(indexA, indexB, std::forward<Args>(args)...));
-			return newIndex;
+			return static_cast<ObjectDenseIndex>(soa.append(std::forward<Args>(args)...));
 		}
 	public:
 		void swap(ObjectDenseIndex a, ObjectDenseIndex b) final { soa.swap(a, b); }
@@ -231,9 +225,16 @@ namespace PS_AGONY2D
 
 		Viewer getViewer() const noexcept { return Viewer(soa); }
 
-		// Handle lookup. indexOf returns Handle::kNull if stale.
+		// Handle lookup. indexOf returns Handle::NULL_DENSE_INDEX if stale.
 		bool isValid(Handle h) const noexcept { return soa.indexOf(h) != Handle::NULL_DENSE_INDEX; }
-		ObjectDenseIndex indexOf(Handle h) const noexcept { return soa.indexOf(h); }
+		ObjectDenseIndex indexOf(Handle h) const noexcept final { return soa.indexOf(h); }
+
+		// nullopt if stale. Derived provides getDataAt (nullopt if out of range).
+		auto getData(Handle h, const BodySoA& bodies) const noexcept
+		{
+			return static_cast<const Derived&>(*this).getDataAt(soa.indexOf(h), bodies);
+		}
+
 		Handle handleAt(ObjectDenseIndex index) const noexcept { return soa.handleAt(index); }
 
 		size_t getCount() const noexcept final { return soa.getCount(); }

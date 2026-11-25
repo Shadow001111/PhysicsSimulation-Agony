@@ -7,7 +7,7 @@
 namespace PS_AGONY2D
 {
 	class RevoluteJointConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::RevoluteJoint, RevoluteJointSoA, RevoluteJointSoAViewer, RevoluteJointSolver>
+		public ConstraintSystemBase<ConstraintType::RevoluteJoint, RevoluteJointSoA, RevoluteJointSoAViewer, RevoluteJointSolver, RevoluteJointConstraintSystem>
 	{
 		enum class Cmd : uint8_t { LocalAnchorA, LocalAnchorB, Stiffness, Damping };
 	public:
@@ -54,13 +54,6 @@ namespace PS_AGONY2D
 					case Cmd::Damping: soa.damping[i] = std::fmax(Real(0), c.a); break;
 					}
 				});
-		}
-
-		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
-		{
-			const ObjectDenseIndex i = soa.indexOf(h);
-			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			return getDataAt(i, bodies);
 		}
 
 		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept

@@ -37,7 +37,9 @@ namespace PS_AGONY2D
 		SetCircleRadius,
 		SetBoxSize,
 		SetCapsuleShape,
-		SetPolygonGeometry
+		SetPolygonGeometry,
+
+		DestroyConstraint // index = ConstraintType.
 	};
 
 	struct ObjectCommand
@@ -81,17 +83,17 @@ namespace PS_AGONY2D
 			ConstraintSystemArray& constraintSystems
 		);
 
-		// Creates a body with NO colliders attached. Mass/inertia are taken directly
-		// from params; since there's no shape yet, inertia is not auto-derived and
-		// attaching colliders afterward does not recompute mass/inertia/COM for you.
+		// Creates a body with NO colliders. Mass/inertia are taken from params;
+		// attaching colliders later does not recompute mass/inertia/COM.
 		std::optional<ObjectDenseIndex> createBody(const BodyCreateParams& params);
 
 		// Attaches a new collider of the given shape to an EXISTING body immediately. Wakes the body if it sleeps.
-		// Returns std::nullopt if bodyIndex is invalid.
+		// Returns std::nullopt if the body handle is stale.
 		std::optional<ObjectDenseIndex> createCircleCollider(const CircleColliderCreateParams& params);
 		std::optional<ObjectDenseIndex> createBoxCollider(const BoxColliderCreateParams& params);
 		std::optional<PolygonColliderCreateResult> createPolygonCollider(const PolygonColliderCreateParams& params);
 		std::optional<ObjectDenseIndex> createCapsuleCollider(const CapsuleColliderCreateParams& params);
+
 
 		std::optional<ObjectDenseIndex> createCircle(const CircleCreateParams& params);
 		std::optional<ObjectDenseIndex> createBox(const BoxCreateParams& params);
@@ -108,19 +110,12 @@ namespace PS_AGONY2D
 
 		// Constraint lifetime. ObjectManager owns body attachments; creating/destroying wakes the touched bodies
 		// (and their sleeping islands). Not safe for callbacks or during solving.
-		// createSpring: nullopt if a body handle is stale.
+		// Create: nullopt if a body handle is stale.
 		std::optional<Handle> createSpring(const SpringConstraintSystem::CreateParams& params);
 		std::optional<Handle> createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& params);
 		std::optional<Handle> createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& params);
 		std::optional<Handle> createSliderJoint(const SliderJointConstraintSystem::CreateParams& params);
 		std::optional<Handle> createMotor(const MotorConstraintSystem::CreateParams& params);
-
-		void destroySpringImmediate(Handle h);
-		void destroyRevoluteJointImmediate(Handle h);
-		void destroyPrismaticJointImmediate(Handle h);
-		void destroySliderJointImmediate(Handle h);
-		void destroyMotorImmediate(Handle h);
-		void destroyConstraintImmediate(ConstraintType type, ObjectDenseIndex constraintIndex);
 
 		// Sleeping: moves the body to the Sleeping group and its colliders to the sleeping list. Body data is kept.
 		// Any modification of a sleeping body or its colliders (commands, collider create/destroy) wakes it first.
@@ -183,6 +178,7 @@ namespace PS_AGONY2D
 
 		void destroyBody(Handle handle) { pushCommand(ObjectCommandType::DestroyBody, handle); }
 		void destroyCollider(Handle handle) { pushCommand(ObjectCommandType::DestroyCollider, handle); }
+		void destroyConstraint(ConstraintType type, Handle handle) { pushCommand(ObjectCommandType::DestroyConstraint, handle, 0, 0, static_cast<uint32_t>(type)); }
 
 		// Deferred modification commands.
 		// Queued in call order, applied by flushCommands(). Stale handles and shape-type mismatches are dropped.
@@ -223,11 +219,13 @@ namespace PS_AGONY2D
 		bool queueColliderPolygon(Handle collider, std::span<const Vec2> localVertices);
 
 		// Applies and clears the queue. Must not run during collision-event dispatch or solving.
-		// Commands include bodies and constraints.
 		void flushCommands();
 
 		// Instant reads (no queue). nullopt if index is out of range.
 		std::optional<ColliderData> getColliderData(ObjectDenseIndex colliderIndex) const noexcept;
+		// By handle; nullopt if stale.
+		std::optional<BodyData> getBodyData(Handle body) const noexcept { return bodies.getBodyData(bodies.indexOf(body)); }
+		std::optional<ColliderData> getColliderData(Handle collider) const noexcept { return getColliderData(colliders.indexOf(collider)); }
 	private:
 		std::vector<ObjectCommand> commands;
 		std::vector<PolygonGeometry> pendingPolygons;
@@ -254,13 +252,11 @@ namespace PS_AGONY2D
 		void markStaticColliderEdited(ObjectDenseIndex colliderIndex);
 		void markStaticBodyEdited(ObjectDenseIndex bodyIndex);
 
-		// Wakes both bodies (indices move: re-resolved by handle). False if either handle is stale.
-		bool wakeAndResolvePair(Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b);
-		// Two-body create: wake, append via System::createAt, attach to both bodies. Defined in the .cpp.
+		// Validates and wakes the bodies, appends via System::createAt, attaches.
 		template<class System, class Params>
-		std::optional<Handle> createPairConstraint(ConstraintType type, const Params& params);
-		template<class System>
-		void destroyConstraintByHandle(ConstraintType type, Handle h);
+		std::optional<Handle> createConstraint(const Params& params);
+		// Removes attachments and wakes the bodies. Not safe during solving.
+		void destroyConstraintInternal(ConstraintType type, ObjectDenseIndex constraintIndex);
 
 		void pushCommand(ObjectCommandType type, Handle handle, Real a = 0, Real b = 0, uint32_t index = 0)
 		{
@@ -323,22 +319,18 @@ namespace PS_AGONY2D
 			Vec2 localCenterOfMass
 		);
 
-		//
 		ObjectDenseIndex createColliderInternal(
 			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
 			MaterialIndex materialIndex, ColliderShapeType shapeType, ObjectDenseIndex shapeIndex
 		);
 
-		// Appends a single convex-polygon collider (assumed already convex, CCW, >=3 vertices -
-		// no validation is performed here) to bodyIndex. Shared by createPolygon() and
-		// createPolygonCollider() so the collider/shape-SoA wiring is written once.
+		// Appends a single convex-polygon collider (assumed convex, CCW, >=3 vertices; not validated) to bodyIndex.
 		ObjectDenseIndex createConvexPolygonColliderInternal(
 			ObjectDenseIndex bodyIndex, Vec2 localOffset, Real localRotation,
 			MaterialIndex materialIndex, std::vector<Vec2> convexVertices
 		);
 
-		// Removes a single collider (and its underlying shape-SoA entry) from bodyIndex's
-		// owned list. Shared by destroyCollider() and destroyBody()'s cascade loop.
+		// Removes a single collider (and its shape-SoA entry) from bodyIndex's owned list.
 		void destroyColliderInternal(ObjectDenseIndex bodyIndex, ObjectDenseIndex colliderIndex);
 	};
 }

@@ -7,7 +7,7 @@
 namespace PS_AGONY2D
 {
 	class SliderJointConstraintSystem final :
-		public ConstraintSystemBase<ConstraintType::SliderJoint, SliderJointSoA, SliderJointSoAViewer, SliderJointSolver>
+		public ConstraintSystemBase<ConstraintType::SliderJoint, SliderJointSoA, SliderJointSoAViewer, SliderJointSolver, SliderJointConstraintSystem>
 	{
 		enum class Cmd : uint8_t { LocalAnchorA, LocalAnchorB, LocalAxisA, Stiffness, Damping, Limits, EnableLimit };
 	public:
@@ -42,13 +42,9 @@ namespace PS_AGONY2D
 		// Call through ObjectManager::createSliderJoint (wakes bodies, registers attachments).
 		ObjectDenseIndex createAt(ObjectDenseIndex a, ObjectDenseIndex b, const CreateParams& p)
 		{
-			// Normalize the axis defensively; a zero-length axis would make the joint singular.
-			const Real axisLenSq = glm::dot(p.localAxisA, p.localAxisA);
-			const Vec2 axis = axisLenSq > Real(1e-12) ? p.localAxisA / glm::sqrt(axisLenSq) : Vec2(Real(1), Real(0));
-
 			return createImpl(
 				a, b,
-				p.localAnchorA, p.localAnchorB, axis,
+				p.localAnchorA, p.localAnchorB, sanitizeAxis(p.localAxisA),
 				p.stiffness, p.damping, p.lowerLimit, p.upperLimit, p.enableLimit
 			);
 		}
@@ -86,13 +82,6 @@ namespace PS_AGONY2D
 					case Cmd::EnableLimit: soa.enableLimit[i] = static_cast<uint8_t>(c.index != 0); break;
 					}
 				});
-		}
-
-		std::optional<Data> getData(Handle h, const BodySoA& bodies) const noexcept
-		{
-			const ObjectDenseIndex i = soa.indexOf(h);
-			if (i == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			return getDataAt(i, bodies);
 		}
 
 		std::optional<Data> getDataAt(ObjectDenseIndex i, const BodySoA& bodies) const noexcept

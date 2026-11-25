@@ -78,9 +78,7 @@ namespace PS_AGONY2D
         const Real invMass = mass == Real(0) ? Real(0) : Real(1) / mass;
         const Real invInertia = inertia == Real(0) ? Real(0) : Real(1) / inertia;
 
-        // No shape attached yet, so there's nothing to derive inertia from: it starts
-        // at zero (infinite resistance to rotation change is NOT implied - it just
-        // means no angular response until a collider/inertia is set some other way).
+        // No shape yet, so inertia starts at zero: no angular response until a collider/inertia is set.
         const ObjectDenseIndex newBodyIndex = appendBody(
             params.position, params.velocity, params.rotation, params.angularVelocity,
             mass, invMass, inertia, invInertia, centerOfMass
@@ -91,13 +89,14 @@ namespace PS_AGONY2D
 
     std::optional<ObjectDenseIndex> ObjectManager::createCircleCollider(const CircleColliderCreateParams& params)
     {
-        if (params.bodyIndex >= bodies.getCount())
+        ObjectDenseIndex bodyIndex = bodies.indexOf(params.bodyHandle);
+        if (bodyIndex == Handle::NULL_DENSE_INDEX)
         {
-            std::cerr << "[AGONY][Simulation::createCircleCollider]: Failed: bodyIndex is invalid.\n";
+            std::cerr << "[AGONY][Simulation::createCircleCollider]: Failed: bodyHandle is stale.\n";
             return std::nullopt;
         }
 
-        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
+        bodyIndex = wakeBody(bodyIndex);
 
         const Real radius = std::fmax(Real(0), params.radius);
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
@@ -114,13 +113,14 @@ namespace PS_AGONY2D
 
     std::optional<ObjectDenseIndex> ObjectManager::createBoxCollider(const BoxColliderCreateParams& params)
     {
-        if (params.bodyIndex >= bodies.getCount())
+        ObjectDenseIndex bodyIndex = bodies.indexOf(params.bodyHandle);
+        if (bodyIndex == Handle::NULL_DENSE_INDEX)
         {
-            std::cerr << "[AGONY][Simulation::createBoxCollider]: Failed: bodyIndex is invalid.\n";
+            std::cerr << "[AGONY][Simulation::createBoxCollider]: Failed: bodyHandle is stale.\n";
             return std::nullopt;
         }
 
-        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
+        bodyIndex = wakeBody(bodyIndex);
 
         const Real width = std::fmax(Real(0), params.size.x);
         const Real height = std::fmax(Real(0), params.size.y);
@@ -150,9 +150,10 @@ namespace PS_AGONY2D
             std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: vertices count is less than three.\n";
             return std::nullopt;
         }
-        if (params.bodyIndex >= bodies.getCount())
+        ObjectDenseIndex bodyIndex = bodies.indexOf(params.bodyHandle);
+        if (bodyIndex == Handle::NULL_DENSE_INDEX)
         {
-            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: bodyIndex is invalid.\n";
+            std::cerr << "[AGONY][Simulation::createPolygonCollider]: Failed: bodyHandle is stale.\n";
             return std::nullopt;
         }
 
@@ -166,8 +167,6 @@ namespace PS_AGONY2D
 
         const MaterialIndex materialIndex = params.materialIndex < materials.size() ? params.materialIndex : 0;
 
-        // Concave outlines are split into multiple convex pieces here; an already-convex
-        // outline comes back as a single (CCW-normalized) piece at no extra cost.
         std::vector<std::vector<Vec2>> convexPieces = PhysicsGeometry::decomposeConcave(uniqueVertices, params.concaveDecompositionMethod);
         PhysicsGeometry::limitConvexPieceVertexCount(
             convexPieces, MAX_POLYGON_VERTEX_COUNT, params.convexDecompositionMethod
@@ -179,7 +178,7 @@ namespace PS_AGONY2D
             return std::nullopt;
         }
 
-        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
+        bodyIndex = wakeBody(bodyIndex);
         // Placing later pieces moves colliders between groups, so track the first piece by handle.
         const Handle firstHandle = colliders.handleAt(createConvexPolygonColliderInternal(
             bodyIndex, params.localOffset, params.localRotation, materialIndex, std::move(convexPieces[0])
@@ -191,19 +190,20 @@ namespace PS_AGONY2D
             );
         }
 
-        // NOTE: pieces are no longer guaranteed to have consecutive dense indices (grouping moves colliders).
+        // Pieces are not guaranteed to have consecutive dense indices (grouping moves colliders).
         return PolygonColliderCreateResult{ colliders.indexOfUnchecked(firstHandle), convexPieces.size() };
     }
 
     std::optional<ObjectDenseIndex> ObjectManager::createCapsuleCollider(const CapsuleColliderCreateParams& params)
     {
-        if (params.bodyIndex >= bodies.getCount())
+        ObjectDenseIndex bodyIndex = bodies.indexOf(params.bodyHandle);
+        if (bodyIndex == Handle::NULL_DENSE_INDEX)
         {
-            std::cerr << "[AGONY][Simulation::createCapsuleCollider]: Failed: bodyIndex is invalid.\n";
+            std::cerr << "[AGONY][Simulation::createCapsuleCollider]: Failed: bodyHandle is stale.\n";
             return std::nullopt;
         }
 
-        const ObjectDenseIndex bodyIndex = wakeBody(params.bodyIndex);
+        bodyIndex = wakeBody(bodyIndex);
 
         Real length = std::fmax(Real(0), params.length);
         Vec2 localOffset = params.localOffset;
@@ -246,7 +246,7 @@ namespace PS_AGONY2D
         );
 
         createCircleCollider({
-            .bodyIndex = newBodyIndex,
+            .bodyHandle = bodies.handleAt(newBodyIndex),
             .localOffset = Vec2(0),
             .localRotation = Real(0),
             .materialIndex = params.base.materialIndex,
@@ -273,7 +273,7 @@ namespace PS_AGONY2D
         );
 
         createBoxCollider({
-            .bodyIndex = newBodyIndex,
+            .bodyHandle = bodies.handleAt(newBodyIndex),
             .localOffset = Vec2(0),
             .localRotation = Real(0),
             .materialIndex = params.base.materialIndex,
@@ -338,8 +338,6 @@ namespace PS_AGONY2D
 
         const MaterialIndex materialIndex = params.base.materialIndex < materials.size() ? params.base.materialIndex : 0;
 
-        // Split the already de-duplicated/re-centered outline into convex colliders (one
-        // piece if it was already convex) via the same helper createPolygonCollider() uses.
         for (std::vector<Vec2>& piece : convexPieces)
         {
             createConvexPolygonColliderInternal(
@@ -378,7 +376,7 @@ namespace PS_AGONY2D
         );
 
         createCapsuleCollider({
-            .bodyIndex = newBodyIndex,
+            .bodyHandle = bodies.handleAt(newBodyIndex),
             .localOffset = Vec2(0),
             .localRotation = Real(0),
             .materialIndex = params.base.materialIndex,
@@ -405,18 +403,16 @@ namespace PS_AGONY2D
             const auto& list = bodies.attachments[bodyIndex];
             if (list.empty()) break;
             const BodyAttachment attachment = list.back();
-            destroyConstraintImmediate(attachment.type, attachment.objectIndex);
+            destroyConstraintInternal(attachment.type, attachment.objectIndex);
         }
         bodyIndex = bodies.indexOfUnchecked(bodyHandle);
 
-        // Cascade-delete every collider owned by this body.
         while (!bodies.colliderIndices[bodyIndex].empty())
         {
             const ObjectDenseIndex colliderIdx = bodies.colliderIndices[bodyIndex].back();
             destroyColliderInternal(bodyIndex, colliderIdx);
         }
 
-        // Body removal: move to the unused tail (keeps group order), then pop.
         moveBodyToGroup(bodyIndex, BodyGroup::Unused);
         bodies.popBack();
     }
@@ -430,85 +426,80 @@ namespace PS_AGONY2D
         refreshBoundRadius(bodies, colliders, bodyIndex);
     }
 
-    bool ObjectManager::wakeAndResolvePair(Handle hA, Handle hB, ObjectDenseIndex& a, ObjectDenseIndex& b)
-    {
-        if (bodies.indexOf(hA) == Handle::NULL_DENSE_INDEX ||
-            bodies.indexOf(hB) == Handle::NULL_DENSE_INDEX) return false;
-
-        wakeBody(bodies.indexOfUnchecked(hA));
-        wakeBody(bodies.indexOfUnchecked(hB));
-        a = bodies.indexOfUnchecked(hA);
-        b = bodies.indexOfUnchecked(hB);
-        return true;
-    }
-
     template<class System, class Params>
-    std::optional<Handle> ObjectManager::createPairConstraint(ConstraintType type, const Params& p)
+    std::optional<Handle> ObjectManager::createConstraint(const Params& p)
     {
-        ObjectDenseIndex a, b;
-        if (!wakeAndResolvePair(p.bodyHandleA, p.bodyHandleB, a, b)) return std::nullopt;
+        constexpr ConstraintType type = System::TYPE;
+        constexpr size_t bodyCount = System::IsSingleBody ? 1 : 2;
+
+        Handle handles[bodyCount];
+        if constexpr (System::IsSingleBody)
+        {
+            handles[0] = p.bodyHandle;
+        }
+        else
+        {
+            handles[0] = p.bodyHandleA;
+            handles[1] = p.bodyHandleB;
+        }
+
+        for (const Handle h : handles)
+        {
+            if (bodies.indexOf(h) == Handle::NULL_DENSE_INDEX) return std::nullopt;
+        }
+        for (const Handle h : handles)
+        {
+            wakeBody(bodies.indexOfUnchecked(h));
+        }
+
+        ObjectDenseIndex indices[bodyCount];
+        for (size_t i = 0; i < bodyCount; i++)
+        {
+            indices[i] = bodies.indexOfUnchecked(handles[i]);
+        }
 
         auto& system = static_cast<System&>(*constraintSystems[size_t(type)]);
         const BodySoA& constBodies = bodies;
         ObjectDenseIndex ci;
-        if constexpr (requires { system.createAt(a, b, p, constBodies); }) ci = system.createAt(a, b, p, constBodies);
-        else ci = system.createAt(a, b, p);
+        if constexpr (System::IsSingleBody) ci = system.createAt(indices[0], p);
+        else if constexpr (requires { system.createAt(indices[0], indices[1], p, constBodies); }) ci = system.createAt(indices[0], indices[1], p, constBodies);
+        else ci = system.createAt(indices[0], indices[1], p);
 
-        bodies.addAttachment(a, type, ci);
-        bodies.addAttachment(b, type, ci);
+        for (const ObjectDenseIndex index : indices)
+        {
+            bodies.addAttachment(index, type, ci);
+        }
         const Handle handle = system.handleAt(ci);
         refreshConstraintGroup(type, ci);
         return handle;
     }
 
-    template<class System>
-    void ObjectManager::destroyConstraintByHandle(ConstraintType type, Handle h)
-    {
-        const auto& system = static_cast<const System&>(*constraintSystems[size_t(type)]);
-        const ObjectDenseIndex i = system.indexOf(h);
-        if (i != Handle::NULL_DENSE_INDEX) destroyConstraintImmediate(type, i);
-    }
-
     std::optional<Handle> ObjectManager::createSpring(const SpringConstraintSystem::CreateParams& p)
     {
-        return createPairConstraint<SpringConstraintSystem>(ConstraintType::Spring, p);
+        return createConstraint<SpringConstraintSystem>(p);
     }
 
     std::optional<Handle> ObjectManager::createRevoluteJoint(const RevoluteJointConstraintSystem::CreateParams& p)
     {
-        return createPairConstraint<RevoluteJointConstraintSystem>(ConstraintType::RevoluteJoint, p);
+        return createConstraint<RevoluteJointConstraintSystem>(p);
     }
 
     std::optional<Handle> ObjectManager::createPrismaticJoint(const PrismaticJointConstraintSystem::CreateParams& p)
     {
-        return createPairConstraint<PrismaticJointConstraintSystem>(ConstraintType::PrismaticJoint, p);
+        return createConstraint<PrismaticJointConstraintSystem>(p);
     }
 
     std::optional<Handle> ObjectManager::createSliderJoint(const SliderJointConstraintSystem::CreateParams& p)
     {
-        return createPairConstraint<SliderJointConstraintSystem>(ConstraintType::SliderJoint, p);
+        return createConstraint<SliderJointConstraintSystem>(p);
     }
 
     std::optional<Handle> ObjectManager::createMotor(const MotorConstraintSystem::CreateParams& p)
     {
-        if (bodies.indexOf(p.bodyHandle) == Handle::NULL_DENSE_INDEX) return std::nullopt;
-
-        const ObjectDenseIndex bodyIndex = wakeBody(bodies.indexOfUnchecked(p.bodyHandle));
-        auto& motors = static_cast<MotorConstraintSystem&>(*constraintSystems[size_t(ConstraintType::Motor)]);
-        const ObjectDenseIndex ci = motors.createAt(bodyIndex, p);
-        bodies.addAttachment(bodyIndex, ConstraintType::Motor, ci);
-        const Handle handle = motors.handleAt(ci);
-        refreshConstraintGroup(ConstraintType::Motor, ci);
-        return handle;
+        return createConstraint<MotorConstraintSystem>(p);
     }
 
-    void ObjectManager::destroySpringImmediate(Handle h) { destroyConstraintByHandle<SpringConstraintSystem>(ConstraintType::Spring, h); }
-    void ObjectManager::destroyRevoluteJointImmediate(Handle h) { destroyConstraintByHandle<RevoluteJointConstraintSystem>(ConstraintType::RevoluteJoint, h); }
-    void ObjectManager::destroyPrismaticJointImmediate(Handle h) { destroyConstraintByHandle<PrismaticJointConstraintSystem>(ConstraintType::PrismaticJoint, h); }
-    void ObjectManager::destroySliderJointImmediate(Handle h) { destroyConstraintByHandle<SliderJointConstraintSystem>(ConstraintType::SliderJoint, h); }
-    void ObjectManager::destroyMotorImmediate(Handle h) { destroyConstraintByHandle<MotorConstraintSystem>(ConstraintType::Motor, h); }
-
-    void ObjectManager::destroyConstraintImmediate(ConstraintType type, ObjectDenseIndex index)
+    void ObjectManager::destroyConstraintInternal(ConstraintType type, ObjectDenseIndex index)
     {
         IConstraintSystem& system = *constraintSystems[size_t(type)];
         if (index >= system.getCount()) return;
@@ -517,15 +508,12 @@ namespace PS_AGONY2D
         ObjectDenseIndex a, b;
         system.getBodyIndices(index, a, b);
 
-        // Remove attachments(Constraint from bodies' lists).
         bodies.removeAttachment(a, type, index);
         bodies.removeAttachment(b, type, index);
 
-        // Delete constraint.
         moveConstraintToGroup(type, index, ConstraintGroup::Unused);
         system.popBack();
 
-        // Wake body a. Then wake body b by handle.
         const Handle hB = b != NONE ? bodies.handleAt(b) : Handle{};
         wakeBody(a);
         if (b != NONE) wakeBody(bodies.indexOfUnchecked(hB));
@@ -639,7 +627,7 @@ namespace PS_AGONY2D
         if (!outline) return false;
         if (outline->size() > MAX_POLYGON_VERTEX_COUNT) return false;
         if (!PhysicsGeometry::isConvexPolygon(*outline)) return false;
-        // NOTE: on apply the geometry is recentered on its centroid and the shift is added to the collider's local offset.
+        // On apply the geometry is recentered on its centroid and the shift is added to the collider's local offset.
 
         const uint32_t slot = static_cast<uint32_t>(pendingPolygons.size());
         pendingPolygons.emplace_back(std::move(*outline));
@@ -649,7 +637,6 @@ namespace PS_AGONY2D
 
     void ObjectManager::flushCommands()
     {
-        // Bodies/colliders.
         if (!commands.empty())
         {
             for (const ObjectCommand& command : commands)
@@ -659,7 +646,6 @@ namespace PS_AGONY2D
             commands.clear();
             pendingPolygons.clear();
         }
-        // Constraints.
         {
             constraintWakeScratch.clear();
             for (IConstraintSystem* system : constraintSystems)
@@ -676,6 +662,14 @@ namespace PS_AGONY2D
     void ObjectManager::applyCommand(const ObjectCommand& c)
     {
         using T = ObjectCommandType;
+
+        if (c.type == T::DestroyConstraint)
+        {
+            const ConstraintType type = static_cast<ConstraintType>(c.index);
+            const ObjectDenseIndex index = constraintSystems[size_t(type)]->indexOf(c.handle);
+            if (index != Handle::NULL_DENSE_INDEX) destroyConstraintInternal(type, index);
+            return;
+        }
 
         if (c.type < T::DestroyCollider)
         {
@@ -1025,7 +1019,6 @@ namespace PS_AGONY2D
             for (ObjectDenseIndex& ci : bodies.colliderIndices[ownerB]) if (ci == a) { ci = b; break; }
         }
 
-        // Shape back-references.
         const auto fixShape = [this](ObjectDenseIndex c)
             {
                 const ObjectDenseIndex s = colliders.shapeIndex[c];

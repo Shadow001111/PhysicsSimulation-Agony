@@ -26,7 +26,7 @@ namespace PS_AGONY2D
 	// Params for attaching a new collider to an EXISTING body immediately (no standalone colliders).
 	struct CircleColliderCreateParams
 	{
-		ObjectDenseIndex bodyIndex;
+		Handle bodyHandle;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -35,7 +35,7 @@ namespace PS_AGONY2D
 
 	struct BoxColliderCreateParams
 	{
-		ObjectDenseIndex bodyIndex;
+		Handle bodyHandle;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -44,7 +44,7 @@ namespace PS_AGONY2D
 
 	struct PolygonColliderCreateParams
 	{
-		ObjectDenseIndex bodyIndex;
+		Handle bodyHandle;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -57,7 +57,7 @@ namespace PS_AGONY2D
 	// If 'localStart' and 'localEnd' are set, they dominate.
 	struct CapsuleColliderCreateParams
 	{
-		ObjectDenseIndex bodyIndex;
+		Handle bodyHandle;
 		Vec2 localOffset{ 0 };
 		Real localRotation{ 0 };
 		MaterialIndex materialIndex{ 0 };
@@ -67,10 +67,7 @@ namespace PS_AGONY2D
 		std::optional<Vec2> localEnd{};
 	};
 
-	// Result of createPolygonCollider(). A concave input outline may be split into several
-	// convex colliders on the same body; they are appended back-to-back in colliders/polygons
-	// SoA storage during that single call, so every valid collider index is contiguous:
-	// [firstColliderIndex, firstColliderIndex + colliderCount).
+	// A concave outline may be split into several convex colliders on the same body.
 	struct PolygonColliderCreateResult
 	{
 		ObjectDenseIndex firstColliderIndex{ 0 };

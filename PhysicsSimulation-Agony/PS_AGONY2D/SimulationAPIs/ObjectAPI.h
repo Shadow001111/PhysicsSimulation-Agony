@@ -18,7 +18,8 @@ namespace PS_AGONY2D
 	public:
 		ObjectAPI(ObjectManager& objectManager, ConstraintSystemArray& constraintSystems) noexcept
 			: objectManager(objectManager)
-		{}
+		{
+		}
 
 		ObjectAPI(const ObjectAPI&) = delete;
 		ObjectAPI& operator=(const ObjectAPI&) = delete;
@@ -63,36 +64,9 @@ namespace PS_AGONY2D
 		std::optional<Handle> createPolygonH(const PolygonCreateParams& params) { return toBodyHandle(objectManager.createPolygon(params)); }
 		std::optional<Handle> createCapsuleH(const CapsuleCreateParams& params) { return toBodyHandle(objectManager.createCapsule(params)); }
 
-		// Collider creators taking a body handle (params.bodyIndex is ignored). nullopt if the handle is stale.
-		std::optional<Handle> createCircleColliderH(Handle body, CircleColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return toColliderHandle(objectManager.createCircleCollider(params));
-		}
-		std::optional<Handle> createBoxColliderH(Handle body, BoxColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return toColliderHandle(objectManager.createBoxCollider(params));
-		}
-		std::optional<Handle> createCapsuleColliderH(Handle body, CapsuleColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return toColliderHandle(objectManager.createCapsuleCollider(params));
-		}
-		// Pieces are contiguous in dense order: use getColliderHandle(first + i) right after the call.
-		std::optional<PolygonColliderCreateResult> createPolygonColliderH(Handle body, PolygonColliderCreateParams params)
-		{
-			const uint32_t b = getBodyIndex(body);
-			if (b == Handle::NULL_DENSE_INDEX) return std::nullopt;
-			params.bodyIndex = static_cast<ObjectDenseIndex>(b);
-			return objectManager.createPolygonCollider(params);
-		}
+		std::optional<Handle> createCircleColliderH(const CircleColliderCreateParams& params) { return toColliderHandle(objectManager.createCircleCollider(params)); }
+		std::optional<Handle> createBoxColliderH(const BoxColliderCreateParams& params) { return toColliderHandle(objectManager.createBoxCollider(params)); }
+		std::optional<Handle> createCapsuleColliderH(const CapsuleColliderCreateParams& params) { return toColliderHandle(objectManager.createCapsuleCollider(params)); }
 
 		// Stale handle: no-op.
 		void destroyBody(Handle h) { objectManager.destroyBody(h); }
@@ -132,18 +106,9 @@ namespace PS_AGONY2D
 		}
 
 		// Instant reads of current stored state (not the queue); nullopt if the handle is stale.
-		std::optional<BodyData> getBodyDataH(Handle body) const noexcept
-		{
-			const ObjectDenseIndex i = objectManager.bodies.indexOf(body);
-			return i == Handle::NULL_DENSE_INDEX ? std::nullopt : objectManager.bodies.getBodyData(i);
-		}
-		std::optional<ColliderData> getColliderDataH(Handle collider) const noexcept
-		{
-			const ObjectDenseIndex i = objectManager.colliders.indexOf(collider);
-			return i == Handle::NULL_DENSE_INDEX ? std::nullopt : objectManager.getColliderData(i);
-		}
+		std::optional<BodyData> getBodyDataH(Handle body) const noexcept { return objectManager.getBodyData(body); }
+		std::optional<ColliderData> getColliderDataH(Handle collider) const noexcept { return objectManager.getColliderData(collider); }
 
-		//
 		std::span<const ObjectDenseIndex> getBodyColliders(ObjectDenseIndex bodyIndex) const
 		{
 			if (bodyIndex >= objectManager.bodies.getCount()) { return {}; }
