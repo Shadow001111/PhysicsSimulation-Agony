@@ -11,7 +11,6 @@
 #include <array>
 #include <bit>
 #include <cstdint>
-#include <span>
 #include <vector>
 
 namespace PS_AGONY2D::BroadPhaseInternal
@@ -82,8 +81,8 @@ namespace PS_AGONY2D::BroadPhaseInternal
 		struct LeafAABBSoA
 		{
 			CacheLineAlignedVector<LeafData> minX;
-			CacheLineAlignedVector<LeafData> maxX;
 			CacheLineAlignedVector<LeafData> minY;
+			CacheLineAlignedVector<LeafData> maxX;
 			CacheLineAlignedVector<LeafData> maxY;
 		};
 
@@ -213,7 +212,7 @@ namespace PS_AGONY2D::BroadPhaseInternal
 
 			if (node.leftChildIndex == BvhNode::INVALID_INDEX) // Leaf node.
 			{
-				outAABBs.push_back(AABB{ node.minX, node.minY, node.maxX, node.maxY });
+				outAABBs.emplace_back(node.minX, node.minY, node.maxX, node.maxY);
 			}
 			else // Internal node.
 			{
